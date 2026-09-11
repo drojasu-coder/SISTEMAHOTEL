@@ -10,19 +10,20 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       nombre: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150),
+        allowNull: false
       },
       nit: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20)
       },
       contacto: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150)
       },
       telefono: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20)
       },
       email: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150)
       },
       createdAt: {
         allowNull: false,

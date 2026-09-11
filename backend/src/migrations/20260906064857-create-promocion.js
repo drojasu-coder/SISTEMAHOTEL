@@ -10,25 +10,31 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       nombre: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150),
+        allowNull: false
       },
       tipo_descuento: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20),
+        allowNull: false
       },
       valor_descuento: {
-        type: Sequelize.DECIMAL
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false
       },
       aplica_a: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(50)
       },
       fecha_inicio: {
-        type: Sequelize.DATEONLY
+        type: Sequelize.DATEONLY,
+        allowNull: false
       },
       fecha_fin: {
-        type: Sequelize.DATEONLY
+        type: Sequelize.DATEONLY,
+        allowNull: false
       },
       activa: {
-        type: Sequelize.BOOLEAN
+        type: Sequelize.BOOLEAN,
+        defaultValue: true
       },
       createdAt: {
         allowNull: false,

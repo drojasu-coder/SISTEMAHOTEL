@@ -18,10 +18,12 @@ module.exports = {
         }
       },
       nombre: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(100),
+        allowNull: false
       },
       aforo_maximo: {
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
+        allowNull: false
       },
       createdAt: {
         allowNull: false,

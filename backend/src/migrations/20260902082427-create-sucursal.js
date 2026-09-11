@@ -10,23 +10,26 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       nombre: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150),
+        allowNull: false
       },
       direccion: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(255)
       },
       ciudad: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(100)
       },
       telefono: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20)
       },
       activa: {
-        type: Sequelize.BOOLEAN
+        type: Sequelize.BOOLEAN,
+        defaultValue: true
       },
       createdAt: {
         allowNull: false,
-        type: Sequelize.DATE
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.NOW
       },
       updatedAt: {
         allowNull: false,

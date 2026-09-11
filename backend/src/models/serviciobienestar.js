@@ -14,13 +14,23 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   ServicioBienestar.init({
-    nombre: DataTypes.STRING,
-    duracion_minutos: DataTypes.INTEGER,
-    precio: DataTypes.DECIMAL
+    nombre: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    duracion_minutos: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    precio: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    }
   }, {
     sequelize,
     modelName: 'ServicioBienestar',
-    tableName: 'servicios_bienestar'
+    tableName: 'servicios_bienestar',
+    timestamps: true
   });
   return ServicioBienestar;
 };

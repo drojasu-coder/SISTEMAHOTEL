@@ -18,10 +18,12 @@ module.exports = {
         },
       },
       tipo: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(30),
+        allowNull: false,
       },
       nombre: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(100),
+        allowNull: false,
       },
       createdAt: {
         allowNull: false,

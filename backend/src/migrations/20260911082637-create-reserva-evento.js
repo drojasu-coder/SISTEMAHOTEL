@@ -2,37 +2,64 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('habitaciones', {
+    await queryInterface.createTable('reservas_evento', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      sucursal_id: {
+
+      usuario_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'sucursales',
+          model: 'usuarios',
           key: 'id'
-        }
+        },
       },
-      tipo_habitacion_id: {
+        
+      salon_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'tipos_habitacion',
+          model: 'salones',
           key: 'id'
-        }
+        },
       },
-      numero: {
-        type: Sequelize.STRING(10),
+
+      tipo_evento: {
+        type: Sequelize.STRING(50),
+        allowNull: false
+      },
+      fecha: {
+        type: Sequelize.DATEONLY,
+        allowNull: false
+      },
+      hora_inicio: {
+        type: Sequelize.TIME,
+        allowNull: false
+      },
+      hora_fin: {
+        type: Sequelize.TIME,
+        allowNull: false
+      },
+      numero_invitados: {
+        type: Sequelize.INTEGER,
         allowNull: false
       },
       estado: {
         type: Sequelize.STRING(20),
         allowNull: false,
-        defaultValue: 'disponible'
+        defaultValue: 'cotizacion'
+      },
+      anticipo: {
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false
+      },
+      total: {
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false
       },
       createdAt: {
         allowNull: false,
@@ -44,14 +71,8 @@ module.exports = {
         type: Sequelize.DATE
       }
     });
-
-    await queryInterface.addIndex('habitaciones', ['sucursal_id', 'numero'], {
-      unique: true,
-      name: 'habitaciones_sucursal_numero_unique'
-    });
   },
-
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('habitaciones');
+    await queryInterface.dropTable('reservas_evento');
   }
 };

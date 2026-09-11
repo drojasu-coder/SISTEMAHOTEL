@@ -14,13 +14,23 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Vehiculo.init({
-    tipo: DataTypes.STRING,
-    capacidad: DataTypes.INTEGER,
-    placa: DataTypes.STRING
+    tipo: {
+      type: DataTypes.STRING(30),
+      allowNull: false
+    },
+    capacidad: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    placa: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'Vehiculo',
-    tableName: 'vehiculos'
+    tableName: 'vehiculos',
+    timestamps: true
   });
   return Vehiculo;
 };

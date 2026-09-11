@@ -10,26 +10,33 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       nombre: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150),
+        allowNull: false
       },
       email: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150),
+        allowNull: false,
+        unique: true
       },
       password_hash: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(255),
+        allowNull: false
       },
       rol: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(30),
+        allowNull: false
       },
       telefono: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20)
       },
       activo: {
-        type: Sequelize.BOOLEAN
+        type: Sequelize.BOOLEAN,
+        defaultValue: true
       },
       createdAt: {
         allowNull: false,
-        type: Sequelize.DATE
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.NOW
       },
       updatedAt: {
         allowNull: false,

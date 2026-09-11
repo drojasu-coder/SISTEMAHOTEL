@@ -14,13 +14,24 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Carrito.init({
-    usuario_id: DataTypes.INTEGER,
-    estado: DataTypes.STRING,
-    expira_en: DataTypes.DATE
+    usuario_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    estado: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'activo'
+    },
+    expira_en: {
+      type: DataTypes.DATE,
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'Carrito',
-    tableName: 'carritos'
+    tableName: 'carritos',
+    timestamps: true
   });
   return Carrito;
 };

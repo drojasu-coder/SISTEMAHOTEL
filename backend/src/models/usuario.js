@@ -12,19 +12,43 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       Usuario.hasOne(models.Empleado,{foreignKey:'usuario_id'});
       Usuario.hasMany(models.Carrito,{foreignKey:'usuario_id'});
+      Usuario.hasMany(models.Factura,{foreignKey:'usuario_id'});
+      Usuario.hasMany(models.BoletoParque,{foreignKey:'usuario_id'});
+      Usuario.hasMany(models.ReservaHabitacion,{foreignKey:'usuario_id'});
+      Usuario.hasMany(models.ReservaEvento,{foreignKey:'usuario_id'});
     }
   }
   Usuario.init({
-    nombre: DataTypes.STRING,
-    email: DataTypes.STRING,
-    password_hash: DataTypes.STRING,
-    rol: DataTypes.STRING,
-    telefono: DataTypes.STRING,
-    activo: DataTypes.BOOLEAN
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    email: {
+      type: DataTypes.STRING(150),
+      allowNull: false,
+      unique: true
+    },
+    password_hash: {
+      type: DataTypes.STRING(255),
+      allowNull: false
+    },
+    rol: {
+      type: DataTypes.STRING(30),
+      allowNull: false
+    },
+    telefono: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    activo: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'Usuario',
     tableName: 'usuarios',
+    timestamps: true
   });
   return Usuario;
 };

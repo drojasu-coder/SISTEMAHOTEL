@@ -15,14 +15,24 @@ module.exports = (sequelize, DataTypes) => {
   }
   RecursoActividad.init(
     {
-      sucursal_id: DataTypes.INTEGER,
-      tipo: DataTypes.STRING,
-      nombre: DataTypes.STRING,
+      sucursal_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      tipo: {
+        type: DataTypes.STRING(30),
+        allowNull: false,
+      },
+      nombre: {
+        type: DataTypes.STRING(100),
+        allowNull: false,
+      },
     },
     {
       sequelize,
       modelName: "RecursoActividad",
       tableName: "recursos_actividad",
+      timestamps: true,
     },
   );
   return RecursoActividad;

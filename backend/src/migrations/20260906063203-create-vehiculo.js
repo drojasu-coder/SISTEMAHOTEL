@@ -10,13 +10,15 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       tipo: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(30),
+        allowNull: false
       },
       capacidad: {
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
+        allowNull: false
       },
       placa: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20)
       },
       createdAt: {
         allowNull: false,

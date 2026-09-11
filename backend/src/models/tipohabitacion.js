@@ -14,14 +14,27 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   TipoHabitacion.init({
-    nombre: DataTypes.STRING,
-    capacidad_maxima: DataTypes.INTEGER,
-    tarifa_noche: DataTypes.DECIMAL,
-    descripcion: DataTypes.TEXT
+    nombre: {
+      type: DataTypes.STRING(50),
+      allowNull: false
+    },
+    capacidad_maxima: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    tarifa_noche: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    },
+    descripcion: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'TipoHabitacion',
-    tableName: 'tipos_habitacion'
+    tableName: 'tipos_habitacion',
+    timestamps: true
   });
   return TipoHabitacion;
 };

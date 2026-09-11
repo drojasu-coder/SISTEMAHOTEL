@@ -18,7 +18,8 @@ module.exports = {
         }
       },
       nombre_producto: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(150),
+        allowNull: false
       },
       descripcion: {
         type: Sequelize.TEXT

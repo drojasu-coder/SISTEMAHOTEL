@@ -14,14 +14,28 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Mesa.init({
-    sucursal_id: DataTypes.INTEGER,
-    zona: DataTypes.STRING,
-    capacidad: DataTypes.INTEGER,
-    estado: DataTypes.STRING
+    sucursal_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    zona: {
+      type: DataTypes.STRING(30),
+      allowNull: false
+    },
+    capacidad: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    estado: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'disponible'
+    }
   }, {
     sequelize,
     modelName: 'Mesa',
-    tableName: 'mesas'
+    tableName: 'mesas',
+    timestamps: true
   });
   return Mesa;
 };

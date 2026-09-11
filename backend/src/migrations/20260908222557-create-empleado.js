@@ -12,6 +12,7 @@ module.exports = {
       usuario_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
+        unique: true,
         references: {
           model: 'usuarios',
           key: 'id'
@@ -26,7 +27,8 @@ module.exports = {
         }
       },
       area: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(50),
+        allowNull: false
       },
       fecha_contratacion: {
         type: Sequelize.DATEONLY

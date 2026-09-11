@@ -14,13 +14,23 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   ProveedorProducto.init({
-    proveedor_id: DataTypes.INTEGER,
-    nombre_producto: DataTypes.STRING,
-    descripcion: DataTypes.TEXT
+    proveedor_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    nombre_producto: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    descripcion: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'ProveedorProducto',
-    tableName: 'proveedor_productos'
+    tableName: 'proveedor_productos',
+    timestamps: true
   });
   return ProveedorProducto;
 };

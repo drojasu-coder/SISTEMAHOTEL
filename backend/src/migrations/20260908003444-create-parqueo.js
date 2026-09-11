@@ -18,10 +18,13 @@ module.exports = {
         }
       },
       numero: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(10),
+        allowNull: false
       },
       estado: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20),
+        allowNull: false,
+        defaultValue: 'disponible'
       },
       createdAt: {
         allowNull: false,

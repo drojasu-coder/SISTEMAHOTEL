@@ -15,15 +15,31 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Proveedor.init({
-    nombre: DataTypes.STRING,
-    nit: DataTypes.STRING,
-    contacto: DataTypes.STRING,
-    telefono: DataTypes.STRING,
-    email: DataTypes.STRING
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    nit: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    contacto: {
+      type: DataTypes.STRING(150),
+      allowNull: true
+    },
+    telefono: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    email: {
+      type: DataTypes.STRING(150),
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'Proveedor',
-    tableName: 'proveedores'
+    tableName: 'proveedores',
+    timestamps: true
   });
   return Proveedor;
 };

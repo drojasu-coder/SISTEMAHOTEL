@@ -16,14 +16,28 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Empleado.init({
-    usuario_id: DataTypes.INTEGER,
-    sucursal_id: DataTypes.INTEGER,
-    area: DataTypes.STRING,
-    fecha_contratacion: DataTypes.DATEONLY
+    usuario_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      unique: true
+    },
+    sucursal_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    area: {
+      type: DataTypes.STRING(50),
+      allowNull: false
+    },
+    fecha_contratacion: {
+      type: DataTypes.DATEONLY,
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'Empleado',
-    tableName: 'empleados'
+    tableName: 'empleados',
+    timestamps: true
   });
   return Empleado;
 };

@@ -14,17 +14,39 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Promocion.init({
-    nombre: DataTypes.STRING,
-    tipo_descuento: DataTypes.STRING,
-    valor_descuento: DataTypes.DECIMAL,
-    aplica_a: DataTypes.STRING,
-    fecha_inicio: DataTypes.DATEONLY,
-    fecha_fin: DataTypes.DATEONLY,
-    activa: DataTypes.BOOLEAN
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    tipo_descuento: {
+      type: DataTypes.STRING(20),
+      allowNull: false
+    },
+    valor_descuento: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    },
+    aplica_a: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    fecha_inicio: {
+      type: DataTypes.DATEONLY,
+      allowNull: false
+    },
+    fecha_fin: {
+      type: DataTypes.DATEONLY,
+      allowNull: false
+    },
+    activa: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'Promocion',
-    tableName: 'promociones'
+    tableName: 'promociones',
+    timestamps: true
   });
   return Promocion;
 };

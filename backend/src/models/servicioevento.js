@@ -14,12 +14,19 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   ServicioEvento.init({
-    nombre: DataTypes.STRING,
-    precio: DataTypes.DECIMAL
+    nombre: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    precio: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    }
   }, {
     sequelize,
     modelName: 'ServicioEvento',
-    tableName: 'servicios_evento'
+    tableName: 'servicios_evento',
+    timestamps: true
   });
   return ServicioEvento;
 };

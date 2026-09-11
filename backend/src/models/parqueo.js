@@ -14,13 +14,24 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Parqueo.init({
-    sucursal_id: DataTypes.INTEGER,
-    numero: DataTypes.STRING,
-    estado: DataTypes.STRING
+    sucursal_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    numero: {
+      type: DataTypes.STRING(10),
+      allowNull: false
+    },
+    estado: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'disponible'
+    }
   }, {
     sequelize,
     modelName: 'Parqueo',
-    tableName: 'parqueos'
+    tableName: 'parqueos',
+    timestamps: true
   });
   return Parqueo;
 };

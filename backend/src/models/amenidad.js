@@ -14,13 +14,23 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Amenidad.init({
-    sucursal_id: DataTypes.INTEGER,
-    nombre: DataTypes.STRING,
-    aforo_maximo: DataTypes.INTEGER
+    sucursal_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    nombre: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    aforo_maximo: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    }
   }, {
     sequelize,
     modelName: 'Amenidad',
-    tableName: 'amenidades'
+    tableName: 'amenidades',
+    timestamps: true
   });
   return Amenidad;
 };

@@ -14,13 +14,23 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Instructor.init({
-    nombre: DataTypes.STRING,
-    especialidad: DataTypes.STRING,
-    activo: DataTypes.BOOLEAN
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    especialidad: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    activo: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'Instructor',
-    tableName: 'instructores'
+    tableName: 'instructores',
+    timestamps: true
   });
   return Instructor;
 };

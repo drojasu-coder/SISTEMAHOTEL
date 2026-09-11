@@ -3,43 +3,47 @@ const {
   Model
 } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  class Salon extends Model {
+  class BoletoParque extends Model {
     /**
      * Helper method for defining associations.
      * This method is not a part of Sequelize lifecycle.
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      Salon.belongsTo(models.Sucursal,{foreignKey:'sucursal_id'});
-      Salon.hasMany(models.ReservaEvento,{foreignKey:'salon_id'});
+      BoletoParque.belongsTo(models.Usuario,{foreignKey:'usuario_id'});
     }
   }
-  Salon.init({
-    sucursal_id: {
+  BoletoParque.init({
+    usuario_id: {
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    nombre: {
-      type: DataTypes.STRING(100),
+    fecha_visita: {
+      type: DataTypes.DATEONLY,
       allowNull: false
     },
-    capacidad_maxima: {
-      type: DataTypes.INTEGER,
+    tipo_boleto: {
+      type: DataTypes.STRING(20),
       allowNull: false
     },
-    tarifa_base: {
+    precio: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
-    descripcion: {
-      type: DataTypes.TEXT,
+    codigo_qr: {
+      type: DataTypes.STRING(150),
       allowNull: true
+    },
+    estado: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'valido'
     }
   }, {
     sequelize,
-    modelName: 'Salon',
-    tableName: 'salones',
+    modelName: 'BoletoParque',
+    tableName: 'boletos_parque',
     timestamps: true
   });
-  return Salon;
+  return BoletoParque;
 };

@@ -18,16 +18,20 @@ module.exports = {
         }
       },
       monto: {
-        type: Sequelize.DECIMAL
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false
       },
       fecha_vencimiento: {
-        type: Sequelize.DATEONLY
+        type: Sequelize.DATEONLY,
+        allowNull: false
       },
       estado: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20),
+        allowNull: false,
+        defaultValue: 'pendiente'
       },
       factura_referencia: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(100)
       },
       createdAt: {
         allowNull: false,

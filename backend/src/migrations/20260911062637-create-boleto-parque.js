@@ -2,27 +2,40 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('tipos_habitacion', {
+    await queryInterface.createTable('boletos_parque', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      nombre: {
-        type: Sequelize.STRING(50),
-        allowNull: false
-      },
-      capacidad_maxima: {
+      usuario_id: {
         type: Sequelize.INTEGER,
+        allowNull: false,
+        references:{
+          model:'usuarios',
+          key:'id'
+        }
+      },
+      fecha_visita: {
+        type: Sequelize.DATEONLY,
         allowNull: false
       },
-      tarifa_noche: {
+      tipo_boleto: {
+        type: Sequelize.STRING(20),
+        allowNull: false
+      },
+      precio: {
         type: Sequelize.DECIMAL(10, 2),
         allowNull: false
       },
-      descripcion: {
-        type: Sequelize.TEXT
+      codigo_qr: {
+        type: Sequelize.STRING(150)
+      },
+      estado: {
+        type: Sequelize.STRING(20),
+        allowNull: false,
+        defaultValue: 'valido'
       },
       createdAt: {
         allowNull: false,
@@ -35,6 +48,6 @@ module.exports = {
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('tipos_habitacion');
+    await queryInterface.dropTable('boletos_parque');
   }
 };

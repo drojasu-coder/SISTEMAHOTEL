@@ -20,15 +20,31 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Sucursal.init({
-    nombre: DataTypes.STRING,
-    direccion: DataTypes.STRING,
-    ciudad: DataTypes.STRING,
-    telefono: DataTypes.STRING,
-    activa: DataTypes.BOOLEAN
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    direccion: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    ciudad: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    telefono: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    activa: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'Sucursal',
-    tableName: 'sucursales'
+    tableName: 'sucursales',
+    timestamps: true
   });
   return Sucursal;
 };

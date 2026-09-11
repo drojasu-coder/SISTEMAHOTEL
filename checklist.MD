@@ -36,11 +36,11 @@ Patron a repetir en cada tabla:
 - [X] proveedor_productos (proveedores)
 - [X] cuentas_por_pagar (proveedores)
 - [X] carritos (usuarios)
-- [ ] facturas (usuarios)
-- [ ] boletos_parque (usuarios)
+- [X] facturas (usuarios)
+- [X] boletos_parque (usuarios)
 
 ## PARTE 3 - dependen de PARTE 2
-- [ ] reservas_habitacion
+- [X] reservas_habitacion
 - [ ] reservas_evento
 - [ ] reservas_mesa
 - [ ] reservas_actividad

@@ -2,37 +2,49 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('habitaciones', {
+    await queryInterface.createTable('reservas_habitacion', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      sucursal_id: {
+      usuario_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: {
-          model: 'sucursales',
-          key: 'id'
+        references:{
+          model:'usuarios',
+          key:'id'
         }
       },
-      tipo_habitacion_id: {
+      habitacion_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        references: {
-          model: 'tipos_habitacion',
-          key: 'id'
+        references:{
+          model:'habitaciones',
+          key:'id'
         }
       },
-      numero: {
-        type: Sequelize.STRING(10),
+      fecha_entrada: {
+        type: Sequelize.DATEONLY,
+        allowNull: false
+      },
+      fecha_salida: {
+        type: Sequelize.DATEONLY,
+        allowNull: false
+      },
+      numero_huespedes: {
+        type: Sequelize.INTEGER,
         allowNull: false
       },
       estado: {
         type: Sequelize.STRING(20),
         allowNull: false,
-        defaultValue: 'disponible'
+        defaultValue: 'pendiente'
+      },
+      total: {
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false
       },
       createdAt: {
         allowNull: false,
@@ -44,14 +56,8 @@ module.exports = {
         type: Sequelize.DATE
       }
     });
-
-    await queryInterface.addIndex('habitaciones', ['sucursal_id', 'numero'], {
-      unique: true,
-      name: 'habitaciones_sucursal_numero_unique'
-    });
   },
-
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('habitaciones');
+    await queryInterface.dropTable('reservas_habitacion');
   }
 };

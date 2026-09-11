@@ -14,12 +14,19 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Terapeuta.init({
-    nombre: DataTypes.STRING,
-    activo: DataTypes.BOOLEAN
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    activo: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'Terapeuta',
-    tableName: 'terapeutas'
+    tableName: 'terapeutas',
+    timestamps: true
   });
   return Terapeuta;
 };

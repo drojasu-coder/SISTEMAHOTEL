@@ -14,13 +14,23 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Chofer.init({
-    nombre: DataTypes.STRING,
-    licencia: DataTypes.STRING,
-    activo: DataTypes.BOOLEAN
+    nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: false
+    },
+    licencia: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    activo: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    }
   }, {
     sequelize,
     modelName: 'Chofer',
-    tableName: 'choferes'
+    tableName: 'choferes',
+    timestamps: true
   });
   return Chofer;
 };

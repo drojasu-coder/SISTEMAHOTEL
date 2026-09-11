@@ -14,15 +14,32 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   CuentaPorPagar.init({
-    proveedor_id: DataTypes.INTEGER,
-    monto: DataTypes.DECIMAL,
-    fecha_vencimiento: DataTypes.DATEONLY,
-    estado: DataTypes.STRING,
-    factura_referencia: DataTypes.STRING
+    proveedor_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    monto: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    },
+    fecha_vencimiento: {
+      type: DataTypes.DATEONLY,
+      allowNull: false
+    },
+    estado: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'pendiente'
+    },
+    factura_referencia: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    }
   }, {
     sequelize,
     modelName: 'CuentaPorPagar',
-    tableName: 'cuentas_por_pagar'
+    tableName: 'cuentas_por_pagar',
+    timestamps: true
   });
   return CuentaPorPagar;
 };

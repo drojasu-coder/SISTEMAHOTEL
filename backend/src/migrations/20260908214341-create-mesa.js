@@ -18,13 +18,17 @@ module.exports = {
         }
       },
       zona: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(30),
+        allowNull: false
       },
       capacidad: {
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
+        allowNull: false
       },
       estado: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20),
+        allowNull: false,
+        defaultValue: 'disponible'
       },
       createdAt: {
         allowNull: false,

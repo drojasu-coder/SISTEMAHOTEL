@@ -18,14 +18,17 @@ module.exports = {
         }
       },
       estado: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(20),
+        allowNull: false,
+        defaultValue: 'activo'
       },
       expira_en: {
         type: Sequelize.DATE
       },
       createdAt: {
         allowNull: false,
-        type: Sequelize.DATE
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.NOW
       },
       updatedAt: {
         allowNull: false,

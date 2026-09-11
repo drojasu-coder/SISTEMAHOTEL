@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Factura extends Model {
     /**
@@ -10,22 +8,55 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Factura.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
     }
   }
-  Factura.init({
-    usuario_id: DataTypes.INTEGER,
-    nit: DataTypes.STRING,
-    nombre_fiscal: DataTypes.STRING,
-    direccion_fiscal: DataTypes.STRING,
-    subtotal: DataTypes.DECIMAL,
-    iva: DataTypes.DECIMAL,
-    total: DataTypes.DECIMAL,
-    estado: DataTypes.STRING,
-    fecha_emision: DataTypes.DATE
-  }, {
-    sequelize,
-    modelName: 'Factura',
-  });
+  Factura.init(
+    {
+      usuario_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      nit: {
+        type: DataTypes.STRING(20),
+        allowNull: false
+      },
+      nombre_fiscal: {
+        type: DataTypes.STRING(150),
+        allowNull: false
+      },
+      direccion_fiscal: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+      },
+      subtotal: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false
+      },
+      iva: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false
+      },
+      total: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false
+      },
+      estado: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: "pendiente"
+      },
+      fecha_emision: {
+        type: DataTypes.DATE,
+        allowNull: true
+      },
+    },
+    {
+      sequelize,
+      modelName: "Factura",
+      tableName: "facturas",
+      timestamps: true,
+    },
+  );
   return Factura;
 };

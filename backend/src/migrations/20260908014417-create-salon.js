@@ -18,13 +18,16 @@ module.exports = {
         }
       },
       nombre: {
-        type: Sequelize.STRING
+        type: Sequelize.STRING(100),
+        allowNull: false
       },
       capacidad_maxima: {
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
+        allowNull: false
       },
       tarifa_base: {
-        type: Sequelize.DECIMAL
+        type: Sequelize.DECIMAL(10, 2),
+        allowNull: false
       },
       descripcion: {
         type: Sequelize.TEXT
