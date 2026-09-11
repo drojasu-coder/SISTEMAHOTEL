@@ -1,14 +1,9 @@
-import express from "express";
+import "dotenv/config";
 
-const app = express();
-const PORT = 4000;
+import app from "./app";
 
-app.use(express.json());
+const PORT = Number(process.env.PORT) || 4000;
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", mensaje: "El servidor esta vivo" });
-});
-
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
-});
+app.listen(PORT, () =>{
+  console.log(`Servidor corriendo en http://localhost:${PORT}`)
+})
