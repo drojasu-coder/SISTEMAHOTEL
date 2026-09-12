@@ -8,7 +8,10 @@ import { AppError } from "../utils/AppError";
 import { verifyAccessToken } from "../utils/jwt";
 import { ROLES, Role } from "../constants/roles";
 
-export const authMiddleware: RequestHandler = (
+const db = require("../models");
+const { Usuario } = db;
+
+export const authMiddleware: RequestHandler = async (
   req,
   _res,
   next
@@ -38,6 +41,7 @@ export const authMiddleware: RequestHandler = (
   }
 
   try {
+    // 1. Comprobar firma, expiración, issuer y audience
     const payload = verifyAccessToken(token);
 
     if (
@@ -51,6 +55,7 @@ export const authMiddleware: RequestHandler = (
       );
     }
 
+    // 2. Obtener ID del usuario desde el JWT
     const userId = Number(payload.sub);
 
     if (
@@ -60,23 +65,55 @@ export const authMiddleware: RequestHandler = (
       throw new AppError(
         401,
         "INVALID_TOKEN",
-        "El token contiene un identificador de usuario inválido"
+        "El token contiene un identificador inválido"
       );
     }
 
-    const validRoles = Object.values(ROLES);
+    // 3. Consultar el usuario ACTUAL en PostgreSQL
+    const usuario = await Usuario.findByPk(
+      userId,
+      {
+        attributes: [
+          "id",
+          "rol",
+          "activo",
+        ],
+      }
+    );
 
-    if (!validRoles.includes(payload.rol as Role)) {
+    // 4. Usuario eliminado
+    if (!usuario) {
       throw new AppError(
         401,
-        "INVALID_TOKEN",
-        "El token contiene información inválida"
+        "USER_NOT_FOUND",
+        "La sesión ya no corresponde a un usuario válido"
       );
     }
 
+    // 5. Usuario deshabilitado
+    if (!usuario.activo) {
+      throw new AppError(
+        403,
+        "USER_INACTIVE",
+        "La cuenta de usuario se encuentra deshabilitada"
+      );
+    }
+
+    // 6. Validar que el rol guardado sea reconocido
+    const validRoles = Object.values(ROLES);
+
+    if (!validRoles.includes(usuario.rol as Role)) {
+      throw new AppError(
+        403,
+        "INVALID_USER_ROLE",
+        "La cuenta no tiene un rol válido asignado"
+      );
+    }
+
+    // 7. El rol usado desde aquí es el ACTUAL de PostgreSQL
     req.user = {
-      id: userId,
-      rol: payload.rol,
+      id: usuario.id,
+      rol: usuario.rol as Role,
     };
 
     next();

@@ -104,7 +104,6 @@ export const login = async (
 
   const accessToken = generateAccessToken({
     id: usuario.id,
-    rol: usuario.rol,
   });
 
   return {

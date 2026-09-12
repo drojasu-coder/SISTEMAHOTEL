@@ -4,16 +4,13 @@ import jwt, {
 } from "jsonwebtoken";
 
 import { env } from "../config/env";
-import { Role } from "../constants/roles";
 
 export interface AccessTokenPayload extends JwtPayload {
-  rol: Role;
   tipo: "access";
 }
 
 interface UserForToken {
   id: number;
-  rol: Role;
 }
 
 export const generateAccessToken = (
@@ -29,7 +26,6 @@ export const generateAccessToken = (
 
   return jwt.sign(
     {
-      rol: usuario.rol,
       tipo: "access",
     },
     env.JWT_SECRET,
