@@ -1,78 +1,78 @@
-'use strict';
+"use strict";
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('reservas_evento', {
+    await queryInterface.createTable("reservas_evento", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
       },
 
       usuario_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'usuarios',
-          key: 'id'
+          model: "usuarios",
+          key: "id",
         },
       },
-        
+
       salon_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
         references: {
-          model: 'salones',
-          key: 'id'
+          model: "salones",
+          key: "id",
         },
       },
 
       tipo_evento: {
         type: Sequelize.STRING(50),
-        allowNull: false
+        allowNull: false,
       },
       fecha: {
         type: Sequelize.DATEONLY,
-        allowNull: false
+        allowNull: false,
       },
       hora_inicio: {
         type: Sequelize.TIME,
-        allowNull: false
+        allowNull: false,
       },
       hora_fin: {
         type: Sequelize.TIME,
-        allowNull: false
+        allowNull: false,
       },
       numero_invitados: {
         type: Sequelize.INTEGER,
-        allowNull: false
+        allowNull: false,
       },
       estado: {
         type: Sequelize.STRING(20),
         allowNull: false,
-        defaultValue: 'cotizacion'
+        defaultValue: "cotizacion",
       },
       anticipo: {
         type: Sequelize.DECIMAL(10, 2),
-        allowNull: false
+        allowNull: false,
       },
       total: {
         type: Sequelize.DECIMAL(10, 2),
-        allowNull: false
+        allowNull: false,
       },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
-        defaultValue: Sequelize.NOW
+        defaultValue: Sequelize.NOW,
       },
       updatedAt: {
         allowNull: false,
-        type: Sequelize.DATE
-      }
+        type: Sequelize.DATE,
+      },
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('reservas_evento');
-  }
+    await queryInterface.dropTable("reservas_evento");
+  },
 };

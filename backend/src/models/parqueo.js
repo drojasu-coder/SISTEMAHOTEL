@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Parqueo extends Model {
     /**
@@ -10,28 +8,32 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      Parqueo.belongsTo(models.Sucursal,{foreignKey:'sucursal_id'});
+      Parqueo.belongsTo(models.Sucursal, { foreignKey: "sucursal_id" });
+      Parqueo.hasMany(models.ReservaParqueo, { foreignKey: "parqueo_id" });
     }
   }
-  Parqueo.init({
-    sucursal_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+  Parqueo.init(
+    {
+      sucursal_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      numero: {
+        type: DataTypes.STRING(10),
+        allowNull: false,
+      },
+      estado: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: "disponible",
+      },
     },
-    numero: {
-      type: DataTypes.STRING(10),
-      allowNull: false
+    {
+      sequelize,
+      modelName: "Parqueo",
+      tableName: "parqueos",
+      timestamps: true,
     },
-    estado: {
-      type: DataTypes.STRING(20),
-      allowNull: false,
-      defaultValue: 'disponible'
-    }
-  }, {
-    sequelize,
-    modelName: 'Parqueo',
-    tableName: 'parqueos',
-    timestamps: true
-  });
+  );
   return Parqueo;
 };

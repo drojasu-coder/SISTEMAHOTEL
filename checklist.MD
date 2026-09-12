@@ -41,7 +41,7 @@ Patron a repetir en cada tabla:
 
 ## PARTE 3 - dependen de PARTE 2
 - [X] reservas_habitacion
-- [ ] reservas_evento
+- [X] reservas_evento
 - [ ] reservas_mesa
 - [ ] reservas_actividad
 - [ ] reservas_amenidad

@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Salon extends Model {
     /**
@@ -10,36 +8,39 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      Salon.belongsTo(models.Sucursal,{foreignKey:'sucursal_id'});
-      Salon.hasMany(models.ReservaEvento,{foreignKey:'salon_id'});
+      Salon.belongsTo(models.Sucursal, { foreignKey: "sucursal_id" });
+      Salon.hasMany(models.ReservaEvento, { foreignKey: "salon_id" });
     }
   }
-  Salon.init({
-    sucursal_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+  Salon.init(
+    {
+      sucursal_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      nombre: {
+        type: DataTypes.STRING(100),
+        allowNull: false,
+      },
+      capacidad_maxima: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      tarifa_base: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+      },
+      descripcion: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
     },
-    nombre: {
-      type: DataTypes.STRING(100),
-      allowNull: false
+    {
+      sequelize,
+      modelName: "Salon",
+      tableName: "salones",
+      timestamps: true,
     },
-    capacidad_maxima: {
-      type: DataTypes.INTEGER,
-      allowNull: false
-    },
-    tarifa_base: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false
-    },
-    descripcion: {
-      type: DataTypes.TEXT,
-      allowNull: true
-    }
-  }, {
-    sequelize,
-    modelName: 'Salon',
-    tableName: 'salones',
-    timestamps: true
-  });
+  );
   return Salon;
 };

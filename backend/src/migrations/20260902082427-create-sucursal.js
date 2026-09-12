@@ -1,43 +1,43 @@
-'use strict';
+"use strict";
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('sucursales', {
+    await queryInterface.createTable("sucursales", {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
-        type: Sequelize.INTEGER
+        type: Sequelize.INTEGER,
       },
       nombre: {
         type: Sequelize.STRING(150),
-        allowNull: false
+        allowNull: false,
       },
       direccion: {
-        type: Sequelize.STRING(255)
+        type: Sequelize.STRING(255),
       },
       ciudad: {
-        type: Sequelize.STRING(100)
+        type: Sequelize.STRING(100),
       },
       telefono: {
-        type: Sequelize.STRING(20)
+        type: Sequelize.STRING(20),
       },
       activa: {
         type: Sequelize.BOOLEAN,
-        defaultValue: true
+        defaultValue: true,
       },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
-        defaultValue: Sequelize.NOW
+        defaultValue: Sequelize.NOW,
       },
       updatedAt: {
         allowNull: false,
-        type: Sequelize.DATE
-      }
+        type: Sequelize.DATE,
+      },
     });
   },
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('sucursales');
-  }
+    await queryInterface.dropTable("sucursales");
+  },
 };

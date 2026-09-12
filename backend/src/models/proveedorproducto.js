@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class ProveedorProducto extends Model {
     /**
@@ -10,27 +8,30 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      ProveedorProducto.belongsTo(models.Proveedor,{foreignKey:'proveedor_id'});
+      ProveedorProducto.belongsTo(models.Proveedor, { foreignKey: "proveedor_id" });
     }
   }
-  ProveedorProducto.init({
-    proveedor_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+  ProveedorProducto.init(
+    {
+      proveedor_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      nombre_producto: {
+        type: DataTypes.STRING(150),
+        allowNull: false,
+      },
+      descripcion: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
     },
-    nombre_producto: {
-      type: DataTypes.STRING(150),
-      allowNull: false
+    {
+      sequelize,
+      modelName: "ProveedorProducto",
+      tableName: "proveedor_productos",
+      timestamps: true,
     },
-    descripcion: {
-      type: DataTypes.TEXT,
-      allowNull: true
-    }
-  }, {
-    sequelize,
-    modelName: 'ProveedorProducto',
-    tableName: 'proveedor_productos',
-    timestamps: true
-  });
+  );
   return ProveedorProducto;
 };

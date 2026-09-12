@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Promocion extends Model {
     /**
@@ -10,43 +8,46 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      Promocion.hasMany(models.CarritoItem, { foreignKey: "promocion_id" });
     }
   }
-  Promocion.init({
-    nombre: {
-      type: DataTypes.STRING(150),
-      allowNull: false
+  Promocion.init(
+    {
+      nombre: {
+        type: DataTypes.STRING(150),
+        allowNull: false,
+      },
+      tipo_descuento: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+      },
+      valor_descuento: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+      },
+      aplica_a: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+      },
+      fecha_inicio: {
+        type: DataTypes.DATEONLY,
+        allowNull: false,
+      },
+      fecha_fin: {
+        type: DataTypes.DATEONLY,
+        allowNull: false,
+      },
+      activa: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true,
+      },
     },
-    tipo_descuento: {
-      type: DataTypes.STRING(20),
-      allowNull: false
+    {
+      sequelize,
+      modelName: "Promocion",
+      tableName: "promociones",
+      timestamps: true,
     },
-    valor_descuento: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false
-    },
-    aplica_a: {
-      type: DataTypes.STRING(50),
-      allowNull: true
-    },
-    fecha_inicio: {
-      type: DataTypes.DATEONLY,
-      allowNull: false
-    },
-    fecha_fin: {
-      type: DataTypes.DATEONLY,
-      allowNull: false
-    },
-    activa: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true
-    }
-  }, {
-    sequelize,
-    modelName: 'Promocion',
-    tableName: 'promociones',
-    timestamps: true
-  });
+  );
   return Promocion;
 };
