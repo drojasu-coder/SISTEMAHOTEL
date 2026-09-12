@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class ServicioEvento extends Model {
     /**
@@ -10,23 +8,26 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      // define association here
+      ServicioEvento.hasMany(models.ReservaEventoServicio, { foreignKey: "servicio_evento_id" });
     }
   }
-  ServicioEvento.init({
-    nombre: {
-      type: DataTypes.STRING(100),
-      allowNull: false
+  ServicioEvento.init(
+    {
+      nombre: {
+        type: DataTypes.STRING(100),
+        allowNull: false,
+      },
+      precio: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+      },
     },
-    precio: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false
-    }
-  }, {
-    sequelize,
-    modelName: 'ServicioEvento',
-    tableName: 'servicios_evento',
-    timestamps: true
-  });
+    {
+      sequelize,
+      modelName: "ServicioEvento",
+      tableName: "servicios_evento",
+      timestamps: true,
+    },
+  );
   return ServicioEvento;
 };

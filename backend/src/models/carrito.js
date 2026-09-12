@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Carrito extends Model {
     /**
@@ -10,28 +8,32 @@ module.exports = (sequelize, DataTypes) => {
      * The `models/index` file will call this method automatically.
      */
     static associate(models) {
-      Carrito.belongsTo(models.Usuario,{foreignKey:'usuario_id'});
+      Carrito.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
+      Carrito.hasMany(models.CarritoItem, { foreignKey: "carrito_id" });
     }
   }
-  Carrito.init({
-    usuario_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+  Carrito.init(
+    {
+      usuario_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      estado: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: "activo",
+      },
+      expira_en: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
     },
-    estado: {
-      type: DataTypes.STRING(20),
-      allowNull: false,
-      defaultValue: 'activo'
+    {
+      sequelize,
+      modelName: "Carrito",
+      tableName: "carritos",
+      timestamps: true,
     },
-    expira_en: {
-      type: DataTypes.DATE,
-      allowNull: true
-    }
-  }, {
-    sequelize,
-    modelName: 'Carrito',
-    tableName: 'carritos',
-    timestamps: true
-  });
+  );
   return Carrito;
 };

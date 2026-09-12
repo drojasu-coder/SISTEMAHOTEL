@@ -9,46 +9,47 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       Factura.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
+      Factura.hasMany(models.FacturaItem, { foreignKey: "factura_id" });
     }
   }
   Factura.init(
     {
       usuario_id: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
       },
       nit: {
         type: DataTypes.STRING(20),
-        allowNull: false
+        allowNull: false,
       },
       nombre_fiscal: {
         type: DataTypes.STRING(150),
-        allowNull: false
+        allowNull: false,
       },
       direccion_fiscal: {
         type: DataTypes.STRING(255),
-        allowNull: true
+        allowNull: true,
       },
       subtotal: {
         type: DataTypes.DECIMAL(10, 2),
-        allowNull: false
+        allowNull: false,
       },
       iva: {
         type: DataTypes.DECIMAL(10, 2),
-        allowNull: false
+        allowNull: false,
       },
       total: {
         type: DataTypes.DECIMAL(10, 2),
-        allowNull: false
+        allowNull: false,
       },
       estado: {
         type: DataTypes.STRING(20),
         allowNull: false,
-        defaultValue: "pendiente"
+        defaultValue: "pendiente",
       },
       fecha_emision: {
         type: DataTypes.DATE,
-        allowNull: true
+        allowNull: true,
       },
     },
     {
