@@ -119,3 +119,34 @@ export const login = async (
     },
   };
 };
+
+export const getCurrentUser = async (
+  userId: number
+) =>{
+  const usuario = await Usuario.findByPk(userId);
+
+  if(!usuario){
+    throw new AppError(
+      401,
+      "USER_NOT_FOUND",
+      "La sesión ya no corresponde a un usuario válido"
+    );
+  }
+
+  if (!usuario.activo){
+    throw new AppError(
+      403,
+      "USER_INACTIVE",
+      "La cuenta de usuario se encuentra deshabilitada"
+    );
+  }
+
+  return{
+    id: usuario.id,
+    nombre: usuario.nombre,
+    email: usuario.email,
+    telefono: usuario.telefono,
+    rol: usuario.rol,
+    activo: usuario.activo,
+  };
+};

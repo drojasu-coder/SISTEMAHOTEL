@@ -33,3 +33,19 @@ export const login = async (
     data: result,
   });
 };
+
+export const me = async (
+  req: Request,
+  res: Response
+) =>{
+  const usuario = await authService.getCurrentUser(
+    req.user!.id
+  );
+
+  res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: "Usuario autenticado",
+    data: usuario,
+  });
+};
