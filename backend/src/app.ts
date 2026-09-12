@@ -4,29 +4,32 @@ import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 
 import { errorHandler } from "./middlewares/error.middleware";
-import {notFoundHandler} from "./middlewares/notFound.middleware";
+import { notFoundHandler } from "./middlewares/notFound.middleware";
 
 const app = express();
 
 app.use(cors());
 
 app.use(
-    express.json({
-        limit: "1mb",
-    })
+  express.json({
+    limit: "1mb",
+  })
 );
 
-app.get("/api/health", (_req, res)=>{
-    res.status(200).json({
-        succes: true,
-        statusCode: 200,
-        message: "API de Hotel está funcionando correctamente"
-    });
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: "API de Hotel está funcionando correctamente",
+  });
 });
 
 app.use("/api/auth", authRoutes);
 
+// Debe ir después de todas las rutas
 app.use(notFoundHandler);
+
+// El manejador de errores siempre va al final
 app.use(errorHandler);
 
 export default app;

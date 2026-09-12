@@ -73,8 +73,8 @@ export const errorHandler: ErrorRequestHandler =(
     error instanceof TimeoutError
   ){
     statusCode = 503;
-    code = "DATABASE_UNVAILABLE";
-    message = "La base de datos no está disponible temporalmente;"
+    code = "DATABASE_UNAVAILABLE";
+    message = "La base de datos no está disponible temporalmente";
   }
 
   // Los errores 500+ los registramos en consola
