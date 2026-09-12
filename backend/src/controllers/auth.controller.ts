@@ -1,0 +1,30 @@
+import {Request, Response} from "express";
+
+import * as authService from "../services/auth.service";
+
+export const register = async (
+    req: Request,
+    res: Response
+) =>{
+    const usuario = await authService.register(req.body);
+
+    res.status(201).json({
+        succes: true,
+        statusCode: 201,
+        message: "Usuario registrado correctamente",
+    });
+};
+
+export const login = async(
+    req:Request,
+    res: Response
+) =>{
+    const result = await authService.login(req.body);
+
+    res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message:"Inicio de sesión exitoso",
+        data: result,
+    });
+};

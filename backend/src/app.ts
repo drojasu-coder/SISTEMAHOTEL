@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 
+import authRoutes from "./routes/auth.routes";
+
 import { errorHandler } from "./middlewares/error.middleware";
 import {notFoundHandler} from "./middlewares/notFound.middleware";
 
@@ -10,7 +12,7 @@ app.use(cors());
 
 app.use(
     express.json({
-        limit: "1mb"
+        limit: "1mb",
     })
 );
 
@@ -21,6 +23,8 @@ app.get("/api/health", (_req, res)=>{
         message: "API de Hotel está funcionando correctamente"
     });
 });
+
+app.use("/api/auth", authRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
