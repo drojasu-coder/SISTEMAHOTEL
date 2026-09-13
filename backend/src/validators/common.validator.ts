@@ -18,3 +18,13 @@ export const moneySchema = z
 .refine((value)=> value >= 0,{
     message: "El monto no puede ser negativo, debe ser mayor o igual a cero."
 });
+
+export const idParamSchema = z
+.object({
+    id: z.string()
+    .regex(
+        /^[1-9]\d*$/,
+        "El id debe ser un número entero positivo"
+    ),
+})
+.strict();
