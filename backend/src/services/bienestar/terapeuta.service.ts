@@ -1,0 +1,47 @@
+import { AppError } from "../../utils/AppError";
+const db = require("../../models");
+
+const {
+  Terapeuta,
+  CitaBienestar,
+} = db;
+
+export const getAll = async () => {
+  return await Terapeuta.findAll({ order: [["nombre", "ASC"]] });
+};
+
+export const getById = async (id: number) => {
+  const terapeuta = await Terapeuta.findByPk(id);
+  if (!terapeuta) {
+    throw new AppError(404, "THERAPIST_NOT_FOUND", "El terapeuta solicitado no existe");
+  }
+  return terapeuta;
+};
+
+export const create = async (
+  data: any
+) => {
+  return Terapeuta.create({
+    nombre: data.nombre,
+    activo:
+      data.activo !== undefined
+        ? data.activo
+        : true,
+  });
+};
+
+export const update = async (id: number, data: any) => {
+  const terapeuta = await getById(id);
+  await terapeuta.update(data);
+  return terapeuta;
+};
+
+export const remove = async (id: number) => {
+  const terapeuta = await getById(id);
+  const usos =
+  await CitaBienestar.count({
+    where: {
+      terapeuta_id: id,
+    },
+  });
+}

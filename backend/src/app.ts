@@ -12,6 +12,23 @@ import choferRoutes from "./routes/transporte/chofer.routes";
 import vehiculoRoutes from "./routes/transporte/vehiculo.routes";
 import reservaTransporteRoutes from "./routes/transporte/reservaTransporte.routes";
 import carritoRoutes from "./routes/carrito/carrito.routes";
+
+import sucursalRoutes from "./routes/sucursales/sucursal.routes";
+
+import mesaRoutes from "./routes/restaurante/mesa.routes";
+
+import recursoActividadRoutes from "./routes/actividades/recursoActividad.routes";
+import instructorRoutes from "./routes/actividades/instructor.routes";
+import reservaActividadRoutes from "./routes/actividades/reservaActividad.routes";
+
+import amenidadRoutes from "./routes/amenidades/amenidad.routes";
+import reservaAmenidadRoutes from "./routes/amenidades/reservaAmenidad.routes";
+
+import terapeutaRoutes from "./routes/bienestar/terapeuta.routes";
+import servicioSpaRoutes from "./routes/bienestar/servicioSpa.routes";
+import citaSpaRoutes from "./routes/bienestar/citaSpa.routes";
+
+import boletoParqueRoutes from "./routes/parque/boletoParque.routes";
 import { errorHandler } from "./middlewares/error.middleware";
 import { notFoundHandler } from "./middlewares/notFound.middleware";
 import servicioEventoRoutes from "./routes/eventos/servicioEvento.routes";
@@ -56,6 +73,18 @@ app.use("/api/choferes", choferRoutes);
 app.use("/api/vehiculos", vehiculoRoutes);
 app.use("/api/reservas-transporte", reservaTransporteRoutes);
 app.use("/api/carritos", carritoRoutes);
+app.use("/api/sucursales", sucursalRoutes);
+
+app.use("/api/mesas", mesaRoutes);
+app.use("/api/recursos-actividad",recursoActividadRoutes);
+app.use("/api/instructores",instructorRoutes);
+app.use("/api/reservas-actividad",reservaActividadRoutes);
+app.use("/api/amenidades",amenidadRoutes);
+app.use("/api/reservas-amenidad",reservaAmenidadRoutes);
+app.use("/api/terapeutas",terapeutaRoutes);
+app.use("/api/servicios-spa",servicioSpaRoutes);
+app.use("/api/citas-spa",citaSpaRoutes);
+app.use("/api/boletos-parque",boletoParqueRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);
