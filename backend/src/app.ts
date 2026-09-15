@@ -18,6 +18,7 @@ import terapeutaRoutes from "./routes/bienestar/terapeuta.routes";
 import servicioSpaRoutes from "./routes/bienestar/servicioSpa.routes";
 import citaSpaRoutes from "./routes/bienestar/citaSpa.routes";
 import boletoParqueRoutes from "./routes/parque/boletoParque.routes";
+import reservaMesaRoutes from "./routes/restaurante/reservaMesa.routes";
 
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./docs/swagger";
@@ -62,7 +63,7 @@ app.use("/api/terapeutas", terapeutaRoutes);
 app.use("/api/servicios-spa", servicioSpaRoutes);
 app.use("/api/citas-spa", citaSpaRoutes);
 app.use("/api/boletos-parque", boletoParqueRoutes);
-
+app.use("/api/reservas-mesa", reservaMesaRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);
