@@ -16,6 +16,7 @@ import carritoRoutes from "./routes/carrito/carrito.routes";
 import sucursalRoutes from "./routes/sucursales/sucursal.routes";
 
 import mesaRoutes from "./routes/restaurante/mesa.routes";
+import reservaMesaRoutes from "./routes/restaurante/reservaMesa.routes";
 
 import recursoActividadRoutes from "./routes/actividades/recursoActividad.routes";
 import instructorRoutes from "./routes/actividades/instructor.routes";
@@ -85,6 +86,7 @@ app.use("/api/terapeutas",terapeutaRoutes);
 app.use("/api/servicios-spa",servicioSpaRoutes);
 app.use("/api/citas-spa",citaSpaRoutes);
 app.use("/api/boletos-parque",boletoParqueRoutes);
+app.use("/api/reservas-mesa",reservaMesaRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);
