@@ -36,12 +36,26 @@ export const update = async (id: number, data: any) => {
   return terapeuta;
 };
 
-export const remove = async (id: number) => {
-  const terapeuta = await getById(id);
+export const remove = async (
+  id: number
+) => {
+  const terapeuta =
+    await getById(id);
+
   const usos =
-  await CitaBienestar.count({
-    where: {
-      terapeuta_id: id,
-    },
-  });
-}
+    await CitaBienestar.count({
+      where: {
+        terapeuta_id: id,
+      },
+    });
+
+  if (usos > 0) {
+    throw new AppError(
+      409,
+      "THERAPIST_IN_USE",
+      "El terapeuta tiene citas asociadas y no puede eliminarse"
+    );
+  }
+
+  await terapeuta.destroy();
+};

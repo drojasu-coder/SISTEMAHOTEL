@@ -44,7 +44,7 @@ export const create = async (data: any) => {
   const terapeuta = await Terapeuta.findByPk(data.terapeuta_id);
   if (!terapeuta) throw new AppError(404, "THERAPIST_NOT_FOUND", "El terapeuta no existe");
 
-  const servicio =
+const servicio =
   await ServicioBienestar.findByPk(
     data.servicio_bienestar_id
   );
@@ -62,17 +62,33 @@ export const create = async (data: any) => {
   const horaFinConBuffer = minutesToTime(finConBufferMinutos);
 
   // 3. Validar traslape considerando el buffer de descanso del terapeuta
-  const traslape =
+const traslape =
   await CitaBienestar.findOne({
     where: {
-      terapeuta_id: data.terapeuta_id,
-      fecha: data.fecha,
-      estado: 'confirmada',
+      terapeuta_id:
+        data.terapeuta_id,
+
+      fecha:
+        data.fecha,
+
+      estado:
+        "confirmada",
+
       [Op.and]: [
-        { hora_inicio: { [Op.lt]: horaFinConBuffer } },
-        { hora_fin: { [Op.gt]: data.hora_inicio } }
-      ]
-    }
+        {
+          hora_inicio: {
+            [Op.lt]:
+              horaFinConBuffer,
+          },
+        },
+        {
+          hora_fin: {
+            [Op.gt]:
+              data.hora_inicio,
+          },
+        },
+      ],
+    },
   });
 
   if (traslape) {
