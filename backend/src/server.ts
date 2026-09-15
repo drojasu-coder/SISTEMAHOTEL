@@ -1,14 +1,8 @@
-import express from "express";
+import app from "./app";
+import {env} from "./config/env";
 
-const app = express();
-const PORT = 4000;
+app.listen(env.PORT, () =>{
+  console.log(`Servidor corriendo en http://localhost:${env.PORT}`
 
-app.use(express.json());
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", mensaje: "El servidor esta vivo" });
-});
-
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  );
 });
