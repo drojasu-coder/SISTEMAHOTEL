@@ -38,11 +38,83 @@ export const getById = async (id: number) => {
   return reserva;
 };
 
+const timeToMinutes = (
+  time: string
+) => {
+  const [hours, minutes] =
+    time
+      .split(":")
+      .map(Number);
+
+  return (
+    hours * 60 +
+    minutes
+  );
+};
+
+const validateDate = (
+  fecha: string
+) => {
+  const hoy =
+    new Date();
+
+  hoy.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const fechaReserva =
+    new Date(
+      `${fecha}T00:00:00`
+    );
+
+  if (
+    fechaReserva < hoy
+  ) {
+    throw new AppError(
+      422,
+      "ACTIVITY_DATE_IN_PAST",
+      "La fecha de la actividad no puede estar en el pasado"
+    );
+  }
+};
+
 export const create = async (data: CreateReservaActividadData) => {
+
+  validateDate(
+  data.fecha
+);
   // 1. Validar que la hora de inicio sea menor a la de fin
   if (data.hora_inicio >= data.hora_fin) {
     throw new AppError(400, "INVALID_TIME_RANGE", "La hora de inicio debe ser anterior a la hora de fin");
   }
+
+  const inicioMinutos =
+  timeToMinutes(
+    data.hora_inicio
+  );
+
+const finMinutos =
+  timeToMinutes(
+    data.hora_fin
+  );
+
+const duracion =
+  finMinutos -
+  inicioMinutos;
+
+if (
+  duracion < 30 ||
+  duracion > 120
+) {
+  throw new AppError(
+    422,
+    "INVALID_ACTIVITY_DURATION",
+    "La actividad debe durar entre 30 minutos y 2 horas"
+  );
+}
 
   // 2. Validar que el recurso exista
   const recurso = await RecursoActividad.findByPk(data.recurso_id);
@@ -66,27 +138,67 @@ export const create = async (data: CreateReservaActividadData) => {
     throw new AppError(409, "RESOURCE_OVERLAP", "El recurso ya está ocupado en ese horario. Por favor elija otro horario.");
   }
 
-  // 4. REGLA DERCAS: Validar traslape del INSTRUCTOR (Si el cliente pidió uno)
-  if (data.instructor_id) {
-    const instructor = await Instructor.findByPk(data.instructor_id);
-    if (!instructor) throw new AppError(404, "INSTRUCTOR_NOT_FOUND", "El instructor solicitado no existe");
+// 4. REGLA DERCAS:
+// Validar instructor y traslape si fue solicitado
+if (data.instructor_id) {
+  const instructor =
+    await Instructor.findByPk(
+      data.instructor_id
+    );
 
-    const traslapeInstructor = await ReservaActividad.findOne({
+  if (!instructor) {
+    throw new AppError(
+      404,
+      "INSTRUCTOR_NOT_FOUND",
+      "El instructor solicitado no existe"
+    );
+  }
+
+  if (!instructor.activo) {
+    throw new AppError(
+      422,
+      "INSTRUCTOR_INACTIVE",
+      "El instructor seleccionado se encuentra inactivo"
+    );
+  }
+
+  const traslapeInstructor =
+    await ReservaActividad.findOne({
       where: {
-        instructor_id: data.instructor_id,
-        fecha: data.fecha,
-        estado: 'confirmada',
+        instructor_id:
+          data.instructor_id,
+
+        fecha:
+          data.fecha,
+
+        estado:
+          "confirmada",
+
         [Op.and]: [
-          { hora_inicio: { [Op.lt]: data.hora_fin } },
-          { hora_fin: { [Op.gt]: data.hora_inicio } }
-        ]
-      }
+          {
+            hora_inicio: {
+              [Op.lt]:
+                data.hora_fin,
+            },
+          },
+          {
+            hora_fin: {
+              [Op.gt]:
+                data.hora_inicio,
+            },
+          },
+        ],
+      },
     });
 
-    if (traslapeInstructor) {
-      throw new AppError(409, "INSTRUCTOR_OVERLAP", "El instructor ya tiene una clase en ese horario.");
-    }
+  if (traslapeInstructor) {
+    throw new AppError(
+      409,
+      "INSTRUCTOR_OVERLAP",
+      "El instructor ya tiene una clase en ese horario."
+    );
   }
+}
 
   // 5. Si pasa todas las validaciones, creamos la reserva
   const reserva = await ReservaActividad.create({
@@ -96,7 +208,7 @@ export const create = async (data: CreateReservaActividadData) => {
     fecha: data.fecha,
     hora_inicio: data.hora_inicio,
     hora_fin: data.hora_fin,
-    con_equipo: data.con_equipo || false,
+    con_equipo: data.con_equipo ?? false,
     estado: 'confirmada'
   });
 

@@ -34,11 +34,18 @@ export const createCitaSpaSchema =
   })
   .strict();
 
-export const updateCitaSpaSchema = z
-  .object({
-    estado: z.string().max(20).optional(),
+export const updateCitaSpaSchema =
+  z.object({
+    estado: z.enum(
+      [
+        "confirmada",
+        "cancelada",
+        "completada",
+      ],
+      {
+        error:
+          "El estado debe ser confirmada, cancelada o completada",
+      }
+    ),
   })
-  .strict()
-  .refine((data) => Object.keys(data).length > 0, {
-    message: "Debe enviar al menos un campo para actualizar",
-  });
+  .strict();

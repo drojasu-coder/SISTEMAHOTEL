@@ -20,16 +20,13 @@ import { idParamSchema } from "../../validators/common.validator";
 
 const router = Router();
 
-/*
- * CONSULTA PÚBLICA / EMPLEADOS
- */
 
 /**
  * @openapi
  * /api/mesas:
  *   get:
  *     tags:
- *       - Restaurante - Mesas
+ *       - Mesas
  *     summary: Listar mesas
  *     description: Obtiene todas las mesas disponibles en el restaurante.
  *     responses:
@@ -46,7 +43,7 @@ router.get(
  * /api/mesas/{id}:
  *   get:
  *     tags:
- *       - Restaurante - Mesas
+ *       - Mesas
  *     summary: Obtener una mesa por ID
  *     parameters:
  *       - in: path
@@ -67,16 +64,12 @@ router.get(
   mesaController.getById
 );
 
-/*
- * ADMINISTRACIÓN
- */
-
 /**
  * @openapi
  * /api/mesas:
  *   post:
  *     tags:
- *       - Restaurante - Mesas
+ *       - Mesas
  *     summary: Crear una mesa
  *     description: Crea una nueva mesa. Requiere rol administrador o gerente de restaurante.
  *     security:
@@ -118,7 +111,7 @@ router.post(
  * /api/mesas/{id}:
  *   patch:
  *     tags:
- *       - Restaurante - Mesas
+ *       - Mesas
  *     summary: Actualizar una mesa
  *     security:
  *       - bearerAuth: []
@@ -160,7 +153,7 @@ router.patch(
  * /api/mesas/{id}:
  *   delete:
  *     tags:
- *       - Restaurante - Mesas
+ *       - Mesas
  *     summary: Eliminar una mesa
  *     security:
  *       - bearerAuth: []

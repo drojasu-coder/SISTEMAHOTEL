@@ -23,6 +23,24 @@ const envSchema = z.object({
     "CART_EXPIRATION_MINUTES debe ser mayor que cero"
   )
   .default(15),
+
+  PARK_TICKET_PRICE_ADULT: z.coerce
+  .number()
+  .positive(
+    "PARK_TICKET_PRICE_ADULT debe ser mayor que cero"
+  ),
+
+PARK_TICKET_PRICE_CHILD: z.coerce
+  .number()
+  .positive(
+    "PARK_TICKET_PRICE_CHILD debe ser mayor que cero"
+  ),
+
+PARK_TICKET_PRICE_FAMILY: z.coerce
+  .number()
+  .positive(
+    "PARK_TICKET_PRICE_FAMILY debe ser mayor que cero"
+  ),
     
     JWT_SECRET: z
     .string()

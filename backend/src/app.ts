@@ -12,6 +12,7 @@ import choferRoutes from "./routes/transporte/chofer.routes";
 import vehiculoRoutes from "./routes/transporte/vehiculo.routes";
 import reservaTransporteRoutes from "./routes/transporte/reservaTransporte.routes";
 import carritoRoutes from "./routes/carrito/carrito.routes";
+import carritoItemsRoutes from "./routes/carrito/carritoItem.routes";
 
 import sucursalRoutes from "./routes/sucursales/sucursal.routes";
 
@@ -73,7 +74,6 @@ app.use("/api/turnos", turnoRoutes);
 app.use("/api/choferes", choferRoutes);
 app.use("/api/vehiculos", vehiculoRoutes);
 app.use("/api/reservas-transporte", reservaTransporteRoutes);
-app.use("/api/carritos", carritoRoutes);
 app.use("/api/sucursales", sucursalRoutes);
 
 app.use("/api/mesas", mesaRoutes);
@@ -87,6 +87,8 @@ app.use("/api/servicios-spa",servicioSpaRoutes);
 app.use("/api/citas-spa",citaSpaRoutes);
 app.use("/api/boletos-parque",boletoParqueRoutes);
 app.use("/api/reservas-mesa",reservaMesaRoutes);
+app.use("/api/carritos/:carritoId/items", carritoItemsRoutes);
+app.use("/api/carritos",carritoRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);
