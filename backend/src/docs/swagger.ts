@@ -24,6 +24,12 @@ const options: swaggerJsdoc.Options = {
     ],
 
     tags: [
+      {
+  name: "Autenticación",
+  description:
+    "Registro, inicio de sesión, consulta de sesión y control de acceso",
+},
+
   {
     name: "Sucursales",
     description: "Administración de sucursales del hotel",
@@ -1731,6 +1737,141 @@ UpdateBoletoParqueEstadoRequest: {
         "cancelado",
       ],
       example: "usado",
+    },
+  },
+},
+
+AuthRegisterRequest: {
+  type: "object",
+
+  required: [
+    "nombre",
+    "email",
+    "password",
+  ],
+
+  additionalProperties: false,
+
+  properties: {
+    nombre: {
+      type: "string",
+      minLength: 2,
+      maxLength: 150,
+      example: "José Pérez",
+    },
+
+    email: {
+      type: "string",
+      format: "email",
+      maxLength: 150,
+      example: "jose@hotel.com",
+    },
+
+    password: {
+      type: "string",
+      minLength: 8,
+      maxLength: 72,
+      example: "Hotel1234",
+      description:
+        "Debe contener al menos una mayúscula, una minúscula y un número.",
+    },
+
+    telefono: {
+      type: "string",
+      example: "55555555",
+      description:
+        "Campo opcional de entre 8 y 20 caracteres.",
+    },
+  },
+},
+
+AuthLoginRequest: {
+  type: "object",
+
+  required: [
+    "email",
+    "password",
+  ],
+
+  additionalProperties: false,
+
+  properties: {
+    email: {
+      type: "string",
+      format: "email",
+      example: "jose@hotel.com",
+    },
+
+    password: {
+      type: "string",
+      example: "Hotel1234",
+    },
+  },
+},
+
+AuthUser: {
+  type: "object",
+
+  properties: {
+    id: {
+      type: "integer",
+      example: 3,
+    },
+
+    nombre: {
+      type: "string",
+      example: "José Pérez",
+    },
+
+    email: {
+      type: "string",
+      format: "email",
+      example: "jose@hotel.com",
+    },
+
+    telefono: {
+      type: "string",
+      nullable: true,
+      example: "55555555",
+    },
+
+    rol: {
+      type: "string",
+
+      enum: [
+        "admin",
+        "recepcionista",
+        "gerente_restaurante",
+        "gerente_habitaciones",
+        "empleado_operativo",
+        "cliente",
+      ],
+
+      example: "cliente",
+    },
+
+    activo: {
+      type: "boolean",
+      example: true,
+    },
+  },
+},
+
+AuthLoginData: {
+  type: "object",
+
+  properties: {
+    accessToken: {
+      type: "string",
+      description:
+        "JWT de acceso que debe enviarse como Bearer Token.",
+      example:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    },
+
+    usuario: {
+      $ref:
+        "#/components/schemas/AuthUser",
     },
   },
 },
