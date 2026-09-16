@@ -105,3 +105,28 @@ const details = result.error.issues.map((issue) => {
     next();
   };
 };
+
+export const validateQuery = (schema: ZodType): RequestHandler => {
+  return (req, _res, next) => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      const details = result.error.issues.map((issue) => ({
+        field: issue.path.length ? issue.path.join(".") : "query",
+        message: issue.message,
+      }));
+      return next(new AppError(
+        400,
+        "VALIDATION_ERROR",
+        "Los parámetros enviados no son válidos",
+        details,
+      ));
+    }
+    Object.defineProperty(req, "query", {
+      value: result.data,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    next();
+  };
+};

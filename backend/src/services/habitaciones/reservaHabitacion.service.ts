@@ -22,7 +22,19 @@ interface UpdateReservaHabitacionData {
 }
 
 const reservationInclude = [
-  { model: Usuario },
+  {
+    model: Usuario,
+    attributes: [
+      "id",
+      "nombre",
+      "email",
+      "rol",
+      "telefono",
+      "activo",
+      "createdAt",
+      "updatedAt",
+    ],
+  },
   { model: Habitacion, include: [{ model: TipoHabitacion }] },
 ];
 

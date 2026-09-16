@@ -49,15 +49,20 @@ import configuracionRoutes from "./routes/configuracion.routes";
 import proveedorRoutes from "./routes/proveedores/proveedor.routes";
 import proveedorProductoRoutes from "./routes/proveedores/proveedorProducto.routes";
 import cuentaPorPagarRoutes from "./routes/proveedores/cuentaPorPagar.routes";
+import pagoRoutes from "./routes/pagos/pago.routes";
+import { stripeWebhook } from "./controllers/pagos/pago.controller";
 
 const app = express();
 
 app.use(cors());
 
+// Stripe signature verification requires the untouched request bytes.
+app.post("/api/pagos/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhook);
+
 app.use(
   express.json({
     limit: "1mb",
-  })
+  }),
 );
 
 app.use(
@@ -65,7 +70,7 @@ app.use(
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
     explorer: true,
-  })
+  }),
 );
 
 app.get("/api/health", (_req, res) => {
@@ -78,7 +83,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/servicios-evento", servicioEventoRoutes);
-<<<<<<< HEAD
+
 app.use("/api/habitaciones", habitacionRoutes);
 app.use("/api/tipos-habitacion", tipoHabitacionRoutes);
 app.use("/api/parqueos", parqueoRoutes);
@@ -91,32 +96,33 @@ app.use("/api/configuraciones", configuracionRoutes);
 app.use("/api/proveedores", proveedorRoutes);
 app.use("/api/proveedor-productos", proveedorProductoRoutes);
 app.use("/api/cuentas-por-pagar", cuentaPorPagarRoutes);
-=======
+app.use("/api/pagos", pagoRoutes);
 app.use("/api/salones", salonRoutes);
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/reservas-evento", reservaEventoRoutes);
-app.use("/api/reservas-evento/:reservaId/servicios", reservaEventoServicioRoutes);
+app.use(
+  "/api/reservas-evento/:reservaId/servicios",
+  reservaEventoServicioRoutes,
+);
 app.use("/api/empleados", empleadoRoutes);
-app.use("/api/turnos", turnoRoutes); 
+app.use("/api/turnos", turnoRoutes);
 app.use("/api/choferes", choferRoutes);
 app.use("/api/vehiculos", vehiculoRoutes);
 app.use("/api/reservas-transporte", reservaTransporteRoutes);
 app.use("/api/sucursales", sucursalRoutes);
-
 app.use("/api/mesas", mesaRoutes);
-app.use("/api/recursos-actividad",recursoActividadRoutes);
-app.use("/api/instructores",instructorRoutes);
-app.use("/api/reservas-actividad",reservaActividadRoutes);
-app.use("/api/amenidades",amenidadRoutes);
-app.use("/api/reservas-amenidad",reservaAmenidadRoutes);
-app.use("/api/terapeutas",terapeutaRoutes);
-app.use("/api/servicios-spa",servicioSpaRoutes);
-app.use("/api/citas-spa",citaSpaRoutes);
-app.use("/api/boletos-parque",boletoParqueRoutes);
-app.use("/api/reservas-mesa",reservaMesaRoutes);
+app.use("/api/recursos-actividad", recursoActividadRoutes);
+app.use("/api/instructores", instructorRoutes);
+app.use("/api/reservas-actividad", reservaActividadRoutes);
+app.use("/api/amenidades", amenidadRoutes);
+app.use("/api/reservas-amenidad", reservaAmenidadRoutes);
+app.use("/api/terapeutas", terapeutaRoutes);
+app.use("/api/servicios-spa", servicioSpaRoutes);
+app.use("/api/citas-spa", citaSpaRoutes);
+app.use("/api/boletos-parque", boletoParqueRoutes);
+app.use("/api/reservas-mesa", reservaMesaRoutes);
 app.use("/api/carritos/:carritoId/items", carritoItemsRoutes);
-app.use("/api/carritos",carritoRoutes);
->>>>>>> origin/integration/neto-carrito
+app.use("/api/carritos", carritoRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);

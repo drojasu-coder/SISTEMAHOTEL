@@ -9,6 +9,7 @@ import {
 import {
   CartItemType,
 } from "../../constants/cart";
+import { isReservationFullyPaid } from "../pago.service";
 
 const db = require("../../models");
 
@@ -268,6 +269,19 @@ const resolveHabitacion =
     validateReferenceState(
       reserva.estado
     );
+    if (
+      await isReservationFullyPaid(
+        reserva.id,
+        reserva.total,
+        transaction,
+      )
+    ) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva seleccionada ya no se encuentra disponible"
+      );
+    }
 
     return {
       usuarioId:

@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       Carrito.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
       Carrito.hasMany(models.CarritoItem, { foreignKey: "carrito_id" });
+      Carrito.hasMany(models.Pago, { foreignKey: "carrito_id" });
     }
   }
   Carrito.init(
