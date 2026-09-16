@@ -299,6 +299,13 @@ Table promociones {
 
 // ===================== CAPA 2: FACTURACION =====================
 
+Table configuraciones {
+  id integer [pk, increment]
+  porcentaje_iva decimal(5,2) [not null, default: 12, note: 'Porcentaje de IVA global vigente']
+  createdAt timestamp
+  updatedAt timestamp
+}
+
 Table facturas {
   id integer [pk, increment]
   usuario_id integer [not null, ref: > usuarios.id]
@@ -307,6 +314,7 @@ Table facturas {
   direccion_fiscal varchar(255)
   subtotal decimal(10,2) [not null]
   iva decimal(10,2) [not null]
+  porcentaje_iva decimal(5,2) [not null, note: 'Porcentaje aplicado a esta factura; no cambia históricamente']
   total decimal(10,2) [not null]
   estado varchar(20) [not null, default: 'pendiente', note: 'pendiente, emitida, anulada']
   fecha_emision timestamp
