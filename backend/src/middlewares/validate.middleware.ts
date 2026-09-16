@@ -8,10 +8,40 @@ export const validateBody = (schema: ZodType): RequestHandler =>{
         const result = schema.safeParse(req.body);
 
         if(!result.success){
-            const details = result.error.issues.map((issue) =>({
-                field: issue.path.join("."),
-                message: issue.message,
-            }));
+const details = result.error.issues.map((issue) => {
+  if (issue.code === "unrecognized_keys") {
+    const keys = issue.keys.join(", ");
+
+    return {
+      field:
+        issue.keys.length === 1
+          ? issue.keys[0]
+          : "body",
+      message:
+        issue.keys.length === 1
+          ? `El campo "${keys}" no está permitido`
+          : `Los campos "${keys}" no están permitidos`,
+    };
+  }
+
+  if (issue.code === "invalid_type") {
+    return {
+      field:
+        issue.path.length > 0
+          ? issue.path.join(".")
+          : "body",
+      message: "El tipo de dato enviado no es válido",
+    };
+  }
+
+  return {
+    field:
+      issue.path.length > 0
+        ? issue.path.join(".")
+        : "body",
+    message: issue.message,
+  };
+});
 
             return next(
                 new AppError(
@@ -36,11 +66,30 @@ export const validateParams = (
     const result = schema.safeParse(req.params);
 
     if (!result.success) {
-      const details = result.error.issues.map((issue) => ({
-        field: issue.path.join("."),
-        message: issue.message,
-      }));
+const details = result.error.issues.map((issue) => {
+  if (issue.code === "unrecognized_keys") {
+    const keys = issue.keys.join(", ");
 
+    return {
+      field:
+        issue.keys.length === 1
+          ? issue.keys[0]
+          : "body",
+      message:
+        issue.keys.length === 1
+          ? `El campo "${keys}" no está permitido`
+          : `Los campos "${keys}" no están permitidos`,
+    };
+  }
+
+  return {
+    field:
+      issue.path.length > 0
+        ? issue.path.join(".")
+        : "body",
+    message: issue.message,
+  };
+});
       return next(
         new AppError(
           400,
