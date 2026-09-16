@@ -38,6 +38,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
       },
+      porcentaje_iva: {
+        type: DataTypes.DECIMAL(5, 2),
+        allowNull: false,
+        defaultValue: 12,
+      },
       total: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
