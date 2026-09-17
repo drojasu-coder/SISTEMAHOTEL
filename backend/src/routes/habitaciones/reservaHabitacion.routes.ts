@@ -16,6 +16,10 @@ const rolesGestionHabitaciones = [
   ROLES.RECEPCIONISTA,
   ROLES.GERENTE_HABITACIONES,
 ];
+const rolesCreacionReservas = [
+  ...rolesGestionHabitaciones,
+  ROLES.CLIENTE,
+];
 
 /**
  * @openapi
@@ -71,9 +75,9 @@ router.get("/:id", authMiddleware, validateParams(reservaHabitacionIdSchema), re
  *         application/json:
  *           schema:
  *             type: object
- *             required: [usuario_id, habitacion_id, fecha_entrada, fecha_salida, numero_huespedes]
+ *             required: [habitacion_id, fecha_entrada, fecha_salida, numero_huespedes]
  *             properties:
- *               usuario_id: { type: integer, minimum: 1, example: 1 }
+ *               usuario_id: { type: integer, minimum: 1, example: 1, description: 'Opcional para clientes, requerido para administradores' }
  *               habitacion_id: { type: integer, minimum: 1, example: 1 }
  *               fecha_entrada: { type: string, format: date, example: '2026-10-01' }
  *               fecha_salida: { type: string, format: date, example: '2026-10-05' }
@@ -93,13 +97,13 @@ router.get("/:id", authMiddleware, validateParams(reservaHabitacionIdSchema), re
  *         description: Usuario o habitación no encontrada
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  *       409:
- *         description: Habitación no disponible
+ *         description: Habitación no disponible o excede la capacidad
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  */
 router.post(
   "/",
   authMiddleware,
-  requireRole(...rolesGestionHabitaciones),
+  requireRole(...rolesCreacionReservas),
   validateBody(createReservaHabitacionSchema),
   reservaHabitacionController.createReservaHabitacion
 );

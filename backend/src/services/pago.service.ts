@@ -193,7 +193,8 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
       }
       return eventTotal * quantity;
     }))).reduce((sum, itemTotal) => sum + itemTotal, 0));
-  return { total, requiredAdvance };
+  const isOnlyRoom = items.length > 0 && items.every((item: any) => item.tipo_item === "habitacion");
+  return { total, requiredAdvance, isOnlyRoom };
 };
 
 const approvedAdvanceAmount = async (where: Record<string, unknown>, transaction: any) => {
@@ -242,14 +243,19 @@ const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowP
     key: { reserva_habitacion_id: reservation.id },
     total: round(Number(reservation.total)),
     requiredAdvance: 0,
+    isOnlyRoom: true,
     origin: reservation,
   };
 };
 
 const applyCartPaid = async (origin: any, total: number, paid: number, transaction: any) => {
-  if (origin && origin.constructor?.name === "Carrito" && paid >= total) {
-    await origin.update({ estado: "pagado" }, { transaction });
-    await confirmCartRoomReservations(origin.id, transaction);
+  if (origin && origin.constructor?.name === "Carrito") {
+    const actualPaid = await approvedAmount({ carrito_id: origin.id }, transaction);
+    const totals = await cartTotals(origin.id, transaction, true);
+    if (actualPaid >= totals.total) {
+      await origin.update({ estado: "pagado" }, { transaction });
+      await confirmCartRoomReservations(origin.id, transaction);
+    }
   }
 };
 
@@ -296,6 +302,9 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     const remaining = round(details.total - paid);
     if (amount > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
+    }
+    if (details.isOnlyRoom && amount < remaining) {
+      throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (tipo === "anticipo") {
       if (!details.requiredAdvance) {
@@ -423,6 +432,9 @@ export const approveTransferencia = async (pagoId: number) =>
     const type = payment.tipo_pago as PagoTipo;
     if (Number(payment.monto) > round(details.total - paid)) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
+    }
+    if (details.isOnlyRoom && Number(payment.monto) < round(details.total - paid)) {
+      throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (type === "anticipo") {
       if (!details.requiredAdvance) {

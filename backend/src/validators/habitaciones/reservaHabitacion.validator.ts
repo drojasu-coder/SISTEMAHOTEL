@@ -28,7 +28,7 @@ const reservaFields = {
 
 export const createReservaHabitacionSchema = z
   .object({
-    usuario_id: reservaFields.usuario_id,
+    usuario_id: reservaFields.usuario_id.optional(),
     habitacion_id: reservaFields.habitacion_id,
     fecha_entrada: reservaFields.fecha_entrada,
     fecha_salida: reservaFields.fecha_salida,

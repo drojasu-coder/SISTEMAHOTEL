@@ -26,10 +26,8 @@ const habitacionFields = {
 
   estado: z
     .enum(estadosHabitacion, {
-      errorMap: () => ({
-        message:
-          "El estado debe ser disponible, ocupada, mantenimiento o limpieza",
-      }),
+      message:
+        "El estado debe ser disponible, ocupada, mantenimiento o limpieza",
     })
     .optional(),
 };
