@@ -1801,7 +1801,7 @@ UpdateBoletoParqueEstadoRequest: {
     },
   },
 
-  apis: [routesPath],
+  apis: [routesPath, path.resolve(process.cwd(), "src", "app.ts")],
 };
 
 export const swaggerSpec =

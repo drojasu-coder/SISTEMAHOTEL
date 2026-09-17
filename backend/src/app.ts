@@ -56,6 +56,35 @@ const app = express();
 
 app.use(cors());
 
+/**
+ * @openapi
+ * /api/pagos/stripe/webhook:
+ *   post:
+ *     tags:
+ *       - Stripe Webhook
+ *     summary: Recibe eventos de Stripe
+ *     description: Endpoint para recibir webhooks de Stripe. Verifica la firma con Stripe-Signature y no usa autenticación JWT.
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: Stripe-Signature
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Evento procesado correctamente
+ *       400:
+ *         description: Firma inválida o cuerpo mal formado
+ *       500:
+ *         description: Error al procesar el evento
+ */
 // Stripe signature verification requires the untouched request bytes.
 app.post("/api/pagos/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhook);
 
@@ -73,6 +102,25 @@ app.use(
   }),
 );
 
+/**
+ * @openapi
+ * /api/health:
+ *   get:
+ *     tags:
+ *       - Health
+ *     summary: Verifica el estado del servidor
+ *     description: Retorna 200 OK si el servidor está en funcionamiento.
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Servidor funcionando
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               statusCode: 200
+ *               message: "API de Hotel está funcionando correctamente"
+ */
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
