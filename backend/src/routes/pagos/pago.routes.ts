@@ -225,4 +225,39 @@ router.post("/:id/aprobar-transferencia", requireRole(...managementRoles), valid
  */
 router.get("/:id", validateParams(pagoIdSchema), controller.getById);
 
+/**
+ * @openapi
+ * /api/pagos/{id}/reembolso:
+ *   post:
+ *     tags: [Pagos]
+ *     summary: Reembolsar un pago
+ *     description: Permite realizar el reembolso parcial o total de un pago aprobado.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: integer, minimum: 1 } }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [monto, idempotency_key]
+ *             properties:
+ *               monto: { type: number, minimum: 0.01 }
+ *               motivo: { type: string }
+ *               idempotency_key: { type: string }
+ *           example:
+ *             monto: 500
+ *             motivo: "Solicitud del cliente"
+ *             idempotency_key: "refund-test-001"
+ *     responses:
+ *       200: { description: Reembolso procesado correctamente }
+ *       400: { description: Datos inválidos }
+ *       403: { description: Permisos insuficientes (INSUFFICIENT_PERMISSIONS) }
+ *       404: { description: Pago no encontrado }
+ *       409: { description: Conflicto de negocio (monto excede el pagado) }
+ *       422: { description: Regla de negocio no cumplida }
+ */
+import { createReembolsoSchema } from "../../validators/pagos/pago.validator";
+router.post("/:id/reembolso", requireRole(...managementRoles), validateParams(pagoIdSchema), validateBody(createReembolsoSchema), controller.reembolso);
+
 export default router;

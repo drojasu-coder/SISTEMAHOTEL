@@ -52,7 +52,7 @@ module.exports = {
          RETURNING id`,
         {
           email: ADMIN_EMAIL,
-          password_hash: "$2b$10$7EqJtq98hPqEX7fNZaFWoO",
+          password_hash: "$2b$10$6CAtBn2gEHnqyOxr7hsEe.bdtZnJmiZTM0IrUcA0AgTwPrhgRN4j2",
           createdAt: CREATED_AT,
           updatedAt: CREATED_AT,
         },

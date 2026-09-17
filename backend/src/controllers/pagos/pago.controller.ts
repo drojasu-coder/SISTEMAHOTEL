@@ -27,8 +27,11 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
       throw new AppError(400, "INVALID_WEBHOOK_REQUEST", "La solicitud del webhook no es válida");
     }
     const event = stripeService.constructEvent(req.body, signature);
-    if (["payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.canceled"].includes(event.type)) {
-      await pagoService.processStripeWebhook(event.data.object as Stripe.PaymentIntent, event.type);
+    const intentEvents = ["payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.canceled"];
+    const refundEvents = ["refund.created", "refund.updated", "refund.failed"];
+
+    if (intentEvents.includes(event.type) || refundEvents.includes(event.type)) {
+      await pagoService.processStripeWebhook(event.data.object as any, event.type);
     }
     res.status(200).json({ received: true });
   } catch (error) { next(error); }
@@ -62,5 +65,12 @@ export const aprobarTransferencia = async (req: Request, res: Response, next: Ne
   try {
     const pago = await pagoService.approveTransferencia(Number(req.params.id));
     res.status(200).json({ success: true, statusCode: 200, message: "Transferencia aprobada correctamente", data: pago });
+  } catch (error) { next(error); }
+};
+
+export const reembolso = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await pagoService.createReembolso(Number(req.params.id), req.body, req.user!);
+    res.status(200).json({ success: true, statusCode: 200, message: "Reembolso procesado correctamente", data });
   } catch (error) { next(error); }
 };

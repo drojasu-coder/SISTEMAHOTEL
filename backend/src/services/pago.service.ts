@@ -63,12 +63,23 @@ const payableEventStates = new Set(["cotizacion", "confirmada"]);
 
 const approvedAmount = async (where: Record<string, unknown>, transaction: any) => {
   const payments = await Pago.findAll({
-    where: { ...where, estado: "aprobado" },
-    attributes: ["monto"],
+    where: { ...where, estado: { [Op.in]: ["aprobado", "reembolsado_parcial", "reembolsado"] } },
+    attributes: ["id", "monto"],
     transaction,
     lock: transaction.LOCK.UPDATE,
   });
-  return round(payments.reduce((sum: number, payment: any) => sum + Number(payment.monto), 0));
+  let sum = 0;
+  for (const payment of payments) {
+    const refunds = await db.Reembolso.findAll({
+      where: { pago_id: payment.id, estado: "aprobado" },
+      attributes: ["monto"],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    const refunded = refunds.reduce((acc: number, r: any) => acc + Number(r.monto), 0);
+    sum += Math.max(0, Number(payment.monto) - refunded);
+  }
+  return round(sum);
 };
 
 const approvedCartAmount = (carritoId: number, transaction: any) =>
@@ -199,12 +210,23 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
 
 const approvedAdvanceAmount = async (where: Record<string, unknown>, transaction: any) => {
   const payments = await Pago.findAll({
-    where: { ...where, estado: "aprobado", tipo_pago: "anticipo" },
-    attributes: ["monto"],
+    where: { ...where, estado: { [Op.in]: ["aprobado", "reembolsado_parcial", "reembolsado"] }, tipo_pago: "anticipo" },
+    attributes: ["id", "monto"],
     transaction,
     lock: transaction.LOCK.UPDATE,
   });
-  return round(payments.reduce((sum: number, payment: any) => sum + Number(payment.monto), 0));
+  let sum = 0;
+  for (const payment of payments) {
+    const refunds = await db.Reembolso.findAll({
+      where: { pago_id: payment.id, estado: "aprobado" },
+      attributes: ["monto"],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    const refunded = refunds.reduce((acc: number, r: any) => acc + Number(r.monto), 0);
+    sum += Math.max(0, Number(payment.monto) - refunded);
+  }
+  return round(sum);
 };
 
 const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowPaid = false) => {
@@ -354,10 +376,64 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
   });
 };
 
-export const processStripeWebhook = async (intent: Stripe.PaymentIntent, eventType: string) =>
+export const processStripeWebhook = async (object: any, eventType: string) =>
   sequelize.transaction(async (transaction: any) => {
-    const payment = await Pago.findOne({ where: { id_transaccion_externo: intent.id }, transaction, lock: transaction.LOCK.UPDATE });
-    if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este PaymentIntent");
+    const isRefundEvent = eventType.includes("refund");
+    const intentId = isRefundEvent ? (typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id) : object.id;
+
+    const payment = await Pago.findOne({ where: { id_transaccion_externo: intentId }, transaction, lock: transaction.LOCK.UPDATE });
+    if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
+
+    if (isRefundEvent) {
+      const refundObj = object as Stripe.Refund;
+      let reembolso = await db.Reembolso.findOne({ where: { id_reembolso_externo: refundObj.id }, transaction });
+
+      const refundState = refundObj.status === "succeeded" ? "aprobado" :
+                          refundObj.status === "failed" ? "rechazado" : "pendiente";
+
+      if (!reembolso) {
+        reembolso = await db.Reembolso.create({
+          pago_id: payment.id,
+          monto: round(refundObj.amount / 100),
+          moneda: refundObj.currency.toUpperCase(),
+          motivo: refundObj.reason ?? null,
+          estado: refundState,
+          fecha_reembolso: refundState === "aprobado" ? new Date(refundObj.created * 1000) : null,
+          id_reembolso_externo: refundObj.id,
+        }, { transaction });
+      } else if (reembolso.estado !== refundState) {
+        await reembolso.update({
+          estado: refundState,
+          fecha_reembolso: refundState === "aprobado" ? new Date(refundObj.created * 1000) : null
+        }, { transaction });
+      }
+
+      const refunds = await db.Reembolso.findAll({
+        where: { pago_id: payment.id, estado: "aprobado" },
+        attributes: ["monto"],
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      const refunded = round(refunds.reduce((acc: number, r: any) => acc + Number(r.monto), 0));
+
+      let newPaymentState = payment.estado;
+      if (refunded === 0) {
+        if (payment.estado === "reembolsado_parcial" || payment.estado === "reembolsado") {
+          newPaymentState = "aprobado";
+        }
+      } else if (refunded >= round(Number(payment.monto))) {
+        newPaymentState = "reembolsado";
+      } else {
+        newPaymentState = "reembolsado_parcial";
+      }
+
+      if (payment.estado !== newPaymentState) {
+        await payment.update({ estado: newPaymentState }, { transaction });
+      }
+      return payment;
+    }
+
+    const intent = object as Stripe.PaymentIntent;
     if (payment.pasarela !== "stripe" || toStripeAmount(payment.monto, payment.moneda) !== intent.amount ||
         payment.moneda.toLowerCase() !== intent.currency.toUpperCase().toLowerCase()) {
       throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
@@ -502,6 +578,101 @@ export const getPagos = async (
   }
   return Pago.findAll({ where, order: [["createdAt", "DESC"]] });
 };
+
+export const createReembolso = async (
+  pagoId: number,
+  data: { monto: number | string; motivo?: string; idempotency_key?: string },
+  requester: RequesterContext,
+) =>
+  sequelize.transaction(async (transaction: any) => {
+    if (!isPaymentAdministrator(requester)) {
+      throw new AppError(403, "INSUFFICIENT_PERMISSIONS", "No tienes permisos para realizar reembolsos");
+    }
+    const payment = await Pago.findByPk(pagoId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "El pago no existe");
+    if (!["aprobado", "reembolsado_parcial"].includes(payment.estado)) {
+      throw new AppError(409, "PAYMENT_NOT_REFUNDABLE", "El pago no se encuentra en un estado reembolsable");
+    }
+
+    const isStripe = payment.pasarela === "stripe" && payment.id_transaccion_externo;
+
+    if (!isStripe) {
+      if (!data.idempotency_key) {
+        throw new AppError(400, "MISSING_IDEMPOTENCY_KEY", "La llave de idempotencia es obligatoria para pagos manuales");
+      }
+      const existingLocal = await db.Reembolso.findOne({
+        where: { id_reembolso_externo: data.idempotency_key },
+        transaction
+      });
+      if (existingLocal) return existingLocal;
+    }
+
+    const amount = money(data.monto, "El monto del reembolso");
+
+    const refunds = await db.Reembolso.findAll({
+      where: { pago_id: payment.id, estado: "aprobado" },
+      attributes: ["monto"],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    const refunded = round(refunds.reduce((acc: number, r: any) => acc + Number(r.monto), 0));
+    const remaining = round(Number(payment.monto) - refunded);
+    if (amount > remaining) {
+      throw new AppError(409, "REFUND_EXCEEDS_BALANCE", "El monto del reembolso excede el saldo pagado disponible");
+    }
+
+    const isTotal = round(refunded + amount) === round(Number(payment.monto));
+
+    let externalRefundId = null;
+    let refundState = "aprobado";
+    let refundDate = new Date();
+
+    if (isStripe) {
+      try {
+        const stripeRefund = await stripeService.createRefund(
+          payment.id_transaccion_externo,
+          amount,
+          payment.moneda,
+          data.motivo === "duplicate" || data.motivo === "fraudulent" || data.motivo === "requested_by_customer"
+            ? data.motivo : undefined,
+          data.idempotency_key
+        );
+        externalRefundId = stripeRefund.id;
+
+        const existingByExternal = await db.Reembolso.findOne({
+          where: { id_reembolso_externo: externalRefundId },
+          transaction,
+        });
+        if (existingByExternal) return existingByExternal;
+
+        refundState = stripeRefund.status === "succeeded" ? "aprobado" :
+                      stripeRefund.status === "failed" ? "rechazado" : "pendiente";
+        if (refundState !== "aprobado") refundDate = null as any;
+      } catch (error: any) {
+        if (error instanceof AppError) throw error;
+        throw new AppError(502, "STRIPE_REFUND_FAILED", "No fue posible procesar el reembolso en Stripe");
+      }
+    }
+
+    const reembolso = await db.Reembolso.create({
+      pago_id: payment.id,
+      monto: amount,
+      moneda: payment.moneda,
+      motivo: data.motivo ?? null,
+      estado: refundState,
+      fecha_reembolso: refundDate,
+      id_reembolso_externo: isStripe ? externalRefundId : data.idempotency_key,
+    }, { transaction });
+
+    if (refundState === "aprobado") {
+      await payment.update({ estado: isTotal ? "reembolsado" : "reembolsado_parcial" }, { transaction });
+    }
+
+    return reembolso;
+  });
 
 export const aprobarTransferencia = approveTransferencia;
 export const getFinancialSummary = getResumenPago;

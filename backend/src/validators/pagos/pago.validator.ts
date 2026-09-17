@@ -42,3 +42,12 @@ export const resumenPagoQuerySchema = z.object({
   (value) => Boolean(value.carrito_id) !== Boolean(value.reserva_habitacion_id),
   "Debe indicar exactamente un carrito o una reserva de habitación",
 );
+
+export const createReembolsoSchema = z.object({
+  monto: z.union([
+    z.number().positive(),
+    z.string().regex(/^\d+(\.\d{1,2})?$/, "El monto debe tener hasta dos decimales"),
+  ]),
+  motivo: z.string().trim().min(1).max(255).optional(),
+  idempotency_key: z.string().trim().min(1).max(150),
+}).strict();

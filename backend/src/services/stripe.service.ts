@@ -41,6 +41,17 @@ class StripeService {
   retrievePaymentIntent(id: string) { return this.getClient().paymentIntents.retrieve(id); }
   cancelPaymentIntent(id: string) { return this.getClient().paymentIntents.cancel(id); }
 
+  createRefund(paymentIntentId: string, amount: number | string, currency: string, reason?: string, idempotencyKey?: string) {
+    const params: Stripe.RefundCreateParams = {
+      payment_intent: paymentIntentId,
+      amount: toStripeAmount(amount, currency),
+    };
+    if (reason && ["duplicate", "fraudulent", "requested_by_customer"].includes(reason)) {
+      params.reason = reason as Stripe.RefundCreateParams.Reason;
+    }
+    return this.getClient().refunds.create(params, idempotencyKey ? { idempotencyKey } : undefined);
+  }
+
   constructEvent(payload: Buffer, signature: string) {
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!secret) throw new AppError(503, "STRIPE_WEBHOOK_NOT_CONFIGURED", "El webhook de Stripe no está configurado");
