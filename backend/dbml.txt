@@ -1,0 +1,464 @@
+Table amenidades {
+  id integer [pk, increment, not null]
+  sucursal_id integer [not null]
+  nombre varchar(100) [not null]
+  aforo_maximo integer [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table boletos_parque {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  fecha_visita date [not null]
+  tipo_boleto varchar(20) [not null]
+  precio decimal(10,2) [not null]
+  codigo_qr varchar(150)
+  estado varchar(20) [not null, default: 'valido']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table carritos {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  estado varchar(20) [not null, default: 'activo']
+  expira_en timestamp
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table carrito_items {
+  id integer [pk, increment, not null]
+  carrito_id integer [not null]
+  tipo_item varchar(30) [not null]
+  referencia_id integer [not null]
+  descripcion varchar(255)
+  precio decimal(10,2) [not null]
+  cantidad integer [not null, default: 1]
+  promocion_id integer
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table choferes {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  licencia varchar(50)
+  activo boolean [default: true]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table citas_bienestar {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  servicio_bienestar_id integer [not null]
+  terapeuta_id integer
+  fecha date [not null]
+  hora_inicio time [not null]
+  hora_fin time [not null]
+  estado varchar(20) [not null, default: 'confirmada']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table configuraciones {
+  id integer [pk, increment, not null]
+  porcentaje_iva decimal(5,2) [not null, default: 12]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table cuentas_por_pagar {
+  id integer [pk, increment, not null]
+  proveedor_id integer [not null]
+  monto decimal(10,2) [not null]
+  fecha_vencimiento date [not null]
+  estado varchar(20) [not null, default: 'pendiente']
+  factura_referencia varchar(100)
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table empleados {
+  id integer [pk, increment, not null]
+  usuario_id integer [unique, not null]
+  sucursal_id integer [not null]
+  area varchar(50) [not null]
+  fecha_contratacion date
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table facturas {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  nit varchar(20) [not null]
+  nombre_fiscal varchar(150) [not null]
+  direccion_fiscal varchar(255)
+  subtotal decimal(10,2) [not null]
+  iva decimal(10,2) [not null]
+  porcentaje_iva decimal(5,2) [not null, default: 12]
+  total decimal(10,2) [not null]
+  estado varchar(20) [not null, default: 'pendiente']
+  fecha_emision timestamp
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table factura_items {
+  id integer [pk, increment, not null]
+  factura_id integer [not null]
+  descripcion varchar(255) [not null]
+  cantidad integer [not null, default: 1]
+  precio_unitario decimal(10,2) [not null]
+  subtotal decimal(10,2) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table habitaciones {
+  id integer [pk, increment, not null]
+  sucursal_id integer [not null]
+  tipo_habitacion_id integer [not null]
+  numero varchar(10) [not null]
+  estado varchar(20) [not null, default: 'disponible']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table instructores {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  especialidad varchar(50)
+  activo boolean [default: true]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table mesas {
+  id integer [pk, increment, not null]
+  sucursal_id integer [not null]
+  zona varchar(30) [not null]
+  capacidad integer [not null]
+  estado varchar(20) [not null, default: 'disponible']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table pagos {
+  id integer [pk, increment, not null]
+  reserva_habitacion_id integer
+  carrito_id integer
+  monto decimal(10,2) [not null]
+  metodo varchar(20) [not null]
+  estado varchar(20) [not null, default: 'pendiente']
+  id_transaccion_externo varchar(150)
+  moneda varchar(3) [not null, default: 'GTQ']
+  tipo_pago varchar(20) [not null, default: 'total']
+  pasarela varchar(50)
+  idempotency_key varchar(150) [unique]
+  fecha_pago timestamp
+  codigo_error_externo varchar(100)
+  mensaje_error varchar(255)
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table parqueos {
+  id integer [pk, increment, not null]
+  sucursal_id integer [not null]
+  numero varchar(10) [not null]
+  estado varchar(20) [not null, default: 'disponible']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table promociones {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  tipo_descuento varchar(20) [not null]
+  valor_descuento decimal(10,2) [not null]
+  aplica_a varchar(50)
+  fecha_inicio date [not null]
+  fecha_fin date [not null]
+  activa boolean [default: true]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table proveedores {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  nit varchar(20)
+  contacto varchar(150)
+  telefono varchar(20)
+  email varchar(150)
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table proveedor_productos {
+  id integer [pk, increment, not null]
+  proveedor_id integer [not null]
+  nombre_producto varchar(150) [not null]
+  descripcion text
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table recursos_actividad {
+  id integer [pk, increment, not null]
+  sucursal_id integer [not null]
+  tipo varchar(30) [not null]
+  nombre varchar(100) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reembolsos {
+  id integer [pk, increment, not null]
+  pago_id integer [not null]
+  monto decimal(10,2) [not null]
+  moneda varchar(3) [not null, default: 'GTQ']
+  estado varchar(20) [not null, default: 'pendiente']
+  id_reembolso_externo varchar(150) [unique]
+  motivo varchar(255)
+  fecha_reembolso timestamp
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_actividad {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  recurso_id integer [not null]
+  instructor_id integer
+  fecha date [not null]
+  hora_inicio time [not null]
+  hora_fin time [not null]
+  con_equipo boolean [default: false]
+  estado varchar(20) [not null, default: 'confirmada']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_amenidad {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  amenidad_id integer [not null]
+  fecha date [not null]
+  franja_horaria varchar(20) [not null]
+  mobiliario varchar(30)
+  codigo_qr varchar(150)
+  estado varchar(20) [not null, default: 'confirmada']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_evento {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  salon_id integer [not null]
+  tipo_evento varchar(50) [not null]
+  fecha date [not null]
+  hora_inicio time [not null]
+  hora_fin time [not null]
+  numero_invitados integer [not null]
+  estado varchar(20) [not null, default: 'cotizacion']
+  anticipo decimal(10,2) [not null]
+  total decimal(10,2) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reserva_evento_servicios {
+  id integer [pk, increment, not null]
+  reserva_evento_id integer [not null]
+  servicio_evento_id integer [not null]
+  cantidad integer [not null, default: 1]
+  subtotal decimal(10,2) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_habitacion {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  habitacion_id integer [not null]
+  fecha_entrada date [not null]
+  fecha_salida date [not null]
+  numero_huespedes integer [not null]
+  estado varchar(20) [not null, default: 'pendiente']
+  total decimal(10,2) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_mesa {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  mesa_id integer [not null]
+  fecha date [not null]
+  hora time [not null]
+  numero_comensales integer [not null]
+  estado varchar(20) [not null, default: 'confirmada']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_parqueo {
+  id integer [pk, increment, not null]
+  reserva_habitacion_id integer
+  parqueo_id integer [not null]
+  fecha_entrada timestamp [not null]
+  fecha_salida timestamp
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table reservas_transporte {
+  id integer [pk, increment, not null]
+  usuario_id integer [not null]
+  chofer_id integer
+  vehiculo_id integer
+  origen varchar(150) [not null]
+  destino varchar(150) [not null]
+  fecha_hora timestamp [not null]
+  numero_pasajeros integer [not null]
+  estado varchar(20) [not null, default: 'pendiente']
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table salones {
+  id integer [pk, increment, not null]
+  sucursal_id integer [not null]
+  nombre varchar(100) [not null]
+  capacidad_maxima integer [not null]
+  tarifa_base decimal(10,2) [not null]
+  descripcion text
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table servicios_bienestar {
+  id integer [pk, increment, not null]
+  nombre varchar(100) [not null]
+  duracion_minutos integer [not null]
+  precio decimal(10,2) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table servicios_evento {
+  id integer [pk, increment, not null]
+  nombre varchar(100) [not null]
+  precio decimal(10,2) [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table sucursales {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  direccion varchar(255)
+  ciudad varchar(100)
+  telefono varchar(20)
+  activa boolean [default: true]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table terapeutas {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  activo boolean [default: true]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table tipos_habitacion {
+  id integer [pk, increment, not null]
+  nombre varchar(50) [not null]
+  capacidad_maxima integer [not null]
+  tarifa_noche decimal(10,2) [not null]
+  descripcion text
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table turnos {
+  id integer [pk, increment, not null]
+  empleado_id integer [not null]
+  fecha date [not null]
+  hora_inicio time [not null]
+  hora_fin time [not null]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table usuarios {
+  id integer [pk, increment, not null]
+  nombre varchar(150) [not null]
+  email varchar(150) [unique, not null]
+  password_hash varchar(255) [not null]
+  rol varchar(30) [not null]
+  telefono varchar(20)
+  activo boolean [default: true]
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Table vehiculos {
+  id integer [pk, increment, not null]
+  tipo varchar(30) [not null]
+  capacidad integer [not null]
+  placa varchar(20)
+  createdAt timestamp [not null]
+  updatedAt timestamp [not null]
+}
+
+Ref: amenidades.sucursal_id > sucursales.id
+Ref: reservas_amenidad.amenidad_id > amenidades.id
+Ref: boletos_parque.usuario_id > usuarios.id
+Ref: carritos.usuario_id > usuarios.id
+Ref: carrito_items.carrito_id > carritos.id
+Ref: pagos.carrito_id > carritos.id
+Ref: carrito_items.promocion_id > promociones.id
+Ref: reservas_transporte.chofer_id > choferes.id
+Ref: citas_bienestar.usuario_id > usuarios.id
+Ref: citas_bienestar.servicio_bienestar_id > servicios_bienestar.id
+Ref: citas_bienestar.terapeuta_id > terapeutas.id
+Ref: cuentas_por_pagar.proveedor_id > proveedores.id
+Ref: empleados.usuario_id > usuarios.id
+Ref: empleados.sucursal_id > sucursales.id
+Ref: turnos.empleado_id > empleados.id
+Ref: facturas.usuario_id > usuarios.id
+Ref: factura_items.factura_id > facturas.id
+Ref: habitaciones.sucursal_id > sucursales.id
+Ref: habitaciones.tipo_habitacion_id > tipos_habitacion.id
+Ref: reservas_habitacion.habitacion_id > habitaciones.id
+Ref: reservas_actividad.instructor_id > instructores.id
+Ref: mesas.sucursal_id > sucursales.id
+Ref: reservas_mesa.mesa_id > mesas.id
+Ref: pagos.reserva_habitacion_id > reservas_habitacion.id
+Ref: reembolsos.pago_id > pagos.id
+Ref: parqueos.sucursal_id > sucursales.id
+Ref: reservas_parqueo.parqueo_id > parqueos.id
+Ref: proveedor_productos.proveedor_id > proveedores.id
+Ref: recursos_actividad.sucursal_id > sucursales.id
+Ref: reservas_actividad.recurso_id > recursos_actividad.id
+Ref: reservas_actividad.usuario_id > usuarios.id
+Ref: reservas_amenidad.usuario_id > usuarios.id
+Ref: reservas_evento.usuario_id > usuarios.id
+Ref: reservas_evento.salon_id > salones.id
+Ref: reserva_evento_servicios.reserva_evento_id > reservas_evento.id
+Ref: reserva_evento_servicios.servicio_evento_id > servicios_evento.id
+Ref: reservas_habitacion.usuario_id > usuarios.id
+Ref: reservas_parqueo.reserva_habitacion_id > reservas_habitacion.id
+Ref: reservas_mesa.usuario_id > usuarios.id
+Ref: reservas_transporte.usuario_id > usuarios.id
+Ref: reservas_transporte.vehiculo_id > vehiculos.id
+Ref: salones.sucursal_id > sucursales.id
