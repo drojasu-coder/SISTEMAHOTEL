@@ -10,27 +10,42 @@ const estadosHabitacion = [
 const habitacionFields = {
   sucursal_id: z
     .number()
-    .int("El ID de la sucursal debe ser un número entero")
-    .positive("El ID de la sucursal debe ser positivo"),
+    .int(
+      "El ID de la sucursal debe ser un número entero"
+    )
+    .positive(
+      "El ID de la sucursal debe ser positivo"
+    ),
 
   tipo_habitacion_id: z
     .number()
-    .int("El ID del tipo de habitación debe ser un número entero")
-    .positive("El ID del tipo de habitación debe ser positivo"),
+    .int(
+      "El ID del tipo de habitación debe ser un número entero"
+    )
+    .positive(
+      "El ID del tipo de habitación debe ser positivo"
+    ),
 
   numero: z
     .string()
     .trim()
-    .min(1, "El número de habitación es obligatorio")
-    .max(10, "El número de habitación no puede superar 10 caracteres"),
+    .min(
+      1,
+      "El número de habitación es obligatorio"
+    )
+    .max(
+      10,
+      "El número de habitación no puede superar 10 caracteres"
+    ),
 
   estado: z
-    .enum(estadosHabitacion, {
-      errorMap: () => ({
-        message:
+    .enum(
+      estadosHabitacion,
+      {
+        error:
           "El estado debe ser disponible, ocupada, mantenimiento o limpieza",
-      }),
-    })
+      }
+    )
     .optional(),
 };
 
@@ -43,10 +58,18 @@ export const updateHabitacionSchema = z
   .partial()
   .strict();
 
-export const habitacionIdSchema = z.object({
-  id: z
-    .string()
-    .regex(/^\d+$/, "El ID debe contener únicamente dígitos")
-    .transform(Number)
-    .refine((id) => id > 0, "El ID debe ser un número positivo"),
-}).strict();
+export const habitacionIdSchema = z
+  .object({
+    id: z
+      .string()
+      .regex(
+        /^\d+$/,
+        "El ID debe contener únicamente dígitos"
+      )
+      .transform(Number)
+      .refine(
+        (id) => id > 0,
+        "El ID debe ser un número positivo"
+      ),
+  })
+  .strict();

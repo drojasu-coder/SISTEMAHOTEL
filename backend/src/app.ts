@@ -78,7 +78,11 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/servicios-evento", servicioEventoRoutes);
-<<<<<<< HEAD
+
+// ======================================================
+// MÓDULOS DIEGO — HABITACIONES, FINANZAS Y PROVEEDORES
+// ======================================================
+
 app.use("/api/habitaciones", habitacionRoutes);
 app.use("/api/tipos-habitacion", tipoHabitacionRoutes);
 app.use("/api/parqueos", parqueoRoutes);
@@ -87,36 +91,93 @@ app.use("/api/reservas-parqueo", reservaParqueoRoutes);
 app.use("/api/promociones", promocionRoutes);
 app.use("/api/facturas", facturaRoutes);
 app.use("/api/factura-items", facturaItemRoutes);
-app.use("/api/configuraciones", configuracionRoutes);
+
 app.use("/api/proveedores", proveedorRoutes);
 app.use("/api/proveedor-productos", proveedorProductoRoutes);
 app.use("/api/cuentas-por-pagar", cuentaPorPagarRoutes);
-=======
+
+// Módulo auxiliar para parámetros de negocio como IVA
+app.use("/api/configuraciones", configuracionRoutes);
+
+// ======================================================
+// MÓDULOS JOSÉ — USUARIOS, EVENTOS, PERSONAL Y CARRITO
+// ======================================================
+
 app.use("/api/salones", salonRoutes);
 app.use("/api/usuarios", usuarioRoutes);
+
 app.use("/api/reservas-evento", reservaEventoRoutes);
-app.use("/api/reservas-evento/:reservaId/servicios", reservaEventoServicioRoutes);
+
+app.use(
+  "/api/reservas-evento/:reservaId/servicios",
+  reservaEventoServicioRoutes
+);
+
 app.use("/api/empleados", empleadoRoutes);
-app.use("/api/turnos", turnoRoutes); 
+app.use("/api/turnos", turnoRoutes);
+
 app.use("/api/choferes", choferRoutes);
 app.use("/api/vehiculos", vehiculoRoutes);
-app.use("/api/reservas-transporte", reservaTransporteRoutes);
+app.use(
+  "/api/reservas-transporte",
+  reservaTransporteRoutes
+);
+
+// Ítems antes del router general de carritos
+app.use(
+  "/api/carritos/:carritoId/items",
+  carritoItemsRoutes
+);
+
+app.use("/api/carritos", carritoRoutes);
+
+// ======================================================
+// MÓDULOS NETO — RESTAURANTE, ACTIVIDADES Y BIENESTAR
+// ======================================================
+
 app.use("/api/sucursales", sucursalRoutes);
 
 app.use("/api/mesas", mesaRoutes);
-app.use("/api/recursos-actividad",recursoActividadRoutes);
-app.use("/api/instructores",instructorRoutes);
-app.use("/api/reservas-actividad",reservaActividadRoutes);
-app.use("/api/amenidades",amenidadRoutes);
-app.use("/api/reservas-amenidad",reservaAmenidadRoutes);
-app.use("/api/terapeutas",terapeutaRoutes);
-app.use("/api/servicios-spa",servicioSpaRoutes);
-app.use("/api/citas-spa",citaSpaRoutes);
-app.use("/api/boletos-parque",boletoParqueRoutes);
-app.use("/api/reservas-mesa",reservaMesaRoutes);
-app.use("/api/carritos/:carritoId/items", carritoItemsRoutes);
-app.use("/api/carritos",carritoRoutes);
->>>>>>> origin/integration/neto-carrito
+app.use("/api/reservas-mesa", reservaMesaRoutes);
+
+app.use(
+  "/api/recursos-actividad",
+  recursoActividadRoutes
+);
+
+app.use(
+  "/api/instructores",
+  instructorRoutes
+);
+
+app.use(
+  "/api/reservas-actividad",
+  reservaActividadRoutes
+);
+
+app.use("/api/amenidades", amenidadRoutes);
+
+app.use(
+  "/api/reservas-amenidad",
+  reservaAmenidadRoutes
+);
+
+app.use("/api/terapeutas", terapeutaRoutes);
+
+app.use(
+  "/api/servicios-spa",
+  servicioSpaRoutes
+);
+
+app.use(
+  "/api/citas-spa",
+  citaSpaRoutes
+);
+
+app.use(
+  "/api/boletos-parque",
+  boletoParqueRoutes
+);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);
