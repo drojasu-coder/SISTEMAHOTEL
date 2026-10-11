@@ -1,15 +1,39 @@
 import { Router } from "express";
+
 import * as controller from "../../controllers/restaurante/reservaMesa.controller";
-import { validateBody, validateParams } from "../../middlewares/validate.middleware";
-import { authMiddleware } from "../../middlewares/auth.middleware";
-import { requireRole } from "../../middlewares/role.middleware";
-import { ROLES } from "../../constants/roles";
-import { createReservaMesaSchema, updateReservaMesaSchema } from "../../validators/restaurante/reservaMesa.validator";
-import { idParamSchema } from "../../validators/common.validator";
+
+import {
+  validateBody,
+  validateParams,
+} from "../../middlewares/validate.middleware";
+
+import {
+  authMiddleware,
+} from "../../middlewares/auth.middleware";
+
+import {
+  requireRole,
+} from "../../middlewares/role.middleware";
+
+import {
+  ROLES,
+} from "../../constants/roles";
+
+import {
+  createReservaMesaSchema,
+  updateReservaMesaSchema,
+} from "../../validators/restaurante/reservaMesa.validator";
+
+import {
+  idParamSchema,
+} from "../../validators/common.validator";
 
 const router = Router();
 
-// Todas las reservas requieren inicio de sesión
+/**
+ * Todas las operaciones del módulo requieren
+ * un usuario autenticado.
+ */
 router.use(authMiddleware);
 
 /**
@@ -20,10 +44,10 @@ router.use(authMiddleware);
  *       - Reservas de Mesa
  *     summary: Crear una reserva de mesa
  *     description: >
- *       Permite a un cliente autenticado reservar una mesa.
+ *       Permite a un cliente autenticado reservar una mesa para sí mismo.
  *       El usuario se obtiene automáticamente del JWT.
- *       La mesa debe existir, tener capacidad suficiente y no
- *       encontrarse reservada en la misma fecha y hora.
+ *       La mesa debe existir, tener capacidad suficiente, no encontrarse
+ *       en mantenimiento y estar disponible para la fecha y hora solicitadas.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -40,15 +64,19 @@ router.use(authMiddleware);
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo los clientes pueden reservar
+ *         description: Solo los clientes pueden crear reservas de mesa
  *       404:
  *         description: Mesa no encontrada
  *       409:
- *         description: La mesa ya está reservada en esa fecha y hora
+ *         description: >
+ *           La mesa ya está reservada en esa fecha y hora
+ *           o se encuentra en mantenimiento.
  *       422:
- *         description: Fecha pasada o capacidad de la mesa excedida
+ *         description: >
+ *           La fecha u hora solicitada está en el pasado
+ *           o se excede la capacidad de la mesa.
  */
-// Cualquier usuario puede crear una reserva para sí mismo
+// Solo los clientes autenticados pueden crear una reserva para sí mismos.
 router.post(
   "/",
   requireRole(
@@ -67,7 +95,7 @@ router.post(
  *     tags:
  *       - Reservas de Mesa
  *     summary: Listar todas las reservas de mesa
- *     description: Solo disponible para administradores.
+ *     description: Operación administrativa disponible únicamente para administradores.
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -88,10 +116,17 @@ router.post(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Permisos insuficientes
+ *         description: Usuario sin permisos administrativos
  */
-// Solo el Admin (o Gerente) puede ver TODAS las reservas del restaurante
-router.get("/", requireRole(ROLES.ADMIN), controller.getAll);
+// Solo el administrador puede consultar todas las reservas.
+router.get(
+  "/",
+  requireRole(
+    ROLES.ADMIN
+  ),
+  controller.getAll
+);
+
 /**
  * @openapi
  * /api/reservas-mesa/{id}:
@@ -99,6 +134,7 @@ router.get("/", requireRole(ROLES.ADMIN), controller.getAll);
  *     tags:
  *       - Reservas de Mesa
  *     summary: Obtener una reserva de mesa por ID
+ *     description: Operación administrativa disponible únicamente para administradores.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -116,11 +152,20 @@ router.get("/", requireRole(ROLES.ADMIN), controller.getAll);
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  *       404:
  *         description: Reserva no encontrada
  */
-router.get("/:id", requireRole(ROLES.ADMIN), validateParams(idParamSchema), controller.getById);
+router.get(
+  "/:id",
+  requireRole(
+    ROLES.ADMIN
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  controller.getById
+);
 
 /**
  * @openapi
@@ -129,6 +174,11 @@ router.get("/:id", requireRole(ROLES.ADMIN), validateParams(idParamSchema), cont
  *     tags:
  *       - Reservas de Mesa
  *     summary: Cambiar el estado de una reserva de mesa
+ *     description: >
+ *       Permite al administrador cambiar una reserva entre
+ *       confirmada y cancelada. Si se intenta reactivar una
+ *       reserva cancelada, el backend vuelve a comprobar
+ *       disponibilidad, capacidad y estado de la mesa.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -152,12 +202,32 @@ router.get("/:id", requireRole(ROLES.ADMIN), validateParams(idParamSchema), cont
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  *       404:
  *         description: Reserva no encontrada
  *       409:
- *         description: La reserva ya posee el estado solicitado
+ *         description: >
+ *           La reserva ya posee el estado solicitado,
+ *           la mesa ya está ocupada para esa fecha y hora
+ *           o la mesa se encuentra en mantenimiento.
+ *       422:
+ *         description: >
+ *           No se puede reactivar la reserva porque su fecha
+ *           u hora ya pasó o porque excede la capacidad actual
+ *           de la mesa.
  */
-router.patch("/:id/estado", requireRole(ROLES.ADMIN), validateParams(idParamSchema), validateBody(updateReservaMesaSchema), controller.updateStatus);
+router.patch(
+  "/:id/estado",
+  requireRole(
+    ROLES.ADMIN
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  validateBody(
+    updateReservaMesaSchema
+  ),
+  controller.updateStatus
+);
 
 export default router;
