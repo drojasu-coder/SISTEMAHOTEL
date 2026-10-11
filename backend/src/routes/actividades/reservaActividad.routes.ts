@@ -1,18 +1,41 @@
 import { Router } from "express";
+
 import * as reservaActividadController from "../../controllers/actividades/reservaActividad.controller";
-import { validateBody, validateParams } from "../../middlewares/validate.middleware";
-import { authMiddleware } from "../../middlewares/auth.middleware";
-import { requireRole } from "../../middlewares/role.middleware";
-import { ROLES } from "../../constants/roles";
-import { createReservaActividadSchema, updateReservaActividadSchema } from "../../validators/actividades/reservaActividad.validator";
-import { idParamSchema } from "../../validators/common.validator";
+
+import {
+  validateBody,
+  validateParams,
+} from "../../middlewares/validate.middleware";
+
+import {
+  authMiddleware,
+} from "../../middlewares/auth.middleware";
+
+import {
+  requireRole,
+} from "../../middlewares/role.middleware";
+
+import {
+  ROLES,
+} from "../../constants/roles";
+
+import {
+  createReservaActividadSchema,
+  updateReservaActividadSchema,
+} from "../../validators/actividades/reservaActividad.validator";
+
+import {
+  idParamSchema,
+} from "../../validators/common.validator";
 
 const router = Router();
 
-// Todas las reservas exigen inicio de sesión
+/**
+ * Todas las operaciones del módulo requieren
+ * que el usuario esté autenticado.
+ */
 router.use(authMiddleware);
 
-// Un cliente o admin puede crear una reserva
 /**
  * @openapi
  * /api/reservas-actividad:
@@ -21,10 +44,11 @@ router.use(authMiddleware);
  *       - Reservas de Actividad
  *     summary: Crear una reserva de actividad
  *     description: >
- *       Permite a un cliente reservar un recurso para una actividad.
- *       La duración debe ser entre 30 y 120 minutos. El sistema evita
- *       traslapes tanto del recurso como del instructor y verifica que,
- *       si se seleccionó instructor, se encuentre activo.
+ *       Permite a un cliente autenticado reservar un recurso para una actividad.
+ *       El usuario se obtiene automáticamente del JWT.
+ *       La duración debe ser de entre 30 y 120 minutos.
+ *       El sistema evita traslapes tanto del recurso como del instructor
+ *       y, si se selecciona un instructor, verifica que exista y esté activo.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -41,15 +65,20 @@ router.use(authMiddleware);
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo clientes pueden reservar
+ *         description: Solo los clientes pueden crear reservas de actividad
  *       404:
  *         description: Recurso o instructor no encontrado
  *       409:
- *         description: Recurso o instructor ocupado en ese horario
+ *         description: >
+ *           El recurso o el instructor ya se encuentra ocupado
+ *           en el horario solicitado.
  *       422:
  *         description: >
- *           Fecha pasada, duración inválida o instructor inactivo
+ *           La fecha u hora solicitada está en el pasado,
+ *           la duración no se encuentra entre 30 y 120 minutos
+ *           o el instructor seleccionado está inactivo.
  */
+// Solo los clientes autenticados pueden crear una reserva para sí mismos.
 router.post(
   "/",
   requireRole(
@@ -61,7 +90,6 @@ router.post(
   reservaActividadController.create
 );
 
-// Solo administradores (o encargados) pueden ver todas las reservas globales
 /**
  * @openapi
  * /api/reservas-actividad:
@@ -69,6 +97,7 @@ router.post(
  *     tags:
  *       - Reservas de Actividad
  *     summary: Listar todas las reservas de actividad
+ *     description: Operación administrativa disponible únicamente para administradores.
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -89,11 +118,14 @@ router.post(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  */
+// Solo el administrador puede consultar todas las reservas.
 router.get(
   "/",
-  requireRole(ROLES.ADMIN),
+  requireRole(
+    ROLES.ADMIN
+  ),
   reservaActividadController.getAll
 );
 
@@ -104,6 +136,7 @@ router.get(
  *     tags:
  *       - Reservas de Actividad
  *     summary: Obtener una reserva de actividad por ID
+ *     description: Operación administrativa disponible únicamente para administradores.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -121,18 +154,21 @@ router.get(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  *       404:
  *         description: Reserva no encontrada
  */
 router.get(
   "/:id",
-  requireRole(ROLES.ADMIN),
-  validateParams(idParamSchema),
+  requireRole(
+    ROLES.ADMIN
+  ),
+  validateParams(
+    idParamSchema
+  ),
   reservaActividadController.getById
 );
 
-// Actualizar estado (ej. cancelada)
 /**
  * @openapi
  * /api/reservas-actividad/{id}/estado:
@@ -143,6 +179,9 @@ router.get(
  *     description: >
  *       Permite al administrador modificar el estado de la reserva
  *       y/o indicar si requiere equipo.
+ *       Si una reserva cancelada o completada vuelve a estado confirmada,
+ *       el backend verifica nuevamente fecha, horario, recurso,
+ *       instructor y posibles traslapes.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -166,15 +205,30 @@ router.get(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  *       404:
- *         description: Reserva no encontrada
+ *         description: Reserva, recurso o instructor no encontrado
+ *       409:
+ *         description: >
+ *           No se puede reactivar la reserva porque el recurso
+ *           o el instructor ya se encuentra ocupado en ese horario.
+ *       422:
+ *         description: >
+ *           No se puede reactivar la reserva porque la fecha u hora
+ *           ya pasó, la duración dejó de ser válida
+ *           o el instructor se encuentra inactivo.
  */
 router.patch(
   "/:id/estado",
-  requireRole(ROLES.ADMIN),
-  validateParams(idParamSchema),
-  validateBody(updateReservaActividadSchema),
+  requireRole(
+    ROLES.ADMIN
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  validateBody(
+    updateReservaActividadSchema
+  ),
   reservaActividadController.updateStatus
 );
 
