@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply bg-crema text-tinta font-sans antialiased; }
+  h1, h2, h3, h4 { @apply font-serif font-normal text-tinta; }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-bronce; outline-style: solid; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 px-6 py-3 text-[13px] font-medium tracking-wide transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primario { @apply btn bg-bronce text-white hover:bg-bronce-600; }
+  .btn-contorno { @apply btn border border-bronce text-bronce-700 hover:bg-bronce hover:text-white; }
+  .btn-oscuro { @apply btn bg-tinta text-crema hover:bg-tinta-700; }
+  .input { @apply w-full border border-linea bg-crema-50 px-4 py-3 text-sm text-tinta placeholder:text-tinta-400 focus:border-bronce focus:outline-none; }
+  .etiqueta { @apply mb-1.5 block text-xs font-medium text-tinta-500; }
+  .tarjeta { @apply border border-linea bg-crema-100; }
+}

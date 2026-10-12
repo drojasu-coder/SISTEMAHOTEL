@@ -1,0 +1,26 @@
+{
+  "development": {
+    "username": "hotel_user",
+    "password": "hotel_pass",
+    "database": "hotel_db",
+    "host": "localhost",
+    "port": 5432,
+    "dialect": "postgres"
+  },
+  "test": {
+    "username": "hotel_user",
+    "password": "hotel_pass",
+    "database": "hotel_db",
+    "host": "localhost",
+    "port": 5432,
+    "dialect": "postgres"
+  },
+  "production": {
+    "username": "hotel_user",
+    "password": "hotel_pass",
+    "database": "hotel_db",
+    "host": "localhost",
+    "port": 5432,
+    "dialect": "postgres"
+  }
+}
