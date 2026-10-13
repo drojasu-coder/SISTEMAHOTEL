@@ -6,4 +6,3 @@ pruebas, documentación OpenAPI, migraciones y persistencia.
 
 No se cambió la clasificación de runtime/dev ni se añadió una dependencia
 alternativa.
-

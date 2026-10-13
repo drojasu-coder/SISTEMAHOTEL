@@ -17,4 +17,3 @@ Ejecutada contra el estado previo a la documentación:
 
 El warning preexistente de Vitest sobre configuración ESM/CJS no bloquea la
 validación.
-

@@ -11,4 +11,3 @@
 
 Cada paquete tiene imports, configuración o montaje verificable en
 `backend/src`, scripts o pruebas de contrato.
-

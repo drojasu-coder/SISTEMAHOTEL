@@ -12,4 +12,3 @@
 | `db:seed` | Seeders mediante Sequelize CLI |
 
 No se eliminaron ni reescribieron scripts.
-

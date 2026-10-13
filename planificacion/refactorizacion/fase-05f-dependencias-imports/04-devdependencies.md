@@ -11,4 +11,3 @@
 
 La clasificación `DEV_ONLY` no implica que los paquetes sean eliminables:
 varios son requeridos por scripts o compilación.
-

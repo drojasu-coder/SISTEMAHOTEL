@@ -13,4 +13,3 @@
 | Tipos | paquetes `@types/*` declarados | Soporte de compilación |
 
 No se encontró una dependencia directa demostrablemente no utilizada.
-

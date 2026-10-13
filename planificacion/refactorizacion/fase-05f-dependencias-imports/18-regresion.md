@@ -10,4 +10,3 @@
 
 No se modificaron contratos HTTP, modelos, migraciones, dependencias,
 configuración ni imports productivos.
-

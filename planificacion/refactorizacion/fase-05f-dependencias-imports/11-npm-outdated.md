@@ -12,4 +12,3 @@ Actualizaciones observadas:
 No se aplicaron actualizaciones: incluso los cambios menores requieren
 validación posterior y los mayores tienen riesgo de contrato. Quedan para una
 subfase específica de upgrades.
-

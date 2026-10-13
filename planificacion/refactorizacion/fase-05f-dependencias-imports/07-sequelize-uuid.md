@@ -9,4 +9,3 @@ cambio mayor incompatible y no aceptable para esta fase.
 
 Conclusión: conservar Sequelize y documentar la deuda; no instalar una versión
 incompatible ni forzar overrides del lockfile.
-

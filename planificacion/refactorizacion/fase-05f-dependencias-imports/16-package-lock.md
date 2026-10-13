@@ -8,4 +8,3 @@ El lockfile se leyó y se contrastó con el árbol instalado:
 
 `package-lock.json` no fue editado, regenerado ni actualizado. No se ejecutó
 `npm install` sólo para refrescarlo.
-

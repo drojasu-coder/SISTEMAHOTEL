@@ -16,4 +16,3 @@ Hallazgos representativos:
 
 No se aplicó una limpieza estética ni se eliminó ningún import sin evidencia
 de que el cambio fuera seguro.
-

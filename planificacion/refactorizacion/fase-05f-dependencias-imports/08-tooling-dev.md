@@ -9,4 +9,3 @@
 
 El warning de configuración ESM/CJS de Vitest quedó observado como riesgo de
 tooling, sin modificar `vitest.config.ts` ni `package.json`.
-
