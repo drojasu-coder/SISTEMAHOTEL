@@ -25,4 +25,19 @@ describe("generated OpenAPI contract", () => {
     expect(configuration.get.security).toEqual([{ bearerAuth: [] }]);
     expect(configuration.patch.security).toEqual([{ bearerAuth: [] }]);
   });
+
+  it("keeps the generated specification operation inventory stable", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, unknown>>;
+    const operations = Object.values(paths).reduce(
+      (count, pathItem) =>
+        count +
+        Object.keys(pathItem).filter((method) =>
+          ["get", "post", "put", "patch", "delete", "options", "head"].includes(method),
+        ).length,
+      0,
+    );
+
+    expect(Object.keys(paths)).toHaveLength(93);
+    expect(operations).toBe(184);
+  });
 });

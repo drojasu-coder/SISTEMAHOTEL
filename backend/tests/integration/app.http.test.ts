@@ -14,6 +14,13 @@ describe("HTTP baseline", () => {
     });
   });
 
+  it("exposes the generated Swagger UI entry point", async () => {
+    const response = await request(app).get("/api/docs/");
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain("swagger-ui");
+  });
+
   it("returns a fresh request ID and preserves it in the response", async () => {
     const [first, second] = await Promise.all([
       request(app).get("/api/health"),
