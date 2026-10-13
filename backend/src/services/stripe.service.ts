@@ -1,8 +1,9 @@
 import Stripe from "stripe";
 import { AppError } from "../utils/AppError";
 import { env } from "../config/env";
+import { PAYMENT_CURRENCY } from "../constants/payments";
 
-const minorUnits: Record<string, number> = { GTQ: 100 };
+const minorUnits: Record<string, number> = { [PAYMENT_CURRENCY]: 100 };
 
 export const toStripeAmount = (amount: number | string, currency: string) => {
   const units = minorUnits[currency];

@@ -3,6 +3,13 @@ import { stripeService, toStripeAmount } from "./stripe.service";
 import Stripe from "stripe";
 import { Op } from "sequelize";
 import {
+  PAYMENT_CURRENCY,
+  PAYMENT_METHODS,
+  PAYMENT_TYPES,
+  PaymentMethod,
+  PaymentType,
+} from "../constants/payments";
+import {
   assertPaymentOriginOwnership,
   assertPaymentOwnership,
   isPaymentAdministrator,
@@ -19,8 +26,8 @@ const {
   ReservaEvento,
 } = db;
 
-export type PagoMetodo = "tarjeta" | "efectivo" | "transferencia";
-export type PagoTipo = "total" | "anticipo" | "saldo";
+export type PagoMetodo = PaymentMethod;
+export type PagoTipo = PaymentType;
 
 export interface CreatePagoData {
   carrito_id?: number;
@@ -283,15 +290,19 @@ const applyCartPaid = async (origin: any, total: number, paid: number, transacti
 
 export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
   validateOrigin(data);
-  if (!["tarjeta", "efectivo", "transferencia"].includes(data.metodo)) {
+  if (!PAYMENT_METHODS.includes(data.metodo)) {
     throw new AppError(422, "INVALID_PAYMENT_METHOD", "El método de pago no es válido");
   }
   const tipo = data.tipo_pago ?? "total";
-  if (!["total", "anticipo", "saldo"].includes(tipo)) {
+  if (!PAYMENT_TYPES.includes(tipo)) {
     throw new AppError(422, "INVALID_PAYMENT_TYPE", "El tipo de pago no es válido");
   }
-  if (data.moneda !== undefined && data.moneda !== "GTQ") {
-    throw new AppError(422, "UNSUPPORTED_CURRENCY", "La moneda de pago debe ser GTQ");
+  if (data.moneda !== undefined && data.moneda !== PAYMENT_CURRENCY) {
+    throw new AppError(
+      422,
+      "UNSUPPORTED_CURRENCY",
+      `La moneda de pago debe ser ${PAYMENT_CURRENCY}`,
+    );
   }
   const amount = money(data.monto);
 
@@ -345,7 +356,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       monto: amount,
       metodo: data.metodo,
       tipo_pago: tipo,
-      moneda: "GTQ",
+      moneda: PAYMENT_CURRENCY,
       estado: data.metodo === "tarjeta" ? "procesando" : (approved ? "aprobado" : "pendiente"),
       pasarela: data.metodo === "tarjeta" ? "stripe" : null,
       idempotency_key: data.idempotency_key ?? null,
@@ -353,7 +364,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     }, { transaction });
     if (data.metodo === "tarjeta") {
       try {
-        const intent = await stripeService.createPaymentIntent(amount, "GTQ", {
+        const intent = await stripeService.createPaymentIntent(amount, PAYMENT_CURRENCY, {
           pago_id: String(payment.id),
           ...(payment.carrito_id ? { carrito_id: String(payment.carrito_id) } : {}),
           ...(payment.reserva_habitacion_id ? { reserva_habitacion_id: String(payment.reserva_habitacion_id) } : {}),

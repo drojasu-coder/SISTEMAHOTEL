@@ -1,8 +1,7 @@
 import { z } from "zod";
+import { PAYMENT_CURRENCY, PAYMENT_METHODS, PAYMENT_TYPES } from "../../constants/payments";
 
 const positiveId = z.string().regex(/^[1-9]\d*$/, "El id debe ser un entero positivo");
-const paymentMethods = ["tarjeta", "efectivo", "transferencia"] as const;
-const paymentTypes = ["total", "anticipo", "saldo"] as const;
 
 export const createPagoSchema = z.object({
   carrito_id: z.number().int().positive().nullable().optional(),
@@ -11,9 +10,9 @@ export const createPagoSchema = z.object({
     z.number().positive(),
     z.string().regex(/^\d+(\.\d{1,2})?$/, "El monto debe tener hasta dos decimales"),
   ]),
-  metodo: z.enum(paymentMethods),
-  tipo_pago: z.enum(paymentTypes).optional(),
-  moneda: z.literal("GTQ"),
+  metodo: z.enum(PAYMENT_METHODS),
+  tipo_pago: z.enum(PAYMENT_TYPES).optional(),
+  moneda: z.literal(PAYMENT_CURRENCY),
   idempotency_key: z.string().trim().min(1).max(150).nullable().optional(),
 }).strict();
 
@@ -29,8 +28,8 @@ export const pagoQuerySchema = z.object({
     "reembolsado",
     "reembolsado_parcial",
   ]).optional(),
-  metodo: z.enum(paymentMethods).optional(),
-  tipo_pago: z.enum(paymentTypes).optional(),
+  metodo: z.enum(PAYMENT_METHODS).optional(),
+  tipo_pago: z.enum(PAYMENT_TYPES).optional(),
   carrito_id: positiveId.optional(),
   reserva_habitacion_id: positiveId.optional(),
 }).strict();
