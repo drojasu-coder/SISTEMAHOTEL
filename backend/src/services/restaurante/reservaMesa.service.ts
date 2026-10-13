@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
+import { env } from "../../config/env";
 
 const db = require("../../models");
 
@@ -46,9 +47,7 @@ const reservaMesaInclude = [
  * en la zona horaria utilizada por el hotel.
  */
 const getCurrentHotelDateTime = () => {
-  const timeZone =
-    process.env.APP_TIMEZONE ||
-    "America/Guatemala";
+  const timeZone = env.APP_TIMEZONE;
 
   const parts =
     new Intl.DateTimeFormat(

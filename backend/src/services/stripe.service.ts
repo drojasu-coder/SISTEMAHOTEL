@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { AppError } from "../utils/AppError";
+import { env } from "../config/env";
 
 const minorUnits: Record<string, number> = { GTQ: 100 };
 
@@ -19,9 +20,9 @@ class StripeService {
 
   private getClient() {
     if (!this.client) {
-      const key = process.env.STRIPE_SECRET_KEY;
+      const key = env.STRIPE_SECRET_KEY;
       if (!key) throw new AppError(503, "STRIPE_NOT_CONFIGURED", "Stripe no está configurado");
-      if (process.env.NODE_ENV !== "production" && !key.startsWith("sk_test_")) {
+      if (env.NODE_ENV !== "production" && !key.startsWith("sk_test_")) {
         throw new AppError(503, "STRIPE_TEST_KEY_REQUIRED", "Stripe debe utilizar una clave de prueba");
       }
       this.client = new Stripe(key);
@@ -53,7 +54,7 @@ class StripeService {
   }
 
   constructEvent(payload: Buffer, signature: string) {
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    const secret = env.STRIPE_WEBHOOK_SECRET;
     if (!secret) throw new AppError(503, "STRIPE_WEBHOOK_NOT_CONFIGURED", "El webhook de Stripe no está configurado");
     try { return this.getClient().webhooks.constructEvent(payload, signature, secret); }
     catch { throw new AppError(400, "INVALID_STRIPE_SIGNATURE", "La firma del webhook de Stripe no es válida"); }

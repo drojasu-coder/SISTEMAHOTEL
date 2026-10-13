@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { ROLES, Role } from "../../constants/roles";
+import { env } from "../../config/env";
 
 export interface RequesterContext {
   id: number;
@@ -95,9 +96,7 @@ const bloqueaDisponibilidad = (
  * pero puede configurarse mediante APP_TIMEZONE.
  */
 const getTodayDate = () => {
-  const timeZone =
-    process.env.APP_TIMEZONE ||
-    "America/Guatemala";
+  const timeZone = env.APP_TIMEZONE;
 
   const parts =
     new Intl.DateTimeFormat(
