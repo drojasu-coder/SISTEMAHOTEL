@@ -1,0 +1,57 @@
+path,tipo,tracked,estado_git,categoria,proposito_observado,evidencia_uso,consumidor,generado,academico,duplicado_potencial,riesgo_eliminacion,accion_propuesta,fase_destino,requiere_confirmacion,observaciones
+.gitignore,archivo,sí,tracked,configuración,reglas_de_ignore,Git,Git,no,no,no,medio,REVISAR,5B,no,coverage y outputs no están expresamente cubiertos
+script.sql,archivo,no,modified,SQL manual,dump o script académico,archivo local,usuario/manual,no,posible,no,alto,REQUIERE_CONFIRMACION,5B,sí,no alterar
+DERCAS.pdf,archivo,no,untracked,académico,documento DER,archivo local,académico,no,sí,no,alto,REQUIERE_CONFIRMACION,5B,sí,no alterar
+dercas.txt,archivo,no,untracked,académico,fuente textual DER,archivo local,académico,no,sí,sí,alto,REQUIERE_CONFIRMACION,5B,sí,no asumir duplicado del PDF
+TABLAS-Y-RELACIONES.md,archivo,no,untracked,académico,tablas y relaciones,archivo local,académico,no,sí,sí,alto,REQUIERE_CONFIRMACION,5B,sí,no alterar
+Frontend/,directorio,no,untracked,frontend,prototipo y recursos visuales,exploración local,usuario,no,sí,no,alto,REQUIERE_CONFIRMACION,5B,sí,no es frontend React confirmado
+Frontend/diseno-hotel.pen,archivo,no,untracked,frontend,prototipo Penpot,archivo local,usuario,no,sí,no,alto,REQUIERE_CONFIRMACION,5B,sí,no modificar
+Frontend/GUIA-DISENO.md,archivo,no,untracked,frontend,guía visual,archivo local,usuario,no,sí,no,alto,REQUIERE_CONFIRMACION,5B,sí,no modificar
+Frontend/*.jpg,grupo,no,untracked,frontend,logos e isotipos,archivos locales,frontend,no,sí,no,alto,REQUIERE_CONFIRMACION,5B,sí,7 imágenes
+backend/openapi.json,archivo,no,untracked,OpenAPI,export o snapshot,pruebas OpenAPI/app,Swagger,posible,no,sí,alto,REQUIERE_CONFIRMACION,5B,sí,no modificar
+backend/scripts/export-openapi.ts,archivo,no,untracked,scripts,exportar OpenAPI,contenido y package scripts,manual/no invocado,no,no,no,medio,REVISAR,5B,no,183 bytes
+backend/coverage/,grupo,no,untracked,generado,reporte cobertura,`npm run test:coverage`,Vitest,sí,no,no,medio,GENERADO,5B,no,coverage no está cubierto explícitamente por .gitignore
+backend/node_modules/,grupo,no,ignored,dependencias instaladas,paquetes runtime/dev,package-lock,npm,sí,no,no,bajo,IGNORAR_GIT,5F,no,agrupado
+backend/package.json,archivo,sí,tracked,configuración,scripts y dependencias,package manager,npm,no,no,no,medio,MANTENER,5F,no,referencia de 12 scripts
+backend/package-lock.json,archivo,sí,tracked,dependencias,lock reproducible,package.json,npm,no,no,no,alto,MANTENER,5F,no,no modificar en 5A
+backend/.env,archivo,no,ignored,secretos,configuración local,loader dotenv,backend,no,no,no,alto,IGNORAR_GIT,5B,sí,no imprimir valores
+backend/.env.example,archivo,sí,tracked,configuración,plantilla ambiente,env loader,desarrollo,no,no,no,medio,MANTENER,5D,no,no contiene secretos reales según inspección
+backend/vitest.config.ts,archivo,sí,tracked,tests,configuración Vitest,package scripts,Vitest,no,no,no,medio,MANTENER,5E,no,warning ESM/CJS conocido
+backend/tsconfig.json,archivo,sí,tracked,configuración,compilación TypeScript,tsc,TypeScript,no,no,no,medio,MANTENER,5F,no,
+backend/.sequelizerc,archivo,sí,tracked,persistencia,rutas Sequelize CLI,sequelize-cli,CLI,no,no,no,medio,MANTENER,5H,no,
+backend/src/app.ts,archivo,sí,tracked,código productivo,composition root y montajes,rutas y middleware,Express,no,no,no,alto,MANTENER,5C,no,
+backend/src/server.ts,archivo,sí,tracked,código productivo,entrypoint servidor,package dev,Node,no,no,no,alto,MANTENER,5C,no,
+backend/src/routes/,grupo,sí,tracked,código productivo,rutas HTTP,imports en app.ts,Express,no,no,sí,alto,MANTENER,5C,no,45 archivos aproximadamente
+backend/src/controllers/,grupo,sí,tracked,código productivo,handlers HTTP,routers y adapters,Express,no,no,sí,alto,REVISAR,5C,no,legacy y modular coexistente
+backend/src/services/,grupo,sí,tracked,código productivo,lógica dominio,controllers y tests,backend,no,no,sí,alto,REVISAR,5C,no,
+backend/src/modules/sucursales/,grupo,sí,tracked,módulo piloto,fachada modular,architecture.test.ts,Express,no,no,sí,alto,MANTENER,5C,no,
+backend/src/modules/configuraciones/,grupo,sí,tracked,módulo piloto,IVA/configuración,architecture.test.ts,Express,no,no,sí,alto,MANTENER,5D,sí,contrato bajo coordinación Diego
+backend/src/middlewares/,grupo,sí,tracked,código productivo,auth/errores/logging,app.ts,Express,no,no,no,alto,MANTENER,5C,no,
+backend/src/config/,grupo,sí,tracked,configuración,env/seguridad/Sequelize,app.ts y CLI,backend,no,no,sí,alto,REVISAR,5D,no,
+backend/src/constants/,grupo,sí,tracked,configuración,roles/cart,imports,backend,no,no,sí,medio,CONSOLIDAR,5D,no,
+backend/src/models/,grupo,sí,tracked,persistencia,modelos Sequelize,services y loaders,Sequelize,no,no,no,alto,MANTENER,5C,no,39 archivos
+backend/src/migrations/,grupo,sí,tracked,persistencia,esquema PostgreSQL,sequelize-cli,PostgreSQL,no,no,no,alto,MANTENER,5H,no,41 archivos up
+backend/src/docs/swagger.ts,archivo,sí,tracked,OpenAPI,generación runtime,app.ts,Swagger-jsdoc,no,no,no,alto,MANTENER,5C,no,
+backend/dbml.txt,archivo,sí,tracked,documentación académica,modelo DB,referencia manual,académico,no,sí,sí,alto,REQUIERE_CONFIRMACION,5B,sí,
+backend/docker-compose.test.yml,archivo,sí,tracked,infraestructura,PostgreSQL test,pruebas integración,Docker,no,no,no,alto,MANTENER,5H,no,
+backend/tests/setup.ts,archivo,sí,tracked,tests,fixtures/env test,Vitest,tests,sí,no,no,alto,MANTENER,5E,no,secretos sólo fixtures
+backend/tests/integration/,grupo,sí,tracked,tests,integration HTTP/PostgreSQL,package test:integration,Vitest,no,no,no,alto,MANTENER,5E,no,5 suites principales
+backend/tests/unit/,grupo,sí,tracked,tests,unitarias arquitectura/seguridad,package test:unit,Vitest,no,no,no,alto,MANTENER,5E,no,9 suites
+backend/tests/integration/postgres.reservations.test.ts,archivo,sí,tracked,tests,concurrencia/rollback habitaciones,package test,Vitest/PostgreSQL,no,no,no,alto,MANTENER,5E,no,
+backend/tests/integration/postgres.payments.test.ts,archivo,sí,tracked,tests,ownership/idempotencia pagos,package test,Vitest/PostgreSQL,no,no,no,alto,MANTENER,5E,no,
+backend/tests/unit/openapi.test.ts,archivo,sí,tracked,tests,conteo OpenAPI,package test,Vitest,no,no,no,alto,MANTENER,5E,no,
+backend/tests/unit/architecture.test.ts,archivo,sí,tracked,tests,fachadas y arquitectura,package test,Vitest,no,no,no,alto,MANTENER,5E,no,
+backend/tests/unit/stripe.service.test.ts,archivo,sí,tracked,tests,Stripe sin red real,package test,Vitest,no,no,no,alto,MANTENER,5E,no,
+planificacion/refactorizacion/fase-04a-*/,grupo,sí,tracked,documentación histórica,auditoría funcional,lectura humana,usuarios,no,no,no,medio,ARCHIVAR,5B,sí,conservar evidencia
+planificacion/refactorizacion/fase-04b1-*/,grupo,sí,tracked,documentación histórica,trazabilidad contratos,lectura humana,usuarios,no,no,no,medio,ARCHIVAR,5B,sí,
+planificacion/refactorizacion/fase-04b2-*/,grupo,sí,tracked,documentación histórica,paquete José,lectura humana,usuarios,no,no,no,medio,ARCHIVAR,5B,sí,
+planificacion/refactorizacion/fase-04c-*/,grupo,sí,tracked,documentación histórica,reservas/concurrencia,lectura humana,usuarios,no,no,no,medio,ARCHIVAR,5B,sí,
+planificacion/refactorizacion/fase-04d-*/,grupo,sí,tracked,documentación histórica,pagos/facturación,lectura humana,usuarios,no,no,no,medio,ARCHIVAR,5B,sí,
+planificacion/refactorizacion/fase-04e-*/,grupo,sí,tracked,documentación histórica,cierre técnico,lectura humana,usuarios,no,no,no,medio,MANTENER,5B,no,resumen de baseline vigente
+planificacion/refactorizacion/fase-05a-*/,grupo,sí,tracked,documentación operativa,este inventario,usuarios,Fase 5A,no,no,no,bajo,MANTENER,5B,no,
+planificacion/auditoria-backend/,grupo,sí,tracked,documentación histórica,auditoría anterior,lectura humana,usuarios,no,no,no,medio,ARCHIVAR,5B,sí,
+GUIA-PRUEBAS-PAGOS.md,archivo,sí,tracked,documentación técnica,guía pruebas pagos,usuarios,backend tests,no,no,no,medio,MANTENER,5E,no,
+flujo-completo-backend.md,archivo,sí,tracked,documentación técnica,flujo backend,usuarios,backend,no,no,sí,medio,REVISAR,5B,no,
+checklist.MD,archivo,sí,tracked,documentación técnica,checklist manual,usuarios,repo,no,no,no,bajo,REVISAR,5B,no,
+docker-compose.yml,archivo,sí,tracked,infraestructura,servicios desarrollo,operador,Docker,no,no,no,alto,MANTENER,5H,no,
+ZIPs de planificacion/refactorizacion,grupo,no,no visible,temporal,paquetes de fases,usuario/manual,archivo,no,sí,no,alto,REQUIERE_CONFIRMACION,5B,sí,no se encontraron en el conteo actual
