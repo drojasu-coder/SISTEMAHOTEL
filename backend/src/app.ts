@@ -1,5 +1,6 @@
 import express from "express";
-import cors from "cors";
+import { corsMiddleware, securityHeaders, authenticationRateLimiter } from "./config/httpSecurity";
+import { env } from "./config/env";
 
 import authRoutes from "./routes/auth.routes";
 import salonRoutes from "./routes/eventos/salon.routes";
@@ -54,7 +55,10 @@ import { stripeWebhook } from "./controllers/pagos/pago.controller";
 
 const app = express();
 
-app.use(cors());
+app.disable("x-powered-by");
+app.set("trust proxy", env.TRUST_PROXY);
+app.use(securityHeaders);
+app.use(corsMiddleware);
 
 /**
  * @openapi
@@ -86,13 +90,18 @@ app.use(cors());
  *         description: Error al procesar el evento
  */
 // Stripe signature verification requires the untouched request bytes.
-app.post("/api/pagos/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhook);
+app.post(
+  "/api/pagos/stripe/webhook",
+  express.raw({ type: "application/json", limit: env.WEBHOOK_BODY_LIMIT }),
+  stripeWebhook,
+);
 
 app.use(
   express.json({
-    limit: "1mb",
+    limit: env.REQUEST_BODY_LIMIT,
   }),
 );
+app.use(express.urlencoded({ extended: false, limit: env.REQUEST_BODY_LIMIT }));
 
 app.use(
   "/api/docs",
@@ -129,6 +138,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.use("/api/auth/login", authenticationRateLimiter);
+app.use("/api/auth/register", authenticationRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/servicios-evento", servicioEventoRoutes);
 

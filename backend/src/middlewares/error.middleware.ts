@@ -43,6 +43,11 @@ export const errorHandler: ErrorRequestHandler =(
         code = "INVALID_JSON";
         message = "El cuerpo de la petición contiene JSON inválido";
     }
+    else if ((error as { type?: string }).type === "entity.too.large") {
+        statusCode = 413;
+        code = "REQUEST_ENTITY_TOO_LARGE";
+        message = "El cuerpo de la petición supera el tamaño permitido";
+    }
 
     // Restricción UNIQUE
     else if (error instanceof UniqueConstraintError){

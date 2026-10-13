@@ -5,6 +5,8 @@ const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const optionalString = z.preprocess(emptyToUndefined, z.string().min(1).optional());
+const nonNegativeInteger = (fallback: number) =>
+  z.coerce.number().int().min(0).default(fallback);
 
 const booleanFromEnv = z.preprocess((value) => {
   if (value === undefined) return false;
@@ -20,6 +22,12 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   APP_TIMEZONE: z.string().min(1).default("America/Guatemala"),
+  CORS_ORIGINS: optionalString,
+  TRUST_PROXY: nonNegativeInteger(0),
+  REQUEST_BODY_LIMIT: z.string().min(1).default("1mb"),
+  WEBHOOK_BODY_LIMIT: z.string().min(1).default("512kb"),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
   EVENT_DEPOSIT_PERCENTAGE: z.coerce
     .number()
