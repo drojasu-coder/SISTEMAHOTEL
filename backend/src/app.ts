@@ -1,6 +1,7 @@
 import express from "express";
 import { corsMiddleware, securityHeaders, authenticationRateLimiter } from "./config/httpSecurity";
 import { env } from "./config/env";
+import { requestLoggingMiddleware } from "./middlewares/request-logging.middleware";
 
 import authRoutes from "./routes/auth.routes";
 import salonRoutes from "./routes/eventos/salon.routes";
@@ -57,6 +58,7 @@ const app = express();
 
 app.disable("x-powered-by");
 app.set("trust proxy", env.TRUST_PROXY);
+app.use(requestLoggingMiddleware);
 app.use(securityHeaders);
 app.use(corsMiddleware);
 

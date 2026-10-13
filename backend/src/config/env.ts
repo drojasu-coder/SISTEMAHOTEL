@@ -28,6 +28,10 @@ const envSchema = z.object({
   WEBHOOK_BODY_LIMIT: z.string().min(1).default("512kb"),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  LOG_FORMAT: z.enum(["pretty", "json"]).default("pretty"),
+  SERVICE_NAME: z.string().min(1).default("hotel-hunapu-backend"),
+  SLOW_QUERY_THRESHOLD_MS: z.coerce.number().int().positive().default(1000),
 
   EVENT_DEPOSIT_PERCENTAGE: z.coerce
     .number()

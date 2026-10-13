@@ -14,6 +14,17 @@ describe("HTTP baseline", () => {
     });
   });
 
+  it("returns a fresh request ID and preserves it in the response", async () => {
+    const [first, second] = await Promise.all([
+      request(app).get("/api/health"),
+      request(app).get("/api/health"),
+    ]);
+
+    expect(first.headers["x-request-id"]).toEqual(expect.any(String));
+    expect(second.headers["x-request-id"]).toEqual(expect.any(String));
+    expect(first.headers["x-request-id"]).not.toBe(second.headers["x-request-id"]);
+  });
+
   it("rejects invalid registration input before reaching the database", async () => {
     const response = await request(app)
       .post("/api/auth/register")

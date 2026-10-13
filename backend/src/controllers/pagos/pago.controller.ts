@@ -3,6 +3,7 @@ import * as pagoService from "../../services/pago.service";
 import { stripeService } from "../../services/stripe.service";
 import Stripe from "stripe";
 import { AppError } from "../../utils/AppError";
+import { logger } from "../../utils/logger";
 
 export const create = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -27,6 +28,11 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
       throw new AppError(400, "INVALID_WEBHOOK_REQUEST", "La solicitud del webhook no es válida");
     }
     const event = stripeService.constructEvent(req.body, signature);
+    logger.info("stripe.webhook.verified", {
+      requestId: req.requestId,
+      eventId: event.id,
+      eventType: event.type,
+    });
     const intentEvents = ["payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.canceled"];
     const refundEvents = ["refund.created", "refund.updated", "refund.failed"];
 
@@ -34,6 +40,11 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
       await pagoService.processStripeWebhook(event.data.object as any, event.type);
     }
     res.status(200).json({ received: true });
+    logger.info("stripe.webhook.processed", {
+      requestId: req.requestId,
+      eventId: event.id,
+      eventType: event.type,
+    });
   } catch (error) { next(error); }
 };
 

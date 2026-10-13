@@ -10,6 +10,7 @@ import{
 } from "sequelize";
 
 import { AppError } from "../utils/AppError";
+import { logger } from "../utils/logger";
 
 export const errorHandler: ErrorRequestHandler =(
     error,
@@ -107,12 +108,22 @@ export const errorHandler: ErrorRequestHandler =(
 
   // Los errores 500+ los registramos en consola
   if(statusCode >= 500){
-    console.error("ERROR:",{
-        method: req.method,
-        url: req.originalUrl,
-        code,
-        errorName: error.name,
-        statusCode,
+    logger.error("http.error", {
+      requestId: req.requestId,
+      method: req.method,
+      route: req.originalUrl.split("?")[0],
+      code,
+      errorName: error.name,
+      statusCode,
+      error,
+    });
+  } else {
+    logger.warn("http.expected_error", {
+      requestId: req.requestId,
+      method: req.method,
+      route: req.originalUrl.split("?")[0],
+      code,
+      statusCode,
     });
   }
 
