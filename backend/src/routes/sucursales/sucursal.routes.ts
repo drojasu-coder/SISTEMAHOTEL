@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import * as sucursalController from "../../controllers/sucursales/sucursal.controller";
+import * as sucursalController from "../../modules/sucursales/sucursal.controller";
 
 import {
   validateBody,
@@ -14,7 +14,7 @@ import { ROLES } from "../../constants/roles";
 import {
   createSucursalSchema,
   updateSucursalSchema,
-} from "../../validators/sucursales/sucursal.validator";
+} from "../../modules/sucursales/sucursal.validator";
 
 import { idParamSchema } from "../../validators/common.validator";
 

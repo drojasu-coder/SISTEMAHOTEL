@@ -16,7 +16,7 @@ import reservaTransporteRoutes from "./routes/transporte/reservaTransporte.route
 import carritoRoutes from "./routes/carrito/carrito.routes";
 import carritoItemsRoutes from "./routes/carrito/carritoItem.routes";
 
-import sucursalRoutes from "./routes/sucursales/sucursal.routes";
+import sucursalRoutes from "./modules/sucursales/sucursal.routes";
 
 import mesaRoutes from "./routes/restaurante/mesa.routes";
 import reservaMesaRoutes from "./routes/restaurante/reservaMesa.routes";
