@@ -28,33 +28,117 @@ type ReservaAmenidadEstado =
   | "cancelada"
   | "usada";
 
-// ======================================================
-// VALIDAR FECHA
-// ======================================================
+interface ParsedTimeSlot {
+  inicio: number;
+  fin: number;
+  normalized: string;
+}
+
+const reservaAmenidadInclude = [
+  {
+    model: Amenidad,
+    attributes: [
+      "id",
+      "nombre",
+      "aforo_maximo",
+    ],
+  },
+  {
+    model: Usuario,
+    attributes: [
+      "id",
+      "nombre",
+      "email",
+    ],
+  },
+];
+
+const getCurrentHotelDateTime =
+  () => {
+    const timeZone =
+      process.env.APP_TIMEZONE ||
+      "America/Guatemala";
+
+    const parts =
+      new Intl.DateTimeFormat(
+        "en-US",
+        {
+          timeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hourCycle: "h23",
+        }
+      ).formatToParts(
+        new Date()
+      );
+
+    const getPart = (
+      type: string
+    ) =>
+      parts.find(
+        (part) =>
+          part.type === type
+      )?.value ?? "";
+
+    const hours =
+      Number(
+        getPart("hour")
+      );
+
+    const minutes =
+      Number(
+        getPart("minute")
+      );
+
+    const seconds =
+      Number(
+        getPart("second")
+      );
+
+    return {
+      fecha:
+        `${getPart("year")}-${getPart("month")}-${getPart("day")}`,
+
+      seconds:
+        hours * 3600 +
+        minutes * 60 +
+        seconds,
+    };
+  };
 
 const validateDate = (
   fecha: string
 ) => {
-  const hoy =
-    new Date();
+  const [
+    year,
+    month,
+    day,
+  ] = fecha
+    .split("-")
+    .map(Number);
 
-  hoy.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const fechaReserva =
+  const parsedDate =
     new Date(
-      `${fecha}T00:00:00`
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
     );
 
-  if (
-    Number.isNaN(
-      fechaReserva.getTime()
-    )
-  ) {
+  const validDate =
+    parsedDate.getUTCFullYear() ===
+      year &&
+    parsedDate.getUTCMonth() ===
+      month - 1 &&
+    parsedDate.getUTCDate() ===
+      day;
+
+  if (!validDate) {
     throw new AppError(
       400,
       "INVALID_AMENITY_DATE",
@@ -62,8 +146,12 @@ const validateDate = (
     );
   }
 
+  const current =
+    getCurrentHotelDateTime();
+
   if (
-    fechaReserva < hoy
+    fecha <
+    current.fecha
   ) {
     throw new AppError(
       422,
@@ -72,10 +160,6 @@ const validateDate = (
     );
   }
 };
-
-// ======================================================
-// NORMALIZAR Y VALIDAR FRANJA HORARIA
-// ======================================================
 
 const timeToMinutes = (
   time: string
@@ -95,15 +179,7 @@ const timeToMinutes = (
 
 const normalizeTimeSlot = (
   franja: string
-) => {
-  /*
-   * Aceptamos:
-   * 08:00-10:00
-   * 08:00 - 10:00
-   *
-   * Pero guardamos siempre:
-   * 08:00-10:00
-   */
+): ParsedTimeSlot => {
   const normalized =
     franja
       .replace(
@@ -112,15 +188,13 @@ const normalizeTimeSlot = (
       )
       .trim();
 
-  const [
-    inicio,
-    fin,
-  ] =
-    normalized.split("-");
+  const timeSlotRegex =
+    /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
 
   if (
-    !inicio ||
-    !fin
+    !timeSlotRegex.test(
+      normalized
+    )
   ) {
     throw new AppError(
       400,
@@ -129,9 +203,24 @@ const normalizeTimeSlot = (
     );
   }
 
+  const [
+    inicioText,
+    finText,
+  ] =
+    normalized.split("-");
+
+  const inicio =
+    timeToMinutes(
+      inicioText
+    );
+
+  const fin =
+    timeToMinutes(
+      finText
+    );
+
   if (
-    timeToMinutes(inicio) >=
-    timeToMinutes(fin)
+    inicio >= fin
   ) {
     throw new AppError(
       400,
@@ -140,56 +229,199 @@ const normalizeTimeSlot = (
     );
   }
 
-  return `${inicio}-${fin}`;
+  return {
+    inicio,
+    fin,
+    normalized:
+      `${inicioText}-${finText}`,
+  };
 };
 
-// ======================================================
-// LISTAR
-// ======================================================
+const validateTimeSlotNotPast = (
+  fecha: string,
+  inicioMinutos: number
+) => {
+  const current =
+    getCurrentHotelDateTime();
+
+  if (
+    fecha !==
+    current.fecha
+  ) {
+    return;
+  }
+
+  const inicioSegundos =
+    inicioMinutos * 60;
+
+  if (
+    inicioSegundos <
+    current.seconds
+  ) {
+    throw new AppError(
+      422,
+      "AMENITY_TIME_SLOT_IN_PAST",
+      "La franja horaria de la amenidad ya comenzó"
+    );
+  }
+};
+
+const slotsOverlap = (
+  inicioA: number,
+  finA: number,
+  inicioB: number,
+  finB: number
+) =>
+  inicioA < finB &&
+  finA > inicioB;
+
+const getStoredSlot = (
+  franja: string
+) =>
+  normalizeTimeSlot(
+    franja
+  );
+
+/**
+ * Comprueba el máximo de personas
+ * concurrentes durante la nueva franja.
+ *
+ * No basta con contar todas las reservas
+ * que tengan algún solapamiento, porque
+ * podrían coincidir en momentos distintos.
+ */
+const validateCapacity = (
+  reservasExistentes: any[],
+  nuevaFranja: ParsedTimeSlot,
+  aforoMaximo: number
+) => {
+  const events:
+    Array<{
+      time: number;
+      delta: number;
+    }> = [];
+
+  for (
+    const reserva of
+    reservasExistentes
+  ) {
+    const slot =
+      getStoredSlot(
+        reserva.franja_horaria
+      );
+
+    if (
+      !slotsOverlap(
+        slot.inicio,
+        slot.fin,
+        nuevaFranja.inicio,
+        nuevaFranja.fin
+      )
+    ) {
+      continue;
+    }
+
+    events.push(
+      {
+        time:
+          slot.inicio,
+        delta: 1,
+      },
+      {
+        time:
+          slot.fin,
+        delta: -1,
+      }
+    );
+  }
+
+  /**
+   * Añadimos la nueva reserva,
+   * que representa una persona.
+   */
+  events.push(
+    {
+      time:
+        nuevaFranja.inicio,
+      delta: 1,
+    },
+    {
+      time:
+        nuevaFranja.fin,
+      delta: -1,
+    }
+  );
+
+  /**
+   * Ante la misma hora procesamos
+   * primero las salidas (-1) y
+   * después las entradas (+1).
+   *
+   * De esta forma:
+   * 08:00-10:00
+   * 10:00-12:00
+   *
+   * no se consideran simultáneas.
+   */
+  events.sort(
+    (
+      a,
+      b
+    ) =>
+      a.time -
+        b.time ||
+      a.delta -
+        b.delta
+  );
+
+  let ocupacion = 0;
+  let maxOcupacion = 0;
+
+  for (
+    const event of events
+  ) {
+    ocupacion +=
+      event.delta;
+
+    maxOcupacion =
+      Math.max(
+        maxOcupacion,
+        ocupacion
+      );
+  }
+
+  if (
+    maxOcupacion >
+    aforoMaximo
+  ) {
+    throw new AppError(
+      409,
+      "AMENITY_CAPACITY_FULL",
+      `El aforo máximo de ${aforoMaximo} personas sería excedido durante esa franja horaria`
+    );
+  }
+};
 
 export const getAll =
   async () => {
-    return ReservaAmenidad.findAll({
-      include: [
-        {
-          model:
-            Amenidad,
+    return ReservaAmenidad.findAll(
+      {
+        include:
+          reservaAmenidadInclude,
 
-          attributes: [
-            "id",
-            "nombre",
-            "aforo_maximo",
+        order: [
+          [
+            "fecha",
+            "DESC",
           ],
-        },
-
-        {
-          model:
-            Usuario,
-
-          attributes: [
-            "id",
-            "nombre",
-            "email",
+          [
+            "franja_horaria",
+            "ASC",
           ],
-        },
-      ],
-
-      order: [
-        [
-          "fecha",
-          "DESC",
         ],
-        [
-          "franja_horaria",
-          "ASC",
-        ],
-      ],
-    });
+      }
+    );
   };
-
-// ======================================================
-// OBTENER POR ID
-// ======================================================
 
 export const getById =
   async (
@@ -199,29 +431,8 @@ export const getById =
       await ReservaAmenidad.findByPk(
         id,
         {
-          include: [
-            {
-              model:
-                Amenidad,
-
-              attributes: [
-                "id",
-                "nombre",
-                "aforo_maximo",
-              ],
-            },
-
-            {
-              model:
-                Usuario,
-
-              attributes: [
-                "id",
-                "nombre",
-                "email",
-              ],
-            },
-          ],
+          include:
+            reservaAmenidadInclude,
         }
       );
 
@@ -236,10 +447,6 @@ export const getById =
     return reserva;
   };
 
-// ======================================================
-// CREAR
-// ======================================================
-
 export const create =
   async (
     data:
@@ -249,23 +456,25 @@ export const create =
       data.fecha
     );
 
-    const franjaHoraria =
+    const nuevaFranja =
       normalizeTimeSlot(
         data.franja_horaria
       );
+
+    validateTimeSlotNotPast(
+      data.fecha,
+      nuevaFranja.inicio
+    );
 
     const reservaId =
       await sequelize.transaction(
         async (
           transaction: any
         ) => {
-          /*
-           * Bloqueamos la amenidad durante
-           * validación de aforo + creación.
-           *
-           * Dos solicitudes simultáneas para
-           * la misma amenidad no podrán superar
-           * el aforo entre ambas.
+          /**
+           * Serializamos las creaciones para
+           * una misma amenidad mientras se
+           * comprueba disponibilidad y aforo.
            */
           const amenidad =
             await Amenidad.findByPk(
@@ -288,33 +497,65 @@ export const create =
             );
           }
 
-          /*
-           * Un mismo usuario no debe reservar
-           * dos veces la misma amenidad en la
-           * misma fecha y franja.
+          /**
+           * Obtenemos las reservas que actualmente
+           * consumen aforo para esa amenidad y día.
            */
-          const reservaUsuario =
-            await ReservaAmenidad
-              .findOne({
+          const reservasConfirmadas =
+            await ReservaAmenidad.findAll(
+              {
                 where: {
-                  usuario_id:
-                    data.usuario_id,
-
                   amenidad_id:
                     data.amenidad_id,
 
                   fecha:
                     data.fecha,
 
-                  franja_horaria:
-                    franjaHoraria,
-
                   estado:
                     "confirmada",
                 },
 
+                attributes: [
+                  "id",
+                  "usuario_id",
+                  "franja_horaria",
+                ],
+
                 transaction,
-              });
+              }
+            );
+
+          /**
+           * Un mismo usuario no puede reservar
+           * la misma amenidad en franjas que se
+           * superpongan.
+           */
+          const reservaUsuario =
+            reservasConfirmadas.find(
+              (
+                reserva: any
+              ) => {
+                if (
+                  reserva.usuario_id !==
+                  data.usuario_id
+                ) {
+                  return false;
+                }
+
+                const slot =
+                  getStoredSlot(
+                    reserva
+                      .franja_horaria
+                  );
+
+                return slotsOverlap(
+                  slot.inicio,
+                  slot.fin,
+                  nuevaFranja.inicio,
+                  nuevaFranja.fin
+                );
+              }
+            );
 
           if (
             reservaUsuario
@@ -322,18 +563,32 @@ export const create =
             throw new AppError(
               409,
               "AMENITY_RESERVATION_ALREADY_EXISTS",
-              "El usuario ya posee una reserva para esta amenidad, fecha y franja horaria"
+              "El usuario ya posee una reserva para esta amenidad en una franja horaria que se superpone"
             );
           }
 
-          /*
-           * Cada reserva actual equivale a
-           * una persona porque el modelo no
-           * dispone de numero_personas.
+          /**
+           * Cada reserva representa actualmente
+           * una persona.
            */
-          const ocupacionActual =
-            await ReservaAmenidad.count({
-              where: {
+          validateCapacity(
+            reservasConfirmadas,
+            nuevaFranja,
+            Number(
+              amenidad
+                .aforo_maximo
+            )
+          );
+
+          const codigoQr =
+            `AMENITY-${randomUUID()}`;
+
+          const reserva =
+            await ReservaAmenidad.create(
+              {
+                usuario_id:
+                  data.usuario_id,
+
                 amenidad_id:
                   data.amenidad_id,
 
@@ -341,66 +596,23 @@ export const create =
                   data.fecha,
 
                 franja_horaria:
-                  franjaHoraria,
+                  nuevaFranja.normalized,
+
+                mobiliario:
+                  data.mobiliario
+                    ?.trim() ||
+                  "ninguno",
+
+                codigo_qr:
+                  codigoQr,
 
                 estado:
                   "confirmada",
               },
-
-              transaction,
-            });
-
-          if (
-            ocupacionActual >=
-            amenidad.aforo_maximo
-          ) {
-            throw new AppError(
-              409,
-              "AMENITY_CAPACITY_FULL",
-              `El aforo máximo de ${amenidad.aforo_maximo} personas ya está completo para esta franja horaria`
+              {
+                transaction,
+              }
             );
-          }
-
-          /*
-           * UUID aleatorio.
-           * El frontend puede transformar este
-           * texto en una imagen QR.
-           */
-          const codigoQr =
-            `AMENITY-${randomUUID()}`;
-
-          const reserva =
-            await ReservaAmenidad
-              .create(
-                {
-                  usuario_id:
-                    data.usuario_id,
-
-                  amenidad_id:
-                    data.amenidad_id,
-
-                  fecha:
-                    data.fecha,
-
-                  franja_horaria:
-                    franjaHoraria,
-
-                  mobiliario:
-                    data.mobiliario
-                      ?.trim() ||
-                    "ninguno",
-
-                  codigo_qr:
-                    codigoQr,
-
-                  estado:
-                    "confirmada",
-                },
-
-                {
-                  transaction,
-                }
-              );
 
           return reserva.id;
         }
@@ -410,10 +622,6 @@ export const create =
       reservaId
     );
   };
-
-// ======================================================
-// ACTUALIZAR ESTADO
-// ======================================================
 
 export const updateStatus =
   async (
@@ -445,8 +653,8 @@ export const updateStatus =
       );
     }
 
-    /*
-     * Una reserva cancelada o usada es final.
+    /**
+     * Cancelada y usada son estados finales.
      */
     if (
       reserva.estado ===

@@ -31,16 +31,16 @@ import {
   idParamSchema,
 } from "../../validators/common.validator";
 
-const router =
-  Router();
+const router = Router();
 
+/**
+ * Todas las operaciones de reservas de amenidad
+ * requieren autenticación.
+ */
 router.use(
   authMiddleware
 );
 
-/*
- * Solo los clientes realizan reservas.
- */
 /**
  * @openapi
  * /api/reservas-amenidad:
@@ -49,10 +49,13 @@ router.use(
  *       - Reservas de Amenidad
  *     summary: Crear una reserva de amenidad
  *     description: >
- *       Permite a un cliente reservar una amenidad para una fecha
- *       y franja horaria. El backend controla el aforo máximo,
- *       evita reservas duplicadas del mismo usuario y genera
+ *       Permite a un cliente autenticado reservar una amenidad
+ *       para una fecha y franja horaria.
+ *       El usuario se obtiene automáticamente del JWT.
+ *       El backend controla el aforo concurrente de la amenidad,
+ *       evita reservas superpuestas del mismo usuario y genera
  *       automáticamente un código QR único.
+ *       Actualmente cada reserva representa el acceso de una persona.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -65,20 +68,24 @@ router.use(
  *       201:
  *         description: Reserva creada correctamente
  *       400:
- *         description: Datos o franja horaria inválidos
+ *         description: Datos, fecha o franja horaria inválidos
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo clientes pueden reservar
+ *         description: Solo los clientes pueden crear reservas de amenidad
  *       404:
  *         description: Amenidad no encontrada
  *       409:
  *         description: >
- *           Aforo completo o reserva duplicada para el mismo usuario,
- *           fecha y franja
+ *           El aforo máximo sería excedido durante la franja solicitada
+ *           o el usuario ya posee una reserva superpuesta
+ *           para esa amenidad.
  *       422:
- *         description: Fecha de reserva en el pasado
+ *         description: >
+ *           La fecha está en el pasado o, para una reserva
+ *           del día actual, la franja horaria ya comenzó.
  */
+// Solo los clientes autenticados pueden reservar amenidades.
 router.post(
   "/",
   requireRole(
@@ -90,9 +97,6 @@ router.post(
   reservaAmenidadController.create
 );
 
-/*
- * Administración.
- */
 /**
  * @openapi
  * /api/reservas-amenidad:
@@ -100,6 +104,9 @@ router.post(
  *     tags:
  *       - Reservas de Amenidad
  *     summary: Listar todas las reservas de amenidad
+ *     description: >
+ *       Operación administrativa disponible únicamente
+ *       para administradores.
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -126,8 +133,9 @@ router.post(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  */
+// Solo el administrador puede consultar todas las reservas.
 router.get(
   "/",
   requireRole(
@@ -143,6 +151,9 @@ router.get(
  *     tags:
  *       - Reservas de Amenidad
  *     summary: Obtener una reserva de amenidad por ID
+ *     description: >
+ *       Operación administrativa disponible únicamente
+ *       para administradores.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -160,7 +171,7 @@ router.get(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  *       404:
  *         description: Reserva no encontrada
  */
@@ -183,8 +194,11 @@ router.get(
  *       - Reservas de Amenidad
  *     summary: Cambiar el estado de una reserva de amenidad
  *     description: >
- *       Permite marcar una reserva confirmada como cancelada o usada.
- *       Las reservas canceladas o usadas son estados finales.
+ *       Permite al administrador marcar una reserva confirmada
+ *       como cancelada o usada.
+ *       Los estados cancelada y usada son terminales,
+ *       por lo que una reserva que alcance uno de ellos
+ *       ya no puede modificarse nuevamente.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -208,13 +222,14 @@ router.get(
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Solo administradores
+ *         description: Usuario sin permisos administrativos
  *       404:
  *         description: Reserva no encontrada
  *       409:
  *         description: >
- *           La reserva ya posee ese estado o se encuentra
- *           en un estado final
+ *           La reserva ya posee el estado solicitado
+ *           o se encuentra en un estado final
+ *           y ya no puede modificarse.
  */
 router.patch(
   "/:id/estado",
