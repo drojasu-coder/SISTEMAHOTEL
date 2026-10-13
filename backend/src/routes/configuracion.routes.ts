@@ -3,8 +3,8 @@ import { authMiddleware } from "../middlewares/auth.middleware";
 import { requireRole } from "../middlewares/role.middleware";
 import { validateBody } from "../middlewares/validate.middleware";
 import { ROLES } from "../constants/roles";
-import * as configuracionController from "../controllers/configuracion.controller";
-import { updateIvaSchema } from "../validators/configuracion.validator";
+import * as configuracionController from "../modules/configuraciones/configuracion.controller";
+import { updateIvaSchema } from "../modules/configuraciones/configuracion.validator";
 
 const router = Router();
 

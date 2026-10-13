@@ -43,6 +43,18 @@ describe("HTTP baseline", () => {
     expect(response.body.code).toBe("AUTH_TOKEN_REQUIRED");
   });
 
+  it("preserves authentication on the configuration endpoints", async () => {
+    const read = await request(app).get("/api/configuraciones/iva");
+    const update = await request(app)
+      .patch("/api/configuraciones/iva")
+      .send({ porcentaje_iva: 12 });
+
+    expect(read.status).toBe(401);
+    expect(read.body.code).toBe("AUTH_TOKEN_REQUIRED");
+    expect(update.status).toBe(401);
+    expect(update.body.code).toBe("AUTH_TOKEN_REQUIRED");
+  });
+
   it("keeps the Stripe webhook outside JWT middleware and requires raw signed input", async () => {
     const response = await request(app)
       .post("/api/pagos/stripe/webhook")

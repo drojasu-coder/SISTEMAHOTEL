@@ -47,7 +47,7 @@ import reservaParqueoRoutes from "./routes/habitaciones/reservaParqueo.routes";
 import promocionRoutes from "./routes/habitaciones/promocion.routes";
 import facturaRoutes from "./routes/habitaciones/factura.routes";
 import facturaItemRoutes from "./routes/habitaciones/facturaItem.routes";
-import configuracionRoutes from "./routes/configuracion.routes";
+import configuracionRoutes from "./modules/configuraciones/configuracion.routes";
 import proveedorRoutes from "./routes/proveedores/proveedor.routes";
 import proveedorProductoRoutes from "./routes/proveedores/proveedorProducto.routes";
 import cuentaPorPagarRoutes from "./routes/proveedores/cuentaPorPagar.routes";
