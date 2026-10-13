@@ -1,0 +1,11 @@
+id,dominio,tipo,severidad,evidencia,responsable,fase_destino,bloquea_fase_5,bloquea_frontend,bloquea_jose,requiere_negocio
+R-01,Stripe,RIESGO_TECNICO,alta,"No se observó registro de Stripe event.id",Diego/arquitectura,decisión técnica,no,posible,no,sí
+R-02,Facturación,REGLA_AMBIGUA,alta,"No hay relación Pago-Factura-Carrito definida",Negocio+Diego,contrato futuro,no,sí,sí,sí
+R-03,Pagos,RIESGO_TECNICO,alta,"Operación Stripe y commit local son límites distintos",Diego,diseño técnico,posible,sí,no,no
+R-04,Facturación,RIESGO_TECNICO,alta,"Factura-item y recálculo no comparten transacción global",Diego,prueba/corrección,posible,sí,no,no
+R-05,Reservas,RIESGO_TECNICO,media,"SELECT seguido de escritura en dominios auxiliares",Diego/José,pruebas+decisión,no,posible,sí,sí
+R-06,Contratos,FALTA_COBERTURA,media,"Matriz Fase 4B-1 sin prueba HTTP específica para muchas rutas",Diego,pruebas,no,sí,no,no
+R-08,Facturación,FALTA_COBERTURA,alta,"Ownership no demostrado en todos los services",Diego,seguridad,posible,sí,sí,no
+R-09,Configuración,DEUDA_TECNICA,media,"IVA/estados/constantes repetidos",Diego,Fase 5,no,no,no,no
+R-10,Legacy,ARCHIVO_OBSOLETO,baja,"Fachadas y adapters legacy coexistentes",Diego,Fase 5,no,no,no,no
+R-07-RESUELTO,Migraciones,RESUELTO,baja,"db:migrate:status confirmó 41 up y 0 down en la misma base aislada de tests",Entorno/Diego,cerrado,no,no,no,no
