@@ -247,11 +247,13 @@ const getNights = (
 const validateReferences =
   async (
     usuarioId: number,
-    habitacionId: number
+    habitacionId: number,
+    transaction?: any
   ) => {
     const usuario =
       await Usuario.findByPk(
-        usuarioId
+        usuarioId,
+        transaction ? { transaction } : undefined
       );
 
     if (!usuario) {
@@ -262,10 +264,19 @@ const validateReferences =
       );
     }
 
+    const habitacionLock =
+      await Habitacion.findByPk(
+        habitacionId,
+        transaction
+          ? { transaction, lock: transaction.LOCK.UPDATE }
+          : undefined
+      );
+
     const habitacion =
       await Habitacion.findByPk(
         habitacionId,
         {
+          ...(transaction ? { transaction } : {}),
           include: [
             {
               model:
@@ -275,10 +286,7 @@ const validateReferences =
         }
       );
 
-    if (
-      !habitacion ||
-      !habitacion.TipoHabitacion
-    ) {
+    if (!habitacionLock || !habitacion || !habitacion.TipoHabitacion) {
       throw new AppError(
         404,
         "HABITACION_NOT_FOUND",
@@ -297,7 +305,8 @@ const validateOverlap = async (
   habitacionId: number,
   fechaEntrada: string,
   fechaSalida: string,
-  reservaId?: number
+  reservaId?: number,
+  transaction?: any
 ) => {
   const where: any = {
     habitacion_id:
@@ -337,6 +346,7 @@ const validateOverlap = async (
   const reservaExistente =
     await ReservaHabitacion.findOne({
       where,
+      ...(transaction ? { transaction } : {}),
     });
 
   if (reservaExistente) {
@@ -479,74 +489,46 @@ export const createReservaHabitacion =
      * Regla 3:
      * usuario y habitación deben existir.
      */
-    const habitacion =
-      await validateReferences(
-        data.usuario_id,
-        data.habitacion_id
+    return db.sequelize.transaction(async (transaction: any) => {
+      const habitacion =
+        await validateReferences(
+          data.usuario_id,
+          data.habitacion_id,
+          transaction
+        );
+
+      validateHabitacionReservable(habitacion);
+      validateCapacidad(
+        data.numero_huespedes,
+        habitacion.TipoHabitacion.capacidad_maxima
       );
-
-    /**
-     * Regla 4:
-     * una habitación en mantenimiento
-     * no puede reservarse.
-     */
-    validateHabitacionReservable(
-      habitacion
-    );
-
-    /**
-     * Regla 5:
-     * no superar capacidad.
-     */
-    validateCapacidad(
-      data.numero_huespedes,
-      habitacion
-        .TipoHabitacion
-        .capacidad_maxima
-    );
-
-    /**
-     * Regla 6:
-     * no debe existir traslape.
-     */
-    await validateOverlap(
-      data.habitacion_id,
-      data.fecha_entrada,
-      data.fecha_salida
-    );
-
-    const total =
-      calculateTotal(
+      await validateOverlap(
+        data.habitacion_id,
         data.fecha_entrada,
         data.fecha_salida,
-        habitacion
-          .TipoHabitacion
-          .tarifa_noche
+        undefined,
+        transaction
       );
 
-    return ReservaHabitacion.create(
-      {
-        usuario_id:
-          data.usuario_id,
+      const total = calculateTotal(
+        data.fecha_entrada,
+        data.fecha_salida,
+        habitacion.TipoHabitacion.tarifa_noche
+      );
 
-        habitacion_id:
-          data.habitacion_id,
-
-        fecha_entrada:
-          data.fecha_entrada,
-
-        fecha_salida:
-          data.fecha_salida,
-
-        numero_huespedes:
-          data.numero_huespedes,
-
-        estado:
-          "pendiente",
-
-        total,
-      }
-    );
+      return ReservaHabitacion.create(
+        {
+          usuario_id: data.usuario_id,
+          habitacion_id: data.habitacion_id,
+          fecha_entrada: data.fecha_entrada,
+          fecha_salida: data.fecha_salida,
+          numero_huespedes: data.numero_huespedes,
+          estado: "pendiente",
+          total,
+        },
+        { transaction }
+      );
+    });
   };
 
 /**
