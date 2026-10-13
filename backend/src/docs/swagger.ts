@@ -513,6 +513,43 @@ ReservaTransporte: {
   },
 },
 
+Carrito: {
+  type: "object",
+  properties: {
+    id: {
+      type: "integer",
+      example: 1,
+    },
+    usuario_id: {
+      type: "integer",
+      example: 2,
+    },
+    estado: {
+      type: "string",
+      enum: [
+        "activo",
+        "expirado",
+        "pagado",
+      ],
+      example: "activo",
+    },
+    expira_en: {
+      type: "string",
+      format: "date-time",
+      nullable: true,
+      example: "2026-10-15T18:00:00.000Z",
+    },
+    createdAt: {
+      type: "string",
+      format: "date-time",
+    },
+    updatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+  },
+},
+
 CarritoItem: {
   type: "object",
 
