@@ -7,14 +7,15 @@
     "port": 5432,
     "dialect": "postgres"
   },
-  "test": {
-    "username": "hotel_user",
-    "password": "hotel_pass",
-    "database": "hotel_db",
-    "host": "localhost",
-    "port": 5432,
-    "dialect": "postgres"
-  },
+"test": {
+  "username": "hotel_user",
+  "password": "hotel_pass",
+  "database": "hotel_test_db",
+  "host": "127.0.0.1",
+  "port": 5432,
+  "dialect": "postgres",
+  "logging": false
+},
   "production": {
     "username": "hotel_user",
     "password": "hotel_pass",
