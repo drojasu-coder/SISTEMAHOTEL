@@ -16,8 +16,11 @@ export const Card: React.FC<CardProps> = ({
     elevated: 'bg-white shadow-md border border-charcoal-200/40',
   }[variant];
 
+  const hasPadding = /(^|\s)p[xytrbl]?-\d+/.test(className);
+  const paddingClass = hasPadding ? '' : 'p-4 sm:p-6';
+
   return (
-    <div className={`rounded-2xl p-6 ${variantStyles} ${className}`} {...props}>
+    <div className={`rounded-2xl ${paddingClass} ${variantStyles} ${className}`} {...props}>
       {children}
     </div>
   );

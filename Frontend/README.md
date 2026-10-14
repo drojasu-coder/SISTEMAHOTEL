@@ -22,6 +22,11 @@ Configuración requerida:
 VITE_API_BASE_URL=http://localhost:4000/api
 ```
 
+## Referencia Visual y Diseño
+- **Referencia visual oficial:** Prototipo web publicado (`https://hotel-hunahpu-prototipo.diegoantoniorojasuyu.chatgpt.site`). El prototipo sirve como referencia visual base, no como especificación rígida a copiar ciegamente.
+- **Responsive mobile-first:** Toda la interfaz se diseña mobile-first y debe funcionar correctamente en móvil, tablet, laptop y desktop.
+- **Política de assets:** El branding estático se ubica exclusivamente en `src/assets/branding/`. El contenido dinámico de catálogo (fotos de habitaciones, servicios, actividades) se gestionará en almacenamiento de objetos (AWS S3) en fases posteriores.
+
 ## Comandos Disponibles
 
 ### Instalación de dependencias

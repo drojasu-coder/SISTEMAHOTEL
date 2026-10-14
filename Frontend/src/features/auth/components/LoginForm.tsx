@@ -54,7 +54,7 @@ export const LoginForm: React.FC = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5" noValidate>
         {/* Email */}
         <div>
           <label htmlFor="email" className="block text-xs font-semibold text-charcoal-700 uppercase tracking-wider mb-1.5">
@@ -69,7 +69,7 @@ export const LoginForm: React.FC = () => {
               type="email"
               placeholder="ejemplo@hotelhunapu.com"
               {...register('email')}
-              className={`w-full h-12 pl-10 pr-4 rounded-lg border bg-white text-sm text-charcoal-900 placeholder:text-charcoal-400 focus:outline-none focus:ring-2 focus:ring-bronze-500 focus:border-transparent transition-colors ${
+              className={`w-full h-11 sm:h-12 pl-10 pr-4 rounded-lg border bg-white text-base sm:text-sm text-charcoal-900 placeholder:text-charcoal-400 focus:outline-none focus:ring-2 focus:ring-bronze-500 focus:border-transparent transition-colors ${
                 errors.email ? 'border-status-danger focus:ring-status-danger' : 'border-charcoal-200 hover:border-charcoal-400'
               }`}
             />
@@ -83,11 +83,11 @@ export const LoginForm: React.FC = () => {
 
         {/* Password */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
             <label htmlFor="password" className="block text-xs font-semibold text-charcoal-700 uppercase tracking-wider">
               Contraseña
             </label>
-            <span className="text-xs text-bronze-700 hover:underline cursor-pointer">
+            <span className="text-xs text-bronze-700 hover:underline cursor-pointer py-0.5">
               ¿Olvidó su contraseña?
             </span>
           </div>
@@ -100,14 +100,14 @@ export const LoginForm: React.FC = () => {
               type={showPassword ? 'text' : 'password'}
               placeholder="••••••••"
               {...register('password')}
-              className={`w-full h-12 pl-10 pr-11 rounded-lg border bg-white text-sm text-charcoal-900 placeholder:text-charcoal-400 focus:outline-none focus:ring-2 focus:ring-bronze-500 focus:border-transparent transition-colors ${
+              className={`w-full h-11 sm:h-12 pl-10 pr-11 rounded-lg border bg-white text-base sm:text-sm text-charcoal-900 placeholder:text-charcoal-400 focus:outline-none focus:ring-2 focus:ring-bronze-500 focus:border-transparent transition-colors ${
                 errors.password ? 'border-status-danger focus:ring-status-danger' : 'border-charcoal-200 hover:border-charcoal-400'
               }`}
             />
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-charcoal-400 hover:text-charcoal-700"
+              className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-charcoal-400 hover:text-charcoal-700 transition-colors focus:outline-none"
               tabIndex={-1}
               aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
             >
@@ -121,7 +121,7 @@ export const LoginForm: React.FC = () => {
           )}
         </div>
 
-        <Button type="submit" variant="primary" size="lg" className="w-full mt-2" isLoading={isSubmitting}>
+        <Button type="submit" variant="primary" size="lg" className="w-full mt-2 h-11 sm:h-12 text-sm sm:text-base justify-center" isLoading={isSubmitting}>
           Iniciar Sesión
         </Button>
       </form>

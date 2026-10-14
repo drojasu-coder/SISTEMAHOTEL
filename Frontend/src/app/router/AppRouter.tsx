@@ -4,6 +4,7 @@ import { GuestLayout } from '@/layouts/GuestLayout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
+import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
@@ -15,6 +16,8 @@ export const AppRouter: React.FC = () => {
         <Route element={<GuestLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forbidden" element={<ForbiddenPage />} />
+          <Route path="/403" element={<ForbiddenPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 

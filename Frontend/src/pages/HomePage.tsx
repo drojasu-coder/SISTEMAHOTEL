@@ -65,15 +65,15 @@ export const HomePage: React.FC = () => {
               Bienvenido al sistema integral de reservas de Hotel Hunapú. Disfrute de estancias inolvidables en nuestras sedes de Antigua Guatemala y Lago de Atitlán.
             </p>
 
-            <div className="flex flex-wrap items-center gap-4 pt-2">
-              <Link to="/login">
-                <Button variant="primary" size="lg" className="gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2">
+              <Link to="/login" className="w-full sm:w-auto">
+                <Button variant="primary" size="lg" className="w-full sm:w-auto gap-2 justify-center">
                   <span>Acceso de Huéspedes</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
-              <Link to="/admin">
-                <Button variant="secondary" size="lg" className="border-gold-300 text-gold-100 hover:bg-charcoal-700">
+              <Link to="/admin" className="w-full sm:w-auto">
+                <Button variant="secondary" size="lg" className="w-full sm:w-auto border-gold-300 text-gold-100 hover:bg-charcoal-700 justify-center">
                   <Shield className="w-4 h-4 mr-2 text-gold-300" />
                   <span>Área Administrativa</span>
                 </Button>
