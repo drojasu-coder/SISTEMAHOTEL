@@ -12,11 +12,48 @@ const tipoEventoSchema = z.enum(
   }
 );
 
+const isValidCalendarDate = (
+  value: string
+) => {
+  const [
+    year,
+    month,
+    day,
+  ] = value
+    .split("-")
+    .map(Number);
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+  return (
+    date.getUTCFullYear() ===
+      year &&
+    date.getUTCMonth() ===
+      month - 1 &&
+    date.getUTCDate() ===
+      day
+  );
+};
+
 const fechaSchema = z
   .string()
   .regex(
     /^\d{4}-\d{2}-\d{2}$/,
     "La fecha debe tener formato YYYY-MM-DD"
+  )
+  .refine(
+    isValidCalendarDate,
+    {
+      message:
+        "La fecha no corresponde a un día calendario válido",
+    }
   );
 
 const horaSchema = z
