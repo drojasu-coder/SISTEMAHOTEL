@@ -430,3 +430,94 @@ findings:
       migrations_modified: false
       new_failures: none
       regression: green
+
+  - id: QA-PAY-FIN-CANDIDATE-010
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Un PaymentIntent creado exitosamente debe quedar asociado de forma durable
+      a un Pago local o ser compensado de forma confirmada cuando falla la
+      persistencia posterior; no puede quedar activo y huérfano tras un rollback.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.orphan.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-010: evita PaymentIntent huérfano tras éxito externo y rollback local sin idempotency key"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.orphan.test.ts -t
+        "QA-PAY-FIN-CANDIDATE-010: evita PaymentIntent huérfano tras éxito externo y rollback local sin idempotency key"
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      idempotency_key: absent
+    expected:
+      local_failure_http_status: 500
+      local_failure_code: PAYMENT_LOCAL_PERSISTENCE_FAILED
+      first_intent_compensated: true
+      first_intent_orphaned: false
+      active_uncompensated_intents:
+        - pi_orphan_002
+      duplicated_active_external_attempt: false
+    actual_before_fix:
+      local_failure_http_status: 502
+      local_failure_code: STRIPE_PAYMENT_INTENT_FAILED
+      first_intent_compensated: false
+      first_intent_orphaned: true
+      active_uncompensated_intents:
+        - pi_orphan_001
+        - pi_orphan_002
+      duplicated_active_external_attempt: true
+    endpoint: POST /api/pagos
+    root_cause: >-
+      createPago agrupaba createPaymentIntent y la persistencia de
+      id_transaccion_externo en un mismo try/catch. Un fallo local posterior al
+      éxito externo se clasificaba como fallo Stripe y provocaba rollback sin
+      compensar el PaymentIntent recién creado.
+    correction: >-
+      createPago separa el fallo de creación externa del fallo local posterior.
+      Si falla la asociación local, cancela únicamente el PaymentIntent creado
+      por esa ejecución y, tras cancelación confirmada, responde 500
+      PAYMENT_LOCAL_PERSISTENCE_FAILED conservando el error local como causa. Si
+      la cancelación falla o no confirma estado canceled, responde 502
+      PAYMENT_COMPENSATION_FAILED sin afirmar que la operación quedó compensada.
+    protection_scope: >-
+      Cubre fallos al persistir id_transaccion_externo después de crear el
+      PaymentIntent y antes de completar createPago; no afirma cubrir fallos del
+      commit posteriores al retorno exitoso del callback transaccional.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.orphan.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-010: evita PaymentIntent huérfano tras éxito externo y rollback local sin idempotency key"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      payment_test_files: "3 files, 3 passed"
+      fix_007_concurrency: "1 passed"
+      fix_008_reuse: "1 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      full_backend: "350 passed"
+      stripe_mode: mock
+      real_stripe_charges: false
+      local_failure_http_status: 500
+      local_failure_code: PAYMENT_LOCAL_PERSISTENCE_FAILED
+      first_intent: pi_orphan_001
+      cancel_payment_intent_called: true
+      canceled_intent: pi_orphan_001
+      first_intent_compensated: true
+      first_intent_orphaned: false
+      transaction_rollback: true
+      retry: "201/pi_orphan_002"
+      second_intent: pi_orphan_002
+      active_uncompensated_intents:
+        - pi_orphan_002
+      duplicated_active_external_attempt: false
+      compensation_failure_path: correct
+      local_failure_classification: PAYMENT_LOCAL_PERSISTENCE_FAILED
+      compensation_failure_classification: PAYMENT_COMPENSATION_FAILED
+      approved_semantics_regression: green
+      processing_exposure_regression: green
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      migrations_modified: false

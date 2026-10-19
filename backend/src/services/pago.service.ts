@@ -518,19 +518,51 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       fecha_pago: approved ? new Date() : null,
     }, { transaction });
     if (data.metodo === "tarjeta") {
+      let intent: Awaited<ReturnType<typeof stripeService.createPaymentIntent>>;
+
       try {
-        const intent = await stripeService.createPaymentIntent(amount, "GTQ", {
+        intent = await stripeService.createPaymentIntent(amount, "GTQ", {
           pago_id: String(payment.id),
           ...(payment.carrito_id ? { carrito_id: String(payment.carrito_id) } : {}),
           ...(payment.reserva_habitacion_id ? { reserva_habitacion_id: String(payment.reserva_habitacion_id) } : {}),
           tipo_pago: tipo,
         }, data.idempotency_key);
-        await payment.update({ id_transaccion_externo: intent.id }, { transaction });
-        return { payment, intent };
       } catch (error: any) {
         if (error instanceof AppError) throw error;
         throw new AppError(502, "STRIPE_PAYMENT_INTENT_FAILED", "No fue posible crear el pago en Stripe");
       }
+
+      try {
+        await payment.update({ id_transaccion_externo: intent.id }, { transaction });
+      } catch (localError: any) {
+        try {
+          const canceledIntent = await stripeService.cancelPaymentIntent(intent.id);
+          if (canceledIntent.status !== "canceled") {
+            throw new Error("Stripe no confirmó la cancelación del PaymentIntent");
+          }
+        } catch (compensationError: any) {
+          const error = new AppError(
+            502,
+            "PAYMENT_COMPENSATION_FAILED",
+            "El PaymentIntent fue creado, pero no fue posible persistir ni compensar la operación",
+          );
+          (error as AppError & { cause?: unknown }).cause = {
+            localError,
+            compensationError,
+          };
+          throw error;
+        }
+
+        const error = new AppError(
+          500,
+          "PAYMENT_LOCAL_PERSISTENCE_FAILED",
+          "El PaymentIntent fue creado y compensado, pero no pudo persistirse su asociación local",
+        );
+        (error as AppError & { cause?: unknown }).cause = localError;
+        throw error;
+      }
+
+      return { payment, intent };
     }
     if (approved) {
       await applyCartPaid(details.origin, details.total, round(paid + amount), transaction);
