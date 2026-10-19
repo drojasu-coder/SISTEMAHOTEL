@@ -164,3 +164,71 @@ findings:
       migrations_modified: false
       regression: green
       new_failures: none
+
+  - id: QA-RA-DATA-CANDIDATE-006
+    status: closed
+    severity: high
+    category: DATA
+    invariant: >-
+      Toda fila de reservas_actividad debe tener estado confirmada, cancelada
+      o completada; hora_inicio debe ser anterior a hora_fin; y total debe ser
+      mayor o igual que cero, incluso ante escrituras internas o directas.
+    reproduction:
+      test_file: backend/tests/actividades/reservaActividad.integrity.test.ts
+      test_names:
+        - "QA-RA-DATA-CANDIDATE-006 STATE rechaza un estado fuera del dominio"
+        - "QA-RA-DATA-CANDIDATE-006 TIME rechaza hora_inicio posterior a hora_fin"
+        - "QA-RA-DATA-CANDIDATE-006 TOTAL rechaza un total negativo"
+    expected:
+      invalid_state: rejected_without_persistence
+      invalid_time_range: rejected_without_persistence
+      negative_total: rejected_without_persistence
+    actual_before_fix:
+      invalid_state: accepted_and_persisted
+      invalid_time_range: accepted_and_persisted
+      negative_total: accepted_and_persisted
+    affected_model: ReservaActividad
+    affected_table: reservas_actividad
+    root_cause: >-
+      El modelo y las migraciones históricas solo definían tipos, nulabilidad
+      y valores predeterminados. Las comprobaciones de horario y estado del
+      flujo HTTP no protegían ReservaActividad.create ni escrituras directas,
+      y PostgreSQL no tenía CHECK constraints para los tres invariantes.
+    correction: >-
+      Una migración aditiva bloquea la tabla durante un preflight que falla sin
+      corregir datos inválidos y agrega tres CHECK constraints transaccionales.
+      No se añadieron validaciones Sequelize porque PostgreSQL es la defensa
+      mínima suficiente y cubre todas las rutas de escritura concurrentes.
+    migration: backend/src/migrations/20261018000000-enforce-reserva-actividad-integrity.js
+    database_constraints:
+      - reservas_actividad_estado_valid_check
+      - reservas_actividad_hora_rango_valid_check
+      - reservas_actividad_total_nonnegative_check
+    regression_test:
+      test_file: backend/tests/actividades/reservaActividad.integrity.test.ts
+      assertions: >-
+        Cada escritura inválida es rechazada y una consulta posterior confirma
+        que ninguna fila del escenario fue persistida.
+    final_verification:
+      database: hotel_test_db
+      state_focused: "1 passed, 2 skipped"
+      time_focused: "1 passed, 2 skipped"
+      total_focused: "1 passed, 2 skipped"
+      integrity_file: "3 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      cart_item: "40 passed"
+      typecheck: green
+      full_backend: "347 passed"
+      invalid_state: green
+      invalid_time_range: green
+      negative_total: green
+      invalid_rows_after_regression: none
+      migration_registered: true
+      migration_down_safety: green
+      database_constraints:
+        - reservas_actividad_estado_valid_check
+        - reservas_actividad_hora_rango_valid_check
+        - reservas_actividad_total_nonnegative_check
+      regression: green
+      new_failures: none
