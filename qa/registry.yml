@@ -97,3 +97,70 @@ findings:
       client_controlled_price: rejected
       regression: green
       new_failures: none
+
+  - id: QA-RA-FUNC-CANDIDATE-003
+    status: closed
+    severity: medium
+    category: FUNC
+    invariant: >-
+      Un administrador autenticado debe poder configurar precio_hora,
+      precio_equipo y precio_instructor_hora al crear o actualizar un recurso
+      de actividad, y las tarifas no negativas deben persistirse exactamente.
+    reproduction:
+      test_file: backend/tests/actividades/recursoActividad.test.ts
+      test_names:
+        - "QA-RA-FUNC-CANDIDATE-003 CREATE: admin configura tarifas al crear recurso"
+        - "QA-RA-FUNC-CANDIDATE-003 UPDATE: admin configura tarifas al actualizar recurso"
+      commands:
+        - >-
+          npm test -- tests/actividades/recursoActividad.test.ts -t
+          "QA-RA-FUNC-CANDIDATE-003 CREATE: admin configura tarifas al crear recurso"
+        - >-
+          npm test -- tests/actividades/recursoActividad.test.ts -t
+          "QA-RA-FUNC-CANDIDATE-003 UPDATE: admin configura tarifas al actualizar recurso"
+    expected:
+      create_http_status: 201
+      create_database_tariffs: "100.00/25.00/50.00"
+      update_http_status: 200
+      update_database_tariffs: "150.00/30.00/60.00"
+    actual_before_fix:
+      create_http_status: 400
+      create_error_code: VALIDATION_ERROR
+      update_http_status: 400
+      update_error_code: VALIDATION_ERROR
+      update_database_tariffs: "0.00/0.00/0.00"
+    endpoints:
+      - POST /api/recursos-actividad
+      - PATCH /api/recursos-actividad/{id}
+    root_cause: >-
+      Los esquemas strict de CREATE y UPDATE no declaraban los tres campos de
+      tarifa ya existentes en RecursoActividad, por lo que el middleware los
+      rechazaba antes del controller. Además, el servicio enviaba el objeto de
+      entrada completo al modelo en lugar de construir una lista explícita de
+      campos administrables.
+    correction: >-
+      Los esquemas strict ahora admiten opcionalmente las tres tarifas como
+      números finitos y no negativos. El servicio selecciona explícitamente los
+      campos permitidos para CREATE y UPDATE y vuelve a consultar el recurso
+      actualizado para responder con la representación decimal persistida.
+    regression_test:
+      test_file: backend/tests/actividades/recursoActividad.test.ts
+      create_test: "QA-RA-FUNC-CANDIDATE-003 CREATE: admin configura tarifas al crear recurso"
+      update_test: "QA-RA-FUNC-CANDIDATE-003 UPDATE: admin configura tarifas al actualizar recurso"
+    final_verification:
+      database: hotel_test_db
+      create_focused: "1 passed, 1 skipped"
+      update_focused: "1 passed, 1 skipped"
+      recurso_actividad: "2 passed"
+      reserva_actividad: "45 passed"
+      cart_item: "40 passed"
+      typecheck: green
+      full_backend: "344 passed"
+      strict_validation: green
+      unknown_field_rejection: green
+      negative_price_rejection: green
+      mass_assignment_regression: green
+      admin_authorization: preserved
+      migrations_modified: false
+      regression: green
+      new_failures: none

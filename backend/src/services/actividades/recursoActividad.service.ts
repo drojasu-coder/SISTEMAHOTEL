@@ -7,11 +7,17 @@ interface CreateRecursoData {
   sucursal_id: number;
   tipo: string;
   nombre: string;
+  precio_hora?: number;
+  precio_equipo?: number;
+  precio_instructor_hora?: number;
 }
 
 interface UpdateRecursoData {
   tipo?: string;
   nombre?: string;
+  precio_hora?: number;
+  precio_equipo?: number;
+  precio_instructor_hora?: number;
 }
 
 export const getAll = async () => {
@@ -36,13 +42,30 @@ export const create = async (data: CreateRecursoData) => {
     throw new AppError(404, "BRANCH_NOT_FOUND", "La sucursal indicada no existe");
   }
 
-  return await RecursoActividad.create(data);
+  return await RecursoActividad.create({
+    sucursal_id: data.sucursal_id,
+    tipo: data.tipo,
+    nombre: data.nombre,
+    ...(data.precio_hora !== undefined && { precio_hora: data.precio_hora }),
+    ...(data.precio_equipo !== undefined && { precio_equipo: data.precio_equipo }),
+    ...(data.precio_instructor_hora !== undefined && {
+      precio_instructor_hora: data.precio_instructor_hora,
+    }),
+  });
 };
 
 export const update = async (id: number, data: UpdateRecursoData) => {
   const recurso = await getById(id);
-  await recurso.update(data);
-  return recurso;
+  await recurso.update({
+    ...(data.tipo !== undefined && { tipo: data.tipo }),
+    ...(data.nombre !== undefined && { nombre: data.nombre }),
+    ...(data.precio_hora !== undefined && { precio_hora: data.precio_hora }),
+    ...(data.precio_equipo !== undefined && { precio_equipo: data.precio_equipo }),
+    ...(data.precio_instructor_hora !== undefined && {
+      precio_instructor_hora: data.precio_instructor_hora,
+    }),
+  });
+  return await getById(id);
 };
 
 export const remove = async (id: number) => {
