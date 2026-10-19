@@ -268,3 +268,78 @@ findings:
       definir A) activo=false solo impide nuevas asignaciones y existentes siguen
       válidas o B) significa que no puede prestar actividades y debe impedirse
       desactivación con reservas futuras confirmadas.
+
+  - id: QA-PAY-FIN-CANDIDATE-007
+    status: closed
+    severity: critical
+    category: FIN
+    invariant: >-
+      Los pagos aprobados netos más la exposición de pagos con tarjeta en estado
+      procesando para un mismo origen no deben superar su total; veinte intentos
+      concurrentes sobre un carrito de Q100.00 solo pueden comprometer Q100.00.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.concurrency.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-007: limita a una sola exposición pendiente el pago concurrente del mismo carrito"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.concurrency.test.ts -t
+        "QA-PAY-FIN-CANDIDATE-007: limita a una sola exposición pendiente el pago concurrente del mismo carrito"
+      stripe_mode: mock_local
+      concurrent_requests: 20
+    expected:
+      successful_requests: 1
+      payment_intents_created: 1
+      pending_exposure: "100.00"
+      approved_amount: "0.00"
+      exposure_violation: false
+    actual_before_fix:
+      successful_requests: 20
+      payment_intents_created: 20
+      processing_payments: 20
+      pending_exposure: "2000.00"
+      approved_amount: "0.00"
+      exposure_violation: true
+    endpoint: POST /api/pagos
+    root_cause: >-
+      El bloqueo FOR UPDATE del carrito serializaba createPago, pero cada
+      transacción calculaba el saldo únicamente con approvedAmount, que excluye
+      correctamente pagos procesando. Después de cada commit, la siguiente
+      transacción volvía a observar aprobado neto igual a cero y podía crear otro
+      PaymentIntent por el saldo completo.
+    correction: >-
+      createPago calcula exclusivamente el monto nuevo que puede comprometer con
+      un helper separado que suma el aprobado neto y pagos en estado procesando
+      consultados dentro de la transacción serializada por el lock del origen, sin
+      bloquear las filas procesando. No se modificó approvedAmount ni se incluyeron
+      transferencias pendientes, pagos rechazados o cancelados.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.concurrency.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-007: limita a una sola exposición pendiente el pago concurrente del mismo carrito"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      payment_file: "1 passed"
+      stripe_mode: mock
+      real_stripe_charges: false
+      concurrent_requests: 20
+      http_results: "1x201, 19x409 PAYMENT_EXCEEDS_BALANCE, 0x5xx"
+      payment_intents_created: 1
+      local_payments: "1 procesando"
+      approved_amount: "0.00"
+      pending_exposure: "100.00"
+      processing_exposure: "100.00"
+      total_financial_exposure: "100.00"
+      max_legitimate_exposure: "100.00"
+      exposure_violation: false
+      payment_tests: green
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      approved_semantics_regression: green
+      processing_exposure_regression: green
+      rejected_canceled_exposure: correct
+      deadlock_timeout_observed: false
+      full_backend: "348 passed"
+      new_failures: none
+      regression: green

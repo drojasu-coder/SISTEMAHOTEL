@@ -85,6 +85,23 @@ const approvedAmount = async (where: Record<string, unknown>, transaction: any) 
 const approvedCartAmount = (carritoId: number, transaction: any) =>
   approvedAmount({ carrito_id: carritoId }, transaction);
 
+const committedOrProcessingExposure = async (
+  where: Record<string, unknown>,
+  transaction: any,
+) => {
+  const approved = await approvedAmount(where, transaction);
+  const processingPayments = await Pago.findAll({
+    where: { ...where, estado: "procesando" },
+    attributes: ["monto"],
+    transaction,
+  });
+  const processing = processingPayments.reduce(
+    (sum: number, payment: any) => sum + Number(payment.monto),
+    0,
+  );
+  return { approved, total: round(approved + processing) };
+};
+
 
 /**
  * Comprueba si una referencia genérica que estuvo en un carrito
@@ -465,11 +482,12 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       }
     }
     const details = await validateOpenOrigin(data, transaction);
-    const paid = await approvedAmount(details.key, transaction);
+    const exposure = await committedOrProcessingExposure(details.key, transaction);
+    const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
-    const remaining = round(details.total - paid);
+    const remaining = round(details.total - exposure.total);
     if (amount > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
