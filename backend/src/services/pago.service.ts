@@ -85,6 +85,154 @@ const approvedAmount = async (where: Record<string, unknown>, transaction: any) 
 const approvedCartAmount = (carritoId: number, transaction: any) =>
   approvedAmount({ carrito_id: carritoId }, transaction);
 
+
+/**
+ * Comprueba si una referencia genérica que estuvo en un carrito
+ * anterior ya quedó completamente pagada.
+ *
+ * La referencia se considera pagada únicamente cuando alguno de los
+ * carritos históricos que la contuvo quedó cubierto completamente por
+ * pagos aprobados netos de reembolsos.
+ *
+ * No intentamos asignar pagos parciales a ítems concretos.
+ */
+export const isCartReferenceFullyPaid = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const historicalItems = await CarritoItem.findAll({
+    where: {
+      tipo_item: tipoItem,
+      referencia_id: referenciaId,
+    },
+    attributes: ["carrito_id"],
+    transaction,
+  });
+
+  const cartIds: number[] = [
+    ...new Set(
+      (historicalItems as any[]).map((item: any) =>
+        Number(item.carrito_id),
+      ),
+    ),
+  ];
+
+  for (const carritoId of cartIds) {
+    const items = await CarritoItem.findAll({
+      where: { carrito_id: carritoId },
+      attributes: ["precio", "cantidad"],
+      transaction,
+    });
+
+    if (items.length === 0) {
+      continue;
+    }
+
+    const cartTotal = round(
+      (items as any[]).reduce(
+        (total: number, item: any) =>
+          total + Number(item.precio) * Number(item.cantidad),
+        0,
+      ),
+    );
+
+    if (cartTotal <= 0) {
+      continue;
+    }
+
+    const approved = Number(
+      await approvedCartAmount(carritoId, transaction),
+    );
+
+    if (approved >= cartTotal) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Comprueba si una referencia genérica ya tiene
+ * dinero neto aprobado en alguno de los carritos
+ * históricos donde estuvo incluida.
+ *
+ * A diferencia de isCartReferenceFullyPaid(),
+ * aquí NO exigimos que el carrito haya quedado
+ * completamente cubierto.
+ *
+ * Cualquier monto neto aprobado > 0 significa
+ * que la referencia ya tiene un compromiso
+ * financiero previo y no debe duplicarse en
+ * otro carrito.
+ *
+ * approvedCartAmount() ya descuenta reembolsos
+ * aprobados, por lo que un reembolso total
+ * vuelve a dejar el monto neto en cero.
+ */
+export const hasCartReferenceApprovedPayment =
+  async (
+    tipoItem: string,
+    referenciaId: number,
+    transaction: any
+  ) => {
+    const historicalItems =
+      await CarritoItem.findAll({
+        where: {
+          tipo_item:
+            tipoItem,
+
+          referencia_id:
+            referenciaId,
+        },
+
+        attributes: [
+          "carrito_id",
+        ],
+
+        transaction,
+      });
+
+    const cartIds: number[] = [
+      ...new Set(
+        (historicalItems as any[]).map(
+          (item: any) =>
+            Number(
+              item.carrito_id
+            )
+        )
+      ),
+    ];
+
+    for (
+      const carritoId of
+      cartIds
+    ) {
+      const approved =
+        Number(
+          await approvedCartAmount(
+            carritoId,
+            transaction
+          )
+        );
+
+      /**
+       * approvedCartAmount() devuelve el
+       * valor neto:
+       *
+       * pagos aprobados - reembolsos aprobados.
+       */
+      if (
+        approved > 0
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
 export const isReservationFullyPaid = async (
   reservationId: number,
   reservationTotal: number | string,

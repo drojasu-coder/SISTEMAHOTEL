@@ -9,7 +9,10 @@ import {
 import {
   CartItemType,
 } from "../../constants/cart";
-import { isReservationFullyPaid } from "../pago.service";
+import {
+  isReservationFullyPaid,
+  hasCartReferenceApprovedPayment,
+} from "../pago.service";
 
 const db = require("../../models");
 
@@ -45,14 +48,29 @@ const terminalStates =
   new Set([
     "cancelada",
     "cancelado",
+
     "expirada",
     "expirado",
+
+    "pagada",
     "pagado",
+
+    "usada",
     "usado",
+
     "completada",
     "completado",
-  ]);
 
+    /**
+     * Las reservas de habitación utilizan
+     * "finalizada" como estado terminal.
+     *
+     * Una estancia que ya terminó no debe
+     * poder agregarse nuevamente al carrito.
+     */
+    "finalizada",
+    "finalizado",
+  ]);
 const validateReferenceState = (
   estado?: string | null
 ) => {
@@ -332,6 +350,32 @@ const resolveEvento =
       reserva.estado
     );
 
+
+/**
+ * Una reserva de evento que ya tiene
+ * cualquier monto neto aprobado mediante
+ * otro carrito queda financieramente
+ * comprometida.
+ *
+ * No puede agregarse a un carrito nuevo,
+ * porque los pagos están asociados al
+ * carrito original y se produciría riesgo
+ * de doble cobro.
+ */
+if (
+  await hasCartReferenceApprovedPayment(
+    "evento",
+    reserva.id,
+    transaction
+  )
+) {
+  throw new AppError(
+    409,
+    "CART_REFERENCE_NOT_AVAILABLE",
+    "La reserva seleccionada ya posee pagos asociados y no puede agregarse a otro carrito"
+  );
+}
+
     return {
       usuarioId:
         reserva.usuario_id,
@@ -507,6 +551,29 @@ const resolveBienestar =
       cita.estado
     );
 
+    /**
+ * Una cita de bienestar que ya tenga
+ * cualquier monto neto aprobado mediante
+ * un carrito anterior no puede volver
+ * a agregarse a otro carrito.
+ *
+ * Esto evita cobrar nuevamente una cita
+ * que ya posee pagos asociados.
+ */
+if (
+  await hasCartReferenceApprovedPayment(
+    "bienestar",
+    cita.id,
+    transaction
+  )
+) {
+  throw new AppError(
+    409,
+    "CART_REFERENCE_NOT_AVAILABLE",
+    "La cita de bienestar ya posee pagos asociados y no puede agregarse a otro carrito"
+  );
+}
+
     const servicio =
       await ServicioBienestar.findByPk(
         cita.servicio_bienestar_id,
@@ -571,6 +638,28 @@ const resolveBoletoParque =
     validateReferenceState(
       boleto.estado
     );
+
+    /**
+ * Un boleto que ya tenga cualquier monto neto
+ * aprobado mediante un carrito anterior no puede
+ * volver a agregarse a otro carrito.
+ *
+ * Esto evita que el mismo boleto sea cobrado
+ * más de una vez.
+ */
+if (
+  await hasCartReferenceApprovedPayment(
+    "boleto_parque",
+    boleto.id,
+    transaction
+  )
+) {
+  throw new AppError(
+    409,
+    "CART_REFERENCE_NOT_AVAILABLE",
+    "El boleto de parque ya posee pagos asociados y no puede agregarse a otro carrito"
+  );
+}
 
     return {
       usuarioId:
