@@ -23,6 +23,10 @@ import {
 } from "../fixtures/carrito";
 
 import {
+  createRecursoActividad,
+} from "../fixtures/actividades";
+
+import {
   createSalonEvento,
   createReservaEventoFixture,
 } from "../fixtures/eventos";
@@ -35,7 +39,9 @@ const db =
   require("../../src/models");
 
 const {
+  Carrito,
   CarritoItem,
+  ReservaActividad,
   ReservaHabitacion,
   Pago,
   Reembolso,
@@ -4136,6 +4142,269 @@ it(
     expect(
       unexpected
     ).toHaveLength(0);
+  }
+);
+
+it(
+  "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido",
+  async () => {
+    const recurso =
+      await createRecursoActividad({
+        precio_hora:
+          "100.00",
+      });
+
+    const cliente =
+      await createAuthenticatedUser({
+        rol:
+          ROLES.CLIENTE,
+      });
+
+    const reservaResponse =
+      await request(app)
+        .post(
+          "/api/reservas-actividad"
+        )
+        .set(
+          "Authorization",
+          `Bearer ${cliente.token}`
+        )
+        .send({
+          recurso_id:
+            recurso.id,
+
+          fecha:
+            "2027-06-10",
+
+          hora_inicio:
+            "10:00",
+
+          hora_fin:
+            "11:00",
+
+          con_equipo:
+            false,
+        });
+
+    expect(
+      reservaResponse.status
+    ).toBe(201);
+
+    const reservaPersistida =
+      await ReservaActividad.findByPk(
+        reservaResponse.body.data.id
+      );
+
+    expect(
+      reservaPersistida
+    ).not.toBeNull();
+
+    expect(
+      reservaResponse.body.data.total
+    ).toBe("100.00");
+
+    expect(
+      reservaPersistida.total
+    ).toBe("100.00");
+
+    const carritoResponse =
+      await request(app)
+        .post(
+          "/api/carritos"
+        )
+        .set(
+          "Authorization",
+          `Bearer ${cliente.token}`
+        )
+        .send({});
+
+    expect(
+      carritoResponse.status
+    ).toBe(201);
+
+    const carritoId =
+      carritoResponse.body.data.id;
+
+    const itemResponse =
+      await request(app)
+        .post(
+          `/api/carritos/${carritoId}/items`
+        )
+        .set(
+          "Authorization",
+          `Bearer ${cliente.token}`
+        )
+        .send({
+          tipo_item:
+            "actividad",
+
+          referencia_id:
+            reservaPersistida.id,
+        });
+
+    const carritoPersistido =
+      await Carrito.findByPk(
+        carritoId
+      );
+
+    const itemsPersistidos =
+      await CarritoItem.findAll({
+        where: {
+          carrito_id:
+            carritoId,
+
+          tipo_item:
+            "actividad",
+
+          referencia_id:
+            reservaPersistida.id,
+        },
+
+        order: [
+          [
+            "id",
+            "ASC",
+          ],
+        ],
+      });
+
+    console.log(
+      "[QA-RA-FIN-CANDIDATE-002]",
+      {
+        reservation: {
+          httpStatus:
+            reservaResponse.status,
+
+          httpTotal:
+            reservaResponse.body.data.total,
+
+          databaseTotal:
+            reservaPersistida.total,
+        },
+
+        addItemHttp: {
+          status:
+            itemResponse.status,
+
+          code:
+            itemResponse.body.code ??
+            null,
+
+          body: {
+            status:
+              itemResponse.body.status ??
+              null,
+
+            message:
+              itemResponse.body.message ??
+              null,
+
+            data:
+              itemResponse.body.data ??
+              null,
+          },
+        },
+
+        cartDatabase: {
+          id:
+            carritoPersistido?.id ??
+            null,
+
+          estado:
+            carritoPersistido?.estado ??
+            null,
+
+          matchingItemCount:
+            itemsPersistidos.length,
+
+          items:
+            itemsPersistidos.map(
+              (item: any) => ({
+                id:
+                  item.id,
+
+                tipo_item:
+                  item.tipo_item,
+
+                referencia_id:
+                  item.referencia_id,
+
+                precio:
+                  item.precio,
+
+                cantidad:
+                  item.cantidad,
+              })
+            ),
+        },
+      }
+    );
+
+    expect(
+      itemResponse.status
+    ).toBe(201);
+
+    expect(
+      itemResponse.body.data
+        .carrito_id
+    ).toBe(
+      carritoId
+    );
+
+    expect(
+      itemResponse.body.data
+        .tipo_item
+    ).toBe(
+      "actividad"
+    );
+
+    expect(
+      itemResponse.body.data
+        .referencia_id
+    ).toBe(
+      reservaPersistida.id
+    );
+
+    expect(
+      Number(
+        itemResponse.body.data
+          .precio
+      )
+    ).toBeCloseTo(
+      Number(
+        reservaPersistida.total
+      ),
+      2
+    );
+
+    expect(
+      itemResponse.body.data
+        .cantidad
+    ).toBe(1);
+
+    expect(
+      carritoPersistido
+    ).not.toBeNull();
+
+    expect(
+      carritoPersistido.estado
+    ).toBe("activo");
+
+    expect(
+      itemsPersistidos
+    ).toHaveLength(1);
+
+    expect(
+      itemsPersistidos[0]
+        .precio
+    ).toBe(
+      reservaPersistida.total
+    );
+
+    expect(
+      itemsPersistidos[0]
+        .cantidad
+    ).toBe(1);
   }
 );
   }

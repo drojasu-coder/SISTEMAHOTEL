@@ -52,3 +52,48 @@ findings:
       full_backend: "341 passed"
       regression: green
       new_failures: none
+
+  - id: QA-RA-FIN-CANDIDATE-002
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Una ReservaActividad propia, válida y con total calculado por el backend
+      debe poder agregarse al carrito usando exclusivamente su total persistido
+      como precio del ítem.
+    reproduction:
+      test_file: backend/tests/carrito/carritoItem.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido"
+      command: >-
+        npm test -- tests/carrito/carritoItem.test.ts -t
+        "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido"
+    expected:
+      http_status: 201
+      item_price: "100.00"
+    actual_before_fix:
+      http_status: 422
+      error_code: ITEM_PRICE_NOT_AVAILABLE
+      database_item_count: 0
+    endpoint: POST /api/carritos/{id}/items
+    root_cause: >-
+      resolveActividad lanzaba incondicionalmente ITEM_PRICE_NOT_AVAILABLE
+      después de validar existencia, ownership y estado de la reserva.
+    correction: >-
+      resolveActividad usa ReservaActividad.total mediante normalizePrice como
+      precio confiable del backend, preservando las validaciones de existencia,
+      ownership y estado y sin aceptar un precio controlado por el cliente.
+    regression_test:
+      test_file: backend/tests/carrito/carritoItem.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed, 39 skipped"
+      cart_related: "40 passed"
+      reserva_actividad: "45 passed"
+      typecheck: green
+      full_backend: "342 passed"
+      ownership_regression: green
+      state_validation_regression: green
+      client_controlled_price: rejected
+      regression: green
+      new_failures: none

@@ -467,11 +467,18 @@ const resolveActividad =
       reserva.estado
     );
 
-    throw new AppError(
-      422,
-      "ITEM_PRICE_NOT_AVAILABLE",
-      "La reserva de actividad todavía no tiene una tarifa configurada"
-    );
+    return {
+      usuarioId:
+        reserva.usuario_id,
+
+      descripcion:
+        `Reserva de actividad #${reserva.id} (${reserva.fecha} ${reserva.hora_inicio} a ${reserva.hora_fin})`,
+
+      precio:
+        normalizePrice(
+          reserva.total
+        ),
+    };
   };
 
 // ======================================================
