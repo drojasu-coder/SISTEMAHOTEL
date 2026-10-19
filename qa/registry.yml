@@ -1,0 +1,54 @@
+version: 1
+
+project: SISTEMAHOTEL
+
+database:
+  qa: hotel_test_db
+
+methodology:
+  - RED
+  - FIX
+  - GREEN
+  - REGRESSION
+
+findings:
+  - id: QA-RA-FIN-CANDIDATE-001
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      El total de una reserva de actividad debe calcularse con la tarifa
+      persistida del recurso multiplicada por la duración reservada; para una
+      hora con precio_hora 100.00, sin equipo ni instructor, debe ser 100.00.
+    reproduction:
+      test_file: backend/tests/actividades/reservaActividad.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad"
+      command: >-
+        npm test -- tests/actividades/reservaActividad.test.ts -t
+        "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad"
+    expected:
+      http_total: "100.00"
+      database_total: "100.00"
+    actual_before_fix:
+      http_total: "0.00"
+      database_total: "0.00"
+    endpoint: POST /api/reservas-actividad
+    root_cause: >-
+      El método create obtenía y bloqueaba RecursoActividad, pero descartaba
+      el registro y no calculaba ni enviaba total a ReservaActividad.create;
+      por ello Sequelize persistía el valor predeterminado 0.00.
+    correction: >-
+      create conserva el recurso bloqueado, calcula dentro de la transacción
+      precio_hora por la duración en horas, redondea a dos decimales y
+      persiste el resultado como total, sin añadir cargos de equipo o instructor.
+    regression_test:
+      test_file: backend/tests/actividades/reservaActividad.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed, 44 skipped"
+      related: "45 passed"
+      typecheck: green
+      full_backend: "341 passed"
+      regression: green
+      new_failures: none

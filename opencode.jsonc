@@ -1,0 +1,106 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // Empezamos siempre en modo de planificación.
+  // Ninguna nueva sesión debería modificar código accidentalmente.
+  "default_agent": "plan",
+
+  // Permitimos un nivel de subagentes.
+  "subagent_depth": 1,
+
+  "instructions": [
+    "AGENTS.init.md",
+    "qa/README.md"
+  ],
+
+  "permissions": [
+    // Por defecto cualquier modificación requiere autorización.
+    {
+      "action": "edit",
+      "resource": "*",
+      "effect": "ask"
+    },
+
+    // Cualquier comando de shell desconocido requiere aprobación.
+    {
+      "action": "shell",
+      "resource": "*",
+      "effect": "ask"
+    },
+
+    // Inspección Git segura.
+    {
+      "action": "shell",
+      "resource": "git status*",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "git diff*",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "git log*",
+      "effect": "allow"
+    },
+
+    // Verificaciones de QA permitidas.
+    {
+      "action": "shell",
+      "resource": "npm --prefix backend test*",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "npm --prefix backend exec tsc*",
+      "effect": "allow"
+    },
+
+    // Operaciones Git destructivas bloqueadas.
+    {
+      "action": "shell",
+      "resource": "git push*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git reset --hard*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git clean*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git checkout -- *",
+      "effect": "deny"
+    },
+
+    // Operaciones destructivas del sistema.
+    {
+      "action": "shell",
+      "resource": "rm -rf*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "Remove-Item * -Recurse*",
+      "effect": "deny"
+    },
+
+    // Destrucción directa de bases.
+    {
+      "action": "shell",
+      "resource": "*DROP DATABASE*",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "*DROP SCHEMA*",
+      "effect": "deny"
+    }
+  ]
+}
