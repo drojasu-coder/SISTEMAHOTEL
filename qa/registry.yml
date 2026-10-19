@@ -603,3 +603,161 @@ findings:
       real_stripe_charges: false
       full_backend: "352 passed"
       migrations_modified: false
+
+  - id: QA-PAY-DATA-CANDIDATE-012
+    status: closed
+    severity: medium
+    category: DATA
+    invariant: >-
+      Toda fila de pagos debe tener monto mayor que cero, exactamente uno de
+      carrito_id o reserva_habitacion_id, y valores de estado, metodo y
+      tipo_pago dentro de sus dominios. Toda fila de reembolsos debe tener monto
+      mayor que cero y estado dentro de su dominio, incluso ante escrituras
+      internas o directas que no pasan por validadores HTTP ni servicios.
+    reproduction:
+      test_file: backend/tests/pagos/pago.integrity.test.ts
+      test_names:
+        - "QA-PAY-DATA-CANDIDATE-012 A Pago rechaza monto -1"
+        - "QA-PAY-DATA-CANDIDATE-012 B Pago rechaza ambos orígenes null"
+        - "QA-PAY-DATA-CANDIDATE-012 C Pago rechaza ambos orígenes válidos"
+        - "QA-PAY-DATA-CANDIDATE-012 D Pago rechaza estado inventado"
+        - "QA-PAY-DATA-CANDIDATE-012 E Pago rechaza método inventado"
+        - "QA-PAY-DATA-CANDIDATE-012 F Pago rechaza tipo_pago inventado"
+        - "QA-PAY-DATA-CANDIDATE-012 G Reembolso rechaza monto -1"
+        - "QA-PAY-DATA-CANDIDATE-012 H Reembolso rechaza estado inventado"
+      write_path: direct Sequelize model creates
+      stripe_mode: not_used
+      real_stripe_charges: false
+    expected:
+      invalid_creates: rejected
+      persisted_rows_per_scenario: 0
+    actual_before_fix:
+      direct_write_protection: absent
+      observed_red: >-
+        El escenario A fue aceptado por Pago.create y persistió monto -1.00;
+        1 failed y 7 skipped en la reproducción enfocada previa a la migración.
+      affected_scenarios: A-H
+    affected_models:
+      - Pago
+      - Reembolso
+    affected_tables:
+      - pagos
+      - reembolsos
+    domains:
+      pago_estado:
+        - pendiente
+        - procesando
+        - aprobado
+        - rechazado
+        - cancelado
+        - reembolsado
+        - reembolsado_parcial
+      pago_metodo:
+        - tarjeta
+        - efectivo
+        - transferencia
+      pago_tipo_pago:
+        - total
+        - anticipo
+        - saldo
+      reembolso_estado:
+        - pendiente
+        - aprobado
+        - rechazado
+    root_cause: >-
+      Los modelos y las migraciones históricas solo declaraban tipos,
+      nulabilidad y valores predeterminados para estos campos. Los validadores y
+      el servicio rechazaban parte de las entradas HTTP, pero PostgreSQL no tenía
+      CHECK constraints que protegieran Pago.create, Reembolso.create u otras
+      escrituras directas y concurrentes.
+    correction: >-
+      Una migración aditiva y transaccional bloquea pagos y reembolsos en modo
+      ACCESS EXCLUSIVE, ejecuta un preflight que falla sin corregir datos y agrega
+      exactamente siete CHECK constraints. No se añadieron validaciones de modelo:
+      PostgreSQL es la defensa mínima común a todas las rutas de escritura.
+    migration: backend/src/migrations/20261019000000-enforce-pago-reembolso-integrity.js
+    migration_registered:
+      database: hotel_test_db
+      name: 20261019000000-enforce-pago-reembolso-integrity.js
+      applied: true
+    data_preflight:
+      database: hotel_test_db
+      engine: PostgreSQL 16.15
+      invalid_qa_rows_found: 1
+      invalid_qa_rows_deleted: 1
+      deleted_key: qa-pay-data-012-a-negative-amount
+      dependent_refunds: 0
+      other_invalid_rows: 0
+      invalid_rows_after_cleanup: 0
+      valid_support_payments_deleted: 0
+    database_constraints:
+      - pagos_monto_positive_check
+      - pagos_exactly_one_origin_check
+      - pagos_estado_valid_check
+      - pagos_metodo_valid_check
+      - pagos_tipo_pago_valid_check
+      - reembolsos_monto_positive_check
+      - reembolsos_estado_valid_check
+    concurrency: >-
+      Los CHECK se evalúan atómicamente por PostgreSQL para cada INSERT o UPDATE,
+      sin ventana check-then-write. La migración toma ambos locks antes del
+      preflight y conserva los locks hasta agregar y validar los constraints.
+    model_validations_added: none
+    regression_test:
+      test_file: backend/tests/pagos/pago.integrity.test.ts
+      test_modified_by_fixer: false
+      assertions: >-
+        Cada escritura inválida es rechazada y una consulta posterior confirma
+        persisted=0 para su clave QA.
+    final_verification:
+      database: hotel_test_db
+      named_A: "passed; persisted=0"
+      named_B: "passed; persisted=0"
+      named_C: "passed; persisted=0"
+      named_D: "passed; persisted=0"
+      named_E: "passed; persisted=0"
+      named_F: "passed; persisted=0"
+      named_G: "passed; persisted=0"
+      named_H: "passed; persisted=0"
+      negative_payment: green
+      no_origin: green
+      two_origins: green
+      invalid_payment_state: green
+      invalid_payment_method: green
+      invalid_payment_type: green
+      negative_refund: green
+      invalid_refund_state: green
+      integrity_file: "8 passed"
+      payment_tests: "5 files, 13 passed"
+      fix_007_concurrency: green
+      fix_008_reuse: green
+      fix_009_webhook_refund_replay: green
+      fix_010_orphan_compensation: green
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      invalid_rows_after_migration: none
+      invalid_payment_rows_after_regression: none
+      invalid_refund_rows_after_regression: none
+      constraints_registered_and_validated: 7
+      database_constraints_present:
+        - pagos_monto_positive_check
+        - pagos_exactly_one_origin_check
+        - pagos_estado_valid_check
+        - pagos_metodo_valid_check
+        - pagos_tipo_pago_valid_check
+        - reembolsos_monto_positive_check
+        - reembolsos_estado_valid_check
+      migration_registered: true
+      migration_down: "not_run; inspected to remove only the seven named constraints"
+      migration_down_safety: green
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      full_backend: "360 passed"
+      historical_migrations_modified: false
+      production_data_modified: false
+      unrelated_test_data_modified: false
+      real_stripe_charges: false
