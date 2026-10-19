@@ -446,6 +446,53 @@ const applyCartPaid = async (origin: any, total: number, paid: number, transacti
   }
 };
 
+const findIdempotencyReplay = async (
+  data: CreatePagoData,
+  amount: number,
+  tipo: PagoTipo,
+  transaction: any,
+) => {
+  if (!data.idempotency_key) return null;
+
+  const existing = await Pago.findOne({
+    where: { idempotency_key: data.idempotency_key },
+    transaction,
+  });
+  if (!existing) return null;
+
+  if (
+    existing.metodo !== data.metodo ||
+    Number(existing.monto) !== amount ||
+    (existing.carrito_id ?? null) !== (data.carrito_id ?? null) ||
+    (existing.reserva_habitacion_id ?? null) !==
+      (data.reserva_habitacion_id ?? null) ||
+    existing.tipo_pago !== tipo
+  ) {
+    throw new AppError(
+      409,
+      "IDEMPOTENCY_CONFLICT",
+      "La clave de idempotencia ya fue utilizada para otra operación",
+    );
+  }
+
+  if (existing.metodo === "tarjeta" && existing.id_transaccion_externo) {
+    try {
+      const intent = await stripeService.retrievePaymentIntent(
+        existing.id_transaccion_externo,
+      );
+      return { payment: existing, intent };
+    } catch {
+      throw new AppError(
+        502,
+        "STRIPE_RETRIEVAL_FAILED",
+        "No fue posible recuperar el pago en Stripe",
+      );
+    }
+  }
+
+  return existing;
+};
+
 export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
   validateOrigin(data);
   if (!["tarjeta", "efectivo", "transferencia"].includes(data.metodo)) {
@@ -462,26 +509,23 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
 
   return sequelize.transaction(async (transaction: any) => {
     await assertPaymentOriginOwnership(data, requester, transaction);
-    if (data.idempotency_key) {
-      const existing = await Pago.findOne({ where: { idempotency_key: data.idempotency_key }, transaction });
-      if (existing) {
-        if (existing.metodo !== data.metodo || Number(existing.monto) !== amount ||
-            existing.carrito_id !== (data.carrito_id ?? null) ||
-            existing.reserva_habitacion_id !== (data.reserva_habitacion_id ?? null)) {
-          throw new AppError(409, "IDEMPOTENCY_CONFLICT", "La clave de idempotencia ya fue utilizada para otra operación");
-        }
-        if (existing.metodo === "tarjeta" && existing.id_transaccion_externo) {
-          try {
-            const intent = await stripeService.retrievePaymentIntent(existing.id_transaccion_externo);
-            return { payment: existing, intent };
-          } catch {
-            throw new AppError(502, "STRIPE_RETRIEVAL_FAILED", "No fue posible recuperar el pago en Stripe");
-          }
-        }
-        return existing;
-      }
-    }
+    const earlyReplay = await findIdempotencyReplay(
+      data,
+      amount,
+      tipo,
+      transaction,
+    );
+    if (earlyReplay) return earlyReplay;
+
     const details = await validateOpenOrigin(data, transaction);
+    const serializedReplay = await findIdempotencyReplay(
+      data,
+      amount,
+      tipo,
+      transaction,
+    );
+    if (serializedReplay) return serializedReplay;
+
     const exposure = await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
     const advancePaid = details.requiredAdvance

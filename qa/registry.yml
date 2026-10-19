@@ -344,6 +344,117 @@ findings:
       new_failures: none
       regression: green
 
+  - id: QA-PAY-CONC-CANDIDATE-011
+    status: closed
+    severity: medium
+    category: CONCURRENCY
+    invariant: >-
+      Repetir una creación de pago con la misma idempotency_key y el mismo
+      fingerprint debe devolver el mismo Pago y, para tarjeta, el mismo
+      PaymentIntent, incluso con veinte solicitudes concurrentes. Reutilizar la
+      clave con un tipo_pago distinto debe responder 409 IDEMPOTENCY_CONFLICT.
+    reproduction:
+      test_file: backend/tests/pagos/pago.idempotency.concurrency.test.ts
+      test_names:
+        - "SEQUENTIAL CONTRACT: replay de tarjeta conserva HTTP 201 y el mismo pago e intent"
+        - "CONCURRENT SAME KEY: 20 replays convergen al mismo pago sin errores"
+        - "FINGERPRINT TYPE: cambiar solo tipo_pago responde 409 IDEMPOTENCY_CONFLICT"
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      concurrent_requests: 20
+    expected:
+      sequential: "201/201; mismo pago y PaymentIntent; 1 Pago; create=1; retrieve=1"
+      concurrent: >-
+        20x201; un único Pago, PaymentIntent e idempotency_key; create=1;
+        retrieve=19; sin errores
+      fingerprint_type: "primer pago 201; segundo pago 409 IDEMPOTENCY_CONFLICT"
+    actual_before_fix:
+      sequential: green
+      concurrent: >-
+        16x201 y 4x409 PAYMENT_EXCEEDS_BALANCE; un Pago y PaymentIntent;
+        create=1; retrieve=15; exposición persistida 100.00
+      fingerprint_type: >-
+        201/201; el replay con tipo_pago=saldo devolvió el Pago original con
+        tipo_pago=total
+    endpoint: POST /api/pagos
+    root_cause: >-
+      createPago buscaba idempotency_key únicamente antes de adquirir el lock
+      FOR UPDATE del origen. Las solicitudes que no veían aún la fila quedaban
+      serializadas por el lock, pero después evaluaban committedOrProcessingExposure
+      sin volver a consultar la clave y algunas respondían PAYMENT_EXCEEDS_BALANCE
+      en vez de replay. Además, el fingerprint del lookup no comparaba el
+      tipo_pago normalizado.
+    correction: >-
+      Un único helper interno busca la idempotency_key, compara metodo, monto
+      normalizado, ambos orígenes normalizados a null y tipo_pago normalizado con
+      data.tipo_pago ?? "total", y devuelve el Pago existente o recupera su
+      PaymentIntent. createPago conserva el lookup temprano y repite el mismo
+      helper después de validateOpenOrigin, ya con el origen bloqueado, antes de
+      calcular exposición. La validación de ownership permanece antes de ambos
+      posibles replays.
+    concurrency: >-
+      validateOpenOrigin mantiene el lock FOR UPDATE del carrito o reserva; el
+      segundo lookup se ejecuta dentro de la misma transacción y después de ese
+      lock, por lo que los contendientes observan el Pago confirmado por el
+      ganador antes de evaluar exposición. No se alteraron locks, constraints,
+      webhooks, reembolsos ni la protección financiera de 007.
+    regression_test:
+      test_file: backend/tests/pagos/pago.idempotency.concurrency.test.ts
+      test_modified_by_fixer: false
+    final_verification:
+      database: hotel_test_db
+      sequential_named: "1 passed, 2 skipped"
+      sequential_replay: green
+      sequential_http: "201/201"
+      sequential_same_payment_and_intent: true
+      sequential_unique_payment_ids: 1
+      sequential_local_payments: 1
+      sequential_key_rows: 1
+      sequential_stripe_calls: "create=1, retrieve=1"
+      concurrent_named: "1 passed, 2 skipped"
+      concurrent_requests: 20
+      concurrent_replay_convergence: green
+      concurrent_http: "20x201, 0x4xx, 0x5xx"
+      concurrent_distinct_payment_ids: 1
+      concurrent_distinct_intent_ids: 1
+      concurrent_local_payments: 1
+      concurrent_key_rows: 1
+      concurrent_processing_exposure: "100.00"
+      concurrent_stripe_calls: "create=1, retrieve=19"
+      concurrent_errors: none
+      unexpected_concurrency_errors: none
+      deadlock_timeout_observed: false
+      fingerprint_named: "1 passed, 2 skipped"
+      fingerprint_original_type: total
+      fingerprint_replay_type: saldo
+      fingerprint_replay_code: IDEMPOTENCY_CONFLICT
+      tipo_pago_in_effective_fingerprint: true
+      fingerprint_conflict: green
+      fingerprint_http: "201 then 409 IDEMPOTENCY_CONFLICT"
+      fingerprint_local_payments: 1
+      fingerprint_key_rows: 1
+      fingerprint_stripe_calls: "create=0, retrieve=0"
+      idempotency_file: "3 passed"
+      fix_007_concurrency: green
+      fix_008_reuse: green
+      fix_009_webhook_refund_replay: "2 passed"
+      fix_010_orphan_compensation: green
+      fix_012_integrity: "8 passed"
+      payment_tests: "6 files, 16 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      ledger_constraints_present: true
+      invalid_ledger_rows: none
+      typecheck: green
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      migrations_modified: false
+      full_backend: "363 passed"
+      new_failures: none
+      regression: green
+
   - id: QA-RA-FIN-CANDIDATE-008
     status: closed
     severity: high
