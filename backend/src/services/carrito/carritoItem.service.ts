@@ -467,6 +467,20 @@ const resolveActividad =
       reserva.estado
     );
 
+    if (
+      await hasCartReferenceApprovedPayment(
+        "actividad",
+        reserva.id,
+        transaction
+      )
+    ) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva de actividad ya posee pagos asociados y no puede agregarse a otro carrito"
+      );
+    }
+
     return {
       usuarioId:
         reserva.usuario_id,

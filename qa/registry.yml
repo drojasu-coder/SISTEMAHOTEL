@@ -343,3 +343,90 @@ findings:
       full_backend: "348 passed"
       new_failures: none
       regression: green
+
+  - id: QA-RA-FIN-CANDIDATE-008
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Una reserva de actividad con cualquier monto neto aprobado mayor que cero
+      en un carrito histórico no puede agregarse a otro carrito; una devolución
+      total aprobada deja el neto en cero y no activa esta regla adicional.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.reuse.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-008: rechaza reutilizar una reserva de actividad con dinero aprobado"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.reuse.test.ts -t
+        "QA-RA-FIN-CANDIDATE-008: rechaza reutilizar una reserva de actividad con dinero aprobado"
+      payment_method: efectivo
+      real_stripe_charges: false
+    expected:
+      first_add_http_status: 201
+      first_payment: "201/aprobado/100.00"
+      first_net_approved: "100.00"
+      second_add_http_status: 409
+      second_add_error_code: CART_REFERENCE_NOT_AVAILABLE
+      second_item: null
+      second_payment: not_run
+      final_net_approved: "100.00"
+      reference_reuse_violation: false
+      double_charge_violation: false
+    actual_before_fix:
+      first_add_http_status: 201
+      first_payment: "201/aprobado/100.00"
+      first_net_approved: "100.00"
+      second_add_http_status: 201
+      second_item: persisted
+      second_payment: "201/aprobado/100.00"
+      final_net_approved: "200.00"
+      reference_reuse_violation: true
+      double_charge_violation: true
+    endpoint: POST /api/carritos/{id}/items
+    root_cause: >-
+      resolveActividad validaba existencia, ownership y estado y obtenía el
+      total persistido del backend, pero era el único de los resolvers
+      comparables inspeccionados que no consultaba el compromiso financiero
+      histórico antes de crear el nuevo CarritoItem.
+    correction: >-
+      Después de preservar ownership y validación de estado, resolveActividad
+      reutiliza hasCartReferenceApprovedPayment con tipo actividad y la misma
+      transacción. Si existe neto aprobado mayor que cero lanza 409
+      CART_REFERENCE_NOT_AVAILABLE antes de persistir el ítem. El helper usa
+      approvedCartAmount, que descuenta únicamente reembolsos aprobados; por eso
+      un reembolso total produce neto cero sin añadir otra restricción.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.reuse.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-008: rechaza reutilizar una reserva de actividad con dinero aprobado"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      reuse_file: "1 passed"
+      fix_007_concurrency: "1 passed"
+      payment_test_files: "2 files, 2 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      full_backend: "349 passed"
+      stripe_mode: "efectivo en reuse; mock local en concurrencia"
+      payment_method: efectivo
+      real_stripe_charges: false
+      first_cart_add: "201/precio 100.00"
+      first_payment: "201/aprobado/100.00"
+      first_net_approved: "100.00"
+      second_cart_add: "409 CART_REFERENCE_NOT_AVAILABLE"
+      second_cart_item_persisted: false
+      second_payment: not_run
+      total_net_approved: "100.00"
+      max_legitimate_net_approved: "100.00"
+      reference_reuse_violation: false
+      double_charge_violation: false
+      ownership_regression: green
+      state_validation_regression: green
+      client_controlled_price: rejected
+      refund_net_semantics: preserved
+      other_reference_types: green
+      migrations_modified: false
+      new_failures: none
+      regression: green
