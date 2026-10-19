@@ -232,3 +232,39 @@ findings:
         - reservas_actividad_total_nonnegative_check
       regression: green
       new_failures: none
+
+  - id: QA-RA-FUNC-CANDIDATE-004
+    status: product_decision_required
+    severity: medium
+    category: FUNC
+    current_behavior: >-
+      una ReservaActividad futura puede pasar confirmada->completada; solo
+      confirmada bloquea disponibilidad, así que completada libera inmediatamente
+      recurso e instructor.
+    tested_behavior: >-
+      existe una prueba que completa una reserva futura y espera que otra idéntica
+      pueda crearse.
+    documented_business_rule: NONE
+    classification: PRODUCT DECISION REQUIRED
+    confidence: HIGH
+    decision_required: >-
+      definir A) completada solo después de fecha+hora_fin o B) cierre
+      administrativo anticipado; y efectos sobre disponibilidad, reactivación,
+      carrito existente y pagos existentes.
+
+  - id: QA-RA-FUNC-CANDIDATE-005
+    status: product_decision_required
+    severity: medium
+    category: FUNC
+    current_behavior: >-
+      admin puede activo=false aunque haya ReservasActividad futuras
+      confirmadas; estas permanecen confirmadas, conservan instructor_id, no se
+      reasignan ni cancelan; nuevas reservas con instructor inactivo se rechazan;
+      reactivar una reserva con instructor inactivo también se rechaza.
+    documented_business_rule: NONE
+    classification: PRODUCT DECISION REQUIRED
+    confidence: HIGH
+    decision_required: >-
+      definir A) activo=false solo impide nuevas asignaciones y existentes siguen
+      válidas o B) significa que no puede prestar actividades y debe impedirse
+      desactivación con reservas futuras confirmadas.
