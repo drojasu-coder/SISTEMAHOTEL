@@ -643,7 +643,8 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
       eventType === "payment_intent.payment_failed" ? "rechazado" : "cancelado";
     const shouldUpdate =
       payment.estado !== target &&
-      !(payment.estado === "aprobado" && target !== "aprobado");
+      !(payment.estado === "aprobado" && target !== "aprobado") &&
+      !(target === "aprobado" && ["reembolsado", "reembolsado_parcial"].includes(payment.estado));
     if (shouldUpdate) {
       const update: Record<string, unknown> = { estado: target };
       if (target === "aprobado") {

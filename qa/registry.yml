@@ -521,3 +521,85 @@ findings:
       new_failures: none
       regression: green
       migrations_modified: false
+
+  - id: QA-PAY-DATA-CANDIDATE-009
+    status: closed
+    severity: medium
+    category: DATA
+    invariant: >-
+      Repetir payment_intent.succeeded no debe cambiar a aprobado un pago que
+      ya está reembolsado o reembolsado_parcial ni alterar sus reembolsos
+      aprobados o su monto neto.
+    reproduction:
+      test_file: backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+      test_names:
+        - "QA-PAY-DATA-CANDIDATE-009 TOTAL"
+        - "QA-PAY-DATA-CANDIDATE-009 PARTIAL"
+      stripe_mode: mock_local
+      real_stripe_charges: false
+    expected:
+      total: "reembolsado -> reembolsado; reembolso 100.00; neto 0.00"
+      partial: "reembolsado_parcial -> reembolsado_parcial; reembolso 40.00; neto 60.00"
+    actual_before_fix:
+      total: "reembolsado -> aprobado; reembolso 100.00; neto 0.00"
+      partial: "reembolsado_parcial -> aprobado; reembolso 40.00; neto 60.00"
+    affected_service: processStripeWebhook
+    red_evidence:
+      total: "1 failed, 1 skipped; esperado reembolsado, recibido aprobado"
+      partial: "1 failed, 1 skipped; esperado reembolsado_parcial, recibido aprobado"
+    root_cause: >-
+      Para payment_intent.succeeded, target era aprobado y shouldUpdate permitía
+      actualizar cualquier estado distinto de aprobado, incluidos reembolsado y
+      reembolsado_parcial. Las filas de reembolso y el neto permanecían correctos,
+      pero el estado persistido del pago revivía incorrectamente a aprobado.
+    correction: >-
+      shouldUpdate rechaza exclusivamente la transición hacia aprobado cuando el
+      estado actual es reembolsado o reembolsado_parcial. Las demás transiciones,
+      approvedAmount, la lógica de Reembolso y applyCartPaid permanecen sin cambios.
+    concurrency: >-
+      processStripeWebhook bloquea la fila Pago con FOR UPDATE dentro de la
+      transacción, por lo que la decisión de transición se serializa con los flujos
+      de reembolso que bloquean el mismo pago.
+    regression_test:
+      test_file: backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+      test_modified_by_fixer: false
+    final_verification:
+      database: hotel_test_db
+      total_focused: "1 passed, 1 skipped"
+      partial_focused: "1 passed, 1 skipped"
+      webhook_refund_replay_file: "2 passed"
+      total_test: green
+      total_before_state: reembolsado
+      total_after_state: reembolsado
+      total_refund_preserved: true
+      total_before_net: "0.00"
+      total_after_net: "0.00"
+      partial_test: green
+      partial_before_state: reembolsado_parcial
+      partial_after_state: reembolsado_parcial
+      partial_refund_preserved: true
+      partial_before_net: "60.00"
+      partial_after_net: "60.00"
+      total_after: "reembolsado; reembolso 100.00; neto 0.00"
+      partial_after: "reembolsado_parcial; reembolso 40.00; neto 60.00"
+      state_net_regression: none
+      state_regression: false
+      financial_net_regression: false
+      fix_007_concurrency: "1 passed"
+      fix_008_reuse: "1 passed"
+      fix_010_orphan: "1 passed"
+      payment_test_files: "4 files, 5 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      approved_semantics_regression: green
+      refund_logic_regression: green
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      full_backend: "352 passed"
+      migrations_modified: false
