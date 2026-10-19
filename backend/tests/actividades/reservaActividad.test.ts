@@ -100,6 +100,104 @@ describe(
     );
 
     it(
+      "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad",
+      async () => {
+        const recurso =
+          await createRecursoActividad({
+            precio_hora:
+              "100.00",
+          });
+
+        const cliente =
+          await createAuthenticatedUser({
+            rol:
+              ROLES.CLIENTE,
+          });
+
+        const response =
+          await request(app)
+            .post(
+              "/api/reservas-actividad"
+            )
+            .set(
+              "Authorization",
+              `Bearer ${cliente.token}`
+            )
+            .send({
+              recurso_id:
+                recurso.id,
+
+              fecha:
+                "2027-06-10",
+
+              hora_inicio:
+                "10:00",
+
+              hora_fin:
+                "11:00",
+
+              con_equipo:
+                false,
+            });
+
+        expect(
+          response.status
+        ).toBe(201);
+
+        const db =
+          require(
+            "../../src/models"
+          );
+
+        const {
+          ReservaActividad,
+        } = db;
+
+        const persistida =
+          await ReservaActividad.findByPk(
+            response.body.data.id
+          );
+
+        expect(
+          persistida
+        ).not.toBeNull();
+
+        const actualHttpTotal =
+          response.body.data.total;
+
+        const actualDatabaseTotal =
+          persistida.total;
+
+        console.log(
+          "[QA-RA-FIN-CANDIDATE-001]",
+          {
+            expectedTotal:
+              "100.00",
+
+            httpStatus:
+              response.status,
+
+            httpTotal:
+              actualHttpTotal,
+
+            databaseTotal:
+              actualDatabaseTotal,
+          }
+        );
+
+        expect.soft(
+          actualHttpTotal,
+          "HTTP total: Expected 100.00"
+        ).toBe("100.00");
+
+        expect.soft(
+          actualDatabaseTotal,
+          "reservas_actividad.total: Expected 100.00"
+        ).toBe("100.00");
+      }
+    );
+
+    it(
       "2. cliente crea reserva válida con instructor activo",
       async () => {
         const recurso =

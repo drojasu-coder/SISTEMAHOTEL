@@ -17,6 +17,7 @@ interface CreateRecursoActividadOptions {
   sucursal_id?: number;
   tipo?: string;
   nombre?: string;
+  precio_hora?: string;
 }
 
 export const createRecursoActividad =
@@ -51,6 +52,10 @@ export const createRecursoActividad =
       nombre:
         options.nombre ??
         `Recurso QA ${sequence}`,
+
+      precio_hora:
+        options.precio_hora ??
+        "0.00",
     });
   };
 

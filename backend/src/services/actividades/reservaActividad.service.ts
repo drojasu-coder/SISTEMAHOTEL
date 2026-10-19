@@ -549,10 +549,30 @@ export const create =
         async (
           transaction: any
         ) => {
-          await getLockedResourceOrFail(
-            data.recurso_id,
-            transaction
-          );
+          const recurso =
+            await getLockedResourceOrFail(
+              data.recurso_id,
+              transaction
+            );
+
+          const duracionHoras =
+            (timeToSeconds(
+              horaFin
+            ) -
+              timeToSeconds(
+                horaInicio
+              )) /
+            3600;
+
+          const total =
+            Math.round(
+              (Number(
+                recurso.precio_hora
+              ) *
+                duracionHoras +
+                Number.EPSILON) *
+                100
+            ) / 100;
 
           await validateResourceOverlap(
             data.recurso_id,
@@ -620,6 +640,8 @@ export const create =
                 con_equipo:
                   data.con_equipo ??
                   false,
+
+                total,
 
                 estado:
                   "confirmada",
