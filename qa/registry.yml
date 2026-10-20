@@ -872,3 +872,102 @@ findings:
       production_data_modified: false
       unrelated_test_data_modified: false
       real_stripe_charges: false
+
+  - id: QA-PAY-FIN-CANDIDATE-013
+    status: closed
+    severity: critical
+    category: FIN
+    invariant: >-
+      Una reserva de actividad con exposición financiera activa en cualquiera
+      de sus carritos históricos no puede agregarse a otro carrito. La exposición
+      activa es el dinero aprobado neto de reembolsos más los pagos en estado
+      procesando y no debe superar el total de la referencia.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-013: rechaza reutilizar una actividad con pago Stripe procesando en un carrito expirado"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.crossCartProcessing.test.ts -t
+        "QA-PAY-FIN-CANDIDATE-013: rechaza reutilizar una actividad con pago Stripe procesando en un carrito expirado"
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+    expected:
+      second_add_http_status: 409
+      second_add_error_code: CART_REFERENCE_NOT_AVAILABLE
+      second_item: null
+      second_payment: not_run
+      approved_amount: "0.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "100.00"
+      exposure_violation: false
+    actual_before_fix:
+      second_add_http_status: 201
+      second_item: persisted
+      second_payment: "201/aprobado/100.00"
+      approved_amount: "100.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "200.00"
+      exposure_violation: true
+      red_result: "1 failed; 4 assertions failed"
+    endpoint: POST /api/carritos/{id}/items
+    root_cause: >-
+      resolveActividad consultaba hasCartReferenceApprovedPayment, cuya semántica
+      deliberada para QA-RA-FIN-CANDIDATE-008 considera solo dinero aprobado neto
+      de reembolsos. Un Pago histórico en estado procesando no es dinero aprobado,
+      por lo que el helper devolvía false y permitía duplicar la actividad en un
+      carrito nuevo aunque el PaymentIntent anterior aún pudiera completarse.
+    correction: >-
+      Se agregó hasCartReferenceActiveFinancialCommitment, que reutiliza los IDs
+      de carritos históricos de la referencia y committedOrProcessingExposure
+      para detectar aprobado neto más pagos procesando. Solo resolveActividad usa
+      el helper nuevo y conserva 409 CART_REFERENCE_NOT_AVAILABLE. La semántica de
+      hasCartReferenceApprovedPayment y approvedAmount no cambió.
+    financial_semantics: >-
+      Procesando reserva exposición activa pero no incrementa el monto aprobado.
+      Un reembolso total deja aprobado neto en cero; si tampoco existe un pago
+      procesando, la regla adicional no bloquea la referencia.
+    concurrency: >-
+      El cálculo se ejecuta dentro de la transacción de creación del ítem y lee
+      pagos históricos ya confirmados. No se añadieron locks ni constraints y no
+      se amplió el alcance a una carrera simultánea entre carritos distintos; esa
+      condición requiere una regresión de concurrencia separada.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+      test_modified_by_fixer: false
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      cross_cart_processing_file: "1 passed"
+      first_cart_payment: "HTTP 201 / tarjeta / procesando / 100.00"
+      second_add: "409 CART_REFERENCE_NOT_AVAILABLE"
+      second_cart_item_persisted: false
+      second_payment: not_run
+      approved_amount: "0.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "100.00"
+      max_legitimate_exposure: "100.00"
+      exposure_violation: false
+      fix_007_concurrency: "1 passed"
+      fix_008_reuse: "1 passed"
+      fix_011_idempotency: "3 passed"
+      fix_009_webhook_refund_replay: "2 passed"
+      fix_010_orphan_compensation: "1 passed"
+      fix_012_integrity: "8 passed"
+      payment_tests: "7 files, 17 passed"
+      cart_item: "40/40 passed"
+      reserva_actividad: "45/45 passed"
+      recurso_actividad: "2/2 passed"
+      reserva_actividad_integrity: "3/3 passed"
+      typecheck: green
+      stripe_mode: mock
+      real_stripe_charges: false
+      refund_net_semantics: preserved
+      ledger_constraints: "7/7 present"
+      invalid_ledger_rows: none
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_changes: none
+      full_backend: "364 passed, 0 failed, 0 skipped"
+      next_regression: none

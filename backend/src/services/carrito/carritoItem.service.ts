@@ -12,6 +12,7 @@ import {
 import {
   isReservationFullyPaid,
   hasCartReferenceApprovedPayment,
+  hasCartReferenceActiveFinancialCommitment,
 } from "../pago.service";
 
 const db = require("../../models");
@@ -468,7 +469,7 @@ const resolveActividad =
     );
 
     if (
-      await hasCartReferenceApprovedPayment(
+      await hasCartReferenceActiveFinancialCommitment(
         "actividad",
         reserva.id,
         transaction

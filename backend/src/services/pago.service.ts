@@ -102,6 +102,29 @@ const committedOrProcessingExposure = async (
   return { approved, total: round(approved + processing) };
 };
 
+const historicalCartIdsForReference = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const historicalItems = await CarritoItem.findAll({
+    where: {
+      tipo_item: tipoItem,
+      referencia_id: referenciaId,
+    },
+    attributes: ["carrito_id"],
+    transaction,
+  });
+
+  return [
+    ...new Set<number>(
+      (historicalItems as any[]).map((item: any) =>
+        Number(item.carrito_id),
+      ),
+    ),
+  ];
+};
+
 
 /**
  * Comprueba si una referencia genérica que estuvo en un carrito
@@ -118,22 +141,11 @@ export const isCartReferenceFullyPaid = async (
   referenciaId: number,
   transaction: any,
 ) => {
-  const historicalItems = await CarritoItem.findAll({
-    where: {
-      tipo_item: tipoItem,
-      referencia_id: referenciaId,
-    },
-    attributes: ["carrito_id"],
+  const cartIds = await historicalCartIdsForReference(
+    tipoItem,
+    referenciaId,
     transaction,
-  });
-
-  const cartIds: number[] = [
-    ...new Set(
-      (historicalItems as any[]).map((item: any) =>
-        Number(item.carrito_id),
-      ),
-    ),
-  ];
+  );
 
   for (const carritoId of cartIds) {
     const items = await CarritoItem.findAll({
@@ -194,33 +206,12 @@ export const hasCartReferenceApprovedPayment =
     referenciaId: number,
     transaction: any
   ) => {
-    const historicalItems =
-      await CarritoItem.findAll({
-        where: {
-          tipo_item:
-            tipoItem,
-
-          referencia_id:
-            referenciaId,
-        },
-
-        attributes: [
-          "carrito_id",
-        ],
-
+    const cartIds =
+      await historicalCartIdsForReference(
+        tipoItem,
+        referenciaId,
         transaction,
-      });
-
-    const cartIds: number[] = [
-      ...new Set(
-        (historicalItems as any[]).map(
-          (item: any) =>
-            Number(
-              item.carrito_id
-            )
-        )
-      ),
-    ];
+      );
 
     for (
       const carritoId of
@@ -249,6 +240,39 @@ export const hasCartReferenceApprovedPayment =
 
     return false;
   };
+
+/**
+ * Comprueba si una referencia tiene exposición financiera activa en
+ * cualquiera de los carritos históricos donde estuvo incluida.
+ *
+ * La exposición activa incluye dinero aprobado neto de reembolsos y pagos
+ * en estado procesando. Estos últimos no se convierten en dinero aprobado:
+ * solo reservan capacidad financiera mientras pueden completarse.
+ */
+export const hasCartReferenceActiveFinancialCommitment = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    tipoItem,
+    referenciaId,
+    transaction,
+  );
+
+  for (const carritoId of cartIds) {
+    const exposure = await committedOrProcessingExposure(
+      { carrito_id: carritoId },
+      transaction,
+    );
+
+    if (exposure.total > 0) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 export const isReservationFullyPaid = async (
   reservationId: number,
