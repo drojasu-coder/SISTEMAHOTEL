@@ -971,3 +971,139 @@ findings:
       unrelated_changes: none
       full_backend: "364 passed, 0 failed, 0 skipped"
       next_regression: none
+
+  - id: QA-CART-FIN-CANDIDATE-014
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Un PaymentIntent creado cuando un carrito contiene la ReservaActividad A
+      no puede aprobar y marcar como pagada la ReservaActividad B si el cliente
+      elimina A y agrega B antes de confirmar el intent. La composición autorizada
+      debe quedar inmutable o vinculada a un snapshot durable que el webhook valide.
+    reproduction:
+      test_file: backend/tests/pagos/pagoCartMutationBinding.test.ts
+      test_name: "QA-CART-FIN-CANDIDATE-014: no reasigna una autorización Stripe al reemplazar el item del carrito"
+      command: >-
+        npm --prefix backend test -- tests/pagos/pagoCartMutationBinding.test.ts -t
+        "QA-CART-FIN-CANDIDATE-014: no reasigna una autorización Stripe al reemplazar el item del carrito"
+      stripe_mode: full_local_mock
+      payment_intent: pi_cart_mutation_001
+      real_stripe_calls: false
+    expected:
+      authorization_reassigned: false
+      safe_outcomes: >-
+        rechazar la eliminación o el reemplazo mientras el pago está procesando,
+        o rechazar el succeeded si la composición ya no coincide con el snapshot
+        autorizado
+    actual:
+      reservations: "A=201/Q100.00; B=201/Q100.00"
+      add_a: "201; item A; total Q100.00"
+      create_payment: "201/procesando/Q100.00/pi_cart_mutation_001"
+      delete_a: "204; item A eliminado"
+      add_b: "201; item B agregado al mismo carrito; total Q100.00"
+      before_webhook: "carrito activo; solo item B; pago procesando; aprobado Q0.00"
+      webhook: "200 received=true"
+      final: "pago aprobado; carrito pagado; solo item B; aprobado Q100.00"
+      authorization_reassigned: true
+      red_result: "1 failed; expected false, received true"
+    http_evidence:
+      reserva_a: 201
+      reserva_b: 201
+      create_cart: 201
+      add_a: 201
+      create_payment: 201
+      delete_a: 204
+      add_b: 201
+      webhook_succeeded: 200
+      unexpected_500: false
+    database_evidence:
+      authorization_snapshot:
+        total: "100.00"
+        item_id: 1
+        tipo_item: actividad
+        referencia_id: 1
+      before_webhook:
+        carrito_estado: activo
+        item_a: absent
+        item_b: present
+        total: "100.00"
+        pago_estado: procesando
+        pago_monto: "100.00"
+        approved_amount: "0.00"
+      final:
+        carrito_estado: pagado
+        item_a: absent
+        item_b: present
+        total: "100.00"
+        pago_estado: aprobado
+        pago_monto: "100.00"
+        approved_amount: "100.00"
+        reembolsos: 0
+        reserva_a_estado: confirmada
+        reserva_b_estado: confirmada
+    binding_evidence:
+      intent_metadata:
+        pago_id: present
+        carrito_id: present
+        tipo_pago: total
+      metadata_item_binding: false
+      persisted_payment_item_binding: false
+      payment_bound_only_to_mutable_cart: true
+    demonstrated_execution:
+      A_delete_after_intent_permitted: true
+      B_same_cart_replacement_permitted: true
+      C_succeeded_authorization_reassigned: true
+    suspected_execution_path: >-
+      createPago persiste Pago y metadata de Stripe vinculados solo a carrito_id y
+      pago_id, sin snapshot ni identidad de ítems. carritoItemService.remove solo
+      exige que el carrito esté activo y no comprueba pagos procesando, por lo que
+      elimina A. create permite B porque B no tiene compromiso histórico propio.
+      processStripeWebhook valida intent, monto, moneda y pago_id, vuelve a calcular
+      el total con los ítems actuales y applyCartPaid marca pagado el carrito que ya
+      contiene B.
+    root_cause: >-
+      create y remove serializaban la mutación mediante el bloqueo UPDATE del carrito,
+      pero no consultaban la exposición financiera persistida después de adquirir ese
+      bloqueo. Por ello permitían cambiar los ítems aunque existiera un Pago del mismo
+      carrito en estado procesando.
+    correction: >-
+      Ambos caminos de mutación reutilizan una única guarda financiera dentro de la
+      transacción. Después de bloquear y autorizar el carrito, la guarda consulta Pago
+      por carrito_id y estado procesando y responde 409 CART_HAS_PROCESSING_PAYMENT
+      antes de crear o eliminar un CarritoItem. No se agregó snapshot ni dependencia
+      de Stripe.
+    severity_recommendation: high
+    regression_test:
+      test_file: backend/tests/pagos/pagoCartMutationBinding.test.ts
+      preserved_red: true
+    final_verification:
+      database: hotel_test_db
+      focused: "1 file, 1 passed"
+      payment_suites: "8 files, 18 passed"
+      cart_item: "1 file, 40 passed"
+      reserva_actividad: "1 file, 45 passed"
+      recurso_actividad: "1 file, 2 passed"
+      reserva_actividad_integrity: "1 file, 3 passed"
+      full_backend: "22 files, 365 passed, 0 failed, 0 skipped"
+      typecheck: "PASS"
+      db_guard: green
+      stripe_mode: full_local_mock
+      real_stripe_calls: false
+      add_protected: true
+      delete_protected: true
+      delete_a: "409 CART_HAS_PROCESSING_PAYMENT"
+      item_a_remains: true
+      add_b: not_run
+      item_b_persisted: false
+      cart_mutated: false
+      authorization_reassigned: false
+      fixes_007_013: "PASS"
+      fixes_007_013_modified: false
+      ledger_constraints: "7/7 present"
+      invalid_ledger_rows: none
+      deadlock_timeout_observed: false
+      production_code_modified: true
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
