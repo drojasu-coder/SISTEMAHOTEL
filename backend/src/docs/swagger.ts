@@ -1003,6 +1003,21 @@ RecursoActividad: {
       type: "string",
       example: "Cancha de tenis 1",
     },
+    precio_hora: {
+      type: "number",
+      minimum: 0,
+      example: 50.00,
+    },
+    precio_equipo: {
+      type: "number",
+      minimum: 0,
+      example: 10.00,
+    },
+    precio_instructor_hora: {
+      type: "number",
+      minimum: 0,
+      example: 25.00,
+    },
     createdAt: {
       type: "string",
       format: "date-time",
@@ -1036,6 +1051,21 @@ CreateRecursoActividadRequest: {
       type: "string",
       example: "Cancha de tenis 1",
     },
+    precio_hora: {
+      type: "number",
+      minimum: 0,
+      example: 50.00,
+    },
+    precio_equipo: {
+      type: "number",
+      minimum: 0,
+      example: 10.00,
+    },
+    precio_instructor_hora: {
+      type: "number",
+      minimum: 0,
+      example: 25.00,
+    },
   },
 },
 
@@ -1050,6 +1080,21 @@ UpdateRecursoActividadRequest: {
     nombre: {
       type: "string",
       example: "Cancha de pádel 1",
+    },
+    precio_hora: {
+      type: "number",
+      minimum: 0,
+      example: 50.00,
+    },
+    precio_equipo: {
+      type: "number",
+      minimum: 0,
+      example: 10.00,
+    },
+    precio_instructor_hora: {
+      type: "number",
+      minimum: 0,
+      example: 25.00,
     },
   },
 },

@@ -1,0 +1,973 @@
+version: 1
+
+project: SISTEMAHOTEL
+
+database:
+  qa: hotel_test_db
+
+methodology:
+  - RED
+  - FIX
+  - GREEN
+  - REGRESSION
+
+findings:
+  - id: QA-RA-FIN-CANDIDATE-001
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      El total de una reserva de actividad debe calcularse con la tarifa
+      persistida del recurso multiplicada por la duración reservada; para una
+      hora con precio_hora 100.00, sin equipo ni instructor, debe ser 100.00.
+    reproduction:
+      test_file: backend/tests/actividades/reservaActividad.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad"
+      command: >-
+        npm test -- tests/actividades/reservaActividad.test.ts -t
+        "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad"
+    expected:
+      http_total: "100.00"
+      database_total: "100.00"
+    actual_before_fix:
+      http_total: "0.00"
+      database_total: "0.00"
+    endpoint: POST /api/reservas-actividad
+    root_cause: >-
+      El método create obtenía y bloqueaba RecursoActividad, pero descartaba
+      el registro y no calculaba ni enviaba total a ReservaActividad.create;
+      por ello Sequelize persistía el valor predeterminado 0.00.
+    correction: >-
+      create conserva el recurso bloqueado, calcula dentro de la transacción
+      precio_hora por la duración en horas, redondea a dos decimales y
+      persiste el resultado como total, sin añadir cargos de equipo o instructor.
+    regression_test:
+      test_file: backend/tests/actividades/reservaActividad.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-001: persiste la tarifa por una hora de actividad"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed, 44 skipped"
+      related: "45 passed"
+      typecheck: green
+      full_backend: "341 passed"
+      regression: green
+      new_failures: none
+
+  - id: QA-RA-FIN-CANDIDATE-002
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Una ReservaActividad propia, válida y con total calculado por el backend
+      debe poder agregarse al carrito usando exclusivamente su total persistido
+      como precio del ítem.
+    reproduction:
+      test_file: backend/tests/carrito/carritoItem.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido"
+      command: >-
+        npm test -- tests/carrito/carritoItem.test.ts -t
+        "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido"
+    expected:
+      http_status: 201
+      item_price: "100.00"
+    actual_before_fix:
+      http_status: 422
+      error_code: ITEM_PRICE_NOT_AVAILABLE
+      database_item_count: 0
+    endpoint: POST /api/carritos/{id}/items
+    root_cause: >-
+      resolveActividad lanzaba incondicionalmente ITEM_PRICE_NOT_AVAILABLE
+      después de validar existencia, ownership y estado de la reserva.
+    correction: >-
+      resolveActividad usa ReservaActividad.total mediante normalizePrice como
+      precio confiable del backend, preservando las validaciones de existencia,
+      ownership y estado y sin aceptar un precio controlado por el cliente.
+    regression_test:
+      test_file: backend/tests/carrito/carritoItem.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-002: agrega al carrito una reserva de actividad usando su total persistido"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed, 39 skipped"
+      cart_related: "40 passed"
+      reserva_actividad: "45 passed"
+      typecheck: green
+      full_backend: "342 passed"
+      ownership_regression: green
+      state_validation_regression: green
+      client_controlled_price: rejected
+      regression: green
+      new_failures: none
+
+  - id: QA-RA-FUNC-CANDIDATE-003
+    status: closed
+    severity: medium
+    category: FUNC
+    invariant: >-
+      Un administrador autenticado debe poder configurar precio_hora,
+      precio_equipo y precio_instructor_hora al crear o actualizar un recurso
+      de actividad, y las tarifas no negativas deben persistirse exactamente.
+    reproduction:
+      test_file: backend/tests/actividades/recursoActividad.test.ts
+      test_names:
+        - "QA-RA-FUNC-CANDIDATE-003 CREATE: admin configura tarifas al crear recurso"
+        - "QA-RA-FUNC-CANDIDATE-003 UPDATE: admin configura tarifas al actualizar recurso"
+      commands:
+        - >-
+          npm test -- tests/actividades/recursoActividad.test.ts -t
+          "QA-RA-FUNC-CANDIDATE-003 CREATE: admin configura tarifas al crear recurso"
+        - >-
+          npm test -- tests/actividades/recursoActividad.test.ts -t
+          "QA-RA-FUNC-CANDIDATE-003 UPDATE: admin configura tarifas al actualizar recurso"
+    expected:
+      create_http_status: 201
+      create_database_tariffs: "100.00/25.00/50.00"
+      update_http_status: 200
+      update_database_tariffs: "150.00/30.00/60.00"
+    actual_before_fix:
+      create_http_status: 400
+      create_error_code: VALIDATION_ERROR
+      update_http_status: 400
+      update_error_code: VALIDATION_ERROR
+      update_database_tariffs: "0.00/0.00/0.00"
+    endpoints:
+      - POST /api/recursos-actividad
+      - PATCH /api/recursos-actividad/{id}
+    root_cause: >-
+      Los esquemas strict de CREATE y UPDATE no declaraban los tres campos de
+      tarifa ya existentes en RecursoActividad, por lo que el middleware los
+      rechazaba antes del controller. Además, el servicio enviaba el objeto de
+      entrada completo al modelo en lugar de construir una lista explícita de
+      campos administrables.
+    correction: >-
+      Los esquemas strict ahora admiten opcionalmente las tres tarifas como
+      números finitos y no negativos. El servicio selecciona explícitamente los
+      campos permitidos para CREATE y UPDATE y vuelve a consultar el recurso
+      actualizado para responder con la representación decimal persistida.
+    regression_test:
+      test_file: backend/tests/actividades/recursoActividad.test.ts
+      create_test: "QA-RA-FUNC-CANDIDATE-003 CREATE: admin configura tarifas al crear recurso"
+      update_test: "QA-RA-FUNC-CANDIDATE-003 UPDATE: admin configura tarifas al actualizar recurso"
+    final_verification:
+      database: hotel_test_db
+      create_focused: "1 passed, 1 skipped"
+      update_focused: "1 passed, 1 skipped"
+      recurso_actividad: "2 passed"
+      reserva_actividad: "45 passed"
+      cart_item: "40 passed"
+      typecheck: green
+      full_backend: "344 passed"
+      strict_validation: green
+      unknown_field_rejection: green
+      negative_price_rejection: green
+      mass_assignment_regression: green
+      admin_authorization: preserved
+      migrations_modified: false
+      regression: green
+      new_failures: none
+
+  - id: QA-RA-DATA-CANDIDATE-006
+    status: closed
+    severity: high
+    category: DATA
+    invariant: >-
+      Toda fila de reservas_actividad debe tener estado confirmada, cancelada
+      o completada; hora_inicio debe ser anterior a hora_fin; y total debe ser
+      mayor o igual que cero, incluso ante escrituras internas o directas.
+    reproduction:
+      test_file: backend/tests/actividades/reservaActividad.integrity.test.ts
+      test_names:
+        - "QA-RA-DATA-CANDIDATE-006 STATE rechaza un estado fuera del dominio"
+        - "QA-RA-DATA-CANDIDATE-006 TIME rechaza hora_inicio posterior a hora_fin"
+        - "QA-RA-DATA-CANDIDATE-006 TOTAL rechaza un total negativo"
+    expected:
+      invalid_state: rejected_without_persistence
+      invalid_time_range: rejected_without_persistence
+      negative_total: rejected_without_persistence
+    actual_before_fix:
+      invalid_state: accepted_and_persisted
+      invalid_time_range: accepted_and_persisted
+      negative_total: accepted_and_persisted
+    affected_model: ReservaActividad
+    affected_table: reservas_actividad
+    root_cause: >-
+      El modelo y las migraciones históricas solo definían tipos, nulabilidad
+      y valores predeterminados. Las comprobaciones de horario y estado del
+      flujo HTTP no protegían ReservaActividad.create ni escrituras directas,
+      y PostgreSQL no tenía CHECK constraints para los tres invariantes.
+    correction: >-
+      Una migración aditiva bloquea la tabla durante un preflight que falla sin
+      corregir datos inválidos y agrega tres CHECK constraints transaccionales.
+      No se añadieron validaciones Sequelize porque PostgreSQL es la defensa
+      mínima suficiente y cubre todas las rutas de escritura concurrentes.
+    migration: backend/src/migrations/20261018000000-enforce-reserva-actividad-integrity.js
+    database_constraints:
+      - reservas_actividad_estado_valid_check
+      - reservas_actividad_hora_rango_valid_check
+      - reservas_actividad_total_nonnegative_check
+    regression_test:
+      test_file: backend/tests/actividades/reservaActividad.integrity.test.ts
+      assertions: >-
+        Cada escritura inválida es rechazada y una consulta posterior confirma
+        que ninguna fila del escenario fue persistida.
+    final_verification:
+      database: hotel_test_db
+      state_focused: "1 passed, 2 skipped"
+      time_focused: "1 passed, 2 skipped"
+      total_focused: "1 passed, 2 skipped"
+      integrity_file: "3 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      cart_item: "40 passed"
+      typecheck: green
+      full_backend: "347 passed"
+      invalid_state: green
+      invalid_time_range: green
+      negative_total: green
+      invalid_rows_after_regression: none
+      migration_registered: true
+      migration_down_safety: green
+      database_constraints:
+        - reservas_actividad_estado_valid_check
+        - reservas_actividad_hora_rango_valid_check
+        - reservas_actividad_total_nonnegative_check
+      regression: green
+      new_failures: none
+
+  - id: QA-RA-FUNC-CANDIDATE-004
+    status: product_decision_required
+    severity: medium
+    category: FUNC
+    current_behavior: >-
+      una ReservaActividad futura puede pasar confirmada->completada; solo
+      confirmada bloquea disponibilidad, así que completada libera inmediatamente
+      recurso e instructor.
+    tested_behavior: >-
+      existe una prueba que completa una reserva futura y espera que otra idéntica
+      pueda crearse.
+    documented_business_rule: NONE
+    classification: PRODUCT DECISION REQUIRED
+    confidence: HIGH
+    decision_required: >-
+      definir A) completada solo después de fecha+hora_fin o B) cierre
+      administrativo anticipado; y efectos sobre disponibilidad, reactivación,
+      carrito existente y pagos existentes.
+
+  - id: QA-RA-FUNC-CANDIDATE-005
+    status: product_decision_required
+    severity: medium
+    category: FUNC
+    current_behavior: >-
+      admin puede activo=false aunque haya ReservasActividad futuras
+      confirmadas; estas permanecen confirmadas, conservan instructor_id, no se
+      reasignan ni cancelan; nuevas reservas con instructor inactivo se rechazan;
+      reactivar una reserva con instructor inactivo también se rechaza.
+    documented_business_rule: NONE
+    classification: PRODUCT DECISION REQUIRED
+    confidence: HIGH
+    decision_required: >-
+      definir A) activo=false solo impide nuevas asignaciones y existentes siguen
+      válidas o B) significa que no puede prestar actividades y debe impedirse
+      desactivación con reservas futuras confirmadas.
+
+  - id: QA-PAY-FIN-CANDIDATE-007
+    status: closed
+    severity: critical
+    category: FIN
+    invariant: >-
+      Los pagos aprobados netos más la exposición de pagos con tarjeta en estado
+      procesando para un mismo origen no deben superar su total; veinte intentos
+      concurrentes sobre un carrito de Q100.00 solo pueden comprometer Q100.00.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.concurrency.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-007: limita a una sola exposición pendiente el pago concurrente del mismo carrito"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.concurrency.test.ts -t
+        "QA-PAY-FIN-CANDIDATE-007: limita a una sola exposición pendiente el pago concurrente del mismo carrito"
+      stripe_mode: mock_local
+      concurrent_requests: 20
+    expected:
+      successful_requests: 1
+      payment_intents_created: 1
+      pending_exposure: "100.00"
+      approved_amount: "0.00"
+      exposure_violation: false
+    actual_before_fix:
+      successful_requests: 20
+      payment_intents_created: 20
+      processing_payments: 20
+      pending_exposure: "2000.00"
+      approved_amount: "0.00"
+      exposure_violation: true
+    endpoint: POST /api/pagos
+    root_cause: >-
+      El bloqueo FOR UPDATE del carrito serializaba createPago, pero cada
+      transacción calculaba el saldo únicamente con approvedAmount, que excluye
+      correctamente pagos procesando. Después de cada commit, la siguiente
+      transacción volvía a observar aprobado neto igual a cero y podía crear otro
+      PaymentIntent por el saldo completo.
+    correction: >-
+      createPago calcula exclusivamente el monto nuevo que puede comprometer con
+      un helper separado que suma el aprobado neto y pagos en estado procesando
+      consultados dentro de la transacción serializada por el lock del origen, sin
+      bloquear las filas procesando. No se modificó approvedAmount ni se incluyeron
+      transferencias pendientes, pagos rechazados o cancelados.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.concurrency.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-007: limita a una sola exposición pendiente el pago concurrente del mismo carrito"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      payment_file: "1 passed"
+      stripe_mode: mock
+      real_stripe_charges: false
+      concurrent_requests: 20
+      http_results: "1x201, 19x409 PAYMENT_EXCEEDS_BALANCE, 0x5xx"
+      payment_intents_created: 1
+      local_payments: "1 procesando"
+      approved_amount: "0.00"
+      pending_exposure: "100.00"
+      processing_exposure: "100.00"
+      total_financial_exposure: "100.00"
+      max_legitimate_exposure: "100.00"
+      exposure_violation: false
+      payment_tests: green
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      approved_semantics_regression: green
+      processing_exposure_regression: green
+      rejected_canceled_exposure: correct
+      deadlock_timeout_observed: false
+      full_backend: "348 passed"
+      new_failures: none
+      regression: green
+
+  - id: QA-PAY-CONC-CANDIDATE-011
+    status: closed
+    severity: medium
+    category: CONCURRENCY
+    invariant: >-
+      Repetir una creación de pago con la misma idempotency_key y el mismo
+      fingerprint debe devolver el mismo Pago y, para tarjeta, el mismo
+      PaymentIntent, incluso con veinte solicitudes concurrentes. Reutilizar la
+      clave con un tipo_pago distinto debe responder 409 IDEMPOTENCY_CONFLICT.
+    reproduction:
+      test_file: backend/tests/pagos/pago.idempotency.concurrency.test.ts
+      test_names:
+        - "SEQUENTIAL CONTRACT: replay de tarjeta conserva HTTP 201 y el mismo pago e intent"
+        - "CONCURRENT SAME KEY: 20 replays convergen al mismo pago sin errores"
+        - "FINGERPRINT TYPE: cambiar solo tipo_pago responde 409 IDEMPOTENCY_CONFLICT"
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      concurrent_requests: 20
+    expected:
+      sequential: "201/201; mismo pago y PaymentIntent; 1 Pago; create=1; retrieve=1"
+      concurrent: >-
+        20x201; un único Pago, PaymentIntent e idempotency_key; create=1;
+        retrieve=19; sin errores
+      fingerprint_type: "primer pago 201; segundo pago 409 IDEMPOTENCY_CONFLICT"
+    actual_before_fix:
+      sequential: green
+      concurrent: >-
+        16x201 y 4x409 PAYMENT_EXCEEDS_BALANCE; un Pago y PaymentIntent;
+        create=1; retrieve=15; exposición persistida 100.00
+      fingerprint_type: >-
+        201/201; el replay con tipo_pago=saldo devolvió el Pago original con
+        tipo_pago=total
+    endpoint: POST /api/pagos
+    root_cause: >-
+      createPago buscaba idempotency_key únicamente antes de adquirir el lock
+      FOR UPDATE del origen. Las solicitudes que no veían aún la fila quedaban
+      serializadas por el lock, pero después evaluaban committedOrProcessingExposure
+      sin volver a consultar la clave y algunas respondían PAYMENT_EXCEEDS_BALANCE
+      en vez de replay. Además, el fingerprint del lookup no comparaba el
+      tipo_pago normalizado.
+    correction: >-
+      Un único helper interno busca la idempotency_key, compara metodo, monto
+      normalizado, ambos orígenes normalizados a null y tipo_pago normalizado con
+      data.tipo_pago ?? "total", y devuelve el Pago existente o recupera su
+      PaymentIntent. createPago conserva el lookup temprano y repite el mismo
+      helper después de validateOpenOrigin, ya con el origen bloqueado, antes de
+      calcular exposición. La validación de ownership permanece antes de ambos
+      posibles replays.
+    concurrency: >-
+      validateOpenOrigin mantiene el lock FOR UPDATE del carrito o reserva; el
+      segundo lookup se ejecuta dentro de la misma transacción y después de ese
+      lock, por lo que los contendientes observan el Pago confirmado por el
+      ganador antes de evaluar exposición. No se alteraron locks, constraints,
+      webhooks, reembolsos ni la protección financiera de 007.
+    regression_test:
+      test_file: backend/tests/pagos/pago.idempotency.concurrency.test.ts
+      test_modified_by_fixer: false
+    final_verification:
+      database: hotel_test_db
+      sequential_named: "1 passed, 2 skipped"
+      sequential_replay: green
+      sequential_http: "201/201"
+      sequential_same_payment_and_intent: true
+      sequential_unique_payment_ids: 1
+      sequential_local_payments: 1
+      sequential_key_rows: 1
+      sequential_stripe_calls: "create=1, retrieve=1"
+      concurrent_named: "1 passed, 2 skipped"
+      concurrent_requests: 20
+      concurrent_replay_convergence: green
+      concurrent_http: "20x201, 0x4xx, 0x5xx"
+      concurrent_distinct_payment_ids: 1
+      concurrent_distinct_intent_ids: 1
+      concurrent_local_payments: 1
+      concurrent_key_rows: 1
+      concurrent_processing_exposure: "100.00"
+      concurrent_stripe_calls: "create=1, retrieve=19"
+      concurrent_errors: none
+      unexpected_concurrency_errors: none
+      deadlock_timeout_observed: false
+      fingerprint_named: "1 passed, 2 skipped"
+      fingerprint_original_type: total
+      fingerprint_replay_type: saldo
+      fingerprint_replay_code: IDEMPOTENCY_CONFLICT
+      tipo_pago_in_effective_fingerprint: true
+      fingerprint_conflict: green
+      fingerprint_http: "201 then 409 IDEMPOTENCY_CONFLICT"
+      fingerprint_local_payments: 1
+      fingerprint_key_rows: 1
+      fingerprint_stripe_calls: "create=0, retrieve=0"
+      idempotency_file: "3 passed"
+      fix_007_concurrency: green
+      fix_008_reuse: green
+      fix_009_webhook_refund_replay: "2 passed"
+      fix_010_orphan_compensation: green
+      fix_012_integrity: "8 passed"
+      payment_tests: "6 files, 16 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      ledger_constraints_present: true
+      invalid_ledger_rows: none
+      typecheck: green
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      migrations_modified: false
+      full_backend: "363 passed"
+      new_failures: none
+      regression: green
+
+  - id: QA-RA-FIN-CANDIDATE-008
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Una reserva de actividad con cualquier monto neto aprobado mayor que cero
+      en un carrito histórico no puede agregarse a otro carrito; una devolución
+      total aprobada deja el neto en cero y no activa esta regla adicional.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.reuse.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-008: rechaza reutilizar una reserva de actividad con dinero aprobado"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.reuse.test.ts -t
+        "QA-RA-FIN-CANDIDATE-008: rechaza reutilizar una reserva de actividad con dinero aprobado"
+      payment_method: efectivo
+      real_stripe_charges: false
+    expected:
+      first_add_http_status: 201
+      first_payment: "201/aprobado/100.00"
+      first_net_approved: "100.00"
+      second_add_http_status: 409
+      second_add_error_code: CART_REFERENCE_NOT_AVAILABLE
+      second_item: null
+      second_payment: not_run
+      final_net_approved: "100.00"
+      reference_reuse_violation: false
+      double_charge_violation: false
+    actual_before_fix:
+      first_add_http_status: 201
+      first_payment: "201/aprobado/100.00"
+      first_net_approved: "100.00"
+      second_add_http_status: 201
+      second_item: persisted
+      second_payment: "201/aprobado/100.00"
+      final_net_approved: "200.00"
+      reference_reuse_violation: true
+      double_charge_violation: true
+    endpoint: POST /api/carritos/{id}/items
+    root_cause: >-
+      resolveActividad validaba existencia, ownership y estado y obtenía el
+      total persistido del backend, pero era el único de los resolvers
+      comparables inspeccionados que no consultaba el compromiso financiero
+      histórico antes de crear el nuevo CarritoItem.
+    correction: >-
+      Después de preservar ownership y validación de estado, resolveActividad
+      reutiliza hasCartReferenceApprovedPayment con tipo actividad y la misma
+      transacción. Si existe neto aprobado mayor que cero lanza 409
+      CART_REFERENCE_NOT_AVAILABLE antes de persistir el ítem. El helper usa
+      approvedCartAmount, que descuenta únicamente reembolsos aprobados; por eso
+      un reembolso total produce neto cero sin añadir otra restricción.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.reuse.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-008: rechaza reutilizar una reserva de actividad con dinero aprobado"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      reuse_file: "1 passed"
+      fix_007_concurrency: "1 passed"
+      payment_test_files: "2 files, 2 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      full_backend: "349 passed"
+      stripe_mode: "efectivo en reuse; mock local en concurrencia"
+      payment_method: efectivo
+      real_stripe_charges: false
+      first_cart_add: "201/precio 100.00"
+      first_payment: "201/aprobado/100.00"
+      first_net_approved: "100.00"
+      second_cart_add: "409 CART_REFERENCE_NOT_AVAILABLE"
+      second_cart_item_persisted: false
+      second_payment: not_run
+      total_net_approved: "100.00"
+      max_legitimate_net_approved: "100.00"
+      reference_reuse_violation: false
+      double_charge_violation: false
+      ownership_regression: green
+      state_validation_regression: green
+      client_controlled_price: rejected
+      refund_net_semantics: preserved
+      other_reference_types: green
+      migrations_modified: false
+      new_failures: none
+      regression: green
+
+  - id: QA-PAY-FIN-CANDIDATE-010
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Un PaymentIntent creado exitosamente debe quedar asociado de forma durable
+      a un Pago local o ser compensado de forma confirmada cuando falla la
+      persistencia posterior; no puede quedar activo y huérfano tras un rollback.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.orphan.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-010: evita PaymentIntent huérfano tras éxito externo y rollback local sin idempotency key"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.orphan.test.ts -t
+        "QA-PAY-FIN-CANDIDATE-010: evita PaymentIntent huérfano tras éxito externo y rollback local sin idempotency key"
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      idempotency_key: absent
+    expected:
+      local_failure_http_status: 500
+      local_failure_code: PAYMENT_LOCAL_PERSISTENCE_FAILED
+      first_intent_compensated: true
+      first_intent_orphaned: false
+      active_uncompensated_intents:
+        - pi_orphan_002
+      duplicated_active_external_attempt: false
+    actual_before_fix:
+      local_failure_http_status: 502
+      local_failure_code: STRIPE_PAYMENT_INTENT_FAILED
+      first_intent_compensated: false
+      first_intent_orphaned: true
+      active_uncompensated_intents:
+        - pi_orphan_001
+        - pi_orphan_002
+      duplicated_active_external_attempt: true
+    endpoint: POST /api/pagos
+    root_cause: >-
+      createPago agrupaba createPaymentIntent y la persistencia de
+      id_transaccion_externo en un mismo try/catch. Un fallo local posterior al
+      éxito externo se clasificaba como fallo Stripe y provocaba rollback sin
+      compensar el PaymentIntent recién creado.
+    correction: >-
+      createPago separa el fallo de creación externa del fallo local posterior.
+      Si falla la asociación local, cancela únicamente el PaymentIntent creado
+      por esa ejecución y, tras cancelación confirmada, responde 500
+      PAYMENT_LOCAL_PERSISTENCE_FAILED conservando el error local como causa. Si
+      la cancelación falla o no confirma estado canceled, responde 502
+      PAYMENT_COMPENSATION_FAILED sin afirmar que la operación quedó compensada.
+    protection_scope: >-
+      Cubre fallos al persistir id_transaccion_externo después de crear el
+      PaymentIntent y antes de completar createPago; no afirma cubrir fallos del
+      commit posteriores al retorno exitoso del callback transaccional.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.orphan.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-010: evita PaymentIntent huérfano tras éxito externo y rollback local sin idempotency key"
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      payment_test_files: "3 files, 3 passed"
+      fix_007_concurrency: "1 passed"
+      fix_008_reuse: "1 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      full_backend: "350 passed"
+      stripe_mode: mock
+      real_stripe_charges: false
+      local_failure_http_status: 500
+      local_failure_code: PAYMENT_LOCAL_PERSISTENCE_FAILED
+      first_intent: pi_orphan_001
+      cancel_payment_intent_called: true
+      canceled_intent: pi_orphan_001
+      first_intent_compensated: true
+      first_intent_orphaned: false
+      transaction_rollback: true
+      retry: "201/pi_orphan_002"
+      second_intent: pi_orphan_002
+      active_uncompensated_intents:
+        - pi_orphan_002
+      duplicated_active_external_attempt: false
+      compensation_failure_path: correct
+      local_failure_classification: PAYMENT_LOCAL_PERSISTENCE_FAILED
+      compensation_failure_classification: PAYMENT_COMPENSATION_FAILED
+      approved_semantics_regression: green
+      processing_exposure_regression: green
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      migrations_modified: false
+
+  - id: QA-PAY-DATA-CANDIDATE-009
+    status: closed
+    severity: medium
+    category: DATA
+    invariant: >-
+      Repetir payment_intent.succeeded no debe cambiar a aprobado un pago que
+      ya está reembolsado o reembolsado_parcial ni alterar sus reembolsos
+      aprobados o su monto neto.
+    reproduction:
+      test_file: backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+      test_names:
+        - "QA-PAY-DATA-CANDIDATE-009 TOTAL"
+        - "QA-PAY-DATA-CANDIDATE-009 PARTIAL"
+      stripe_mode: mock_local
+      real_stripe_charges: false
+    expected:
+      total: "reembolsado -> reembolsado; reembolso 100.00; neto 0.00"
+      partial: "reembolsado_parcial -> reembolsado_parcial; reembolso 40.00; neto 60.00"
+    actual_before_fix:
+      total: "reembolsado -> aprobado; reembolso 100.00; neto 0.00"
+      partial: "reembolsado_parcial -> aprobado; reembolso 40.00; neto 60.00"
+    affected_service: processStripeWebhook
+    red_evidence:
+      total: "1 failed, 1 skipped; esperado reembolsado, recibido aprobado"
+      partial: "1 failed, 1 skipped; esperado reembolsado_parcial, recibido aprobado"
+    root_cause: >-
+      Para payment_intent.succeeded, target era aprobado y shouldUpdate permitía
+      actualizar cualquier estado distinto de aprobado, incluidos reembolsado y
+      reembolsado_parcial. Las filas de reembolso y el neto permanecían correctos,
+      pero el estado persistido del pago revivía incorrectamente a aprobado.
+    correction: >-
+      shouldUpdate rechaza exclusivamente la transición hacia aprobado cuando el
+      estado actual es reembolsado o reembolsado_parcial. Las demás transiciones,
+      approvedAmount, la lógica de Reembolso y applyCartPaid permanecen sin cambios.
+    concurrency: >-
+      processStripeWebhook bloquea la fila Pago con FOR UPDATE dentro de la
+      transacción, por lo que la decisión de transición se serializa con los flujos
+      de reembolso que bloquean el mismo pago.
+    regression_test:
+      test_file: backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+      test_modified_by_fixer: false
+    final_verification:
+      database: hotel_test_db
+      total_focused: "1 passed, 1 skipped"
+      partial_focused: "1 passed, 1 skipped"
+      webhook_refund_replay_file: "2 passed"
+      total_test: green
+      total_before_state: reembolsado
+      total_after_state: reembolsado
+      total_refund_preserved: true
+      total_before_net: "0.00"
+      total_after_net: "0.00"
+      partial_test: green
+      partial_before_state: reembolsado_parcial
+      partial_after_state: reembolsado_parcial
+      partial_refund_preserved: true
+      partial_before_net: "60.00"
+      partial_after_net: "60.00"
+      total_after: "reembolsado; reembolso 100.00; neto 0.00"
+      partial_after: "reembolsado_parcial; reembolso 40.00; neto 60.00"
+      state_net_regression: none
+      state_regression: false
+      financial_net_regression: false
+      fix_007_concurrency: "1 passed"
+      fix_008_reuse: "1 passed"
+      fix_010_orphan: "1 passed"
+      payment_test_files: "4 files, 5 passed"
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      approved_semantics_regression: green
+      refund_logic_regression: green
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      stripe_mode: mock_local
+      real_stripe_charges: false
+      full_backend: "352 passed"
+      migrations_modified: false
+
+  - id: QA-PAY-DATA-CANDIDATE-012
+    status: closed
+    severity: medium
+    category: DATA
+    invariant: >-
+      Toda fila de pagos debe tener monto mayor que cero, exactamente uno de
+      carrito_id o reserva_habitacion_id, y valores de estado, metodo y
+      tipo_pago dentro de sus dominios. Toda fila de reembolsos debe tener monto
+      mayor que cero y estado dentro de su dominio, incluso ante escrituras
+      internas o directas que no pasan por validadores HTTP ni servicios.
+    reproduction:
+      test_file: backend/tests/pagos/pago.integrity.test.ts
+      test_names:
+        - "QA-PAY-DATA-CANDIDATE-012 A Pago rechaza monto -1"
+        - "QA-PAY-DATA-CANDIDATE-012 B Pago rechaza ambos orígenes null"
+        - "QA-PAY-DATA-CANDIDATE-012 C Pago rechaza ambos orígenes válidos"
+        - "QA-PAY-DATA-CANDIDATE-012 D Pago rechaza estado inventado"
+        - "QA-PAY-DATA-CANDIDATE-012 E Pago rechaza método inventado"
+        - "QA-PAY-DATA-CANDIDATE-012 F Pago rechaza tipo_pago inventado"
+        - "QA-PAY-DATA-CANDIDATE-012 G Reembolso rechaza monto -1"
+        - "QA-PAY-DATA-CANDIDATE-012 H Reembolso rechaza estado inventado"
+      write_path: direct Sequelize model creates
+      stripe_mode: not_used
+      real_stripe_charges: false
+    expected:
+      invalid_creates: rejected
+      persisted_rows_per_scenario: 0
+    actual_before_fix:
+      direct_write_protection: absent
+      observed_red: >-
+        El escenario A fue aceptado por Pago.create y persistió monto -1.00;
+        1 failed y 7 skipped en la reproducción enfocada previa a la migración.
+      affected_scenarios: A-H
+    affected_models:
+      - Pago
+      - Reembolso
+    affected_tables:
+      - pagos
+      - reembolsos
+    domains:
+      pago_estado:
+        - pendiente
+        - procesando
+        - aprobado
+        - rechazado
+        - cancelado
+        - reembolsado
+        - reembolsado_parcial
+      pago_metodo:
+        - tarjeta
+        - efectivo
+        - transferencia
+      pago_tipo_pago:
+        - total
+        - anticipo
+        - saldo
+      reembolso_estado:
+        - pendiente
+        - aprobado
+        - rechazado
+    root_cause: >-
+      Los modelos y las migraciones históricas solo declaraban tipos,
+      nulabilidad y valores predeterminados para estos campos. Los validadores y
+      el servicio rechazaban parte de las entradas HTTP, pero PostgreSQL no tenía
+      CHECK constraints que protegieran Pago.create, Reembolso.create u otras
+      escrituras directas y concurrentes.
+    correction: >-
+      Una migración aditiva y transaccional bloquea pagos y reembolsos en modo
+      ACCESS EXCLUSIVE, ejecuta un preflight que falla sin corregir datos y agrega
+      exactamente siete CHECK constraints. No se añadieron validaciones de modelo:
+      PostgreSQL es la defensa mínima común a todas las rutas de escritura.
+    migration: backend/src/migrations/20261019000000-enforce-pago-reembolso-integrity.js
+    migration_registered:
+      database: hotel_test_db
+      name: 20261019000000-enforce-pago-reembolso-integrity.js
+      applied: true
+    data_preflight:
+      database: hotel_test_db
+      engine: PostgreSQL 16.15
+      invalid_qa_rows_found: 1
+      invalid_qa_rows_deleted: 1
+      deleted_key: qa-pay-data-012-a-negative-amount
+      dependent_refunds: 0
+      other_invalid_rows: 0
+      invalid_rows_after_cleanup: 0
+      valid_support_payments_deleted: 0
+    database_constraints:
+      - pagos_monto_positive_check
+      - pagos_exactly_one_origin_check
+      - pagos_estado_valid_check
+      - pagos_metodo_valid_check
+      - pagos_tipo_pago_valid_check
+      - reembolsos_monto_positive_check
+      - reembolsos_estado_valid_check
+    concurrency: >-
+      Los CHECK se evalúan atómicamente por PostgreSQL para cada INSERT o UPDATE,
+      sin ventana check-then-write. La migración toma ambos locks antes del
+      preflight y conserva los locks hasta agregar y validar los constraints.
+    model_validations_added: none
+    regression_test:
+      test_file: backend/tests/pagos/pago.integrity.test.ts
+      test_modified_by_fixer: false
+      assertions: >-
+        Cada escritura inválida es rechazada y una consulta posterior confirma
+        persisted=0 para su clave QA.
+    final_verification:
+      database: hotel_test_db
+      named_A: "passed; persisted=0"
+      named_B: "passed; persisted=0"
+      named_C: "passed; persisted=0"
+      named_D: "passed; persisted=0"
+      named_E: "passed; persisted=0"
+      named_F: "passed; persisted=0"
+      named_G: "passed; persisted=0"
+      named_H: "passed; persisted=0"
+      negative_payment: green
+      no_origin: green
+      two_origins: green
+      invalid_payment_state: green
+      invalid_payment_method: green
+      invalid_payment_type: green
+      negative_refund: green
+      invalid_refund_state: green
+      integrity_file: "8 passed"
+      payment_tests: "5 files, 13 passed"
+      fix_007_concurrency: green
+      fix_008_reuse: green
+      fix_009_webhook_refund_replay: green
+      fix_010_orphan_compensation: green
+      cart_item: "40 passed"
+      reserva_actividad: "45 passed"
+      recurso_actividad: "2 passed"
+      reserva_actividad_integrity: "3 passed"
+      typecheck: green
+      invalid_rows_after_migration: none
+      invalid_payment_rows_after_regression: none
+      invalid_refund_rows_after_regression: none
+      constraints_registered_and_validated: 7
+      database_constraints_present:
+        - pagos_monto_positive_check
+        - pagos_exactly_one_origin_check
+        - pagos_estado_valid_check
+        - pagos_metodo_valid_check
+        - pagos_tipo_pago_valid_check
+        - reembolsos_monto_positive_check
+        - reembolsos_estado_valid_check
+      migration_registered: true
+      migration_down: "not_run; inspected to remove only the seven named constraints"
+      migration_down_safety: green
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      full_backend: "360 passed"
+      historical_migrations_modified: false
+      production_data_modified: false
+      unrelated_test_data_modified: false
+      real_stripe_charges: false
+
+  - id: QA-PAY-FIN-CANDIDATE-013
+    status: closed
+    severity: critical
+    category: FIN
+    invariant: >-
+      Una reserva de actividad con exposición financiera activa en cualquiera
+      de sus carritos históricos no puede agregarse a otro carrito. La exposición
+      activa es el dinero aprobado neto de reembolsos más los pagos en estado
+      procesando y no debe superar el total de la referencia.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-013: rechaza reutilizar una actividad con pago Stripe procesando en un carrito expirado"
+      command: >-
+        npm test -- tests/pagos/pagoActividad.crossCartProcessing.test.ts -t
+        "QA-PAY-FIN-CANDIDATE-013: rechaza reutilizar una actividad con pago Stripe procesando en un carrito expirado"
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+    expected:
+      second_add_http_status: 409
+      second_add_error_code: CART_REFERENCE_NOT_AVAILABLE
+      second_item: null
+      second_payment: not_run
+      approved_amount: "0.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "100.00"
+      exposure_violation: false
+    actual_before_fix:
+      second_add_http_status: 201
+      second_item: persisted
+      second_payment: "201/aprobado/100.00"
+      approved_amount: "100.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "200.00"
+      exposure_violation: true
+      red_result: "1 failed; 4 assertions failed"
+    endpoint: POST /api/carritos/{id}/items
+    root_cause: >-
+      resolveActividad consultaba hasCartReferenceApprovedPayment, cuya semántica
+      deliberada para QA-RA-FIN-CANDIDATE-008 considera solo dinero aprobado neto
+      de reembolsos. Un Pago histórico en estado procesando no es dinero aprobado,
+      por lo que el helper devolvía false y permitía duplicar la actividad en un
+      carrito nuevo aunque el PaymentIntent anterior aún pudiera completarse.
+    correction: >-
+      Se agregó hasCartReferenceActiveFinancialCommitment, que reutiliza los IDs
+      de carritos históricos de la referencia y committedOrProcessingExposure
+      para detectar aprobado neto más pagos procesando. Solo resolveActividad usa
+      el helper nuevo y conserva 409 CART_REFERENCE_NOT_AVAILABLE. La semántica de
+      hasCartReferenceApprovedPayment y approvedAmount no cambió.
+    financial_semantics: >-
+      Procesando reserva exposición activa pero no incrementa el monto aprobado.
+      Un reembolso total deja aprobado neto en cero; si tampoco existe un pago
+      procesando, la regla adicional no bloquea la referencia.
+    concurrency: >-
+      El cálculo se ejecuta dentro de la transacción de creación del ítem y lee
+      pagos históricos ya confirmados. No se añadieron locks ni constraints y no
+      se amplió el alcance a una carrera simultánea entre carritos distintos; esa
+      condición requiere una regresión de concurrencia separada.
+    regression_test:
+      test_file: backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+      test_modified_by_fixer: false
+    final_verification:
+      database: hotel_test_db
+      focused: "1 passed"
+      cross_cart_processing_file: "1 passed"
+      first_cart_payment: "HTTP 201 / tarjeta / procesando / 100.00"
+      second_add: "409 CART_REFERENCE_NOT_AVAILABLE"
+      second_cart_item_persisted: false
+      second_payment: not_run
+      approved_amount: "0.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "100.00"
+      max_legitimate_exposure: "100.00"
+      exposure_violation: false
+      fix_007_concurrency: "1 passed"
+      fix_008_reuse: "1 passed"
+      fix_011_idempotency: "3 passed"
+      fix_009_webhook_refund_replay: "2 passed"
+      fix_010_orphan_compensation: "1 passed"
+      fix_012_integrity: "8 passed"
+      payment_tests: "7 files, 17 passed"
+      cart_item: "40/40 passed"
+      reserva_actividad: "45/45 passed"
+      recurso_actividad: "2/2 passed"
+      reserva_actividad_integrity: "3/3 passed"
+      typecheck: green
+      stripe_mode: mock
+      real_stripe_charges: false
+      refund_net_semantics: preserved
+      ledger_constraints: "7/7 present"
+      invalid_ledger_rows: none
+      deadlock_timeout_observed: false
+      new_failures: none
+      regression: green
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_changes: none
+      full_backend: "364 passed, 0 failed, 0 skipped"
+      next_regression: none

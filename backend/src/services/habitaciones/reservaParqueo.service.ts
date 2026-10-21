@@ -5,6 +5,7 @@ import { env } from "../../config/env";
 const db = require("../../models");
 
 const {
+  sequelize,
   ReservaParqueo,
   Parqueo,
   ReservaHabitacion,
@@ -205,6 +206,70 @@ const validateReferences =
     };
   };
 
+/**
+ * Variante transaccional de validateReferences.
+ *
+ * Bloquea la fila del parqueo con SELECT ... FOR UPDATE
+ * para serializar reservas concurrentes sobre el mismo
+ * espacio de estacionamiento.
+ */
+const validateLockedReferences =
+  async (
+    parqueoId: number,
+    reservaHabitacionId:
+      | number
+      | null
+      | undefined,
+    transaction: any
+  ) => {
+    const parqueo =
+      await Parqueo.findByPk(
+        parqueoId,
+        {
+          transaction,
+          lock:
+            transaction
+              .LOCK
+              .UPDATE,
+        }
+      );
+
+    if (!parqueo) {
+      throw new AppError(
+        404,
+        "PARQUEO_NOT_FOUND",
+        "El parqueo no fue encontrado"
+      );
+    }
+
+    let reservaHabitacion =
+      null;
+
+    if (
+      reservaHabitacionId !=
+      null
+    ) {
+      reservaHabitacion =
+        await ReservaHabitacion.findByPk(
+          reservaHabitacionId,
+          {
+            transaction,
+          }
+        );
+
+      if (
+        !reservaHabitacion
+      ) {
+        throw notFoundReservaHabitacion();
+      }
+    }
+
+    return {
+      parqueo,
+      reservaHabitacion,
+    };
+  };
+
 const validateParqueoReservable =
   (
     parqueo: any
@@ -236,7 +301,8 @@ const validateOverlap =
     fechaSalida?:
       | DateValue
       | null,
-    reservaId?: number
+    reservaId?: number,
+    transaction?: any
   ) => {
     const where: any = {
       parqueo_id:
@@ -281,6 +347,7 @@ const validateOverlap =
     const reservaExistente =
       await ReservaParqueo.findOne({
         where,
+        transaction,
       });
 
     if (
@@ -325,6 +392,9 @@ export const createReservaParqueo =
     data:
       CreateReservaParqueoData
   ) => {
+    /**
+     * Validaciones que no requieren acceso a BD.
+     */
     validateDates(
       data.fecha_entrada,
       data.fecha_salida
@@ -334,26 +404,55 @@ export const createReservaParqueo =
       data.fecha_entrada
     );
 
-    const {
-      parqueo,
-    } =
-      await validateReferences(
-        data.parqueo_id,
-        data.reserva_habitacion_id
-      );
+    /**
+     * Disponibilidad e INSERT ocurren dentro
+     * de la misma transacción.
+     *
+     * El lock sobre Parqueo impide que varias
+     * solicitudes concurrentes comprueben
+     * disponibilidad antes de que exista la
+     * primera reserva persistida.
+     */
+    return sequelize.transaction(
+      async (
+        transaction: any
+      ) => {
+        const {
+          parqueo,
+        } =
+          await validateLockedReferences(
+            data.parqueo_id,
+            data.reserva_habitacion_id,
+            transaction
+          );
 
-    validateParqueoReservable(
-      parqueo
-    );
+        validateParqueoReservable(
+          parqueo
+        );
 
-    await validateOverlap(
-      data.parqueo_id,
-      data.fecha_entrada,
-      data.fecha_salida
-    );
+        /**
+         * El check de traslape ocurre después
+         * de adquirir el bloqueo de la fila.
+         */
+        await validateOverlap(
+          data.parqueo_id,
+          data.fecha_entrada,
+          data.fecha_salida,
+          undefined,
+          transaction
+        );
 
-    return ReservaParqueo.create(
-      data
+        /**
+         * El INSERT pertenece a la misma
+         * transacción que el check.
+         */
+        return ReservaParqueo.create(
+          data,
+          {
+            transaction,
+          }
+        );
+      }
     );
   };
 
@@ -363,84 +462,132 @@ export const updateReservaParqueo =
     data:
       UpdateReservaParqueoData
   ) => {
-    const reservaParqueo =
-      await ReservaParqueo.findByPk(
-        id
-      );
-
-    if (!reservaParqueo) {
-      throw new AppError(
-        404,
-        "RESERVA_PARQUEO_NOT_FOUND",
-        "La reserva de parqueo no fue encontrada"
-      );
-    }
-
-    const parqueoId =
-      data.parqueo_id ??
-      reservaParqueo.parqueo_id;
-
-    const fechaEntrada =
-      data.fecha_entrada ??
-      reservaParqueo.fecha_entrada;
-
     /**
-     * Aquí NO utilizamos ?? porque
-     * null es un valor válido para
-     * fecha_salida.
-     */
-    const fechaSalida =
-      data.fecha_salida !==
-      undefined
-        ? data.fecha_salida
-        : reservaParqueo.fecha_salida;
-
-    /**
-     * Lo mismo para reserva_habitacion_id:
+     * PATCH completo dentro de una transacción.
      *
-     * undefined = no cambiar
-     * null      = desvincular
-     * number    = asociar
+     * Bloqueamos:
+     * 1. La propia reserva, para impedir dos PATCH
+     *    simultáneos sobre el mismo registro.
+     * 2. El parqueo destino, para serializar todas
+     *    las actualizaciones que intenten ocuparlo.
+     *
+     * De esta forma, validateOverlap() y UPDATE
+     * forman una operación atómica.
      */
-    const reservaHabitacionId =
-      data.reserva_habitacion_id !==
-      undefined
-        ? data.reserva_habitacion_id
-        : reservaParqueo.reserva_habitacion_id;
+    return sequelize.transaction(
+      async (
+        transaction: any
+      ) => {
+        const reservaParqueo =
+          await ReservaParqueo.findByPk(
+            id,
+            {
+              transaction,
+              lock:
+                transaction
+                  .LOCK
+                  .UPDATE,
+            }
+          );
 
-    validateDates(
-      fechaEntrada,
-      fechaSalida
+        if (!reservaParqueo) {
+          throw new AppError(
+            404,
+            "RESERVA_PARQUEO_NOT_FOUND",
+            "La reserva de parqueo no fue encontrada"
+          );
+        }
+
+        const parqueoId =
+          data.parqueo_id ??
+          reservaParqueo.parqueo_id;
+
+        const fechaEntrada =
+          data.fecha_entrada ??
+          reservaParqueo.fecha_entrada;
+
+        /**
+         * Aquí NO utilizamos ?? porque
+         * null es un valor válido para
+         * fecha_salida.
+         */
+        const fechaSalida =
+          data.fecha_salida !==
+          undefined
+            ? data.fecha_salida
+            : reservaParqueo.fecha_salida;
+
+        /**
+         * Lo mismo para reserva_habitacion_id:
+         *
+         * undefined = no cambiar
+         * null      = desvincular
+         * number    = asociar
+         */
+        const reservaHabitacionId =
+          data.reserva_habitacion_id !==
+          undefined
+            ? data.reserva_habitacion_id
+            : reservaParqueo.reserva_habitacion_id;
+
+        validateDates(
+          fechaEntrada,
+          fechaSalida
+        );
+
+        validateNotPast(
+          fechaEntrada
+        );
+
+        /**
+         * Bloqueamos el parqueo destino.
+         *
+         * Si 20 PATCH intentan mover reservas
+         * diferentes al mismo parqueo, solamente
+         * uno podrá comprobar disponibilidad y
+         * actualizar inmediatamente.
+         */
+        const {
+          parqueo,
+        } =
+          await validateLockedReferences(
+            parqueoId,
+            reservaHabitacionId,
+            transaction
+          );
+
+        validateParqueoReservable(
+          parqueo
+        );
+
+        /**
+         * La comprobación de traslape ocurre
+         * después de adquirir el lock del
+         * parqueo destino.
+         *
+         * Excluimos la propia reserva.
+         */
+        await validateOverlap(
+          parqueoId,
+          fechaEntrada,
+          fechaSalida,
+          id,
+          transaction
+        );
+
+        /**
+         * UPDATE dentro de la misma transacción.
+         */
+        await reservaParqueo.update(
+          data,
+          {
+            transaction,
+          }
+        );
+
+        return reservaParqueo;
+      }
     );
-
-    validateNotPast(
-      fechaEntrada
-    );
-
-    const {
-      parqueo,
-    } =
-      await validateReferences(
-        parqueoId,
-        reservaHabitacionId
-      );
-
-    validateParqueoReservable(
-      parqueo
-    );
-
-    await validateOverlap(
-      parqueoId,
-      fechaEntrada,
-      fechaSalida,
-      id
-    );
-
-    await reservaParqueo.update(
-      data
-    );
-
-    return reservaParqueo;
   };
 
 export const deleteReservaParqueo =
@@ -471,3 +618,5 @@ export const deleteReservaParqueo =
 
     return reservaParqueo;
   };
+
+

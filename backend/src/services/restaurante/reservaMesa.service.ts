@@ -5,6 +5,7 @@ import { env } from "../../config/env";
 const db = require("../../models");
 
 const {
+  sequelize,
   ReservaMesa,
   Mesa,
   Usuario,
@@ -153,6 +154,40 @@ const getMesaOrFail = async (
 };
 
 /**
+ * Busca la mesa dentro de una transacción y
+ * bloquea su fila con SELECT ... FOR UPDATE.
+ *
+ * Esto serializa las operaciones concurrentes
+ * sobre una misma mesa.
+ */
+const getLockedMesaOrFail = async (
+  mesaId: number,
+  transaction: any
+) => {
+  const mesa =
+    await Mesa.findByPk(
+      mesaId,
+      {
+        transaction,
+        lock:
+          transaction
+            .LOCK
+            .UPDATE,
+      }
+    );
+
+  if (!mesa) {
+    throw new AppError(
+      404,
+      "TABLE_NOT_FOUND",
+      "La mesa solicitada no existe"
+    );
+  }
+
+  return mesa;
+};
+
+/**
  * No permitimos nuevas reservas
  * mientras la mesa esté en mantenimiento.
  *
@@ -206,7 +241,8 @@ const validateAvailability =
     mesaId: number,
     fecha: string,
     hora: string,
-    reservaId?: number
+    reservaId?: number,
+    transaction?: any
   ) => {
     const where: any = {
       mesa_id:
@@ -237,6 +273,7 @@ const validateAvailability =
     const existente =
       await ReservaMesa.findOne({
         where,
+        transaction,
       });
 
     if (existente) {
@@ -302,6 +339,9 @@ export const create =
      * Regla 1:
      * fecha/hora no pueden estar
      * en el pasado.
+     *
+     * No requiere acceso a BD, así que
+     * se valida antes de abrir la transacción.
      */
     validateReservationDateTime(
       data.fecha,
@@ -309,65 +349,103 @@ export const create =
     );
 
     /**
-     * Regla 2:
-     * la mesa debe existir.
+     * La disponibilidad y el INSERT deben
+     * ejecutarse como una sola operación
+     * atómica.
+     *
+     * Bloqueamos la fila de la mesa para
+     * serializar solicitudes concurrentes
+     * sobre la misma mesa.
      */
-    const mesa =
-      await getMesaOrFail(
-        data.mesa_id
+    const reservaId =
+      await sequelize.transaction(
+        async (
+          transaction: any
+        ) => {
+          /**
+           * Regla 2:
+           * la mesa debe existir.
+           *
+           * Además queda bloqueada con
+           * SELECT ... FOR UPDATE.
+           */
+          const mesa =
+            await getLockedMesaOrFail(
+              data.mesa_id,
+              transaction
+            );
+
+          /**
+           * Regla 3:
+           * mantenimiento impide reservar.
+           */
+          validateMesaReservable(
+            mesa
+          );
+
+          /**
+           * Regla 4:
+           * respetar la capacidad máxima.
+           */
+          validateCapacity(
+            data.numero_comensales,
+            mesa.capacidad
+          );
+
+          /**
+           * Regla 5:
+           * evitar dos reservas confirmadas
+           * para la misma mesa/fecha/hora.
+           *
+           * Este check ocurre después de
+           * adquirir el lock y dentro de la
+           * misma transacción que el INSERT.
+           */
+          await validateAvailability(
+            data.mesa_id,
+            data.fecha,
+            data.hora,
+            undefined,
+            transaction
+          );
+
+          const reserva =
+            await ReservaMesa.create(
+              {
+                usuario_id:
+                  data.usuario_id,
+
+                mesa_id:
+                  data.mesa_id,
+
+                fecha:
+                  data.fecha,
+
+                hora:
+                  data.hora,
+
+                numero_comensales:
+                  data.numero_comensales,
+
+                estado:
+                  "confirmada",
+              },
+              {
+                transaction,
+              }
+            );
+
+          return reserva.id;
+        }
       );
 
     /**
-     * Regla 3:
-     * mantenimiento impide reservar.
+     * La transacción ya hizo COMMIT.
+     * Ahora podemos cargar la reserva con
+     * sus relaciones mediante getById().
      */
-    validateMesaReservable(
-      mesa
-    );
-
-    /**
-     * Regla 4:
-     * respetar la capacidad máxima.
-     */
-    validateCapacity(
-      data.numero_comensales,
-      mesa.capacidad
-    );
-
-    /**
-     * Regla 5:
-     * evitar dos reservas confirmadas
-     * para la misma mesa/fecha/hora.
-     */
-    await validateAvailability(
-      data.mesa_id,
-      data.fecha,
-      data.hora
-    );
-
-    const reserva =
-      await ReservaMesa.create({
-        usuario_id:
-          data.usuario_id,
-
-        mesa_id:
-          data.mesa_id,
-
-        fecha:
-          data.fecha,
-
-        hora:
-          data.hora,
-
-        numero_comensales:
-          data.numero_comensales,
-
-        estado:
-          "confirmada",
-      });
-
     return getById(
-      reserva.id
+      reservaId
     );
   };
 
@@ -377,70 +455,125 @@ export const updateStatus =
     estado:
       EstadoReservaMesa
   ) => {
-    const reserva =
-      await ReservaMesa.findByPk(
-        id
-      );
+    /**
+     * El cambio de estado se ejecuta dentro
+     * de una transacción para que la validación
+     * y el UPDATE sean atómicos.
+     *
+     * Primero bloqueamos la propia reserva.
+     * Si se reactiva a "confirmada", también
+     * bloqueamos la mesa asociada.
+     */
+    const reservaId =
+      await sequelize.transaction(
+        async (
+          transaction: any
+        ) => {
+          const reserva =
+            await ReservaMesa.findByPk(
+              id,
+              {
+                transaction,
+                lock:
+                  transaction
+                    .LOCK
+                    .UPDATE,
+              }
+            );
 
-    if (!reserva) {
-      throw new AppError(
-        404,
-        "TABLE_RESERVATION_NOT_FOUND",
-        "La reserva de mesa solicitada no existe"
-      );
-    }
+          if (!reserva) {
+            throw new AppError(
+              404,
+              "TABLE_RESERVATION_NOT_FOUND",
+              "La reserva de mesa solicitada no existe"
+            );
+          }
 
-    if (
-      reserva.estado ===
-      estado
-    ) {
-      throw new AppError(
-        409,
-        "TABLE_RESERVATION_STATUS_UNCHANGED",
-        `La reserva ya se encuentra en estado ${estado}`
+          /**
+           * Al tener la fila de la reserva bloqueada,
+           * una segunda petición concurrente sobre
+           * la misma reserva verá el estado ya
+           * actualizado cuando consiga continuar.
+           */
+          if (
+            reserva.estado ===
+            estado
+          ) {
+            throw new AppError(
+              409,
+              "TABLE_RESERVATION_STATUS_UNCHANGED",
+              `La reserva ya se encuentra en estado ${estado}`
+            );
+          }
+
+          /**
+           * Si una reserva cancelada vuelve
+           * a confirmarse, repetimos todas
+           * las reglas de disponibilidad.
+           */
+          if (
+            estado ===
+            "confirmada"
+          ) {
+            validateReservationDateTime(
+              reserva.fecha,
+              reserva.hora
+            );
+
+            /**
+             * El lock sobre la mesa serializa
+             * reactivaciones concurrentes de
+             * reservas distintas para el mismo
+             * slot de mesa/fecha/hora.
+             */
+            const mesa =
+              await getLockedMesaOrFail(
+                reserva.mesa_id,
+                transaction
+              );
+
+            validateMesaReservable(
+              mesa
+            );
+
+            validateCapacity(
+              reserva.numero_comensales,
+              mesa.capacidad
+            );
+
+            /**
+             * La disponibilidad se comprueba
+             * después de adquirir el lock y
+             * dentro de la misma transacción
+             * que cambiará el estado.
+             */
+            await validateAvailability(
+              reserva.mesa_id,
+              reserva.fecha,
+              reserva.hora,
+              id,
+              transaction
+            );
+          }
+
+          await reserva.update(
+            {
+              estado,
+            },
+            {
+              transaction,
+            }
+          );
+
+          return reserva.id;
+        }
       );
-    }
 
     /**
-     * Si una reserva cancelada vuelve
-     * a confirmarse, debemos ejecutar
-     * otra vez las reglas que afectan
-     * disponibilidad.
+     * La transacción ya confirmó el cambio.
+     * Cargamos las asociaciones fuera de ella.
      */
-    if (
-      estado ===
-      "confirmada"
-    ) {
-      validateReservationDateTime(
-        reserva.fecha,
-        reserva.hora
-      );
-
-      const mesa =
-        await getMesaOrFail(
-          reserva.mesa_id
-        );
-
-      validateMesaReservable(
-        mesa
-      );
-
-      validateCapacity(
-        reserva.numero_comensales,
-        mesa.capacidad
-      );
-
-      await validateAvailability(
-        reserva.mesa_id,
-        reserva.fecha,
-        reserva.hora,
-        id
-      );
-    }
-
-    await reserva.update({
-      estado,
-    });
-
-    return getById(id);
+    return getById(
+      reservaId
+    );
   };

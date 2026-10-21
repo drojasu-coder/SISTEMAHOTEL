@@ -629,49 +629,97 @@ export const updateStatus =
     estado:
       ReservaAmenidadEstado
   ) => {
-    const reserva =
-      await ReservaAmenidad.findByPk(
-        id
-      );
+    /**
+     * El cambio de estado debe ser atómico.
+     *
+     * Sin este lock, varias solicitudes concurrentes
+     * pueden leer "confirmada" al mismo tiempo y todas
+     * terminar actualizando la misma reserva.
+     *
+     * Con SELECT ... FOR UPDATE:
+     * - una sola petición obtiene primero la fila;
+     * - las demás esperan;
+     * - cuando continúan, observan el estado terminal
+     *   ya persistido por la ganadora.
+     */
+    const reservaId =
+      await sequelize.transaction(
+        async (
+          transaction: any
+        ) => {
+          const reserva =
+            await ReservaAmenidad.findByPk(
+              id,
+              {
+                transaction,
+                lock:
+                  transaction
+                    .LOCK
+                    .UPDATE,
+              }
+            );
 
-    if (!reserva) {
-      throw new AppError(
-        404,
-        "AMENITY_RESERVATION_NOT_FOUND",
-        "La reserva de amenidad solicitada no existe"
-      );
-    }
+          if (!reserva) {
+            throw new AppError(
+              404,
+              "AMENITY_RESERVATION_NOT_FOUND",
+              "La reserva de amenidad solicitada no existe"
+            );
+          }
 
-    if (
-      reserva.estado ===
-      estado
-    ) {
-      throw new AppError(
-        409,
-        "AMENITY_RESERVATION_STATUS_UNCHANGED",
-        `La reserva ya se encuentra en estado ${estado}`
+          /**
+           * Si la reserva ya posee exactamente
+           * el estado solicitado, no hay cambio.
+           */
+          if (
+            reserva.estado ===
+            estado
+          ) {
+            throw new AppError(
+              409,
+              "AMENITY_RESERVATION_STATUS_UNCHANGED",
+              `La reserva ya se encuentra en estado ${estado}`
+            );
+          }
+
+          /**
+           * Cancelada y usada son estados finales.
+           *
+           * Después de que una petición gana la carrera
+           * y persiste uno de estos estados, cualquier
+           * otra petición concurrente quedará rechazada.
+           */
+          if (
+            reserva.estado ===
+              "cancelada" ||
+            reserva.estado ===
+              "usada"
+          ) {
+            throw new AppError(
+              409,
+              "AMENITY_RESERVATION_STATUS_FINAL",
+              "La reserva se encuentra en un estado final y ya no puede modificarse"
+            );
+          }
+
+          await reserva.update(
+            {
+              estado,
+            },
+            {
+              transaction,
+            }
+          );
+
+          return reserva.id;
+        }
       );
-    }
 
     /**
-     * Cancelada y usada son estados finales.
+     * El COMMIT ya ocurrió.
+     * Recuperamos la reserva con sus asociaciones.
      */
-    if (
-      reserva.estado ===
-        "cancelada" ||
-      reserva.estado ===
-        "usada"
-    ) {
-      throw new AppError(
-        409,
-        "AMENITY_RESERVATION_STATUS_FINAL",
-        "La reserva se encuentra en un estado final y ya no puede modificarse"
-      );
-    }
-
-    await reserva.update({
-      estado,
-    });
-
-    return getById(id);
+    return getById(
+      reservaId
+    );
   };

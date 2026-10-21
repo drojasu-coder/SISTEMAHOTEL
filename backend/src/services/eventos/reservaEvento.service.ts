@@ -42,9 +42,65 @@ const roundMoney = (
     (value + Number.EPSILON) * 100
   ) / 100;
 
+const isValidCalendarDate = (
+  value: string
+) => {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value
+    )
+  ) {
+    return false;
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] = value
+    .split("-")
+    .map(Number);
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+  return (
+    date.getUTCFullYear() ===
+      year &&
+    date.getUTCMonth() ===
+      month - 1 &&
+    date.getUTCDate() ===
+      day
+  );
+};
+
 const validateEventDate = (
   fecha: string
 ) => {
+  /**
+   * Defensa en profundidad:
+   * aunque el validator HTTP ya debe rechazar
+   * fechas inexistentes, el service también
+   * protege su contrato para usos internos.
+   */
+  if (
+    !isValidCalendarDate(
+      fecha
+    )
+  ) {
+    throw new AppError(
+      400,
+      "INVALID_EVENT_DATE",
+      "La fecha del evento no corresponde a un día calendario válido"
+    );
+  }
+
   const today = new Date();
 
   today.setHours(
@@ -532,57 +588,89 @@ export const cancel = async (
   requesterId: number,
   requesterRole: Role
 ) => {
-  const reserva =
-    await ReservaEvento.findByPk(
-      id
-    );
+  /**
+   * La cancelación debe ser atómica.
+   *
+   * Sin un bloqueo, varias solicitudes concurrentes
+   * pueden leer el mismo estado antes de que alguna
+   * persista "cancelada", provocando múltiples 200.
+   *
+   * SELECT ... FOR UPDATE serializa todas las
+   * operaciones sobre la misma ReservaEvento.
+   */
+  return sequelize.transaction(
+    async (transaction: any) => {
+      const reserva =
+        await ReservaEvento.findByPk(
+          id,
+          {
+            transaction,
+            lock:
+              transaction.LOCK.UPDATE,
+          }
+        );
 
-  if (!reserva) {
-    throw new AppError(
-      404,
-      "EVENT_RESERVATION_NOT_FOUND",
-      "La reserva de evento solicitada no existe"
-    );
-  }
+      if (!reserva) {
+        throw new AppError(
+          404,
+          "EVENT_RESERVATION_NOT_FOUND",
+          "La reserva de evento solicitada no existe"
+        );
+      }
 
-  if (
-    requesterRole !==
-      ROLES.ADMIN &&
-    reserva.usuario_id !==
-      requesterId
-  ) {
-    throw new AppError(
-      403,
-      "INSUFFICIENT_PERMISSIONS",
-      "No tiene permisos para cancelar esta reserva"
-    );
-  }
+      if (
+        requesterRole !==
+          ROLES.ADMIN &&
+        reserva.usuario_id !==
+          requesterId
+      ) {
+        throw new AppError(
+          403,
+          "INSUFFICIENT_PERMISSIONS",
+          "No tiene permisos para cancelar esta reserva"
+        );
+      }
 
-  if (
-    reserva.estado ===
-    "cancelada"
-  ) {
-    throw new AppError(
-      409,
-      "EVENT_RESERVATION_ALREADY_CANCELLED",
-      "La reserva ya se encuentra cancelada"
-    );
-  }
+      /**
+       * Las validaciones se ejecutan DESPUÉS
+       * de obtener el lock.
+       *
+       * Así, cuando una segunda petición continúa,
+       * ya observa el estado que dejó la primera.
+       */
+      if (
+        reserva.estado ===
+        "cancelada"
+      ) {
+        throw new AppError(
+          409,
+          "EVENT_RESERVATION_ALREADY_CANCELLED",
+          "La reserva ya se encuentra cancelada"
+        );
+      }
 
-  if (
-    reserva.estado ===
-    "expirada"
-  ) {
-    throw new AppError(
-      409,
-      "EVENT_RESERVATION_EXPIRED",
-      "Una reserva expirada no puede cancelarse"
-    );
-  }
+      if (
+        reserva.estado ===
+        "expirada"
+      ) {
+        throw new AppError(
+          409,
+          "EVENT_RESERVATION_EXPIRED",
+          "Una reserva expirada no puede cancelarse"
+        );
+      }
 
-  await reserva.update({
-    estado: "cancelada",
-  });
+      await reserva.update(
+        {
+          estado:
+            "cancelada",
+        },
+        {
+          transaction,
+        }
+      );
 
-  return reserva;
+      return reserva;
+    }
+  );
 };

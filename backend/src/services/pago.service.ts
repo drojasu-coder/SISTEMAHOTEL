@@ -92,6 +92,195 @@ const approvedAmount = async (where: Record<string, unknown>, transaction: any) 
 const approvedCartAmount = (carritoId: number, transaction: any) =>
   approvedAmount({ carrito_id: carritoId }, transaction);
 
+const committedOrProcessingExposure = async (
+  where: Record<string, unknown>,
+  transaction: any,
+) => {
+  const approved = await approvedAmount(where, transaction);
+  const processingPayments = await Pago.findAll({
+    where: { ...where, estado: "procesando" },
+    attributes: ["monto"],
+    transaction,
+  });
+  const processing = processingPayments.reduce(
+    (sum: number, payment: any) => sum + Number(payment.monto),
+    0,
+  );
+  return { approved, total: round(approved + processing) };
+};
+
+const historicalCartIdsForReference = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const historicalItems = await CarritoItem.findAll({
+    where: {
+      tipo_item: tipoItem,
+      referencia_id: referenciaId,
+    },
+    attributes: ["carrito_id"],
+    transaction,
+  });
+
+  return [
+    ...new Set<number>(
+      (historicalItems as any[]).map((item: any) =>
+        Number(item.carrito_id),
+      ),
+    ),
+  ];
+};
+
+
+/**
+ * Comprueba si una referencia genérica que estuvo en un carrito
+ * anterior ya quedó completamente pagada.
+ *
+ * La referencia se considera pagada únicamente cuando alguno de los
+ * carritos históricos que la contuvo quedó cubierto completamente por
+ * pagos aprobados netos de reembolsos.
+ *
+ * No intentamos asignar pagos parciales a ítems concretos.
+ */
+export const isCartReferenceFullyPaid = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    tipoItem,
+    referenciaId,
+    transaction,
+  );
+
+  for (const carritoId of cartIds) {
+    const items = await CarritoItem.findAll({
+      where: { carrito_id: carritoId },
+      attributes: ["precio", "cantidad"],
+      transaction,
+    });
+
+    if (items.length === 0) {
+      continue;
+    }
+
+    const cartTotal = round(
+      (items as any[]).reduce(
+        (total: number, item: any) =>
+          total + Number(item.precio) * Number(item.cantidad),
+        0,
+      ),
+    );
+
+    if (cartTotal <= 0) {
+      continue;
+    }
+
+    const approved = Number(
+      await approvedCartAmount(carritoId, transaction),
+    );
+
+    if (approved >= cartTotal) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Comprueba si una referencia genérica ya tiene
+ * dinero neto aprobado en alguno de los carritos
+ * históricos donde estuvo incluida.
+ *
+ * A diferencia de isCartReferenceFullyPaid(),
+ * aquí NO exigimos que el carrito haya quedado
+ * completamente cubierto.
+ *
+ * Cualquier monto neto aprobado > 0 significa
+ * que la referencia ya tiene un compromiso
+ * financiero previo y no debe duplicarse en
+ * otro carrito.
+ *
+ * approvedCartAmount() ya descuenta reembolsos
+ * aprobados, por lo que un reembolso total
+ * vuelve a dejar el monto neto en cero.
+ */
+export const hasCartReferenceApprovedPayment =
+  async (
+    tipoItem: string,
+    referenciaId: number,
+    transaction: any
+  ) => {
+    const cartIds =
+      await historicalCartIdsForReference(
+        tipoItem,
+        referenciaId,
+        transaction,
+      );
+
+    for (
+      const carritoId of
+      cartIds
+    ) {
+      const approved =
+        Number(
+          await approvedCartAmount(
+            carritoId,
+            transaction
+          )
+        );
+
+      /**
+       * approvedCartAmount() devuelve el
+       * valor neto:
+       *
+       * pagos aprobados - reembolsos aprobados.
+       */
+      if (
+        approved > 0
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+/**
+ * Comprueba si una referencia tiene exposición financiera activa en
+ * cualquiera de los carritos históricos donde estuvo incluida.
+ *
+ * La exposición activa incluye dinero aprobado neto de reembolsos y pagos
+ * en estado procesando. Estos últimos no se convierten en dinero aprobado:
+ * solo reservan capacidad financiera mientras pueden completarse.
+ */
+export const hasCartReferenceActiveFinancialCommitment = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    tipoItem,
+    referenciaId,
+    transaction,
+  );
+
+  for (const carritoId of cartIds) {
+    const exposure = await committedOrProcessingExposure(
+      { carrito_id: carritoId },
+      transaction,
+    );
+
+    if (exposure.total > 0) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 export const isReservationFullyPaid = async (
   reservationId: number,
   reservationTotal: number | string,
@@ -288,6 +477,53 @@ const applyCartPaid = async (origin: any, total: number, paid: number, transacti
   }
 };
 
+const findIdempotencyReplay = async (
+  data: CreatePagoData,
+  amount: number,
+  tipo: PagoTipo,
+  transaction: any,
+) => {
+  if (!data.idempotency_key) return null;
+
+  const existing = await Pago.findOne({
+    where: { idempotency_key: data.idempotency_key },
+    transaction,
+  });
+  if (!existing) return null;
+
+  if (
+    existing.metodo !== data.metodo ||
+    Number(existing.monto) !== amount ||
+    (existing.carrito_id ?? null) !== (data.carrito_id ?? null) ||
+    (existing.reserva_habitacion_id ?? null) !==
+      (data.reserva_habitacion_id ?? null) ||
+    existing.tipo_pago !== tipo
+  ) {
+    throw new AppError(
+      409,
+      "IDEMPOTENCY_CONFLICT",
+      "La clave de idempotencia ya fue utilizada para otra operación",
+    );
+  }
+
+  if (existing.metodo === "tarjeta" && existing.id_transaccion_externo) {
+    try {
+      const intent = await stripeService.retrievePaymentIntent(
+        existing.id_transaccion_externo,
+      );
+      return { payment: existing, intent };
+    } catch {
+      throw new AppError(
+        502,
+        "STRIPE_RETRIEVAL_FAILED",
+        "No fue posible recuperar el pago en Stripe",
+      );
+    }
+  }
+
+  return existing;
+};
+
 export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
   validateOrigin(data);
   if (!PAYMENT_METHODS.includes(data.metodo)) {
@@ -308,31 +544,29 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
 
   return sequelize.transaction(async (transaction: any) => {
     await assertPaymentOriginOwnership(data, requester, transaction);
-    if (data.idempotency_key) {
-      const existing = await Pago.findOne({ where: { idempotency_key: data.idempotency_key }, transaction });
-      if (existing) {
-        if (existing.metodo !== data.metodo || Number(existing.monto) !== amount ||
-            existing.carrito_id !== (data.carrito_id ?? null) ||
-            existing.reserva_habitacion_id !== (data.reserva_habitacion_id ?? null)) {
-          throw new AppError(409, "IDEMPOTENCY_CONFLICT", "La clave de idempotencia ya fue utilizada para otra operación");
-        }
-        if (existing.metodo === "tarjeta" && existing.id_transaccion_externo) {
-          try {
-            const intent = await stripeService.retrievePaymentIntent(existing.id_transaccion_externo);
-            return { payment: existing, intent };
-          } catch {
-            throw new AppError(502, "STRIPE_RETRIEVAL_FAILED", "No fue posible recuperar el pago en Stripe");
-          }
-        }
-        return existing;
-      }
-    }
+    const earlyReplay = await findIdempotencyReplay(
+      data,
+      amount,
+      tipo,
+      transaction,
+    );
+    if (earlyReplay) return earlyReplay;
+
     const details = await validateOpenOrigin(data, transaction);
-    const paid = await approvedAmount(details.key, transaction);
+    const serializedReplay = await findIdempotencyReplay(
+      data,
+      amount,
+      tipo,
+      transaction,
+    );
+    if (serializedReplay) return serializedReplay;
+
+    const exposure = await committedOrProcessingExposure(details.key, transaction);
+    const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
-    const remaining = round(details.total - paid);
+    const remaining = round(details.total - exposure.total);
     if (amount > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
@@ -363,19 +597,51 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       fecha_pago: approved ? new Date() : null,
     }, { transaction });
     if (data.metodo === "tarjeta") {
+      let intent: Awaited<ReturnType<typeof stripeService.createPaymentIntent>>;
+
       try {
-        const intent = await stripeService.createPaymentIntent(amount, PAYMENT_CURRENCY, {
+        intent = await stripeService.createPaymentIntent(amount, PAYMENT_CURRENCY, {
           pago_id: String(payment.id),
           ...(payment.carrito_id ? { carrito_id: String(payment.carrito_id) } : {}),
           ...(payment.reserva_habitacion_id ? { reserva_habitacion_id: String(payment.reserva_habitacion_id) } : {}),
           tipo_pago: tipo,
         }, data.idempotency_key);
-        await payment.update({ id_transaccion_externo: intent.id }, { transaction });
-        return { payment, intent };
       } catch (error: any) {
         if (error instanceof AppError) throw error;
         throw new AppError(502, "STRIPE_PAYMENT_INTENT_FAILED", "No fue posible crear el pago en Stripe");
       }
+
+      try {
+        await payment.update({ id_transaccion_externo: intent.id }, { transaction });
+      } catch (localError: any) {
+        try {
+          const canceledIntent = await stripeService.cancelPaymentIntent(intent.id);
+          if (canceledIntent.status !== "canceled") {
+            throw new Error("Stripe no confirmó la cancelación del PaymentIntent");
+          }
+        } catch (compensationError: any) {
+          const error = new AppError(
+            502,
+            "PAYMENT_COMPENSATION_FAILED",
+            "El PaymentIntent fue creado, pero no fue posible persistir ni compensar la operación",
+          );
+          (error as AppError & { cause?: unknown }).cause = {
+            localError,
+            compensationError,
+          };
+          throw error;
+        }
+
+        const error = new AppError(
+          500,
+          "PAYMENT_LOCAL_PERSISTENCE_FAILED",
+          "El PaymentIntent fue creado y compensado, pero no pudo persistirse su asociación local",
+        );
+        (error as AppError & { cause?: unknown }).cause = localError;
+        throw error;
+      }
+
+      return { payment, intent };
     }
     if (approved) {
       await applyCartPaid(details.origin, details.total, round(paid + amount), transaction);
@@ -456,7 +722,8 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
       eventType === "payment_intent.payment_failed" ? "rechazado" : "cancelado";
     const shouldUpdate =
       payment.estado !== target &&
-      !(payment.estado === "aprobado" && target !== "aprobado");
+      !(payment.estado === "aprobado" && target !== "aprobado") &&
+      !(target === "aprobado" && ["reembolsado", "reembolsado_parcial"].includes(payment.estado));
     if (shouldUpdate) {
       const update: Record<string, unknown> = { estado: target };
       if (target === "aprobado") {

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "test": "vitest run",
+    "test:watch": "vitest",
+    "test:qa": "vitest run --reporter=verbose",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:coverage": "vitest run --coverage",

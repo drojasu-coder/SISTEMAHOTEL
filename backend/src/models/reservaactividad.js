@@ -38,6 +38,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      total: {
+  type: DataTypes.DECIMAL(10, 2),
+  allowNull: false,
+  defaultValue: 0,
+},
       estado: {
         type: DataTypes.STRING(20),
         allowNull: false,
