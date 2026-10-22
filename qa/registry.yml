@@ -234,23 +234,75 @@ findings:
       new_failures: none
 
   - id: QA-RA-FUNC-CANDIDATE-004
-    status: product_decision_required
+    status: closed
     severity: medium
     category: FUNC
-    current_behavior: >-
-      una ReservaActividad futura puede pasar confirmada->completada; solo
-      confirmada bloquea disponibilidad, así que completada libera inmediatamente
-      recurso e instructor.
-    tested_behavior: >-
-      existe una prueba que completa una reserva futura y espera que otra idéntica
-      pueda crearse.
-    documented_business_rule: NONE
-    classification: PRODUCT DECISION REQUIRED
+    invariant: >-
+      Una ReservaActividad solo puede pasar de confirmada a completada cuando su
+      fecha y hora_fin sean menores o iguales al momento actual. Si todavía no ha
+      finalizado, el endpoint administrativo debe rechazar la transición con HTTP
+      409 y código RESERVATION_NOT_FINISHED, conservar estado confirmada y mantener
+      bloqueada la disponibilidad del recurso y, cuando aplique, del instructor.
+    approved_product_rule:
+      completed_is_terminal: true
+      completed_to_confirmed_allowed: false
+      completed_to_canceled_allowed: false
+      temporal_transition: "confirmada->completada requiere fecha+hora_fin <= ahora"
+      future_transition_error: "HTTP 409 / RESERVATION_NOT_FINISHED"
+      preserves_historical_payments: true
+      creates_automatic_refund: false
+      allows_new_payments: false
+      red_scope: >-
+        Este RED temporal inicial solo ejercita el rechazo de completar una
+        reserva futura; la terminalidad y los efectos financieros aprobados no
+        se amplían todavía en esta reproducción.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/actividades/reservaActividad.lifecycle.test.ts
+      test_name: "QA-RA-FUNC-CANDIDATE-004: rechaza completar una reserva cuya actividad todavía no ha finalizado"
+      command: >-
+        npm --prefix backend test --
+        tests/actividades/reservaActividad.lifecycle.test.ts -t
+        "QA-RA-FUNC-CANDIDATE-004: rechaza completar una reserva cuya actividad todavía no ha finalizado"
+      dynamic_scenario: "fecha local del hotel + 2 días, 10:00-11:00"
+    expected:
+      completion_http_status: 409
+      completion_error_code: RESERVATION_NOT_FINISHED
+      persisted_state_after_attempt: confirmada
+      resource_availability_still_blocked: true
+      instructor_availability: N/A
+    actual_before_fix:
+      reservation_date: "2026-10-24"
+      completion_http_status: 200
+      completion_error_code: null
+      persisted_state_after_attempt: completada
+      overlapping_resource_probe_http_status: 201
+      resource_availability_still_blocked: false
+      instructor_availability: N/A
+    http_evidence: >-
+      La reserva fue creada por POST /api/reservas-actividad en estado confirmada
+      y un traslape previo recibió HTTP 409 RESOURCE_OVERLAP. PATCH
+      /api/reservas-actividad/{id}/estado con estado completada recibió HTTP 200;
+      después, un POST idéntico recibió HTTP 201.
+    database_evidence: >-
+      Una consulta directa de ReservaActividad confirmó estado confirmada antes
+      del PATCH y estado completada después del intento futuro aceptado.
+    endpoint: PATCH /api/reservas-actividad/{id}/estado
+    suspected_execution_path: >-
+      reservaActividad.routes -> reservaActividad.controller.updateStatus ->
+      reservaActividad.service.update; la actualización transaccional valida
+      fecha y horario solo al reactivar hacia confirmada y persiste directamente
+      la transición confirmada->completada sin comprobar fecha+hora_fin.
+    red_result: >-
+      1 failed con cinco aserciones de evidencia: HTTP 200 en lugar de 409, código
+      ausente, estado completada en lugar de confirmada y recurso liberado, que
+      permitió crear un traslape con HTTP 201.
+    scope: >-
+      Este RED inicial cubre exclusivamente el rechazo de completar una reserva
+      futura; no prueba pagos, otros efectos financieros ni terminalidad.
+    classification: BACKEND DEFECT
     confidence: HIGH
-    decision_required: >-
-      definir A) completada solo después de fecha+hora_fin o B) cierre
-      administrativo anticipado; y efectos sobre disponibilidad, reactivación,
-      carrito existente y pagos existentes.
 
   - id: QA-RA-FUNC-CANDIDATE-005
     status: product_decision_required

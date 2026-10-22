@@ -2,6 +2,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
 
 import request
@@ -1850,75 +1851,250 @@ it(
 it(
   "35. una reserva completada libera el recurso",
   async () => {
-    const recurso =
-      await createRecursoActividad();
+    const realNow =
+      new Date();
 
-    const cliente =
-      await createAuthenticatedUser();
+    const formatHotelDateTime =
+      (date: Date) => {
+        const timeZone =
+          process.env.APP_TIMEZONE ||
+          "America/Guatemala";
 
-    const admin =
-      await createAuthenticatedUser({
-        rol: ROLES.ADMIN,
-      });
+        const parts =
+          new Intl.DateTimeFormat(
+            "en-US",
+            {
+              timeZone,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hourCycle: "h23",
+            }
+          ).formatToParts(date);
 
-    const first =
-      await request(app)
-        .post("/api/reservas-actividad")
-        .set(
-          "Authorization",
-          `Bearer ${cliente.token}`
-        )
-        .send({
-          recurso_id:
-            recurso.id,
+        const getPart =
+          (type: string) =>
+            parts.find(
+              (part) =>
+                part.type === type
+            )?.value ?? "";
 
+        return {
           fecha:
-            "2027-07-10",
+            `${getPart("year")}-${getPart("month")}-${getPart("day")}`,
+          hora:
+            `${getPart("hour")}:${getPart("minute")}:${getPart("second")}`,
+        };
+      };
 
-          hora_inicio:
-            "10:00",
+    const initialHotelTime =
+      formatHotelDateTime(
+        realNow
+      );
 
-          hora_fin:
-            "11:00",
+    const [
+      year,
+      month,
+      day,
+    ] =
+      initialHotelTime.fecha
+        .split("-")
+        .map(Number);
+
+    const fecha =
+      new Date(
+        Date.UTC(
+          year,
+          month - 1,
+          day + 2
+        )
+      )
+        .toISOString()
+        .slice(0, 10);
+
+    const horaInicio =
+      "10:00";
+
+    const horaFin =
+      "11:00";
+
+    vi.useFakeTimers({
+      toFake: [
+        "Date",
+      ],
+    });
+
+    try {
+      vi.setSystemTime(
+        realNow
+      );
+
+      const recurso =
+        await createRecursoActividad();
+
+      const cliente =
+        await createAuthenticatedUser();
+
+      const first =
+        await request(app)
+          .post("/api/reservas-actividad")
+          .set(
+            "Authorization",
+            `Bearer ${cliente.token}`
+          )
+          .send({
+            recurso_id:
+              recurso.id,
+
+            fecha,
+
+            hora_inicio:
+              horaInicio,
+
+            hora_fin:
+              horaFin,
+          });
+
+      expect(
+        first.status,
+        `Precondición inválida al crear la reserva: ${JSON.stringify(first.body)}`
+      ).toBe(201);
+
+      const completionNow =
+        new Date(
+          realNow.getTime() +
+            3 *
+              24 *
+              60 *
+              60 *
+              1000
+        );
+
+      vi.setSystemTime(
+        completionNow
+      );
+
+      const completionHotelTime =
+        formatHotelDateTime(
+          completionNow
+        );
+
+      expect(
+        `${fecha} ${horaFin}:00` <=
+          `${completionHotelTime.fecha} ${completionHotelTime.hora}`,
+        "Precondición temporal: fecha+hora_fin debe haber transcurrido al completar"
+      ).toBe(true);
+
+      const admin =
+        await createAuthenticatedUser({
+          rol: ROLES.ADMIN,
         });
 
-    await request(app)
-      .patch(
-        `/api/reservas-actividad/${first.body.data.id}/estado`
-      )
-      .set(
-        "Authorization",
-        `Bearer ${admin.token}`
-      )
-      .send({
-        estado:
-          "completada",
-      });
+      const completion =
+        await request(app)
+          .patch(
+            `/api/reservas-actividad/${first.body.data.id}/estado`
+          )
+          .set(
+            "Authorization",
+            `Bearer ${admin.token}`
+          )
+          .send({
+            estado:
+              "completada",
+          });
 
-    const second =
-      await request(app)
-        .post("/api/reservas-actividad")
-        .set(
-          "Authorization",
-          `Bearer ${cliente.token}`
-        )
-        .send({
-          recurso_id:
-            recurso.id,
+      expect(
+        completion.status,
+        `La reserva ya finalizada debe poder completarse: ${JSON.stringify(completion.body)}`
+      ).toBe(200);
 
-          fecha:
-            "2027-07-10",
+      expect(
+        completion.body.data.estado
+      ).toBe(
+        "completada"
+      );
 
-          hora_inicio:
-            "10:00",
+      const db =
+        require(
+          "../../src/models"
+        );
 
-          hora_fin:
-            "11:00",
-        });
+      const {
+        ReservaActividad,
+      } = db;
 
-    expect(
-      second.status
-    ).toBe(201);
+      const completedPersisted =
+        await ReservaActividad.findByPk(
+          first.body.data.id
+        );
+
+      expect(
+        completedPersisted
+      ).not.toBeNull();
+
+      expect(
+        completedPersisted.estado
+      ).toBe(
+        "completada"
+      );
+
+      /**
+       * Regresamos al instante inicial únicamente para que el POST
+       * pueda crear por API el mismo horario. La primera reserva ya
+       * quedó completada cuando fecha+hora_fin <= ahora.
+       */
+      vi.setSystemTime(
+        realNow
+      );
+
+      const second =
+        await request(app)
+          .post("/api/reservas-actividad")
+          .set(
+            "Authorization",
+            `Bearer ${cliente.token}`
+          )
+          .send({
+            recurso_id:
+              recurso.id,
+
+            fecha,
+
+            hora_inicio:
+              horaInicio,
+
+            hora_fin:
+              horaFin,
+          });
+
+      expect(
+        second.status,
+        `La reserva completada debe liberar el recurso: ${JSON.stringify(second.body)}`
+      ).toBe(201);
+
+      expect(
+        second.body.data.id
+      ).not.toBe(
+        first.body.data.id
+      );
+
+      const completedAfterRelease =
+        await ReservaActividad.findByPk(
+          first.body.data.id
+        );
+
+      expect(
+        completedAfterRelease.estado
+      ).toBe(
+        "completada"
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   }
 );
 

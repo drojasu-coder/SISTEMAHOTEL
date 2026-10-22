@@ -159,6 +159,32 @@ const validateReservationDateTime =
     }
   };
 
+const validateReservationHasFinished =
+  (
+    fecha: string,
+    horaFin: string
+  ) => {
+    const current =
+      getCurrentHotelDateTime();
+
+    if (
+      fecha >
+        current.fecha ||
+      (fecha ===
+        current.fecha &&
+        normalizeTime(
+          horaFin
+        ) >
+          current.hora)
+    ) {
+      throw new AppError(
+        409,
+        "RESERVATION_NOT_FINISHED",
+        "La actividad todavía no ha finalizado"
+      );
+    }
+  };
+
 const validateTimeRange = (
   horaInicio: string,
   horaFin: string
@@ -721,6 +747,18 @@ export const update =
           const estadoDestino =
             data.estado ??
             estadoActual;
+
+          if (
+            estadoActual ===
+              "confirmada" &&
+            estadoDestino ===
+              "completada"
+          ) {
+            validateReservationHasFinished(
+              reserva.fecha,
+              reserva.hora_fin
+            );
+          }
 
           /**
            * Una reserva cancelada o completada
