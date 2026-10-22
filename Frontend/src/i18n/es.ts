@@ -342,4 +342,74 @@ export const es = {
       "No se encontraron tipos de habitación con el criterio de búsqueda especificado.",
     limpiarFiltros: "Limpiar filtros",
   },
-} as const;
+  servicios: {
+    titulo: "Servicios e Instalaciones",
+    subtitulo: "HOTEL HUNAHPÚ",
+    descripcion:
+      "Administre los servicios complementarios, instalaciones y áreas de estacionamiento del hotel.",
+    amenidadesTitulo: "Amenidades e Instalaciones",
+    amenidadesDescripcion:
+      "Catálogo de amenidades, piscinas, gimnasios y áreas recreativas por sede con su aforo máximo permitido.",
+    amenidadesBoton: "Gestionar amenidades",
+    parqueosTitulo: "Parqueos y Estacionamiento",
+    parqueosDescripcion:
+      "Control y asignación de espacios de parqueo y estacionamiento vehicular por sede.",
+    parqueosProximamente: "Módulo en integración",
+    volverServicios: "Volver a Servicios",
+  },
+  amenidades: {
+    modulo: "Servicios e Instalaciones",
+    titulo: "Amenidades",
+    subtitulo: "HOTEL HUNAHPÚ",
+    descripcion:
+      "Administre el catálogo de amenidades e instalaciones del hotel, su asignación por sede y el aforo máximo permitido.",
+
+    nuevaAmenidad: "Nueva amenidad",
+    editarAmenidad: "Editar amenidad",
+
+    buscarLabel: "Buscar amenidad por nombre",
+    buscarPlaceholder: "Buscar por nombre (ej. Piscina Climatizada)...",
+    limpiarBusqueda: "Limpiar búsqueda",
+    todasLasSedes: "Todas las sedes",
+    filtroSedeLabel: "Filtrar por sede",
+    amenidadesMostradas: (count: number) =>
+      count === 1 ? "1 amenidad mostrada" : `${count} amenidades mostradas`,
+
+    nombre: "Nombre de la amenidad",
+    nombrePlaceholder: "Ej. Piscina Climatizada, Gimnasio, Sauna",
+    sede: "Sede",
+    sedePlaceholder: "Seleccione una sede",
+    aforoMaximo: "Aforo máximo",
+    aforoMaximoLabel: "Aforo máximo (personas)",
+    aforoPlaceholder: "Ej. 25",
+    aforoPersonas: (n: number) => `${n} ${n === 1 ? "persona" : "personas"}`,
+    acciones: "Acciones",
+    editar: "Editar",
+
+    crearTitulo: "Registrar nueva amenidad",
+    crearDescripcion:
+      "Ingrese los datos de la amenidad y seleccione la sede correspondiente donde se encuentra disponible.",
+    editarTitulo: "Editar amenidad",
+    editarDescripcion:
+      "Modifique el nombre o aforo máximo de la amenidad. La sede asignada no se modifica tras su creación.",
+    guardar: "Guardar amenidad",
+    guardando: "Guardando...",
+    cancelar: "Cancelar",
+
+    creadaExito: "La amenidad ha sido registrada correctamente.",
+    actualizadaExito: "La amenidad ha sido actualizada correctamente.",
+
+    cargando: "Cargando amenidades...",
+    errorCargar: "No fue posible cargar las amenidades",
+    sinAmenidadesTitulo: "No hay amenidades registradas",
+    sinAmenidadesDescAdmin:
+      "Comience registrando la primera amenidad del hotel mediante el botón superior.",
+    sinAmenidadesDescLectura:
+      "No se encontraron amenidades registradas en este momento.",
+    sinResultados:
+      "No se encontraron amenidades con los criterios de búsqueda y filtros seleccionados.",
+    limpiarFiltros: "Limpiar filtros",
+
+    sedeNoEspecificada: "Sede no especificada",
+  },
+};

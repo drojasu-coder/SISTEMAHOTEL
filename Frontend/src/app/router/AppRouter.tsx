@@ -12,6 +12,8 @@ import { SedesPage } from '@/pages/SedesPage';
 import { HabitacionesPage } from '@/pages/HabitacionesPage';
 import { TiposHabitacionPage } from '@/pages/TiposHabitacionPage';
 import { MesasPage } from '@/pages/MesasPage';
+import { ServiciosPage } from '@/pages/ServiciosPage';
+import { AmenidadesPage } from '@/pages/AmenidadesPage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
@@ -52,6 +54,8 @@ export const AppRouter: React.FC = () => {
                       <HabitacionesPage />
                     ) : module.id === 'restaurante' ? (
                       <MesasPage />
+                    ) : module.id === 'servicios' ? (
+                      <ServiciosPage />
                     ) : (
                       <ModulePlaceholderPage module={module} />
                     )
@@ -67,6 +71,11 @@ export const AppRouter: React.FC = () => {
             {/* Tipos de habitación */}
             <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
               <Route path="tipos-habitacion" element={<TiposHabitacionPage />} />
+            </Route>
+
+            {/* Amenidades */}
+            <Route element={<RequireAuth permission="servicios.administrar" />}>
+              <Route path="amenidades" element={<AmenidadesPage />} />
             </Route>
           </Route>
         </Route>
