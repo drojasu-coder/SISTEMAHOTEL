@@ -34,15 +34,35 @@ export const carritoApi = {
   },
 
   /**
-   * Obtiene o crea de forma segura un carrito activo para el cliente.
-   * Si getCurrent devuelve 404, procede automáticamente a crearlo mediante POST /carritos.
+   * Obtiene o crea un carrito activo para el cliente tras una acción explícita (p. ej. añadir ítem).
+   *
+   * Reglas de resiliencia y concurrencia:
+   * 1. Consulta el carrito activo existente mediante GET /carritos/actual.
+   * 2. Distingue estrictamente 404 (inexistente o vencido) de cualquier otro error (401, 403, 500 o red).
+   * 3. Si no existe (404), solicita la creación mediante POST /carritos.
+   * 4. Si la creación colisiona con un conflicto específico de carrito activo ya existente
+   *    (código CART_ALREADY_ACTIVE ante carrera concurrente), re-consulta el carrito activo creado en paralelo.
+   * 5. No convierte cualquier 409 en éxito ni reintenta escrituras ante fallos de red.
    */
   getOrCreateActiveCart: async (): Promise<Carrito> => {
     try {
       return await carritoApi.getCurrent();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 404) {
-        return await carritoApi.create();
+        try {
+          return await carritoApi.create();
+        } catch (createErr: unknown) {
+          const isConcurrentCartActive =
+            createErr instanceof ApiError &&
+            createErr.status === 409 &&
+            (createErr.code === 'CART_ALREADY_ACTIVE' ||
+              createErr.message?.toLowerCase().includes('carrito activo'));
+
+          if (isConcurrentCartActive) {
+            return await carritoApi.getCurrent();
+          }
+          throw createErr;
+        }
       }
       throw err;
     }
