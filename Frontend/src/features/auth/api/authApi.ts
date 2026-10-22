@@ -16,8 +16,8 @@ import {
  * Los roles los define el backend. Un rol que el frontend no reconoce se rechaza:
  * no se deduce ni se asume ningún permiso para él.
  */
-function assertKnownRole(user?: { rol?: unknown }): void {
-  if (!user || !isKnownRole(user.rol)) {
+function assertKnownRole(user: { rol: unknown }): void {
+  if (!isKnownRole(user.rol)) {
     throw new AuthFlowError(es.errores.rolDesconocido);
   }
 }
@@ -28,11 +28,8 @@ export const authApi = {
     const response = await api.post<LoginResponseEnvelope>('/auth/login', credentials, {
       token: null,
     });
-    if (!response.data?.usuario) {
-      throw new AuthFlowError(es.errores.inesperado);
-    }
     assertKnownRole(response.data.usuario);
-    return response.data as LoginResponse;
+    return response.data;
   },
 
   /** POST /api/auth/register — el backend siempre crea cuentas con rol cliente. */
@@ -40,16 +37,13 @@ export const authApi = {
     const response = await api.post<RegisterResponseEnvelope>('/auth/register', payload, {
       token: null,
     });
-    return response.data as AuthUser;
+    return response.data;
   },
 
   /** GET /api/auth/me — identidad y rol vigentes según el servidor. */
   async me(): Promise<AuthUser> {
     const response = await api.get<AuthMeResponseEnvelope>('/auth/me');
-    if (!response.data) {
-      throw new AuthFlowError(es.errores.inesperado);
-    }
     assertKnownRole(response.data);
-    return response.data as AuthUser;
+    return response.data;
   },
 };

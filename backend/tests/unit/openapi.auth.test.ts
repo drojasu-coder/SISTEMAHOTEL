@@ -40,6 +40,7 @@ describe("OpenAPI authentication contract (BE-001)", () => {
       expect(schema.properties.email).toBeDefined();
       expect(schema.properties.telefono).toBeDefined();
       expect(schema.properties.rol.enum).toEqual(Object.values(ROLES));
+      expect(schema.required).toEqual(["id", "nombre", "email", "telefono", "rol"]);
     });
 
     it("defines AuthUserWithStatus for register and session inspection", () => {
@@ -50,23 +51,31 @@ describe("OpenAPI authentication contract (BE-001)", () => {
       expect(schema.properties.activo).toBeDefined();
       expect(schema.properties.activo.type).toBe("boolean");
       expect(schema.properties.rol.enum).toEqual(Object.values(ROLES));
+      expect(schema.required).toEqual(["id", "nombre", "email", "telefono", "rol", "activo"]);
     });
 
     it("defines response envelopes with real server structures", () => {
+      // LoginData
+      expect(schemas.LoginData).toBeDefined();
+      expect(schemas.LoginData.required).toEqual(["accessToken", "usuario"]);
+
       // LoginResponse
       expect(schemas.LoginResponse).toBeDefined();
+      expect(schemas.LoginResponse.required).toEqual(["success", "statusCode", "data"]);
       expect(schemas.LoginResponse.properties.success).toBeDefined();
       expect(schemas.LoginResponse.properties.statusCode).toBeDefined();
       expect(schemas.LoginResponse.properties.data.$ref).toBe("#/components/schemas/LoginData");
 
       // RegisterResponse
       expect(schemas.RegisterResponse).toBeDefined();
+      expect(schemas.RegisterResponse.required).toEqual(["success", "statusCode", "data"]);
       expect(schemas.RegisterResponse.properties.success).toBeDefined();
       expect(schemas.RegisterResponse.properties.statusCode).toBeDefined();
       expect(schemas.RegisterResponse.properties.data.$ref).toBe("#/components/schemas/AuthUserWithStatus");
 
       // AuthMeResponse
       expect(schemas.AuthMeResponse).toBeDefined();
+      expect(schemas.AuthMeResponse.required).toEqual(["success", "statusCode", "data"]);
       expect(schemas.AuthMeResponse.properties.success).toBeDefined();
       expect(schemas.AuthMeResponse.properties.statusCode).toBeDefined();
       expect(schemas.AuthMeResponse.properties.data.$ref).toBe("#/components/schemas/AuthUserWithStatus");

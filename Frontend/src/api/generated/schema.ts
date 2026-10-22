@@ -11903,73 +11903,73 @@ export interface components {
         };
         AuthUser: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example Juan Pérez */
-            nombre?: string;
+            nombre: string;
             /**
              * Format: email
              * @example juan.perez@ejemplo.com
              */
-            email?: string;
+            email: string;
             /** @example 55551234 */
-            telefono?: string | null;
+            telefono: string | null;
             /**
              * @example cliente
              * @enum {string}
              */
-            rol?: "admin" | "recepcionista" | "gerente_restaurante" | "gerente_habitaciones" | "empleado_operativo" | "cliente";
+            rol: "admin" | "recepcionista" | "gerente_restaurante" | "gerente_habitaciones" | "empleado_operativo" | "cliente";
         };
         AuthUserWithStatus: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example Juan Pérez */
-            nombre?: string;
+            nombre: string;
             /**
              * Format: email
              * @example juan.perez@ejemplo.com
              */
-            email?: string;
+            email: string;
             /** @example 55551234 */
-            telefono?: string | null;
+            telefono: string | null;
             /**
              * @example cliente
              * @enum {string}
              */
-            rol?: "admin" | "recepcionista" | "gerente_restaurante" | "gerente_habitaciones" | "empleado_operativo" | "cliente";
+            rol: "admin" | "recepcionista" | "gerente_restaurante" | "gerente_habitaciones" | "empleado_operativo" | "cliente";
             /** @example true */
-            activo?: boolean;
+            activo: boolean;
         };
         LoginData: {
             /** @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... */
-            accessToken?: string;
-            usuario?: components["schemas"]["AuthUser"];
+            accessToken: string;
+            usuario: components["schemas"]["AuthUser"];
         };
         LoginResponse: {
             /** @example true */
-            success?: boolean;
+            success: boolean;
             /** @example 200 */
-            statusCode?: number;
+            statusCode: number;
             /** @example Inicio de sesión exitoso */
             message?: string;
-            data?: components["schemas"]["LoginData"];
+            data: components["schemas"]["LoginData"];
         };
         RegisterResponse: {
             /** @example true */
-            success?: boolean;
+            success: boolean;
             /** @example 201 */
-            statusCode?: number;
+            statusCode: number;
             /** @example Usuario registrado correctamente */
             message?: string;
-            data?: components["schemas"]["AuthUserWithStatus"];
+            data: components["schemas"]["AuthUserWithStatus"];
         };
         AuthMeResponse: {
             /** @example true */
-            success?: boolean;
+            success: boolean;
             /** @example 200 */
-            statusCode?: number;
+            statusCode: number;
             /** @example Usuario autenticado */
             message?: string;
-            data?: components["schemas"]["AuthUserWithStatus"];
+            data: components["schemas"]["AuthUserWithStatus"];
         };
         ServicioEvento: {
             /** @example 1 */

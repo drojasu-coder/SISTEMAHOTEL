@@ -148,6 +148,7 @@ const options: swaggerJsdoc.Options = {
 
         AuthUser: {
           type: "object",
+          required: ["id", "nombre", "email", "telefono", "rol"],
           properties: {
             id: {
               type: "integer",
@@ -184,6 +185,7 @@ const options: swaggerJsdoc.Options = {
 
         AuthUserWithStatus: {
           type: "object",
+          required: ["id", "nombre", "email", "telefono", "rol", "activo"],
           properties: {
             id: {
               type: "integer",
@@ -224,6 +226,7 @@ const options: swaggerJsdoc.Options = {
 
         LoginData: {
           type: "object",
+          required: ["accessToken", "usuario"],
           properties: {
             accessToken: {
               type: "string",
@@ -237,6 +240,7 @@ const options: swaggerJsdoc.Options = {
 
         LoginResponse: {
           type: "object",
+          required: ["success", "statusCode", "data"],
           properties: {
             success: {
               type: "boolean",
@@ -258,6 +262,7 @@ const options: swaggerJsdoc.Options = {
 
         RegisterResponse: {
           type: "object",
+          required: ["success", "statusCode", "data"],
           properties: {
             success: {
               type: "boolean",
@@ -279,6 +284,7 @@ const options: swaggerJsdoc.Options = {
 
         AuthMeResponse: {
           type: "object",
+          required: ["success", "statusCode", "data"],
           properties: {
             success: {
               type: "boolean",
