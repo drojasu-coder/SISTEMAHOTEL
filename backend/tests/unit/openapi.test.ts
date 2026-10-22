@@ -158,4 +158,102 @@ describe("generated OpenAPI contract", () => {
     expect(reservasResource.get.responses["403"]).toBeDefined();
     expect(reservasResource.get.responses["404"]).toBeDefined();
   });
+  it("contains complete carritos and carritoItems schemas and contract responses (BE-013)", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    // Component schemas
+    expect(schemas.Carrito).toBeDefined();
+    expect(schemas.CarritoItem).toBeDefined();
+    expect(schemas.CreateCarritoItemRequest).toBeDefined();
+    expect(schemas.CarritoItemsData).toBeDefined();
+    expect(schemas.CarritoResponse).toBeDefined();
+    expect(schemas.CarritosResponse).toBeDefined();
+    expect(schemas.CarritoItemsResponse).toBeDefined();
+    expect(schemas.CarritoItemResponse).toBeDefined();
+
+    expect(schemas.Carrito.required).toEqual([
+      "id",
+      "usuario_id",
+      "estado",
+      "expira_en",
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(schemas.CarritoItem.required).toEqual([
+      "id",
+      "carrito_id",
+      "tipo_item",
+      "referencia_id",
+      "descripcion",
+      "precio",
+      "cantidad",
+      "promocion_id",
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(schemas.CreateCarritoItemRequest.required).toEqual(["tipo_item", "referencia_id"]);
+    expect(schemas.CreateCarritoItemRequest.additionalProperties).toBe(false);
+    expect(schemas.CarritoItemsData.required).toEqual(["items", "total"]);
+
+    // Endpoints
+    const carritosCollection = paths["/api/carritos"];
+    const carritoActual = paths["/api/carritos/actual"];
+    const carritoResource = paths["/api/carritos/{id}"];
+    const itemsCollection = paths["/api/carritos/{carritoId}/items"];
+    const itemResource = paths["/api/carritos/{carritoId}/items/{id}"];
+
+    // GET /api/carritos
+    expect(carritosCollection.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritosResponse"
+    );
+    // POST /api/carritos
+    expect(carritosCollection.post.responses["201"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritoResponse"
+    );
+    expect(carritosCollection.post.responses["409"]).toBeDefined();
+
+    // GET /api/carritos/actual
+    expect(carritoActual.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritoResponse"
+    );
+    expect(carritoActual.get.responses["404"]).toBeDefined();
+
+    // GET /api/carritos/{id}
+    expect(carritoResource.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritoResponse"
+    );
+    expect(carritoResource.get.responses["400"]).toBeDefined();
+    expect(carritoResource.get.responses["403"]).toBeDefined();
+    expect(carritoResource.get.responses["404"]).toBeDefined();
+
+    // GET /api/carritos/{carritoId}/items
+    expect(itemsCollection.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritoItemsResponse"
+    );
+
+    // POST /api/carritos/{carritoId}/items
+    expect(itemsCollection.post.requestBody.content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CreateCarritoItemRequest"
+    );
+    expect(itemsCollection.post.responses["201"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritoItemResponse"
+    );
+    expect(itemsCollection.post.responses["400"]).toBeDefined();
+    expect(itemsCollection.post.responses["409"]).toBeDefined();
+    expect(itemsCollection.post.responses["422"]).toBeDefined();
+
+    // GET /api/carritos/{carritoId}/items/{id}
+    expect(itemResource.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CarritoItemResponse"
+    );
+
+    // DELETE /api/carritos/{carritoId}/items/{id}
+    expect(itemResource.delete.responses["204"]).toBeDefined();
+    expect(itemResource.delete.responses["204"].content).toBeUndefined();
+    expect(itemResource.delete.responses["400"]).toBeDefined();
+    expect(itemResource.delete.responses["403"]).toBeDefined();
+    expect(itemResource.delete.responses["404"]).toBeDefined();
+    expect(itemResource.delete.responses["409"]).toBeDefined();
+  });
 });

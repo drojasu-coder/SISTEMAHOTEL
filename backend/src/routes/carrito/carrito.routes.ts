@@ -45,21 +45,7 @@ router.use(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Carritos obtenidos correctamente
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Carrito'
+ *               $ref: '#/components/schemas/CarritosResponse'
  *       401:
  *         description: Usuario no autenticado
  *         content:
@@ -102,23 +88,19 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Carrito activo obtenido correctamente
- *                 data:
- *                   $ref: '#/components/schemas/Carrito'
+ *               $ref: '#/components/schemas/CarritoResponse'
  *       401:
  *         description: Usuario no autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Usuario inactivo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: El usuario no posee un carrito activo
  *         content:
@@ -157,19 +139,7 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Carrito obtenido correctamente
- *                 data:
- *                   $ref: '#/components/schemas/Carrito'
+ *               $ref: '#/components/schemas/CarritoResponse'
  *       400:
  *         description: ID inválido
  *         content:
@@ -178,6 +148,10 @@ router.get(
  *               $ref: '#/components/schemas/ValidationErrorResponse'
  *       401:
  *         description: Usuario no autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: El carrito pertenece a otro usuario
  *         content:
@@ -219,19 +193,7 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 201
- *                 message:
- *                   type: string
- *                   example: Carrito creado correctamente
- *                 data:
- *                   $ref: '#/components/schemas/Carrito'
+ *               $ref: '#/components/schemas/CarritoResponse'
  *       401:
  *         description: Usuario no autenticado
  *         content:

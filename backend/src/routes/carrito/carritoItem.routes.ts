@@ -64,19 +64,7 @@ router.use(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Ítems del carrito obtenidos correctamente
- *                 data:
- *                   $ref: '#/components/schemas/CarritoItemsData'
+ *               $ref: '#/components/schemas/CarritoItemsResponse'
  *       400:
  *         description: ID del carrito inválido
  *         content:
@@ -144,19 +132,7 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Ítem del carrito obtenido correctamente
- *                 data:
- *                   $ref: '#/components/schemas/CarritoItem'
+ *               $ref: '#/components/schemas/CarritoItemResponse'
  *       400:
  *         description: Alguno de los identificadores es inválido
  *         content:
@@ -231,19 +207,7 @@ router.get(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 201
- *                 message:
- *                   type: string
- *                   example: Ítem agregado al carrito correctamente
- *                 data:
- *                   $ref: '#/components/schemas/CarritoItem'
+ *               $ref: '#/components/schemas/CarritoItemResponse'
  *       400:
  *         description: Datos o identificadores inválidos
  *         content:

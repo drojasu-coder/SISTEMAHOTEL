@@ -84,6 +84,14 @@ const options: swaggerJsdoc.Options = {
     name: "Boletos de Parque",
     description: "Venta y administración de boletos del parque",
   },
+  {
+    name: "Carritos",
+    description: "Operaciones y ciclo de vida del carrito de compras",
+  },
+  {
+    name: "Ítems de Carrito",
+    description: "Gestión de ítems agregados al carrito",
+  },
 ],
 
     components: {
@@ -743,6 +751,14 @@ ReservaTransporte: {
 
 Carrito: {
   type: "object",
+  required: [
+    "id",
+    "usuario_id",
+    "estado",
+    "expira_en",
+    "createdAt",
+    "updatedAt",
+  ],
   properties: {
     id: {
       type: "integer",
@@ -780,21 +796,29 @@ Carrito: {
 
 CarritoItem: {
   type: "object",
-
+  required: [
+    "id",
+    "carrito_id",
+    "tipo_item",
+    "referencia_id",
+    "descripcion",
+    "precio",
+    "cantidad",
+    "promocion_id",
+    "createdAt",
+    "updatedAt",
+  ],
   properties: {
     id: {
       type: "integer",
       example: 1,
     },
-
     carrito_id: {
       type: "integer",
       example: 5,
     },
-
     tipo_item: {
       type: "string",
-
       enum: [
         "habitacion",
         "evento",
@@ -805,45 +829,46 @@ CarritoItem: {
         "boleto_parque",
         "transporte",
       ],
-
       example: "evento",
     },
-
     referencia_id: {
       type: "integer",
       example: 6,
     },
-
     descripcion: {
       type: "string",
       nullable: true,
-      example:
-        "Evento ejecutivo - 2026-09-30",
+      example: "Evento ejecutivo - 2026-09-30",
     },
-
     precio: {
-      type: "number",
-      format: "double",
-      example: 4000.0,
+      oneOf: [
+        {
+          type: "string",
+          example: "4000.00",
+          description: "Precio unitario devuelto como cadena decimal por PostgreSQL",
+        },
+        {
+          type: "number",
+          format: "double",
+          example: 4000.0,
+        },
+      ],
+      description: "Precio unitario del ítem",
     },
-
     cantidad: {
       type: "integer",
       minimum: 1,
       example: 1,
     },
-
     promocion_id: {
       type: "integer",
       nullable: true,
       example: null,
     },
-
     createdAt: {
       type: "string",
       format: "date-time",
     },
-
     updatedAt: {
       type: "string",
       format: "date-time",
@@ -853,18 +878,14 @@ CarritoItem: {
 
 CreateCarritoItemRequest: {
   type: "object",
-
   required: [
     "tipo_item",
     "referencia_id",
   ],
-
   additionalProperties: false,
-
   properties: {
     tipo_item: {
       type: "string",
-
       enum: [
         "habitacion",
         "evento",
@@ -875,10 +896,8 @@ CreateCarritoItemRequest: {
         "boleto_parque",
         "transporte",
       ],
-
       example: "evento",
     },
-
     referencia_id: {
       type: "integer",
       minimum: 1,
@@ -889,21 +908,113 @@ CreateCarritoItemRequest: {
 
 CarritoItemsData: {
   type: "object",
-
+  required: [
+    "items",
+    "total",
+  ],
   properties: {
     items: {
       type: "array",
-
       items: {
-        $ref:
-          "#/components/schemas/CarritoItem",
+        $ref: "#/components/schemas/CarritoItem",
       },
     },
-
     total: {
       type: "number",
       format: "double",
       example: 4000.0,
+      description: "Monto total del carrito calculado por el servidor como número decimal",
+    },
+  },
+},
+
+CarritoResponse: {
+  type: "object",
+  required: ["success", "statusCode", "message", "data"],
+  properties: {
+    success: {
+      type: "boolean",
+      example: true,
+    },
+    statusCode: {
+      type: "integer",
+      example: 200,
+    },
+    message: {
+      type: "string",
+      example: "Carrito activo obtenido correctamente",
+    },
+    data: {
+      $ref: "#/components/schemas/Carrito",
+    },
+  },
+},
+
+CarritosResponse: {
+  type: "object",
+  required: ["success", "statusCode", "message", "data"],
+  properties: {
+    success: {
+      type: "boolean",
+      example: true,
+    },
+    statusCode: {
+      type: "integer",
+      example: 200,
+    },
+    message: {
+      type: "string",
+      example: "Carritos obtenidos correctamente",
+    },
+    data: {
+      type: "array",
+      items: {
+        $ref: "#/components/schemas/Carrito",
+      },
+    },
+  },
+},
+
+CarritoItemsResponse: {
+  type: "object",
+  required: ["success", "statusCode", "message", "data"],
+  properties: {
+    success: {
+      type: "boolean",
+      example: true,
+    },
+    statusCode: {
+      type: "integer",
+      example: 200,
+    },
+    message: {
+      type: "string",
+      example: "Ítems del carrito obtenidos correctamente",
+    },
+    data: {
+      $ref: "#/components/schemas/CarritoItemsData",
+    },
+  },
+},
+
+CarritoItemResponse: {
+  type: "object",
+  required: ["success", "statusCode", "message", "data"],
+  properties: {
+    success: {
+      type: "boolean",
+      example: true,
+    },
+    statusCode: {
+      type: "integer",
+      example: 200,
+    },
+    message: {
+      type: "string",
+      example: "Ítem del carrito obtenido correctamente",
+    },
+    data: {
+      $ref: "#/components/schemas/CarritoItem",
     },
   },
 },
