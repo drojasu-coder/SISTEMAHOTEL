@@ -127,3 +127,51 @@
 - **Criterio para cierre definitivo en backend:**
   - Añadir `$ref: '#/components/schemas/Parqueo'` a las respuestas 200/201 en `parqueo.routes.ts`, incorporar los esquemas `CreateParqueoRequest` y `UpdateParqueoRequest` en `swagger.ts` y regenerar tipos con `api:generate`.
 - **Estado:** no bloqueante / mejora opcional de contrato para backend.
+
+## BE-011 · Documentación OpenAPI en endpoints de reservas de habitación
+
+- **Categoría:** mejora de documentación / contrato OpenAPI
+- **Revisión inspeccionada:** 2026-10-22 · `787114f`
+- **Flujo afectado:** endpoints de reservas de habitación (`GET /api/reservas-habitacion`, `GET /api/reservas-habitacion/:id`, `POST /api/reservas-habitacion`).
+- **Estado de funcionamiento:** las operaciones del backend funcionan en tiempo de ejecución y aplican correctamente la autorización y filtros para rol cliente.
+- **Detalle de las diferencias observadas:**
+  1. En `backend/src/routes/habitaciones/reservaHabitacion.routes.ts`, las anotaciones Swagger para las respuestas 200 y 201 carecen de referencias a esquemas JSON (`content.application/json.schema`).
+  2. En `backend/src/docs/swagger.ts`, no existen esquemas definidos en `components.schemas` para `ReservaHabitacion`, `CreateReservaHabitacionRequest`, `ReservaHabitacionResponse` y `ReservasHabitacionResponse`.
+  3. En `backend/src/services/habitaciones/reservaHabitacion.service.ts`, `reservationInclude` asocia `TipoHabitacion` pero omite `Sucursal` dentro de la habitación asociada.
+- **Criterio para cierre definitivo en backend:**
+  - Definir los esquemas en `swagger.ts` con sus campos obligatorios (`required`).
+  - Enlazar los esquemas a las rutas en `reservaHabitacion.routes.ts` para respuestas 200, 201 y errores (400, 401, 403, 404, 409, 422).
+  - Incluir `Sucursal` en `reservationInclude` de `reservaHabitacion.service.ts`.
+  - Validar mediante pruebas unitarias de OpenAPI y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
+- **Estado:** pendiente de backend.
+
+## BE-012 · Endpoint de consulta de disponibilidad de habitaciones por fechas
+
+- **Categoría:** nueva funcionalidad / endpoint ausente
+- **Revisión inspeccionada:** 2026-10-22 · `787114f`
+- **Flujo afectado:** búsqueda y selección de habitaciones previo a la creación de una reserva.
+- **Comportamiento actual y evidencia:**
+  - Actualmente, `GET /api/habitaciones` únicamente lista todas las habitaciones físicas registradas en la base de datos sin recibir parámetros de fecha ni comprobar ocupación o traslapes.
+  - La verificación de disponibilidad de fechas se realiza únicamente de forma reactiva al intentar crear la reserva con `POST /api/reservas-habitacion` (respondiendo 409 si colisiona).
+  - No existe un endpoint para que un cliente pueda consultar previamente qué habitaciones están efectivamente libres para un rango de fechas y número de huéspedes dado en una sede.
+- **Capacidad o cambio requerido en el backend:**
+  - Implementar la ruta `GET /api/habitaciones/disponibles` (debe declararse antes de `GET /api/habitaciones/:id` para evitar colisión de ruta en Express).
+  - Requiere autenticación (`authMiddleware`).
+  - Parámetros de consulta en query string:
+    * `sucursal_id` (obligatorio, entero positivo).
+    * `fecha_entrada` (obligatorio, fecha `AAAA-MM-DD`, no en el pasado).
+    * `fecha_salida` (obligatorio, fecha `AAAA-MM-DD`, posterior a `fecha_entrada`).
+    * `numero_huespedes` (obligatorio, entero positivo).
+    * `tipo_habitacion_id` (opcional, entero positivo).
+  - Reglas de negocio:
+    * Habitación física en estado distinto de `'mantenimiento'`.
+    * Capacidad máxima del tipo de habitación `>= numero_huespedes`.
+    * Sin reservas activas (`estado` en `'pendiente'` o `'confirmada'`) que se traslapen con el rango solicitado (`fecha_entrada < query.fecha_salida` y `fecha_salida > query.fecha_entrada`).
+    * Salida en la misma fecha que la entrada de otra reserva está permitida (consecutivas).
+  - Cálculos monetarios realizados por el servidor:
+    * Cálculo de noches: `getNights(fecha_entrada, fecha_salida)`.
+    * Tarifa por noche: obtenida de `TipoHabitacion.tarifa_noche`.
+    * Total estimado: calculado con utilidades del backend (`noches * tarifa_noche`).
+  - La consulta es informativa y de solo lectura: no toma bloqueos de fila ni aparta la habitación.
+  - Documentar el endpoint en OpenAPI (`swagger.ts` y anotaciones JSDoc en `habitacion.routes.ts`).
+- **Estado:** pendiente de backend.
