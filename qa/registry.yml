@@ -1789,3 +1789,127 @@ findings:
       migrations_modified: false
       existing_tests_modified: false
       verified_at: "2026-10-22"
+
+  - id: QA-RH-AUTH-CANDIDATE-019
+    status: closed
+    severity: critical
+    category: AUTH
+    title: >-
+      Un cliente puede autoaprobar un pago directo en efectivo de su propia
+      ReservaHabitacion
+    invariant: >-
+      Un cliente autenticado no puede declarar unilateralmente que el hotel
+      recibió efectivo. Al intentar pagar directamente su propia
+      ReservaHabitacion, el backend debe responder HTTP 403 o persistir el pago
+      pendiente de aprobación administrativa; el monto aprobado y neto aprobado
+      deben permanecer en Q0.00 y la reserva no debe confirmarse financieramente.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.cashPaymentAuth.test.ts
+      test_name: "QA-RH-AUTH-CANDIDATE-019: cliente no puede autoaprobar un pago directo en efectivo"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cashPaymentAuth.test.ts -t
+        "QA-RH-AUTH-CANDIDATE-019: cliente no puede autoaprobar un pago directo
+        en efectivo"
+      database: hotel_test_db
+      authenticated_role: cliente
+      reservation_ownership: OWN
+      payment_method: efectivo
+      stripe_used: false
+      real_charges: false
+    expected:
+      safe_outcome: >-
+        HTTP 403, o Pago pendiente de aprobación administrativa sin dinero
+        aprobado
+      approved_after: "0.00"
+      net_approved_after: "0.00"
+      reservation_state_after: pendiente
+      client_self_approved_cash_payment: false
+      authorization_violation: false
+    actual:
+      reservation_create: "HTTP 201"
+      reservation_owner: "cliente autenticado (OWN)"
+      reservation_initial_state: pendiente
+      reservation_total: "100.00"
+      approved_before: "0.00"
+      net_approved_before: "0.00"
+      payment_attempt: "HTTP 201 / code null"
+      payment_persisted: true
+      payment_method: efectivo
+      payment_state: aprobado
+      payment_amount: "100.00"
+      payment_date: "2026-10-22T08:07:11.142Z"
+      payment_date_present: true
+      reservation_state_after: confirmada
+      approved_after: "100.00"
+      net_approved_after: "100.00"
+      admin_approval_involved: false
+      client_self_approved_cash_payment: true
+      authorization_violation: true
+      red_result: "1 file failed, 1 test failed; 6 assertions de autorización y estado financiero fallaron"
+    endpoint: POST /api/pagos
+    http_evidence:
+      reservation_create_status: 201
+      payment_attempt_status: 201
+      payment_attempt_code: null
+      unexpected_500: false
+    database_evidence:
+      before_payment:
+        reservation_usuario_id_matches_authenticated_client: true
+        reservation_state: pendiente
+        reservation_total: "100.00"
+        approved_amount: "0.00"
+        net_approved: "0.00"
+      after_payment:
+        payment_rows: 1
+        payment_method: efectivo
+        payment_state: aprobado
+        payment_amount: "100.00"
+        payment_date: "2026-10-22T08:07:11.142Z"
+        payment_date_present: true
+        reservation_state: confirmada
+        approved_amount: "100.00"
+        net_approved: "100.00"
+    suspected_execution_path: >-
+      pago.routes permite POST /api/pagos a cualquier usuario autenticado y
+      pago.controller.create delega en createPago. Después de validar ownership
+      de la reserva propia, createPago trata metodo=efectivo como aprobado,
+      persiste estado aprobado y fecha_pago inmediatamente y ejecuta
+      confirmReservationIfFullyPaid, sin exigir rol administrativo ni una
+      aprobación posterior para acreditar la recepción física del efectivo.
+    severity_recommendation: critical
+    root_cause: >-
+      createPago distinguía el estado financiero únicamente por metodo y
+      aprobaba efectivo de forma inmediata, pero no autorizaba ese método con el
+      rol actual que authMiddleware carga desde PostgreSQL.
+    correction: >-
+      createPago rechaza con HTTP 403 CASH_PAYMENT_FORBIDDEN todo intento de
+      efectivo cuyo requester no pertenezca a PAYMENT_ADMINISTRATIVE_ROLES,
+      antes de abrir la transacción y antes de Pago.create. Los roles admin,
+      recepcionista y gerente_habitaciones conservan el flujo aprobado existente;
+      tarjeta y transferencia no fueron modificados.
+    corrected_state:
+      payment_attempt: "HTTP 403 / CASH_PAYMENT_FORBIDDEN"
+      payment_rows: 0
+      approved_amount: "0.00"
+      net_approved: "0.00"
+      reservation_state: pendiente
+      client_self_approved_cash_payment: false
+      authorization_violation: false
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      official_file_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cashPaymentAuth.test.ts
+      official_file: "1 file passed, 1 test passed"
+      related_admin_cash_tests: "No existen pruebas previas que cubran POST /api/pagos en efectivo autenticado como admin"
+      typecheck: pass
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      production_files_modified:
+        - backend/src/services/pago.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"

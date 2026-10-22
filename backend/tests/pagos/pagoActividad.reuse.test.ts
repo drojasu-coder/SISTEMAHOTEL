@@ -2,7 +2,73 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
+
+const stripeMock = vi.hoisted(() => {
+  let sequence = 0;
+  const intents = new Map<string, any>();
+  const webhook = { event: null as any };
+  const createPaymentIntent = vi.fn(
+    async (
+      amount: number | string,
+      currency: string,
+      metadata: Record<string, string>,
+      idempotencyKey?: string
+    ) => {
+      sequence += 1;
+      const id = `pi_ra_fin_008_${sequence}`;
+      const intent = {
+        id,
+        status: "requires_payment_method",
+        client_secret: `${id}_secret_qa_local`,
+        amount: Math.round(Number(amount) * 100),
+        currency: currency.toLowerCase(),
+        metadata: { ...metadata },
+        idempotency_key: idempotencyKey,
+      };
+      intents.set(id, intent);
+      return { ...intent };
+    }
+  );
+  const constructEvent = vi.fn(() => {
+    if (!webhook.event) {
+      throw new Error("No se configuró el webhook local de QA-008");
+    }
+    return webhook.event;
+  });
+  const forbidden = (method: string) =>
+    vi.fn(() => {
+      throw new Error(`${method} no permitido en QA-008`);
+    });
+
+  return {
+    intents,
+    webhook,
+    createPaymentIntent,
+    constructEvent,
+    retrievePaymentIntent: forbidden("retrievePaymentIntent"),
+    cancelPaymentIntent: forbidden("cancelPaymentIntent"),
+    createRefund: forbidden("createRefund"),
+  };
+});
+
+/** Stripe queda completamente sustituido por estado local de prueba. */
+vi.mock("../../src/services/stripe.service", () => ({
+  toStripeAmount: (amount: number | string, currency: string) => {
+    if (currency !== "GTQ") {
+      throw new Error(`Moneda inesperada en mock Stripe: ${currency}`);
+    }
+    return Math.round(Number(amount) * 100);
+  },
+  stripeService: {
+    createPaymentIntent: stripeMock.createPaymentIntent,
+    retrievePaymentIntent: stripeMock.retrievePaymentIntent,
+    cancelPaymentIntent: stripeMock.cancelPaymentIntent,
+    createRefund: stripeMock.createRefund,
+    constructEvent: stripeMock.constructEvent,
+  },
+}));
 
 import {
   Op,
@@ -278,7 +344,7 @@ describe(
               monto:
                 "100.00",
               metodo:
-                "efectivo",
+                "tarjeta",
               tipo_pago:
                 "total",
               moneda:
@@ -292,14 +358,71 @@ describe(
         ).toBe(201);
         expect(
           paymentAResponse.body.data.estado
-        ).toBe("aprobado");
+        ).toBe("procesando");
         expect(
           paymentAResponse.body.data.monto
         ).toBe("100.00");
 
+        const paymentAId = Number(
+          paymentAResponse.body.data.pago_id
+        );
+        const paymentAIntentId =
+          paymentAResponse.body.data.payment_intent_id;
+        const paymentAIntent =
+          stripeMock.intents.get(
+            paymentAIntentId
+          );
+
+        expect(
+          paymentAIntent
+        ).toBeDefined();
+        paymentAIntent.status =
+          "succeeded";
+        stripeMock.webhook.event = {
+          id: "evt_ra_fin_008_a",
+          type: "payment_intent.succeeded",
+          data: {
+            object: {
+              id: paymentAIntent.id,
+              status:
+                paymentAIntent.status,
+              amount:
+                paymentAIntent.amount,
+              currency:
+                paymentAIntent.currency,
+              metadata: {
+                ...paymentAIntent.metadata,
+              },
+            },
+          },
+        };
+
+        const webhookAResponse =
+          await request(app)
+            .post(
+              "/api/pagos/stripe/webhook"
+            )
+            .set(
+              "Stripe-Signature",
+              "t=1,v1=qa-local-signature"
+            )
+            .set(
+              "Content-Type",
+              "application/json"
+            )
+            .send(
+              JSON.stringify({
+                id: "evt_ra_fin_008_a",
+              })
+            );
+
+        expect(
+          webhookAResponse.status
+        ).toBe(200);
+
         const paymentA =
           await Pago.findByPk(
-            paymentAResponse.body.data.id
+            paymentAId
           );
         const cartA =
           await Carrito.findByPk(
@@ -395,7 +518,7 @@ describe(
                 monto:
                   "100.00",
                 metodo:
-                  "efectivo",
+                  "tarjeta",
                 tipo_pago:
                   "total",
                 moneda:
@@ -467,7 +590,7 @@ describe(
           JSON.stringify(
             {
               paymentMethod:
-                "efectivo",
+                "tarjeta",
               realStripeCharges:
                 false,
               reservation: {
@@ -507,6 +630,13 @@ describe(
                 },
                 netApproved:
                   firstFinancialState.net.toFixed(2),
+              },
+              webhookA: {
+                status:
+                  webhookAResponse.status,
+                code:
+                  webhookAResponse.body.code ??
+                  null,
               },
               cartA: {
                 id:
@@ -568,6 +698,12 @@ describe(
                 finalFinancialState.net.toFixed(2),
               maxLegitimateNetApproved:
                 "100.00",
+              stripe: {
+                createCalls:
+                  stripeMock.createPaymentIntent.mock.calls.length,
+                webhookConstructCalls:
+                  stripeMock.constructEvent.mock.calls.length,
+              },
               referenceReuseViolation,
               doubleChargeViolation,
             },
@@ -575,6 +711,22 @@ describe(
             2
           )
         );
+
+        expect(
+          stripeMock.createPaymentIntent
+        ).toHaveBeenCalledTimes(1);
+        expect(
+          stripeMock.constructEvent
+        ).toHaveBeenCalledTimes(1);
+        expect(
+          stripeMock.retrievePaymentIntent
+        ).not.toHaveBeenCalled();
+        expect(
+          stripeMock.cancelPaymentIntent
+        ).not.toHaveBeenCalled();
+        expect(
+          stripeMock.createRefund
+        ).not.toHaveBeenCalled();
 
         expect.soft(
           addBResponse.status,

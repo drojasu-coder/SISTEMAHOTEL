@@ -613,6 +613,13 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
   if (!["tarjeta", "efectivo", "transferencia"].includes(data.metodo)) {
     throw new AppError(422, "INVALID_PAYMENT_METHOD", "El método de pago no es válido");
   }
+  if (data.metodo === "efectivo" && !isPaymentAdministrator(requester)) {
+    throw new AppError(
+      403,
+      "CASH_PAYMENT_FORBIDDEN",
+      "Solo el personal autorizado puede registrar pagos en efectivo",
+    );
+  }
   const tipo = data.tipo_pago ?? "total";
   if (!["total", "anticipo", "saldo"].includes(tipo)) {
     throw new AppError(422, "INVALID_PAYMENT_TYPE", "El tipo de pago no es válido");

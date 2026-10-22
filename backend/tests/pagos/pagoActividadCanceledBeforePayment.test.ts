@@ -2,7 +2,54 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
+
+const stripeMock = vi.hoisted(() => {
+  const forbidden = (method: string) =>
+    vi.fn(() => {
+      throw new Error(
+        `${method} no debe ejecutarse en QA-017`
+      );
+    });
+
+  return {
+    createPaymentIntent: forbidden(
+      "createPaymentIntent"
+    ),
+    retrievePaymentIntent: forbidden(
+      "retrievePaymentIntent"
+    ),
+    cancelPaymentIntent: forbidden(
+      "cancelPaymentIntent"
+    ),
+    createRefund: forbidden(
+      "createRefund"
+    ),
+    constructEvent: forbidden(
+      "constructEvent"
+    ),
+  };
+});
+
+/** Mock local completo: Stripe real nunca se carga ni recibe llamadas. */
+vi.mock("../../src/services/stripe.service", () => ({
+  toStripeAmount: (amount: number | string) =>
+    Math.round(Number(amount) * 100),
+  stripeService: {
+    createPaymentIntent:
+      stripeMock.createPaymentIntent,
+    retrievePaymentIntent:
+      stripeMock.retrievePaymentIntent,
+    cancelPaymentIntent:
+      stripeMock.cancelPaymentIntent,
+    createRefund:
+      stripeMock.createRefund,
+    constructEvent:
+      stripeMock.constructEvent,
+  },
+}));
+
 import request from "supertest";
 
 import app from "../../src/app";
@@ -234,7 +281,7 @@ describe(
             .send({
               carrito_id: cartId,
               monto: "100.00",
-              metodo: "efectivo",
+              metodo: "tarjeta",
               tipo_pago: "total",
               moneda: "GTQ",
               idempotency_key:
@@ -324,7 +371,7 @@ describe(
           JSON.stringify(
             {
               database: "hotel_test_db",
-              paymentMethod: "efectivo",
+              paymentMethod: "tarjeta",
               realStripeCharges: false,
               reservationCreate: {
                 status:
@@ -388,6 +435,10 @@ describe(
               canceledServiceCharged,
               financialViolation:
                 canceledServiceCharged,
+              stripe: {
+                createCalls:
+                  stripeMock.createPaymentIntent.mock.calls.length,
+              },
             },
             null,
             2
@@ -426,6 +477,21 @@ describe(
         expect.soft(
           canceledServiceCharged
         ).toBe(false);
+        expect(
+          stripeMock.createPaymentIntent
+        ).not.toHaveBeenCalled();
+        expect(
+          stripeMock.retrievePaymentIntent
+        ).not.toHaveBeenCalled();
+        expect(
+          stripeMock.cancelPaymentIntent
+        ).not.toHaveBeenCalled();
+        expect(
+          stripeMock.createRefund
+        ).not.toHaveBeenCalled();
+        expect(
+          stripeMock.constructEvent
+        ).not.toHaveBeenCalled();
       },
       30000
     );
