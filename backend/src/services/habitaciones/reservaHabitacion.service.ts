@@ -2,6 +2,8 @@ import { Op } from "sequelize";
 
 import { AppError } from "../../utils/AppError";
 
+import { reservationFinancialExposure } from "../pago.service";
+
 import { ROLES, Role } from "../../constants/roles";
 
 
@@ -498,7 +500,9 @@ const validateReferences =
 
     usuarioId: number,
 
-    habitacionId: number
+    habitacionId: number,
+
+    transaction?: any
 
   ) => {
 
@@ -506,7 +510,13 @@ const validateReferences =
 
       await Usuario.findByPk(
 
-        usuarioId
+        usuarioId,
+
+        {
+
+          transaction,
+
+        }
 
       );
 
@@ -547,6 +557,8 @@ const validateReferences =
             },
 
           ],
+
+          transaction,
 
         }
 
@@ -1254,13 +1266,31 @@ export const updateReservaHabitacion =
 
       UpdateReservaHabitacionData
 
+  ) => sequelize.transaction(async (
+
+    transaction: any
+
   ) => {
 
     const reservaHabitacion =
 
       await ReservaHabitacion.findByPk(
 
-        id
+        id,
+
+        {
+
+          transaction,
+
+          lock:
+
+            transaction
+
+              .LOCK
+
+              .UPDATE,
+
+        }
 
       );
 
@@ -1277,6 +1307,50 @@ export const updateReservaHabitacion =
         "La reserva de habitación no fue encontrada"
 
       );
+
+    }
+
+
+
+    const cambiaIdentidadEconomica =
+
+      data.usuario_id !== undefined ||
+
+      data.habitacion_id !== undefined ||
+
+      data.fecha_entrada !== undefined ||
+
+      data.fecha_salida !== undefined;
+
+
+
+    if (cambiaIdentidadEconomica) {
+
+      const exposure =
+
+        await reservationFinancialExposure(
+
+          id,
+
+          transaction
+
+        );
+
+
+
+      if (exposure.processing > 0) {
+
+        throw new AppError(
+
+          409,
+
+          "RESERVATION_HAS_PROCESSING_PAYMENT",
+
+          "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
+
+        );
+
+      }
 
     }
 
@@ -1446,7 +1520,9 @@ export const updateReservaHabitacion =
 
           usuarioId,
 
-          habitacionId
+          habitacionId,
+
+          transaction
 
         );
 
@@ -1508,7 +1584,9 @@ export const updateReservaHabitacion =
 
           fechaSalida,
 
-          id
+          id,
+
+          transaction
 
         );
 
@@ -1569,6 +1647,8 @@ export const updateReservaHabitacion =
               },
 
             ],
+
+            transaction,
 
           }
 
@@ -1740,7 +1820,13 @@ export const updateReservaHabitacion =
 
     await reservaHabitacion.update(
 
-      updateData
+      updateData,
+
+      {
+
+        transaction,
+
+      }
 
     );
 
@@ -1748,7 +1834,7 @@ export const updateReservaHabitacion =
 
     return reservaHabitacion;
 
-  };
+  });
 
 
 

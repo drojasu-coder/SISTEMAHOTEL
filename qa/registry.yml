@@ -1790,6 +1790,202 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-021
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Una ReservaHabitacion puede reducir su total con un PaymentIntent
+      procesando y el intent original aprueba y confirma la obligación mutada
+    invariant: >-
+      Una autorización Stripe para una ReservaHabitacion debe permanecer
+      vinculada al snapshot financiero que la originó. Si existe un Pago con
+      tarjeta procesando, un PATCH que cambia habitación, fechas o total debe
+      rechazarse conservando el snapshot; si la mutación se permite, el webhook
+      no puede aprobar el intent desalineado, confirmar la reserva ni dejar un
+      succeeded externo sin reconciliación local durable.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-021: vincula la autorización Stripe al total inmutable de ReservaHabitacion"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts -t
+        "QA-RH-FIN-CANDIDATE-021: vincula la autorización Stripe al total
+        inmutable de ReservaHabitacion"
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_method: tarjeta
+      reservation_count: 1
+      payment_count: 1
+      payment_intent_count: 1
+      mutation_count: 1
+      mutation_endpoint: PATCH /api/reservas-habitacion/{id}
+    expected:
+      safe_outcomes: >-
+        PATCH HTTP 409 conservando habitación, fechas y total; o, si el PATCH
+        cambia la obligación, el succeeded original no queda aprobado ni
+        confirma la reserva y existe una reconciliación local durable.
+      binding_violation: false
+      authorization_matches_current_obligation: true
+      unexpected_500: false
+    actual:
+      reservation_create: "HTTP 201; id=1; pendiente; 2035-07-10 a 2035-07-13; Q300.00"
+      payment_create: >-
+        HTTP 201; Pago id=1; tarjeta; procesando; Q300.00;
+        PaymentIntent pi_rh_mutation_021_001
+      before_mutation: "aprobado Q0.00; procesando Q300.00"
+      patch: >-
+        HTTP 200; fecha_salida 2035-07-13 -> 2035-07-11; total Q300.00 ->
+        Q100.00
+      webhook: "HTTP 200; received=true; payment_intent.succeeded del intent original"
+      final: >-
+        Pago aprobado Q300.00; ReservaHabitacion confirmada con obligación
+        actual Q100.00
+      authorized_amount: "300.00"
+      current_obligation: "100.00"
+      authorization_matches_current_obligation: false
+      violation_a: true
+      reconciliation_failure_b: false
+      binding_violation: true
+      red_result: "1 file failed, 1 test failed; expected bindingViolation false, received true"
+    http_evidence:
+      create_reservation_status: 201
+      create_reservation_code: null
+      create_payment_status: 201
+      create_payment_code: null
+      patch_status: 200
+      patch_code: null
+      webhook_status: 200
+      webhook_code: null
+      webhook_received: true
+      unexpected_500: false
+    database_evidence:
+      authorization_snapshot:
+        habitacion_id: 1
+        fecha_entrada: "2035-07-10"
+        fecha_salida: "2035-07-13"
+        estado: pendiente
+        total: "300.00"
+      before_mutation:
+        payment_rows: 1
+        payment_id: 1
+        payment_method: tarjeta
+        payment_state: procesando
+        payment_amount: "300.00"
+        approved_amount: "0.00"
+        processing_amount: "300.00"
+        external_id: pi_rh_mutation_021_001
+      after_patch:
+        habitacion_id: 1
+        fecha_entrada: "2035-07-10"
+        fecha_salida: "2035-07-11"
+        estado: pendiente
+        total: "100.00"
+      final:
+        payment_rows: 1
+        payment_state: aprobado
+        payment_amount: "300.00"
+        approved_amount: "300.00"
+        processing_amount: "0.00"
+        reservation_state: confirmada
+        reservation_total: "100.00"
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 1
+      intent_id: pi_rh_mutation_021_001
+      status_after_simulation: succeeded
+      amount_minor: 30000
+      authorized_amount: "300.00"
+      currency: gtq
+      metadata: "pago_id=1,reserva_habitacion_id=1,tipo_pago=total"
+      construct_event_calls: 1
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+    binding_evidence:
+      authorized_total: "300.00"
+      current_total: "100.00"
+      amount_match: false
+      patch_rejected_safely: false
+      payment_approved: true
+      reservation_confirmed: true
+      violation_a: true
+      reconciliation_failure_b: false
+      binding_violation: true
+    suspected_execution_path: >-
+      updateReservaHabitacion carga la reserva y permite recalcular total al
+      cambiar fecha_salida sin consultar pagos procesando ni bloquear el snapshot
+      financiero autorizado. processStripeWebhook vincula el evento al Pago y
+      valida amount contra Pago.monto Q300.00, pero no contra el total vigente de
+      ReservaHabitacion Q100.00; luego marca el Pago aprobado, calcula Q300.00
+      aprobado sobre la obligación mutada y confirma la reserva.
+    root_cause: >-
+      updateReservaHabitacion ejecutaba la lectura, las validaciones, el
+      recálculo y el UPDATE sin una transacción ni un lock canónico sobre
+      ReservaHabitacion. Tampoco consultaba la exposición procesando agregada de
+      pagos directos y pagos originados por carritos que contuvieran la reserva,
+      por lo que podía mutar el snapshot económico autorizado por Stripe.
+    correction: >-
+      El PATCH ahora ejecuta todo el flujo dentro de una transacción, toma
+      SELECT ... FOR UPDATE sobre ReservaHabitacion antes de evaluar pagos y,
+      para cambios de usuario, habitación o fechas, reutiliza
+      reservationFinancialExposure. Si processing es mayor que cero rechaza con
+      HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT antes de validar, recalcular o
+      persistir la mutación. No bloquea por exposición únicamente aprobada y no
+      modifica, cancela ni reconcilia Pago, PaymentIntent, webhook o reembolso.
+    concurrency: >-
+      ReservaHabitacion es el lock canónico y se adquiere antes de consultar la
+      exposición. Las lecturas posteriores de Pago/Reembolso no toman un lock
+      inverso, por lo que no se introdujo Pago -> ReservaHabitacion. createPago
+      que incremente exposición queda serializado por la misma fila; la regresión
+      pagoWebhookLockOrder.concurrency permaneció verde.
+    severity_recommendation: critical
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed por violación A reproducida"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      qa_019_regression_observed: >-
+        En este escenario tarjeta permaneció procesando y aprobado Q0.00 antes
+        del webhook; no se usó efectivo. Su test no se ejecutó ni modificó.
+      qa_020_regression_observed: >-
+        Existieron exactamente un Pago y un PaymentIntent, con exposición inicial
+        procesando Q300.00 igual al total inicial Q300.00. Su test no se ejecutó
+        ni modificó.
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file passed, 1 test passed"
+      safe_rejection: "HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT"
+      reservation_snapshot: >-
+        habitacion_id y fechas intactos; total Q300.00; pago Q300.00 permaneció
+        procesando
+      webhook: "NOT RUN: PATCH blocked"
+      authorization_matches_current_obligation: true
+      binding_violation: false
+      aggregate_exposure_regression: "1 file passed, 1 test passed"
+      cash_payment_auth_regression: "1 file passed, 1 test passed"
+      update_reservation_regression: "3 passed, 33 skipped"
+      webhook_lock_order_regression: "1 file passed, 1 test passed"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: green
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      test_modified_by_fixer: false
+      migrations_modified: false
+      verified_at: "2026-10-22"
+
   - id: QA-RH-FIN-CANDIDATE-020
     status: closed
     severity: critical
