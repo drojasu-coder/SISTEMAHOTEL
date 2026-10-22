@@ -9287,15 +9287,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 200 */
-                            statusCode?: number;
-                            /** @example Ítems del carrito obtenidos correctamente */
-                            message?: string;
-                            data?: components["schemas"]["CarritoItemsData"];
-                        };
+                        "application/json": components["schemas"]["CarritoItemsResponse"];
                     };
                 };
                 /** @description ID del carrito inválido */
@@ -9370,15 +9362,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 201 */
-                            statusCode?: number;
-                            /** @example Ítem agregado al carrito correctamente */
-                            message?: string;
-                            data?: components["schemas"]["CarritoItem"];
-                        };
+                        "application/json": components["schemas"]["CarritoItemResponse"];
                     };
                 };
                 /** @description Datos o identificadores inválidos */
@@ -9474,15 +9458,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 200 */
-                            statusCode?: number;
-                            /** @example Ítem del carrito obtenido correctamente */
-                            message?: string;
-                            data?: components["schemas"]["CarritoItem"];
-                        };
+                        "application/json": components["schemas"]["CarritoItemResponse"];
                     };
                 };
                 /** @description Alguno de los identificadores es inválido */
@@ -9628,15 +9604,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 200 */
-                            statusCode?: number;
-                            /** @example Carritos obtenidos correctamente */
-                            message?: string;
-                            data?: components["schemas"]["Carrito"][];
-                        };
+                        "application/json": components["schemas"]["CarritosResponse"];
                     };
                 };
                 /** @description Usuario no autenticado */
@@ -9679,15 +9647,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 201 */
-                            statusCode?: number;
-                            /** @example Carrito creado correctamente */
-                            message?: string;
-                            data?: components["schemas"]["Carrito"];
-                        };
+                        "application/json": components["schemas"]["CarritoResponse"];
                     };
                 };
                 /** @description Usuario no autenticado */
@@ -9751,15 +9711,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 200 */
-                            statusCode?: number;
-                            /** @example Carrito activo obtenido correctamente */
-                            message?: string;
-                            data?: components["schemas"]["Carrito"];
-                        };
+                        "application/json": components["schemas"]["CarritoResponse"];
                     };
                 };
                 /** @description Usuario no autenticado */
@@ -9767,14 +9719,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description Usuario inactivo */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description El usuario no posee un carrito activo */
                 404: {
@@ -9824,15 +9780,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 200 */
-                            statusCode?: number;
-                            /** @example Carrito obtenido correctamente */
-                            message?: string;
-                            data?: components["schemas"]["Carrito"];
-                        };
+                        "application/json": components["schemas"]["CarritoResponse"];
                     };
                 };
                 /** @description ID inválido */
@@ -9849,7 +9797,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description El carrito pertenece a otro usuario */
                 403: {
@@ -12284,51 +12234,48 @@ export interface components {
         };
         Carrito: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example 2 */
-            usuario_id?: number;
+            usuario_id: number;
             /**
              * @example activo
              * @enum {string}
              */
-            estado?: "activo" | "expirado" | "pagado";
+            estado: "activo" | "expirado" | "pagado";
             /**
              * Format: date-time
              * @example 2026-10-15T18:00:00.000Z
              */
-            expira_en?: string | null;
+            expira_en: string | null;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updatedAt: string;
         };
         CarritoItem: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example 5 */
-            carrito_id?: number;
+            carrito_id: number;
             /**
              * @example evento
              * @enum {string}
              */
-            tipo_item?: "habitacion" | "evento" | "mesa" | "actividad" | "amenidad" | "bienestar" | "boleto_parque" | "transporte";
+            tipo_item: "habitacion" | "evento" | "mesa" | "actividad" | "amenidad" | "bienestar" | "boleto_parque" | "transporte";
             /** @example 6 */
-            referencia_id?: number;
+            referencia_id: number;
             /** @example Evento ejecutivo - 2026-09-30 */
-            descripcion?: string | null;
-            /**
-             * Format: double
-             * @example 4000
-             */
-            precio?: number;
+            descripcion: string | null;
+            /** @description Precio unitario del ítem */
+            precio: string | number;
             /** @example 1 */
-            cantidad?: number;
+            cantidad: number;
             /** @example null */
-            promocion_id?: number | null;
+            promocion_id: number | null;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updatedAt: string;
         };
         CreateCarritoItemRequest: {
             /**
@@ -12340,12 +12287,49 @@ export interface components {
             referencia_id: number;
         };
         CarritoItemsData: {
-            items?: components["schemas"]["CarritoItem"][];
+            items: components["schemas"]["CarritoItem"][];
             /**
              * Format: double
+             * @description Monto total del carrito calculado por el servidor como número decimal
              * @example 4000
              */
-            total?: number;
+            total: number;
+        };
+        CarritoResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Carrito activo obtenido correctamente */
+            message: string;
+            data: components["schemas"]["Carrito"];
+        };
+        CarritosResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Carritos obtenidos correctamente */
+            message: string;
+            data: components["schemas"]["Carrito"][];
+        };
+        CarritoItemsResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Ítems del carrito obtenidos correctamente */
+            message: string;
+            data: components["schemas"]["CarritoItemsData"];
+        };
+        CarritoItemResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Ítem del carrito obtenido correctamente */
+            message: string;
+            data: components["schemas"]["CarritoItem"];
         };
         Sucursal: {
             /** @example 1 */
