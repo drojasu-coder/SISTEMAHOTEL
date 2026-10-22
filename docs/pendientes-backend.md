@@ -143,7 +143,8 @@
   - Enlazar los esquemas a las rutas en `reservaHabitacion.routes.ts` para respuestas 200, 201 y errores (400, 401, 403, 404, 409, 422).
   - Incluir `Sucursal` en `reservationInclude` de `reservaHabitacion.service.ts`.
   - Validar mediante pruebas unitarias de OpenAPI y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
-- **Estado:** pendiente de backend.
+- **Resolución definitiva:** se definieron esquemas completos en `swagger.ts` (`ReservaHabitacionUsuario`, `ReservaHabitacionTipo`, `ReservaHabitacionSucursal`, `ReservaHabitacionHabitacion`, `ReservaHabitacion`, `CreateReservaHabitacionRequest`, `ReservaHabitacionResponse`, `ReservaHabitacionCreatedResponse`, `ReservasHabitacionResponse`), se enlazaron a las rutas `reservaHabitacion.routes.ts` con sus códigos de error reales, se añadió `Sucursal` (con atributos públicos `id`, `nombre`, `activa`) al `reservationInclude` de `reservaHabitacion.service.ts`, y se regeneraron los tipos de transporte del frontend en `schema.ts`.
+- **Estado:** resuelto.
 
 ## BE-012 · Endpoint de consulta de disponibilidad de habitaciones por fechas
 
@@ -174,4 +175,5 @@
     * Total estimado: calculado con utilidades del backend (`noches * tarifa_noche`).
   - La consulta es informativa y de solo lectura: no toma bloqueos de fila ni aparta la habitación.
   - Documentar el endpoint en OpenAPI (`swagger.ts` y anotaciones JSDoc en `habitacion.routes.ts`).
-- **Estado:** pendiente de backend.
+- **Resolución definitiva:** se implementó el endpoint `GET /api/habitaciones/disponibles` con registro previo a `/:id`, protegido con `authMiddleware`, validación estricta de parámetros en `disponibilidadHabitacionQuerySchema`, y elegibilidad de habitaciones (sede, capacidad, tipo opcional, exclusión de mantenimiento y de solapamientos con pendientes/confirmadas, permitiendo estancias consecutivas). Incluye cálculo consistente de noches e importes con dos decimales sin escrituras colaterales ni bloqueos. Documentado en OpenAPI y validado con 25 pruebas de integración y contratos frontend regenerados.
+- **Estado:** resuelto.

@@ -5736,12 +5736,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Reservas obtenidas correctamente */
+                /** @description Reservas de habitación obtenidas correctamente */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReservasHabitacionResponse"];
+                    };
                 };
                 /** @description Usuario no autenticado */
                 401: {
@@ -5757,7 +5759,7 @@ export interface paths {
         put?: never;
         /**
          * Crear una reserva de habitación
-         * @description Los clientes reservan para sí mismos utilizando el usuario del JWT. Los usuarios administrativos deben indicar usuario_id.
+         * @description Los clientes reservan para sí mismos utilizando el usuario del JWT (omiten usuario_id). Los usuarios administrativos deben indicar usuario_id en el cuerpo.
          */
         post: {
             parameters: {
@@ -5768,38 +5770,20 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /**
-                         * @description Opcional para clientes y requerido para usuarios administrativos
-                         * @example 1
-                         */
-                        usuario_id?: number;
-                        /** @example 1 */
-                        habitacion_id: number;
-                        /**
-                         * Format: date
-                         * @example 2026-12-01
-                         */
-                        fecha_entrada: string;
-                        /**
-                         * Format: date
-                         * @example 2026-12-05
-                         */
-                        fecha_salida: string;
-                        /** @example 2 */
-                        numero_huespedes: number;
-                    };
+                    "application/json": components["schemas"]["CreateReservaHabitacionRequest"];
                 };
             };
             responses: {
-                /** @description Reserva creada correctamente */
+                /** @description Reserva de habitación creada correctamente */
                 201: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReservaHabitacionCreatedResponse"];
+                    };
                 };
-                /** @description Datos inválidos */
+                /** @description Datos inválidos o usuario_id faltante para administradores */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -5808,7 +5792,7 @@ export interface paths {
                         "application/json": components["schemas"]["ValidationErrorResponse"];
                     };
                 };
-                /** @description Usuario no autenticado */
+                /** @description Usuario no autenticado (AUTH_TOKEN_REQUIRED, INVALID_AUTH_FORMAT, INVALID_TOKEN, TOKEN_EXPIRED) */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -5826,7 +5810,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Usuario o habitación no encontrada */
+                /** @description Usuario o habitación no encontrada (HABITACION_NOT_FOUND) */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -5835,7 +5819,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Habitación ocupada en esas fechas o habitación en mantenimiento */
+                /** @description Habitación ocupada en esas fechas o en mantenimiento (HABITACION_EN_MANTENIMIENTO, HABITACION_OCUPADA_EN_FECHAS) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -5844,7 +5828,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Fechas inválidas, fecha pasada o capacidad excedida */
+                /** @description Fechas inválidas, fecha pasada o capacidad excedida (FECHAS_INVALIDAS, ROOM_RESERVATION_DATE_IN_PAST, CAPACIDAD_EXCEDIDA) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -5883,12 +5867,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Reserva obtenida correctamente */
+                /** @description Reserva de habitación obtenida correctamente */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReservaHabitacionResponse"];
+                    };
                 };
                 /** @description ID inválido */
                 400: {
@@ -6896,6 +6882,107 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/habitaciones/disponibles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consultar habitaciones disponibles
+         * @description Consulta las habitaciones disponibles para una sede, rango de fechas y número de huéspedes. Requiere autenticación.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /**
+                     * @description ID de la sucursal (entero positivo)
+                     * @example 1
+                     */
+                    sucursal_id: number;
+                    /**
+                     * @description Fecha de entrada (AAAA-MM-DD)
+                     * @example 2026-12-01
+                     */
+                    fecha_entrada: string;
+                    /**
+                     * @description Fecha de salida posterior a la entrada (AAAA-MM-DD)
+                     * @example 2026-12-05
+                     */
+                    fecha_salida: string;
+                    /**
+                     * @description Número de huéspedes (entero positivo)
+                     * @example 2
+                     */
+                    numero_huespedes: number;
+                    /**
+                     * @description Filtro opcional por tipo de habitación
+                     * @example 1
+                     */
+                    tipo_habitacion_id?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Habitaciones disponibles obtenidas correctamente */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DisponibilidadHabitacionesResponse"];
+                    };
+                };
+                /** @description Parámetros inválidos o formato incorrecto */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description Usuario no autenticado (AUTH_TOKEN_REQUIRED, INVALID_AUTH_FORMAT, INVALID_TOKEN, TOKEN_EXPIRED) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Sucursal no encontrada (SUCURSAL_NOT_FOUND) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Parámetros semánticamente inválidos (FECHAS_INVALIDAS, ROOM_RESERVATION_DATE_IN_PAST) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -12758,6 +12845,186 @@ export interface components {
              * @enum {string}
              */
             estado: "valido" | "usado" | "cancelado";
+        };
+        ReservaHabitacionUsuario: {
+            /** @example 1 */
+            id: number;
+            /** @example Juan Pérez */
+            nombre: string;
+            /**
+             * Format: email
+             * @example juan.perez@ejemplo.com
+             */
+            email: string;
+            /** @example cliente */
+            rol: string;
+            /** @example 55551234 */
+            telefono?: string | null;
+            /** @example true */
+            activo?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ReservaHabitacionTipo: {
+            /** @example 1 */
+            id: number;
+            /** @example Suite Presidencial */
+            nombre: string;
+            /** @example 4 */
+            capacidad_maxima: number;
+            /**
+             * @description Tarifa por noche en formato decimal con dos dígitos
+             * @example 450.00
+             */
+            tarifa_noche: string;
+            /** @example Habitación espaciosa con vista panorámica */
+            descripcion?: string | null;
+        };
+        ReservaHabitacionSucursal: {
+            /** @example 1 */
+            id: number;
+            /** @example Hotel Central Guatemala */
+            nombre: string;
+            /** @example true */
+            activa?: boolean;
+        };
+        ReservaHabitacionHabitacion: {
+            /** @example 10 */
+            id: number;
+            /** @example 1 */
+            sucursal_id: number;
+            /** @example 1 */
+            tipo_habitacion_id: number;
+            /** @example 101 */
+            numero: string;
+            /**
+             * @example disponible
+             * @enum {string}
+             */
+            estado: "disponible" | "ocupada" | "mantenimiento" | "limpieza";
+            TipoHabitacion?: components["schemas"]["ReservaHabitacionTipo"];
+            Sucursal?: components["schemas"]["ReservaHabitacionSucursal"];
+        };
+        ReservaHabitacion: {
+            /** @example 1 */
+            id: number;
+            /** @example 3 */
+            usuario_id: number;
+            /** @example 10 */
+            habitacion_id: number;
+            /**
+             * Format: date
+             * @example 2026-12-01
+             */
+            fecha_entrada: string;
+            /**
+             * Format: date
+             * @example 2026-12-05
+             */
+            fecha_salida: string;
+            /** @example 2 */
+            numero_huespedes: number;
+            /**
+             * @example pendiente
+             * @enum {string}
+             */
+            estado: "pendiente" | "confirmada" | "cancelada" | "finalizada" | "expirada";
+            /**
+             * @description Monto total calculado por el servidor con formato decimal
+             * @example 1800.00
+             */
+            total: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            Usuario?: components["schemas"]["ReservaHabitacionUsuario"];
+            Habitacion?: components["schemas"]["ReservaHabitacionHabitacion"];
+        };
+        CreateReservaHabitacionRequest: {
+            /**
+             * @description Opcional para clientes (asignado desde JWT); obligatorio para roles administrativos
+             * @example 1
+             */
+            usuario_id?: number;
+            /** @example 10 */
+            habitacion_id: number;
+            /**
+             * Format: date
+             * @example 2026-12-01
+             */
+            fecha_entrada: string;
+            /**
+             * Format: date
+             * @example 2026-12-05
+             */
+            fecha_salida: string;
+            /** @example 2 */
+            numero_huespedes: number;
+        };
+        HabitacionDisponible: {
+            /** @example 10 */
+            id: number;
+            /** @example 101 */
+            numero: string;
+            /** @example disponible */
+            estado: string;
+            /** @example 1 */
+            sucursal_id: number;
+            /** @example 1 */
+            tipo_habitacion_id: number;
+            /** @example 4 */
+            noches: number;
+            /**
+             * @description Tarifa por noche en formato decimal con dos dígitos
+             * @example 450.00
+             */
+            tarifa_noche: string;
+            /**
+             * @description Monto total estimado para la estancia con dos decimales
+             * @example 1800.00
+             */
+            total_estimado: string;
+            Sucursal?: components["schemas"]["ReservaHabitacionSucursal"];
+            TipoHabitacion?: components["schemas"]["ReservaHabitacionTipo"];
+        };
+        ReservaHabitacionResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Reserva de habitación obtenida correctamente */
+            message: string;
+            data: components["schemas"]["ReservaHabitacion"];
+        };
+        ReservaHabitacionCreatedResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 201 */
+            statusCode: number;
+            /** @example Reserva de habitación creada correctamente */
+            message: string;
+            data: components["schemas"]["ReservaHabitacion"];
+        };
+        ReservasHabitacionResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Reservas de habitación obtenidas correctamente */
+            message: string;
+            data: components["schemas"]["ReservaHabitacion"][];
+        };
+        DisponibilidadHabitacionesResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Habitaciones disponibles obtenidas correctamente */
+            message: string;
+            data: components["schemas"]["HabitacionDisponible"][];
         };
         ErrorResponse: {
             /** @example false */

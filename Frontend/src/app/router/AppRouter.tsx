@@ -17,6 +17,10 @@ import { AmenidadesPage } from '@/pages/AmenidadesPage';
 import { ParqueosPage } from '@/pages/ParqueosPage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { RESERVAS_ROUTES } from '@/features/reservas';
+import { CrearReservaPage } from '@/pages/CrearReservaPage';
+import { MisReservasPage } from '@/pages/MisReservasPage';
+import { DetalleReservaHabitacionPage } from '@/pages/DetalleReservaHabitacionPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -36,6 +40,11 @@ export const AppRouter: React.FC = () => {
           <Route element={<RequireAuth />}>
             <Route path="/cuenta" element={<AccountPage />} />
           </Route>
+
+          {/* Flujo de reservas del cliente */}
+          <Route path={RESERVAS_ROUTES.NUEVA} element={<CrearReservaPage />} />
+          <Route path={RESERVAS_ROUTES.MIS_RESERVAS} element={<MisReservasPage />} />
+          <Route path="/mis-reservas/:id" element={<DetalleReservaHabitacionPage />} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Route>

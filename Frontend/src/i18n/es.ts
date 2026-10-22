@@ -38,6 +38,8 @@ export const es = {
     volverAlSitio: 'Volver al sitio público',
     panelAdmin: 'Panel administrativo',
     sesionIniciadaComo: 'Sesión iniciada como',
+    reservar: 'Reservar',
+    misReservas: 'Mis reservas',
   },
   roles: {
     admin: 'Administrador',

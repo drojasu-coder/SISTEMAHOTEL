@@ -5,6 +5,9 @@ import { useAuth } from '@/features/auth/AuthContext';
 import { canAccessPanel } from '@/features/auth/permissions';
 import { getRoleLabel } from '@/features/auth/types';
 import { es } from '@/i18n/es';
+import { Link } from 'react-router-dom';
+import { buttonStyles } from '@/components/ui/Button';
+import { RESERVAS_ROUTES } from '@/features/reservas';
 
 /**
  * Cuenta mínima de cualquier rol conocido: solo muestra la identidad verificada por el
@@ -40,6 +43,17 @@ export const AccountPage: React.FC = () => {
           ))}
         </dl>
       </Card>
+
+      {user.rol === 'cliente' && (
+        <div className="flex flex-wrap gap-3">
+          <Link to={RESERVAS_ROUTES.NUEVA} className={buttonStyles({ variant: 'primary' })}>
+            {es.navegacion.reservar}
+          </Link>
+          <Link to={RESERVAS_ROUTES.MIS_RESERVAS} className={buttonStyles({ variant: 'secondary' })}>
+            {es.navegacion.misReservas}
+          </Link>
+        </div>
+      )}
 
       {!canAccessPanel(user.rol) && user.rol !== 'cliente' && (
         <Alert tone="info" title={es.cuenta.sinModulosTitulo}>

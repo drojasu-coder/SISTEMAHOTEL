@@ -6,6 +6,7 @@ import { useAuth } from '@/features/auth/AuthContext';
 import { canAccessPanel } from '@/features/auth/permissions';
 import { cn } from '@/lib/cn';
 import { es } from '@/i18n/es';
+import { RESERVAS_ROUTES } from '@/features/reservas';
 
 const actionClass =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
@@ -40,6 +41,34 @@ export const Navbar: React.FC = () => {
           >
             {es.navegacion.inicio}
           </NavLink>
+          {(!hasPanel || user?.rol === 'cliente') && (
+            <>
+              <NavLink
+                to={RESERVAS_ROUTES.NUEVA}
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                    isActive ? 'text-bronce-700' : 'text-neutro-700',
+                  )
+                }
+              >
+                {es.navegacion.reservar}
+              </NavLink>
+              {status === 'authenticated' && user?.rol === 'cliente' && (
+                <NavLink
+                  to={RESERVAS_ROUTES.MIS_RESERVAS}
+                  className={({ isActive }) =>
+                    cn(
+                      'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                      isActive ? 'text-bronce-700' : 'text-neutro-700',
+                    )
+                  }
+                >
+                  {es.navegacion.misReservas}
+                </NavLink>
+              )}
+            </>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">

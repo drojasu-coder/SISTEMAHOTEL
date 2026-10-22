@@ -6,6 +6,7 @@ import type {
   HabitacionDisponible,
   ReservaHabitacion,
   ReservaHabitacionResponse,
+  ReservaHabitacionCreatedResponse,
   ReservasHabitacionResponse,
 } from '../types';
 
@@ -51,7 +52,7 @@ export const reservasApi = {
   create: async (
     data: CreateReservaHabitacionInput
   ): Promise<ReservaHabitacion> => {
-    const response = await api.post<ReservaHabitacionResponse>(
+    const response = await api.post<ReservaHabitacionCreatedResponse>(
       '/reservas-habitacion',
       data
     );
