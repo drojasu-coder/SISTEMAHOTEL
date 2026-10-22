@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert } from '@/components/ui/Feedback';
 import { Card } from '@/components/ui/Card';
 import type { ReservaHabitacion } from '@/features/reservas';
+import { BotonAnadirAlCarrito } from '@/features/carrito';
 import {
   calcularNoches,
   formatFechaCalendario,
@@ -74,14 +75,25 @@ export const ReservaDetalle: React.FC<ReservaDetalleProps> = ({
         </dl>
       </Card>
 
-      <Card className="flex flex-col gap-2 bg-bronce-50">
-        <p className="eyebrow">{textosMisReservas.campos.importe}</p>
-        <p className="font-serif text-[2rem] font-semibold leading-tight text-neutro-900">
-          {importe ?? textosMisReservas.noDisponible}
-        </p>
-        <p className="text-xs text-neutro-600">
-          {textosMisReservas.importeNota}
-        </p>
+      <Card className="flex flex-col gap-4 bg-bronce-50">
+        <div className="flex flex-col gap-1">
+          <p className="eyebrow">{textosMisReservas.campos.importe}</p>
+          <p className="font-serif text-[2rem] font-semibold leading-tight text-neutro-900">
+            {importe ?? textosMisReservas.noDisponible}
+          </p>
+          <p className="text-xs text-neutro-600">
+            {textosMisReservas.importeNota}
+          </p>
+        </div>
+
+        <div className="border-t border-bronce-200/80 pt-3">
+          <BotonAnadirAlCarrito
+            reservaId={reserva.id}
+            reservaEstado={reserva.estado}
+            variant="primary"
+            size="sm"
+          />
+        </div>
       </Card>
 
       {avisoSedes && (

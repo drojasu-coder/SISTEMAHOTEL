@@ -1,7 +1,7 @@
 import type { CarritoItem, TipoItemCarrito } from './types';
 
 /**
- * Textos de la pantalla del carrito.
+ * Textos de la pantalla del carrito y acciones de compra.
  *
  * Se mantienen dentro del módulo para no alterar las traducciones globales ni
  * compartir mensajes con otras pantallas. Todas las referencias monetarias son
@@ -87,6 +87,21 @@ export const textosCarrito = {
     'No pudimos confirmar si el artículo se retiró. Actualizamos el carrito para mostrar su estado real. Revise la lista antes de intentarlo de nuevo.',
   retiroError:
     'No fue posible retirar el artículo. Actualizamos el carrito para mostrar su estado actual.',
+
+  // Acciones de adición al carrito
+  anadirAlCarrito: 'Añadir al carrito',
+  anadiendoAlCarrito: 'Añadiendo al carrito…',
+  anadirExito: 'Se añadió la reserva al carrito activo.',
+  anadirExitoNota: 'Añadir al carrito no constituye pago ni confirmación de la reserva.',
+  verCarrito: 'Ver carrito',
+  yaEnCarrito: 'Esta reserva ya se encuentra en su carrito activo.',
+  referenciaNoDisponible: 'La reserva seleccionada ya no se encuentra disponible para compra.',
+  referenciaAjena: 'La reserva seleccionada no pertenece a su cuenta.',
+  carritoInactivo: 'Su carrito anterior venció. Inténtelo de nuevo para iniciar uno nuevo.',
+  errorRedAnadir:
+    'No fue posible confirmar si la reserva se añadió al carrito debido a un fallo de conexión. Revise su carrito antes de reintentar.',
+  errorAnadirGenerico: 'No fue posible añadir la reserva al carrito.',
+  noElegibleEstado: 'Esta reserva no está disponible para añadir al carrito en su estado actual.',
 
   acceso: {
     verificandoSesion: 'Verificando su sesión…',

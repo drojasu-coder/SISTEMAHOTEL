@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas/constants/routes';
+import { BotonAnadirAlCarrito } from '@/features/carrito';
 import { textosCrearReserva, formatGTQ } from '../textos';
 import type { ReservaHabitacion } from '../types';
 
@@ -101,6 +102,19 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Acción para añadir la reserva recién creada al carrito */}
+      <div className="rounded-lg border border-bronce-200 bg-bronce-50/50 p-4">
+        <p className="mb-3 text-xs font-medium text-neutro-700">
+          ¿Desea incluir esta reserva en su carrito de compras para tramitarla más adelante?
+        </p>
+        <BotonAnadirAlCarrito
+          reservaId={reserva.id}
+          reservaEstado={reserva.estado}
+          variant="secondary"
+          size="sm"
+        />
       </div>
 
       {/* Acciones y Enlaces usando RESERVAS_ROUTES */}

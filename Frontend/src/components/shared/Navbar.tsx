@@ -7,6 +7,8 @@ import { canAccessPanel } from '@/features/auth/permissions';
 import { cn } from '@/lib/cn';
 import { es } from '@/i18n/es';
 import { RESERVAS_ROUTES } from '@/features/reservas';
+import { CARRITO_ROUTES } from '@/features/carrito';
+import { ShoppingCart } from 'lucide-react';
 
 const actionClass =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
@@ -55,17 +57,31 @@ export const Navbar: React.FC = () => {
                 {es.navegacion.reservar}
               </NavLink>
               {status === 'authenticated' && user?.rol === 'cliente' && (
-                <NavLink
-                  to={RESERVAS_ROUTES.MIS_RESERVAS}
-                  className={({ isActive }) =>
-                    cn(
-                      'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                      isActive ? 'text-bronce-700' : 'text-neutro-700',
-                    )
-                  }
-                >
-                  {es.navegacion.misReservas}
-                </NavLink>
+                <>
+                  <NavLink
+                    to={RESERVAS_ROUTES.MIS_RESERVAS}
+                    className={({ isActive }) =>
+                      cn(
+                        'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                        isActive ? 'text-bronce-700' : 'text-neutro-700',
+                      )
+                    }
+                  >
+                    {es.navegacion.misReservas}
+                  </NavLink>
+                  <NavLink
+                    to={CARRITO_ROUTES.CARRITO}
+                    className={({ isActive }) =>
+                      cn(
+                        'inline-flex min-h-11 items-center gap-1.5 text-sm font-medium hover:text-bronce-700',
+                        isActive ? 'text-bronce-700' : 'text-neutro-700',
+                      )
+                    }
+                  >
+                    <ShoppingCart className="size-4" aria-hidden="true" />
+                    <span>{es.navegacion.carrito}</span>
+                  </NavLink>
+                </>
               )}
             </>
           )}

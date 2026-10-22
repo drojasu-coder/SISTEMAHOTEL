@@ -40,6 +40,7 @@ export const es = {
     sesionIniciadaComo: 'Sesión iniciada como',
     reservar: 'Reservar',
     misReservas: 'Mis reservas',
+    carrito: 'Carrito',
   },
   roles: {
     admin: 'Administrador',

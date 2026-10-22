@@ -21,6 +21,8 @@ import { RESERVAS_ROUTES } from '@/features/reservas';
 import { CrearReservaPage } from '@/pages/CrearReservaPage';
 import { MisReservasPage } from '@/pages/MisReservasPage';
 import { DetalleReservaHabitacionPage } from '@/pages/DetalleReservaHabitacionPage';
+import { CarritoPage } from '@/pages/CarritoPage';
+import { CARRITO_ROUTES } from '@/features/carrito';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -39,6 +41,7 @@ export const AppRouter: React.FC = () => {
           {/* Cuenta mínima: cualquier rol conocido con sesión verificada */}
           <Route element={<RequireAuth />}>
             <Route path="/cuenta" element={<AccountPage />} />
+            <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
           </Route>
 
           {/* Flujo de reservas del cliente */}
