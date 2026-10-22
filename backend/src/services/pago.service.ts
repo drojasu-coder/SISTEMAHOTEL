@@ -741,7 +741,56 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
     const isRefundEvent = eventType.includes("refund");
     const intentId = isRefundEvent ? (typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id) : object.id;
 
-    const payment = await Pago.findOne({ where: { id_transaccion_externo: intentId }, transaction, lock: transaction.LOCK.UPDATE });
+    let payment: any;
+    if (!isRefundEvent && eventType === "payment_intent.succeeded") {
+      const unlockedPayment = await Pago.findOne({
+        where: { id_transaccion_externo: intentId },
+        transaction,
+      });
+      if (!unlockedPayment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
+
+      if (unlockedPayment.carrito_id !== null && unlockedPayment.carrito_id !== undefined) {
+        const discoveredPayment = {
+          id: Number(unlockedPayment.id),
+          externalId: unlockedPayment.id_transaccion_externo,
+          carritoId: Number(unlockedPayment.carrito_id),
+          reservaHabitacionId: unlockedPayment.reserva_habitacion_id ?? null,
+        };
+
+        const cart = await Carrito.findByPk(discoveredPayment.carritoId, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!cart) throw new AppError(404, "CART_NOT_FOUND", "El carrito solicitado no existe");
+
+        payment = await Pago.findOne({
+          where: { id_transaccion_externo: intentId },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (
+          !payment ||
+          Number(payment.id) !== discoveredPayment.id ||
+          payment.id_transaccion_externo !== discoveredPayment.externalId ||
+          Number(payment.carrito_id) !== discoveredPayment.carritoId ||
+          (payment.reserva_habitacion_id ?? null) !== discoveredPayment.reservaHabitacionId
+        ) {
+          throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
+        }
+      } else {
+        payment = await Pago.findOne({
+          where: { id_transaccion_externo: intentId },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+      }
+    } else {
+      payment = await Pago.findOne({
+        where: { id_transaccion_externo: intentId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+    }
     if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
 
     if (isRefundEvent) {

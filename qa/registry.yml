@@ -1551,3 +1551,106 @@ findings:
       test_modified_by_fixer: false
       migrations_modified: false
       unrelated_production_changes: none
+
+  - id: QA-PAY-CONC-CANDIDATE-018
+    status: closed
+    severity: medium
+    category: CONCURRENCY
+    title: >-
+      createPago y payment_intent.succeeded adquieren Carrito/Pago en orden
+      inverso y forman un deadlock PostgreSQL
+    invariant: >-
+      Crear el pago del saldo y procesar o repetir legítimamente un webhook
+      payment_intent.succeeded del mismo carrito deben serializarse sin inversión
+      de locks, errores PostgreSQL 40P01 ni respuestas HTTP 500. Ambas operaciones
+      válidas deben completarse y conservar una exposición financiera máxima de
+      Q100.00.
+    reproduction:
+      test_file: backend/tests/pagos/pagoWebhookLockOrder.concurrency.test.ts
+      test_name: "QA-PAY-CONC-CANDIDATE-018: createPago y replay webhook no deben formar deadlock por orden inverso"
+      command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoWebhookLockOrder.concurrency.test.ts -t
+        "QA-PAY-CONC-CANDIDATE-018: createPago y replay webhook no deben formar
+        deadlock por orden inverso"
+      database: hotel_test_db
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+      concurrent_pairs: 1
+      deterministic_coordination: >-
+        vi.spyOn envuelve los métodos reales y usa Promises como barreras justo
+        después de que Pago.findOne FOR UPDATE del webhook adquiere Pago P0 y de
+        que Carrito.findByPk FOR UPDATE de createPago adquiere el carrito. No usa
+        advisory locks ni hooks de producción.
+    expected:
+      create_pago: "201; Pago P1 procesando Q60.00"
+      webhook_replay: "200 received=true"
+      postgres_error_code: null
+      http_500: false
+      deadlock: false
+      timeout: false
+      payment_rows: 2
+      payment_states: "P0 aprobado Q40.00; P1 procesando Q60.00"
+      cart_state: activo
+      approved_amount: "40.00"
+      processing_exposure: "60.00"
+      financial_corruption: false
+    actual:
+      create_pago: "201; Pago P1 procesando Q60.00"
+      webhook_replay: "500 INTERNAL_SERVER_ERROR"
+      postgres_error_code: 40P01
+      sequelize_error: "SequelizeDatabaseError: deadlock detected"
+      http_500: true
+      deadlock: true
+      timeout: false
+      red_result: "1 file failed, 1 test failed; 4 assertions de concurrencia fallaron"
+    lock_evidence:
+      create_pago_first_lock: "Carrito.findByPk FOR UPDATE"
+      create_pago_second_lock: "Pago.findAll FOR UPDATE en approvedAmount"
+      webhook_first_lock: "Pago.findOne FOR UPDATE por id_transaccion_externo"
+      webhook_second_lock: "Carrito.findByPk FOR UPDATE en validateOpenOrigin"
+      lock_order_inversion: true
+      deadlock_victim: webhook
+      failing_lock: Carrito.findByPk
+      original_code: 40P01
+      parent_code: 40P01
+    http_evidence:
+      create_pago_status: 201
+      create_pago_code: null
+      webhook_status: 500
+      webhook_code: INTERNAL_SERVER_ERROR
+      unexpected_500: true
+    database_evidence:
+      payment_rows: 2
+      p0: "id=1; aprobado; Q40.00; pi_pay_conc_018_1"
+      p1: "id=2; procesando; Q60.00; pi_pay_conc_018_2"
+      cart_state: activo
+      approved_amount: "40.00"
+      processing_exposure: "60.00"
+      total_financial_exposure: "100.00"
+      financial_corruption: false
+    suspected_execution_path: >-
+      createPago entra en su transacción, validateOpenOrigin bloquea primero el
+      Carrito y committedOrProcessingExposure llama approvedAmount, que intenta
+      bloquear P0 mediante Pago.findAll FOR UPDATE. En paralelo,
+      processStripeWebhook bloquea primero P0 mediante Pago.findOne FOR UPDATE y,
+      para target aprobado incluso cuando es un replay, llama validateOpenOrigin,
+      que intenta bloquear el mismo Carrito. PostgreSQL detecta el ciclo
+      Carrito->Pago / Pago->Carrito, aborta el webhook con 40P01 y el middleware
+      lo expone como HTTP 500 INTERNAL_SERVER_ERROR.
+    severity_recommendation: medium
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      db_guard: green
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck: pass
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+      fixes_007_through_017_modified: false
+      fixes_007_through_017_regression_observed: none
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
