@@ -829,6 +829,17 @@ Mesa: {
       type: "string",
       format: "date-time",
     },
+
+    Sucursal: {
+      type: "object",
+      nullable: true,
+      properties: {
+        nombre: {
+          type: "string",
+          example: "Hotel Central",
+        },
+      },
+    },
   },
 },
 
@@ -852,6 +863,7 @@ CreateMesaRequest: {
 
     zona: {
       type: "string",
+      maxLength: 30,
       example: "terraza",
     },
 
@@ -860,17 +872,26 @@ CreateMesaRequest: {
       minimum: 1,
       example: 4,
     },
+
+    estado: {
+      type: "string",
+      maxLength: 20,
+      example: "disponible",
+    },
   },
 },
 
 UpdateMesaRequest: {
   type: "object",
 
+  minProperties: 1,
+
   additionalProperties: false,
 
   properties: {
     zona: {
       type: "string",
+      maxLength: 30,
       example: "interior",
     },
 
@@ -882,7 +903,37 @@ UpdateMesaRequest: {
 
     estado: {
       type: "string",
+      maxLength: 20,
       example: "disponible",
+    },
+  },
+},
+
+MesaResponse: {
+  type: "object",
+  properties: {
+    status: {
+      type: "string",
+      example: "success",
+    },
+    data: {
+      $ref: "#/components/schemas/Mesa",
+    },
+  },
+},
+
+MesasResponse: {
+  type: "object",
+  properties: {
+    status: {
+      type: "string",
+      example: "success",
+    },
+    data: {
+      type: "array",
+      items: {
+        $ref: "#/components/schemas/Mesa",
+      },
     },
   },
 },

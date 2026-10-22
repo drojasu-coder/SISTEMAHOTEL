@@ -22,8 +22,7 @@ export const createMesaSchema = z
       .string()
       .trim()
       .max(20, "El estado no puede superar 20 caracteres")
-      .optional()
-      .nullable(),
+      .optional(),
   })
   .strict();
 
@@ -46,8 +45,7 @@ export const updateMesaSchema = z
       .string()
       .trim()
       .max(20, "El estado no puede superar 20 caracteres")
-      .optional()
-      .nullable(),
+      .optional(),
   })
   .strict()
   .refine(

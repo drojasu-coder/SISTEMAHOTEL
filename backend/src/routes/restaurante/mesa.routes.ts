@@ -20,7 +20,6 @@ import { idParamSchema } from "../../validators/common.validator";
 
 const router = Router();
 
-
 /**
  * @openapi
  * /api/mesas:
@@ -28,10 +27,14 @@ const router = Router();
  *     tags:
  *       - Mesas
  *     summary: Listar mesas
- *     description: Obtiene todas las mesas disponibles en el restaurante.
+ *     description: Obtiene todas las mesas disponibles en el restaurante junto con los datos de su sucursal.
  *     responses:
  *       200:
  *         description: Mesas obtenidas correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MesasResponse'
  */
 router.get(
   "/",
@@ -55,8 +58,22 @@ router.get(
  *     responses:
  *       200:
  *         description: Mesa obtenida correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MesaResponse'
+ *       400:
+ *         description: Parámetro de ruta inválido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
  *       404:
  *         description: Mesa no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/:id",
@@ -79,24 +96,38 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - sucursal_id
- *               - zona
- *               - capacidad
- *             properties:
- *               sucursal_id:
- *                 type: integer
- *                 example: 1
- *               zona:
- *                 type: string
- *                 example: Terraza
- *               capacidad:
- *                 type: integer
- *                 example: 4
+ *             $ref: '#/components/schemas/CreateMesaRequest'
  *     responses:
  *       201:
  *         description: Mesa creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MesaResponse'
+ *       400:
+ *         description: Datos enviados inválidos o incompletos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Permisos insuficientes (requiere admin o gerente_restaurante)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: La sucursal indicada no existe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/",
@@ -113,6 +144,7 @@ router.post(
  *     tags:
  *       - Mesas
  *     summary: Actualizar una mesa
+ *     description: Actualiza una mesa existente. Requiere rol administrador o gerente de restaurante. No admite sucursal_id y exige al menos un campo permitido.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -127,17 +159,38 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               zona:
- *                 type: string
- *               capacidad:
- *                 type: integer
- *               estado:
- *                 type: string
+ *             $ref: '#/components/schemas/UpdateMesaRequest'
  *     responses:
  *       200:
  *         description: Mesa actualizada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/MesaResponse'
+ *       400:
+ *         description: Datos enviados inválidos, cuerpo vacío o parámetros incorrectos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Permisos insuficientes (requiere admin o gerente_restaurante)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Mesa no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.patch(
   "/:id",

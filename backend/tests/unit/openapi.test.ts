@@ -26,6 +26,52 @@ describe("generated OpenAPI contract", () => {
     expect(configuration.patch.security).toEqual([{ bearerAuth: [] }]);
   });
 
+  it("contains complete mesas schemas and documented contract responses (BE-009)", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    // Component schemas
+    expect(schemas.Mesa).toBeDefined();
+    expect(schemas.CreateMesaRequest).toBeDefined();
+    expect(schemas.UpdateMesaRequest).toBeDefined();
+    expect(schemas.MesaResponse).toBeDefined();
+    expect(schemas.MesasResponse).toBeDefined();
+
+    // CreateMesaRequest has sucursal_id, zona, capacidad required and estado optional
+    expect(schemas.CreateMesaRequest.required).toEqual(["sucursal_id", "zona", "capacidad"]);
+    expect(schemas.CreateMesaRequest.properties.estado).toBeDefined();
+
+    // UpdateMesaRequest has minProperties: 1, excludes sucursal_id, allows zona, capacidad, estado
+    expect(schemas.UpdateMesaRequest.minProperties).toBe(1);
+    expect(schemas.UpdateMesaRequest.properties.sucursal_id).toBeUndefined();
+    expect(schemas.UpdateMesaRequest.properties.zona).toBeDefined();
+    expect(schemas.UpdateMesaRequest.properties.capacidad).toBeDefined();
+    expect(schemas.UpdateMesaRequest.properties.estado).toBeDefined();
+
+    // Endpoints
+    const collection = paths["/api/mesas"];
+    const resource = paths["/api/mesas/{id}"];
+
+    expect(collection.get.responses["200"].content["application/json"].schema).toBeDefined();
+    expect(collection.post.requestBody.content["application/json"].schema).toBeDefined();
+    expect(collection.post.responses["201"].content["application/json"].schema).toBeDefined();
+    expect(collection.post.responses["400"]).toBeDefined();
+    expect(collection.post.responses["401"]).toBeDefined();
+    expect(collection.post.responses["403"]).toBeDefined();
+    expect(collection.post.responses["404"]).toBeDefined();
+
+    expect(resource.get.responses["200"].content["application/json"].schema).toBeDefined();
+    expect(resource.get.responses["400"]).toBeDefined();
+    expect(resource.get.responses["404"]).toBeDefined();
+
+    expect(resource.patch.requestBody.content["application/json"].schema).toBeDefined();
+    expect(resource.patch.responses["200"].content["application/json"].schema).toBeDefined();
+    expect(resource.patch.responses["400"]).toBeDefined();
+    expect(resource.patch.responses["401"]).toBeDefined();
+    expect(resource.patch.responses["403"]).toBeDefined();
+    expect(resource.patch.responses["404"]).toBeDefined();
+  });
+
   it("keeps the generated specification operation inventory stable", () => {
     const paths = swaggerSpec.paths as Record<string, Record<string, unknown>>;
     const operations = Object.values(paths).reduce(
