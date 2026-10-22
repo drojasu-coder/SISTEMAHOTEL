@@ -1108,6 +1108,170 @@ findings:
       migrations_modified: false
       unrelated_production_changes: none
 
+  - id: QA-PAY-FIN-CANDIDATE-016
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Eventos Stripe antiguos degradan un reembolso aprobado y reabren saldo
+    invariant: >-
+      Un Reembolso aprobado por un evento Stripe válido no puede degradarse a
+      pendiente o rechazado cuando después llega un evento antiguo o fuera de
+      orden del mismo refund. El estado financiero debe ser monotónico: para un
+      pago de Q100.00 con reembolso parcial aprobado de Q40.00 deben conservarse
+      pago reembolsado_parcial, neto Q60.00 y capacidad de segundo reembolso
+      Q60.00.
+    reproduction:
+      test_file: backend/tests/pagos/refundOutOfOrderReplay.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-016: un refund aprobado no se degrada por eventos antiguos fuera de orden"
+      command: >-
+        npm --prefix backend test -- tests/pagos/refundOutOfOrderReplay.test.ts
+        -t "QA-PAY-FIN-CANDIDATE-016: un refund aprobado no se degrada por
+        eventos antiguos fuera de orden"
+      database: hotel_test_db
+      stripe_mode: full_local_mock
+      payment_intent: pi_refund_order_016
+      refund_id: re_016_001
+      real_stripe_calls: false
+    expected:
+      after_refund_updated_succeeded: >-
+        refund aprobado; pago reembolsado_parcial; reembolsos aprobados Q40.00;
+        neto Q60.00; capacidad de segundo reembolso Q60.00
+      after_old_refund_created_pending: >-
+        sin cambios: refund aprobado; pago reembolsado_parcial; neto Q60.00
+      after_old_refund_failed: >-
+        sin cambios: refund aprobado; pago reembolsado_parcial; neto Q60.00
+      after_second_refund_60: >-
+        ambos refunds aprobados Q40.00+Q60.00; pago reembolsado; neto Q0.00
+    actual:
+      after_refund_updated_succeeded: >-
+        refund aprobado; pago reembolsado_parcial; reembolsos aprobados Q40.00;
+        neto Q60.00; capacidad Q60.00
+      after_old_refund_created_pending: >-
+        refund pendiente; pago aprobado; reembolsos aprobados Q0.00; neto
+        Q100.00; capacidad Q100.00
+      after_old_refund_failed: >-
+        refund rechazado; pago aprobado; reembolsos aprobados Q0.00; neto
+        Q100.00; capacidad Q100.00
+      after_second_refund_60: >-
+        re_016_001 rechazado Q40.00 y re_016_002 aprobado Q60.00; pago
+        reembolsado_parcial; reembolsos aprobados Q60.00; neto Q40.00
+      red_result: "1 file failed, 1 test failed; 14 assertions financieras fallaron"
+    http_evidence:
+      reserva_actividad: 201
+      create_cart: 201
+      add_item: 201
+      create_payment: 201
+      payment_intent_succeeded: 200
+      create_partial_refund: 200
+      refund_updated_succeeded: 200
+      old_refund_created_pending: 200
+      old_refund_failed: 200
+      second_refund_60: 200
+      unexpected_500: false
+    database_evidence:
+      approved_checkpoint:
+        refund_state: aprobado
+        payment_state: reembolsado_parcial
+        approved_refunds: "40.00"
+        net: "60.00"
+        second_refund_capacity: "60.00"
+      after_old_pending:
+        refund_state: pendiente
+        payment_state: aprobado
+        approved_refunds: "0.00"
+        net: "100.00"
+        second_refund_capacity: "100.00"
+      after_old_failed:
+        refund_state: rechazado
+        payment_state: aprobado
+        approved_refunds: "0.00"
+        net: "100.00"
+        second_refund_capacity: "100.00"
+      final:
+        first_refund: "re_016_001/rechazado/40.00"
+        second_refund: "re_016_002/aprobado/60.00"
+        payment_state: reembolsado_parcial
+        approved_refunds: "60.00"
+        net: "40.00"
+    demonstrated_execution:
+      A_approved_refund_degraded_to_pending: true
+      B_same_refund_degraded_to_rejected: true
+      C_payment_and_net_regressed: true
+      D_second_refund_capacity_reopened: true
+    distinction_from_009: >-
+      QA-PAY-DATA-CANDIDATE-009 protege el estado de Pago ante replay de
+      payment_intent.succeeded y conserva intactas las filas Reembolso. Este
+      hallazgo usa refund.created/refund.failed del mismo refund después de
+      refund.updated succeeded; degrada la propia fila Reembolso y, al dejar de
+      contarla como aprobada, revive el Pago y altera neto y capacidad.
+    suspected_execution_path: >-
+      processStripeWebhook identifica cualquier eventType que contiene refund,
+      busca Reembolso solo por id_reembolso_externo y traduce el status recibido
+      a aprobado, rechazado o pendiente. Si difiere del estado persistido ejecuta
+      reembolso.update sin comprobar monotonicidad ni antigüedad del evento.
+      Luego recalcula exclusivamente Reembolsos en estado aprobado; al quedar el
+      refund antiguo pendiente o rechazado obtiene refunded=0 y cambia el Pago de
+      reembolsado_parcial a aprobado. createReembolso usa esa suma reducida para
+      calcular remaining y expone capacidad ya consumida externamente.
+    root_cause: >-
+      processStripeWebhook actualizaba un Reembolso siempre que el estado Stripe
+      traducido difiriera del persistido. No trataba aprobado como estado terminal,
+      por lo que un refund.created pendiente o refund.failed fuera de orden quitaba
+      el reembolso de la suma aprobada y hacía retroceder también el estado, neto y
+      capacidad financiera del Pago.
+    correction: >-
+      La actualización de un Reembolso existente ahora bloquea únicamente las
+      transiciones aprobado->pendiente y aprobado->rechazado. pendiente->aprobado
+      continúa permitido y no se alteraron las demás transiciones existentes. Al
+      conservarse la fila aprobada, el recálculo transaccional mantiene el total
+      reembolsado, el estado del Pago y el saldo neto correctos.
+    concurrency: >-
+      processStripeWebhook conserva el bloqueo FOR UPDATE de Pago antes de leer o
+      actualizar el Reembolso. Todos los eventos del mismo PaymentIntent y
+      createReembolso, que también bloquea primero el Pago, quedan serializados por
+      esa fila; no se agregó una comprobación check-then-write fuera de la
+      transacción ni se modificó el orden de locks.
+    regression_test:
+      test_file: backend/tests/pagos/refundOutOfOrderReplay.test.ts
+      test_modified_by_fixer: false
+    severity_recommendation: high
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      db_guard: green
+      existing_payment_regression: "9 files passed, 19 tests passed"
+      qa_pay_data_candidate_009: "2 tests passed"
+      fixes_007_through_015_modified: false
+      typecheck: green
+      stripe_mode: full_local_mock
+      real_stripe_calls: false
+      production_files_modified: false
+      migrations_modified: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      qa_pay_data_candidate_009: "1 file passed, 2 tests passed"
+      typecheck: green
+      stripe_mode: full_local_mock
+      real_stripe_calls: false
+      approved_checkpoint: "refund aprobado; pago reembolsado_parcial; aprobado Q40.00; neto Q60.00; capacidad Q60.00"
+      pending_replay_final_state: "refund aprobado; pago reembolsado_parcial; aprobado Q40.00; neto Q60.00; capacidad Q60.00"
+      failed_replay_final_state: "refund aprobado; pago reembolsado_parcial; aprobado Q40.00; neto Q60.00; capacidad Q60.00"
+      second_refund: "re_016_002 aprobado Q60.00"
+      final_payment_state: reembolsado
+      final_approved_refunds: "100.00"
+      final_net: "0.00"
+      financial_violation: false
+      full_backend: "24 files, 367 passed, 0 failed, 0 skipped"
+      regression: green
+      new_failures: none
+      files_modified_by_regression: none
+      regression_read_only_check: green
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+
   - id: QA-PAY-TX-CANDIDATE-015
     status: closed
     severity: high

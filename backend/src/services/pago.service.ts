@@ -744,7 +744,10 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
           fecha_reembolso: refundState === "aprobado" ? new Date(refundObj.created * 1000) : null,
           id_reembolso_externo: refundObj.id,
         }, { transaction });
-      } else if (reembolso.estado !== refundState) {
+      } else if (
+        reembolso.estado !== refundState &&
+        !(reembolso.estado === "aprobado" && refundState !== "aprobado")
+      ) {
         await reembolso.update({
           estado: refundState,
           fecha_reembolso: refundState === "aprobado" ? new Date(refundObj.created * 1000) : null
