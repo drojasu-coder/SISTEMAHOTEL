@@ -53,7 +53,11 @@ const rolesCreacionReservas = [
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Reservas obtenidas correctamente
+ *         description: Reservas de habitación obtenidas correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReservasHabitacionResponse'
  *       401:
  *         description: Usuario no autenticado
  *         content:
@@ -86,7 +90,11 @@ router.get(
  *           minimum: 1
  *     responses:
  *       200:
- *         description: Reserva obtenida correctamente
+ *         description: Reserva de habitación obtenida correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReservaHabitacionResponse'
  *       400:
  *         description: ID inválido
  *         content:
@@ -128,7 +136,7 @@ router.get(
  *     tags:
  *       - Reservas de Habitación
  *     summary: Crear una reserva de habitación
- *     description: Los clientes reservan para sí mismos utilizando el usuario del JWT. Los usuarios administrativos deben indicar usuario_id.
+ *     description: Los clientes reservan para sí mismos utilizando el usuario del JWT (omiten usuario_id). Los usuarios administrativos deben indicar usuario_id en el cuerpo.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -136,45 +144,22 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - habitacion_id
- *               - fecha_entrada
- *               - fecha_salida
- *               - numero_huespedes
- *             properties:
- *               usuario_id:
- *                 type: integer
- *                 minimum: 1
- *                 example: 1
- *                 description: Opcional para clientes y requerido para usuarios administrativos
- *               habitacion_id:
- *                 type: integer
- *                 minimum: 1
- *                 example: 1
- *               fecha_entrada:
- *                 type: string
- *                 format: date
- *                 example: '2026-12-01'
- *               fecha_salida:
- *                 type: string
- *                 format: date
- *                 example: '2026-12-05'
- *               numero_huespedes:
- *                 type: integer
- *                 minimum: 1
- *                 example: 2
+ *             $ref: '#/components/schemas/CreateReservaHabitacionRequest'
  *     responses:
  *       201:
- *         description: Reserva creada correctamente
+ *         description: Reserva de habitación creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReservaHabitacionCreatedResponse'
  *       400:
- *         description: Datos inválidos
+ *         description: Datos inválidos o usuario_id faltante para administradores
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ValidationErrorResponse'
  *       401:
- *         description: Usuario no autenticado
+ *         description: Usuario no autenticado (AUTH_TOKEN_REQUIRED, INVALID_AUTH_FORMAT, INVALID_TOKEN, TOKEN_EXPIRED)
  *         content:
  *           application/json:
  *             schema:
@@ -186,19 +171,19 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
- *         description: Usuario o habitación no encontrada
+ *         description: Usuario o habitación no encontrada (HABITACION_NOT_FOUND)
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       409:
- *         description: Habitación ocupada en esas fechas o habitación en mantenimiento
+ *         description: Habitación ocupada en esas fechas o en mantenimiento (HABITACION_EN_MANTENIMIENTO, HABITACION_OCUPADA_EN_FECHAS)
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       422:
- *         description: Fechas inválidas, fecha pasada o capacidad excedida
+ *         description: Fechas inválidas, fecha pasada o capacidad excedida (FECHAS_INVALIDAS, ROOM_RESERVATION_DATE_IN_PAST, CAPACIDAD_EXCEDIDA)
  *         content:
  *           application/json:
  *             schema:

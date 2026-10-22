@@ -1,3 +1,5 @@
+import { Op } from "sequelize";
+import { validateDates, validateNotPast, getNights, calculateTotal } from "./reservaHabitacion.service";
 import { AppError } from "../../utils/AppError";
 
 const db = require("../../models");
@@ -201,4 +203,122 @@ export const deleteHabitacion = async (
   await habitacion.destroy();
 
   return habitacion;
+};
+export interface DisponibilidadHabitacionQueryData {
+  sucursal_id: number;
+  fecha_entrada: string;
+  fecha_salida: string;
+  numero_huespedes: number;
+  tipo_habitacion_id?: number;
+}
+
+export const getHabitacionesDisponibles = async (
+  query: DisponibilidadHabitacionQueryData
+) => {
+  const sucursal = await Sucursal.findByPk(query.sucursal_id);
+
+  if (!sucursal) {
+    throw new AppError(
+      404,
+      "SUCURSAL_NOT_FOUND",
+      "La sucursal no fue encontrada"
+    );
+  }
+
+  validateDates(query.fecha_entrada, query.fecha_salida);
+  validateNotPast(query.fecha_entrada);
+
+  const noches = getNights(query.fecha_entrada, query.fecha_salida);
+
+  const reservasSolapadas = await ReservaHabitacion.findAll({
+    attributes: ["habitacion_id"],
+    where: {
+      estado: {
+        [Op.in]: ["pendiente", "confirmada"],
+      },
+      fecha_entrada: {
+        [Op.lt]: query.fecha_salida,
+      },
+      fecha_salida: {
+        [Op.gt]: query.fecha_entrada,
+      },
+    },
+    raw: true,
+  });
+
+  const habitacionIdsOcupadas = Array.from(
+    new Set(reservasSolapadas.map((r: any) => r.habitacion_id))
+  );
+
+  const whereHabitacion: any = {
+    sucursal_id: query.sucursal_id,
+    estado: {
+      [Op.ne]: "mantenimiento",
+    },
+  };
+
+  if (habitacionIdsOcupadas.length > 0) {
+    whereHabitacion.id = {
+      [Op.notIn]: habitacionIdsOcupadas,
+    };
+  }
+
+  if (query.tipo_habitacion_id !== undefined) {
+    whereHabitacion.tipo_habitacion_id = query.tipo_habitacion_id;
+  }
+
+  const habitaciones = await Habitacion.findAll({
+    where: whereHabitacion,
+    include: [
+      {
+        model: TipoHabitacion,
+        where: {
+          capacidad_maxima: {
+            [Op.gte]: query.numero_huespedes,
+          },
+        },
+        required: true,
+      },
+      {
+        model: Sucursal,
+        attributes: ["id", "nombre", "activa"],
+        required: false,
+      },
+    ],
+    order: [["numero", "ASC"], ["id", "ASC"]],
+  });
+
+  return habitaciones.map((h: any) => {
+    const tarifaNoche = Number(h.TipoHabitacion.tarifa_noche).toFixed(2);
+    const totalEstimado = calculateTotal(
+      query.fecha_entrada,
+      query.fecha_salida,
+      h.TipoHabitacion.tarifa_noche
+    );
+
+    return {
+      id: h.id,
+      numero: h.numero,
+      estado: h.estado,
+      sucursal_id: h.sucursal_id,
+      tipo_habitacion_id: h.tipo_habitacion_id,
+      noches,
+      tarifa_noche: tarifaNoche,
+      total_estimado: totalEstimado,
+      Sucursal: h.Sucursal
+        ? {
+            id: h.Sucursal.id,
+            nombre: h.Sucursal.nombre,
+            activa: h.Sucursal.activa,
+          }
+        : undefined,
+      TipoHabitacion: {
+        id: h.TipoHabitacion.id,
+        nombre: h.TipoHabitacion.nombre,
+        capacidad_maxima: h.TipoHabitacion.capacidad_maxima,
+        tarifa_noche: tarifaNoche,
+        descripcion: h.TipoHabitacion.descripcion ?? null,
+      },
+    };
+  });
 };
