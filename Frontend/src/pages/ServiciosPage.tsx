@@ -3,15 +3,22 @@ import { Link } from 'react-router-dom';
 import { Sparkles, Car, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { buttonStyles } from '@/components/ui/Button';
+import { useAuth } from '@/features/auth/AuthContext';
+import { hasPermission } from '@/features/auth/permissions';
 import { es } from '@/i18n/es';
 
 /**
  * Módulo de Servicios e Instalaciones (HOTEL HUNAHPÚ).
  * Centro de gestión para servicios complementarios, divididos entre:
  * 1. Amenidades e Instalaciones (/admin/amenidades)
- * 2. Parqueos y Estacionamiento (/admin/parqueos - reservado para integración)
+ * 2. Parqueos y Estacionamiento (/admin/parqueos - visible para quienes tienen habitaciones.gestionar)
  */
 export const ServiciosPage: React.FC = () => {
+  const { user } = useAuth();
+  const canManageParqueos = user
+    ? hasPermission(user.rol, 'habitaciones.gestionar')
+    : false;
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-12">
       {/* Encabezado */}
@@ -54,33 +61,34 @@ export const ServiciosPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Tarjeta de Parqueos (conserva el espacio para la integración del lote) */}
-        <Card className="flex flex-col justify-between gap-6 p-6 bg-neutro-50/50 border-dashed border-neutro-300">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
+        {/* Tarjeta de Parqueos: enlace funcional visible para quien tiene habitaciones.gestionar */}
+        {canManageParqueos && (
+          <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+            <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-neutro-200 text-neutro-700">
+                <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
                   <Car className="size-5" aria-hidden="true" />
                 </div>
                 <h2 className="font-serif text-lg font-bold text-neutro-900">
                   {es.servicios.parqueosTitulo}
                 </h2>
               </div>
-              <span className="inline-flex items-center rounded-full border border-neutro-300 bg-white px-2.5 py-0.5 text-xs font-semibold text-neutro-600">
-                {es.servicios.parqueosProximamente}
-              </span>
+              <p className="text-sm text-neutro-600">
+                {es.servicios.parqueosDescripcion}
+              </p>
             </div>
-            <p className="text-sm text-neutro-600">
-              {es.servicios.parqueosDescripcion}
-            </p>
-          </div>
 
-          <div className="pt-2">
-            <div className="rounded-lg border border-neutro-200 bg-white px-4 py-3 text-xs text-neutro-500">
-              Este módulo se incorporará con la entrega correspondiente de parqueos sin alterar las amenidades.
+            <div className="pt-2">
+              <Link
+                to="/admin/parqueos"
+                className={buttonStyles({ variant: 'primary', className: 'w-full justify-between' })}
+              >
+                <span>{es.servicios.parqueosBoton}</span>
+                <ChevronRight className="size-4" aria-hidden="true" />
+              </Link>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Plus, ParkingCircle } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Link } from "react-router-dom";
+import { Plus, ParkingCircle, Bed } from "lucide-react";
+import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/features/auth/AuthContext";
@@ -94,12 +95,21 @@ export const ParqueosPage: React.FC = () => {
           </p>
         </div>
 
-        {canManageParqueos && (
-          <Button type="button" variant="primary" onClick={handleOpenCreate}>
-            <Plus className="size-4" aria-hidden="true" />
-            <span>{textosParqueos.nuevoParqueo}</span>
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          <Link
+            to="/admin/habitaciones"
+            className={buttonStyles({ variant: "ghost" })}
+          >
+            <Bed className="size-4" aria-hidden="true" />
+            <span>{es.habitaciones.titulo}</span>
+          </Link>
+          {canManageParqueos && (
+            <Button type="button" variant="primary" onClick={handleOpenCreate}>
+              <Plus className="size-4" aria-hidden="true" />
+              <span>{textosParqueos.nuevoParqueo}</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Mensaje de confirmación o alerta temporal */}

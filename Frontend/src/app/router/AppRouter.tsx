@@ -14,6 +14,7 @@ import { TiposHabitacionPage } from '@/pages/TiposHabitacionPage';
 import { MesasPage } from '@/pages/MesasPage';
 import { ServiciosPage } from '@/pages/ServiciosPage';
 import { AmenidadesPage } from '@/pages/AmenidadesPage';
+import { ParqueosPage } from '@/pages/ParqueosPage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
@@ -76,6 +77,11 @@ export const AppRouter: React.FC = () => {
             {/* Amenidades */}
             <Route element={<RequireAuth permission="servicios.administrar" />}>
               <Route path="amenidades" element={<AmenidadesPage />} />
+            </Route>
+
+            {/* Espacios de parqueo */}
+            <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
+              <Route path="parqueos" element={<ParqueosPage />} />
             </Route>
           </Route>
         </Route>

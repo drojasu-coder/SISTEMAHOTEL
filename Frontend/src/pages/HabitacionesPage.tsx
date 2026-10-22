@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Bed, Layers } from "lucide-react";
+import { Plus, Bed, Layers, Car } from "lucide-react";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
@@ -132,6 +132,13 @@ export const HabitacionesPage: React.FC = () => {
           >
             <Layers className="size-4" aria-hidden="true" />
             <span>{es.tiposHabitacion.titulo}</span>
+          </Link>
+          <Link
+            to="/admin/parqueos"
+            className={buttonStyles({ variant: "ghost" })}
+          >
+            <Car className="size-4" aria-hidden="true" />
+            <span>{es.parqueos.titulo}</span>
           </Link>
           {canManageHabitaciones && (
             <Button

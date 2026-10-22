@@ -9,6 +9,7 @@ import {
 } from "@/test/renderWithProviders";
 import { tokenStorage } from "@/api/session";
 import { ParqueosPage } from "@/pages/ParqueosPage";
+import { ServiciosPage } from "@/pages/ServiciosPage";
 import type { Parqueo } from "./types";
 import type { Sucursal } from "@/features/sedes/types";
 
@@ -498,5 +499,32 @@ describe("Gestión de espacios de parqueo (ParqueosPage)", () => {
     expect(
       screen.getAllByRole("button", { name: /Editar espacio de parqueo/i }).length
     ).toBeGreaterThan(0);
+  });
+  it("muestra el enlace de navegación hacia Habitaciones en el encabezado", async () => {
+    tokenStorage.set("jwt-admin");
+    setupFetchMock({ role: "admin" });
+
+    renderWithProviders(<ParqueosPage />);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: /Espacios de parqueo/i,
+    });
+
+    const habitacionesLink = screen.getByRole("link", { name: /Habitaciones/i });
+    expect(habitacionesLink).toBeInTheDocument();
+    expect(habitacionesLink).toHaveAttribute("href", "/admin/habitaciones");
+  });
+
+  it("muestra la tarjeta con enlace funcional a Parqueos en Servicios para rol con habitaciones.gestionar", async () => {
+    tokenStorage.set("jwt-admin");
+    setupFetchMock({ role: "admin" });
+
+    renderWithProviders(<ServiciosPage />);
+
+    expect(await screen.findByRole("heading", { name: /Parqueos y Estacionamiento/i })).toBeInTheDocument();
+    const parqueosLink = screen.getByRole("link", { name: /Gestionar parqueos/i });
+    expect(parqueosLink).toBeInTheDocument();
+    expect(parqueosLink).toHaveAttribute("href", "/admin/parqueos");
   });
 });

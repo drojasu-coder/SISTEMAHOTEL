@@ -110,3 +110,20 @@
   - Incorporar componentes de schema para `Mesa` en OpenAPI, documentar el campo opcional `estado` en el alta y añadir los códigos de error estándar (400, 401, 403, 404).
 - **Resolución definitiva:** se añadieron las definiciones completas de OpenAPI en `swagger.ts` (`Mesa`, `CreateMesaRequest`, `UpdateMesaRequest`, `MesaResponse`, `MesasResponse`), se documentó el campo opcional `estado` en el alta, y se enlazaron los esquemas de respuesta 200/201 y errores (400, 401, 403, 404) en `mesa.routes.ts`. Validado mediante pruebas unitarias (`openapi.test.ts`) y tipos TypeScript regenerados en `Frontend/src/api/generated/schema.ts`.
 - **Estado:** resuelto.
+
+## BE-010 · Documentación OpenAPI incompleta en endpoints de parqueos
+
+- **Categoría:** mejora de documentación / contrato OpenAPI (no bloqueante)
+- **Revisión inspeccionada:** 2026-10-22 · `refactor/backend-architecture`
+- **Flujo afectado:** catálogo y gestión de espacios de parqueo (`/api/parqueos`).
+- **Estado de funcionamiento:** las operaciones del módulo (`GET /api/parqueos`, `GET /api/parqueos/:id`, `POST /api/parqueos`, `PATCH /api/parqueos/:id`, `DELETE /api/parqueos/:id`) funcionan correctamente en tiempo de ejecución.
+- **Detalle de las diferencias observadas (inspección de código):**
+  1. **Esquemas de respuesta faltantes en OpenAPI:**
+     - En `backend/src/routes/habitaciones/parqueo.routes.ts`, las anotaciones JSDoc OpenAPI para las respuestas 200 y 201 no declaran `content.application/json.schema`. En consecuencia, herramientas de generación de tipos (`openapi-typescript`) producen `content?: never` y no definen `components.schemas.Parqueo`.
+  2. **Resolución de nombres de sede:**
+     - El listado del backend (`GET /api/parqueos`) retorna los registros sin asociación `include: [Sucursal]`. Esto no es un defecto ni un bloqueo: el frontend resuelve los nombres de las sedes cruzando `sucursal_id` con el catálogo público `GET /api/sucursales`, exactamente igual al módulo de habitaciones.
+- **Resolución en frontend:**
+  - El frontend utiliza contratos tipados explícitos en `Frontend/src/features/parqueos/types.ts` (`Parqueo`, `ParqueosResponse`, `CreateParqueoInput`, `UpdateParqueoInput`, etc.) para procesar el envoltorio estándar `{ success: true, statusCode, message, data }`.
+- **Criterio para cierre definitivo en backend:**
+  - Añadir `$ref: '#/components/schemas/Parqueo'` a las respuestas 200/201 en `parqueo.routes.ts`, incorporar los esquemas `CreateParqueoRequest` y `UpdateParqueoRequest` en `swagger.ts` y regenerar tipos con `api:generate`.
+- **Estado:** no bloqueante / mejora opcional de contrato para backend.
