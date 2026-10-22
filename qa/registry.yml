@@ -1108,6 +1108,139 @@ findings:
       migrations_modified: false
       unrelated_production_changes: none
 
+  - id: QA-RA-FIN-CANDIDATE-017
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Una ReservaActividad cancelada después del ADD todavía puede cobrarse
+    invariant: >-
+      Antes de aprobar dinero para un carrito, el backend debe volver a validar
+      que cada ReservaActividad incluida continúa disponible. Si una actividad
+      confirmada de Q100.00 se agrega al carrito y después un administrador la
+      cancela, el intento de pago debe rechazarse sin persistir Pago, aprobar
+      dinero ni marcar el carrito como pagado.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividadCanceledBeforePayment.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-017: rechaza pagar una actividad cancelada después de agregarla al carrito"
+      command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoActividadCanceledBeforePayment.test.ts -t
+        "QA-RA-FIN-CANDIDATE-017: rechaza pagar una actividad cancelada después
+        de agregarla al carrito"
+      database: hotel_test_db
+      payment_method: efectivo
+      real_stripe_charges: false
+    expected:
+      payment_http_status: 409
+      payment_error_code: CART_REFERENCE_NOT_AVAILABLE
+      payment_persisted: false
+      payment_state: null
+      cart_state: activo
+      reservation_state: cancelada
+      cart_item_persisted: true
+      approved_amount: "0.00"
+      net_approved: "0.00"
+      canceled_service_charged: false
+      financial_violation: false
+    actual:
+      reservation_create: "201/confirmada"
+      reservation_total: "HTTP Q100.00 / PostgreSQL Q100.00"
+      cart_add: "201/item actividad/precio Q100.00; listado 200/total Q100.00; total persistido Q100.00"
+      cart_item_persisted: true
+      reservation_cancel: "200/cancelada"
+      reservation_state_before_payment: cancelada
+      payment_attempt: "201/sin código de error"
+      payment_persisted: true
+      payment_state: aprobado
+      payment_amount: "100.00"
+      cart_state: pagado
+      reservation_state_after_payment: cancelada
+      approved_amount: "100.00"
+      approved_refunds: "0.00"
+      net_approved: "100.00"
+      canceled_service_charged: true
+      financial_violation: true
+      red_result: "1 file failed, 1 test failed; 7 assertions financieras fallaron"
+    endpoint: POST /api/pagos
+    http_evidence:
+      reservation_create: 201
+      create_cart: 201
+      add_activity: 201
+      list_cart_items: 200
+      administrative_cancel: 200
+      payment_attempt: 201
+      payment_error_code: null
+      unexpected_500: false
+    database_evidence:
+      before_payment:
+        reservation_state: cancelada
+        reservation_total: "100.00"
+        cart_state: activo
+        cart_item_present: true
+        cart_total: "100.00"
+      after_payment:
+        payment_rows: 1
+        payment_state: aprobado
+        payment_amount: "100.00"
+        cart_state: pagado
+        reservation_state: cancelada
+        cart_item_present: true
+        approved_amount: "100.00"
+        approved_refunds: "0.00"
+        net_approved: "100.00"
+    demonstrated_execution:
+      activity_confirmed_and_added_before_cancel: true
+      administrative_cancel_persisted_before_payment: true
+      canceled_activity_remained_in_cart: true
+      cash_payment_approved: true
+      cart_marked_paid: true
+      canceled_service_charged: true
+    suspected_execution_path: >-
+      createPago llama validateOpenOrigin, que bloquea y valida el estado del
+      Carrito pero cartTotals solo vuelve a validar referencias de habitación y
+      evento. Para un CarritoItem de tipo actividad retorna precio por cantidad
+      sin volver a consultar ReservaActividad ni su estado cancelada. Luego el
+      flujo de efectivo crea Pago aprobado y applyCartPaid recalcula el mismo
+      total mutable, por lo que marca el carrito pagado aunque la actividad sigue
+      cancelada y el ítem permanece persistido.
+    root_cause: >-
+      cartTotals confiaba en el precio persistido del CarritoItem de actividad y
+      no volvía a consultar ReservaActividad dentro de la transacción de pago,
+      por lo que una cancelación posterior al ADD no impedía aprobar dinero.
+    correction: >-
+      La capa de totales/pago vuelve a cargar y bloquear ReservaActividad antes
+      de crear o aprobar Pago. Si la referencia ya no existe o su estado es
+      cancelada, aborta la transacción con HTTP 409 y código
+      CART_REFERENCE_NOT_AVAILABLE, sin eliminar el ítem ni alterar la reserva.
+    severity_recommendation: high
+    verification:
+      focused: "1 file passed, 1 test passed"
+      focused_command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoActividadCanceledBeforePayment.test.ts
+      regression_008: "1 file passed, 1 test passed"
+      regression_008_command: >-
+        npm --prefix backend test -- tests/pagos/pagoActividad.reuse.test.ts
+      regression_013: "1 file passed, 1 test passed"
+      regression_013_command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoActividad.crossCartProcessing.test.ts
+      db_guard: green
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck: green
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      payment_method: efectivo
+      real_stripe_charges: false
+      production_files_modified:
+        - backend/src/services/pago.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      fixes_007_through_016_modified: false
+      verified_at: "2026-10-21"
+
   - id: QA-PAY-FIN-CANDIDATE-016
     status: closed
     severity: high

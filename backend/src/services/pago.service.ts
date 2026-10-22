@@ -17,6 +17,7 @@ const {
   CarritoItem,
   ReservaHabitacion,
   ReservaEvento,
+  ReservaActividad,
 } = db;
 
 export type PagoMetodo = "tarjeta" | "efectivo" | "transferencia";
@@ -373,6 +374,22 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
             409,
             "CART_REFERENCE_NOT_AVAILABLE",
             "La reserva seleccionada ya no se encuentra disponible",
+          );
+        }
+      }
+      if (item.tipo_item === "actividad") {
+        const reservation = await ReservaActividad.findByPk(item.referencia_id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (
+          !reservation ||
+          String(reservation.estado).toLowerCase() === "cancelada"
+        ) {
+          throw new AppError(
+            409,
+            "CART_REFERENCE_NOT_AVAILABLE",
+            "La reserva de actividad ya no se encuentra disponible",
           );
         }
       }
