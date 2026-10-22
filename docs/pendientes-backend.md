@@ -13,5 +13,5 @@
   - Crear esquemas `CarritoResponse`, `CarritosResponse`, `CarritoItemsResponse`, `CarritoItemResponse` y `CreateCarritoItemRequest` en `components.schemas`.
   - Vincular las referencias en `carrito.routes.ts` y `carritoItem.routes.ts` para respuestas 200, 201, 204 y errores.
   - Verificar con pruebas unitarias de OpenAPI, pruebas HTTP contra `hotel_test_db` y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
-- **Avance verificado en backend:** Esquemas y respuestas documentados en `swagger.ts` y rutas, 14 pruebas unitarias OpenAPI (`openapi.carrito.test.ts`) pasando, 9 pruebas de integración HTTP contra `hotel_test_db` (`postgres.carrito.http.test.ts`) pasando, y tipos regenerados en `Frontend/src/api/generated/schema.ts`.
-- **Estado:** backend disponible / integración pendiente.
+- **Resolución definitiva:** Esquemas (`Carrito`, `CarritoItem`, `CarritoItemsData`, `CreateCarritoItemRequest`, `CarritoResponse`, `CarritosResponse`, `CarritoItemsResponse`, `CarritoItemResponse`) documentados con `required` explícito y `nullable` real en `swagger.ts` y rutas. Validado con 14 pruebas OpenAPI, 9 pruebas HTTP sobre `hotel_test_db` (crear, listar, colisión 409, referencia ajena 403, duplicado 409 y retiro 204 conservando reserva), tipos regenerados en `schema.ts`, adición integrada en confirmación/detalle de reservas y ruta `/carrito` activada para clientes.
+- **Estado:** resuelto.
