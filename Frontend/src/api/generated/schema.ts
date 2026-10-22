@@ -107,22 +107,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @example Juan Pérez */
-                        nombre: string;
-                        /**
-                         * Format: email
-                         * @example juan.perez@ejemplo.com
-                         */
-                        email: string;
-                        /**
-                         * Format: password
-                         * @example Password123!
-                         */
-                        password: string;
-                        /** @example 55551234 */
-                        telefono?: string;
-                    };
+                    "application/json": components["schemas"]["RegisterRequest"];
                 };
             };
             responses: {
@@ -132,36 +117,26 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        /**
-                         * @example {
-                         *       "success": true,
-                         *       "statusCode": 201,
-                         *       "data": {
-                         *         "id": 1,
-                         *         "nombre": "Juan Pérez",
-                         *         "email": "juan.perez@ejemplo.com",
-                         *         "telefono": "55551234",
-                         *         "rol": "cliente",
-                         *         "activo": true
-                         *       }
-                         *     }
-                         */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["RegisterResponse"];
                     };
                 };
-                /** @description Datos inválidos */
+                /** @description Datos de registro inválidos o cuerpo malformado */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
                 };
                 /** @description El correo electrónico ya se encuentra registrado */
                 409: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -193,18 +168,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /**
-                         * Format: email
-                         * @example juan.perez@ejemplo.com
-                         */
-                        email: string;
-                        /**
-                         * Format: password
-                         * @example Password123!
-                         */
-                        password: string;
-                    };
+                    "application/json": components["schemas"]["LoginRequest"];
                 };
             };
             responses: {
@@ -214,45 +178,35 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        /**
-                         * @example {
-                         *       "success": true,
-                         *       "statusCode": 200,
-                         *       "data": {
-                         *         "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                         *         "usuario": {
-                         *           "id": 1,
-                         *           "nombre": "Juan Pérez",
-                         *           "email": "juan.perez@ejemplo.com",
-                         *           "telefono": "55551234",
-                         *           "rol": "cliente"
-                         *         }
-                         *       }
-                         *     }
-                         */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["LoginResponse"];
                     };
                 };
-                /** @description Datos inválidos */
+                /** @description Credenciales enviadas con formato inválido */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
                 };
                 /** @description Correo electrónico o contraseña incorrectos */
                 401: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description La cuenta de usuario se encuentra deshabilitada */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -288,21 +242,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        /**
-                         * @example {
-                         *       "success": true,
-                         *       "statusCode": 200,
-                         *       "data": {
-                         *         "id": 1,
-                         *         "nombre": "Juan Pérez",
-                         *         "email": "juan.perez@ejemplo.com",
-                         *         "telefono": "55551234",
-                         *         "rol": "cliente",
-                         *         "activo": true
-                         *       }
-                         *     }
-                         */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["AuthMeResponse"];
                     };
                 };
                 /** @description Usuario no autenticado o sesión expirada */
@@ -310,14 +250,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description La cuenta de usuario se encuentra deshabilitada */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -11929,6 +11873,104 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RegisterRequest: {
+            /** @example Juan Pérez */
+            nombre: string;
+            /**
+             * Format: email
+             * @example juan.perez@ejemplo.com
+             */
+            email: string;
+            /**
+             * Format: password
+             * @example Password123!
+             */
+            password: string;
+            /** @example 55551234 */
+            telefono?: string | null;
+        };
+        LoginRequest: {
+            /**
+             * Format: email
+             * @example juan.perez@ejemplo.com
+             */
+            email: string;
+            /**
+             * Format: password
+             * @example Password123!
+             */
+            password: string;
+        };
+        AuthUser: {
+            /** @example 1 */
+            id?: number;
+            /** @example Juan Pérez */
+            nombre?: string;
+            /**
+             * Format: email
+             * @example juan.perez@ejemplo.com
+             */
+            email?: string;
+            /** @example 55551234 */
+            telefono?: string | null;
+            /**
+             * @example cliente
+             * @enum {string}
+             */
+            rol?: "admin" | "recepcionista" | "gerente_restaurante" | "gerente_habitaciones" | "empleado_operativo" | "cliente";
+        };
+        AuthUserWithStatus: {
+            /** @example 1 */
+            id?: number;
+            /** @example Juan Pérez */
+            nombre?: string;
+            /**
+             * Format: email
+             * @example juan.perez@ejemplo.com
+             */
+            email?: string;
+            /** @example 55551234 */
+            telefono?: string | null;
+            /**
+             * @example cliente
+             * @enum {string}
+             */
+            rol?: "admin" | "recepcionista" | "gerente_restaurante" | "gerente_habitaciones" | "empleado_operativo" | "cliente";
+            /** @example true */
+            activo?: boolean;
+        };
+        LoginData: {
+            /** @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... */
+            accessToken?: string;
+            usuario?: components["schemas"]["AuthUser"];
+        };
+        LoginResponse: {
+            /** @example true */
+            success?: boolean;
+            /** @example 200 */
+            statusCode?: number;
+            /** @example Inicio de sesión exitoso */
+            message?: string;
+            data?: components["schemas"]["LoginData"];
+        };
+        RegisterResponse: {
+            /** @example true */
+            success?: boolean;
+            /** @example 201 */
+            statusCode?: number;
+            /** @example Usuario registrado correctamente */
+            message?: string;
+            data?: components["schemas"]["AuthUserWithStatus"];
+        };
+        AuthMeResponse: {
+            /** @example true */
+            success?: boolean;
+            /** @example 200 */
+            statusCode?: number;
+            /** @example Usuario autenticado */
+            message?: string;
+            data?: components["schemas"]["AuthUserWithStatus"];
+        };
         ServicioEvento: {
             /** @example 1 */
             id?: number;

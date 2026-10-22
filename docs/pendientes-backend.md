@@ -1,3 +1,28 @@
+# Pendientes de backend
+
+## BE-001 · Documentación OpenAPI en endpoints de autenticación
+
+- **Categoría:** mejora de documentación / contrato OpenAPI
+- **Revisión inspeccionada:** 2026-10-22 · `refactor/backend-architecture`
+- **Flujo afectado:** documentación Swagger/OpenAPI de autenticación (`/api/auth/register`, `/api/auth/login`, `/api/auth/me`).
+- **Estado de funcionamiento:** las operaciones de autenticación funcionan correctamente en tiempo de ejecución.
+- **Detalle de las diferencias observadas:**
+  1. **Esquemas de respuesta faltantes en OpenAPI:**
+     - En `backend/src/routes/auth.routes.ts`, las anotaciones Swagger para las respuestas 200/201 carecían de referencias a esquemas JSON (`content.application/json.schema`). Por ende, `openapi-typescript` generaba `content?: never` o respuestas vacías en el frontend.
+  2. **Esquemas de request y respuestas de error omitidas:**
+     - Faltaban esquemas de cuerpo de petición para registro (`RegisterRequest`) y login (`LoginRequest`), así como esquemas tipados de respuesta (`LoginResponse`, `RegisterResponse`, `AuthMeResponse`) y códigos de error (400, 401, 403, 409).
+- **Resolución en frontend:**
+  - El frontend utilizaba contratos tipados explícitos en `Frontend/src/features/auth/types.ts`.
+- **Criterio para cierre definitivo en backend:**
+  - Definir los esquemas en `swagger.ts` (`RegisterRequest`, `LoginRequest`, `AuthUser`, `AuthUserWithStatus`, `LoginData`, `LoginResponse`, `RegisterResponse`, `AuthMeResponse`), asociar los esquemas a `auth.routes.ts` para 200, 201 y errores, verificar mediante pruebas unitarias (`openapi.auth.test.ts`), y regenerar los tipos en el frontend (`Frontend/src/api/generated/schema.ts`).
+- **Resolución definitiva:**
+  - Incorporados los esquemas OpenAPI de autenticación en `swagger.ts`.
+  - Documentadas las operaciones de login, register y me con sus códigos de respuesta y esquemas en `auth.routes.ts`.
+  - Validadas mediante pruebas unitarias en `backend/tests/unit/openapi.auth.test.ts`.
+  - Tipos regenerados en `Frontend/src/api/generated/schema.ts` y contratos de transporte sincronizados en `Frontend/src/features/auth/types.ts` y `Frontend/src/features/auth/api/authApi.ts`.
+- **Estado:** resuelto.
+
+## Capacidades y permisos por usuario en sesión (/auth/me)
 
 - **Categoría:** mejora opcional
 - **Revisión inspeccionada:** 2026-10-21 · `2ed9ef5`

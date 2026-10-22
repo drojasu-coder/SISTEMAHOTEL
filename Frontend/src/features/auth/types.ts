@@ -1,17 +1,27 @@
-import type { paths } from '@/api/generated/schema';
+import type { paths, components } from '@/api/generated/schema';
 import { es } from '@/i18n/es';
 
 /**
- * Los endpoints de autenticación documentan sus respuestas solo como ejemplo en el
- * OpenAPI (el tipo generado es `unknown`), por lo que las respuestas se tipan aquí
- * a mano. Las peticiones sí se derivan del contrato generado.
- * Ver docs/pendientes-backend.md (BE-001).
+ * Contratos de transporte derivados directamente de OpenAPI (BE-001 resuelto).
  */
 export type LoginRequest =
   paths['/api/auth/login']['post']['requestBody']['content']['application/json'];
 
 export type RegisterRequest =
   paths['/api/auth/register']['post']['requestBody']['content']['application/json'];
+
+export type LoginResponseEnvelope =
+  paths['/api/auth/login']['post']['responses'][200]['content']['application/json'];
+
+export type RegisterResponseEnvelope =
+  paths['/api/auth/register']['post']['responses'][201]['content']['application/json'];
+
+export type AuthMeResponseEnvelope =
+  paths['/api/auth/me']['get']['responses'][200]['content']['application/json'];
+
+export type AuthUserSchema = components['schemas']['AuthUser'];
+export type AuthUserWithStatusSchema = components['schemas']['AuthUserWithStatus'];
+export type LoginDataSchema = components['schemas']['LoginData'];
 
 /** Roles definidos por el backend (backend/src/constants/roles.ts). */
 export const ROLES = [
@@ -35,6 +45,7 @@ export interface AuthUser {
   email: string;
   telefono: string | null;
   rol: Role;
+  activo?: boolean;
 }
 
 export interface LoginResponse {

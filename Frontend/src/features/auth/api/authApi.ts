@@ -3,45 +3,53 @@ import { es } from '@/i18n/es';
 import {
   AuthFlowError,
   isKnownRole,
-  type ApiEnvelope,
+  type AuthMeResponseEnvelope,
   type AuthUser,
   type LoginRequest,
   type LoginResponse,
+  type LoginResponseEnvelope,
   type RegisterRequest,
+  type RegisterResponseEnvelope,
 } from '../types';
 
 /**
  * Los roles los define el backend. Un rol que el frontend no reconoce se rechaza:
  * no se deduce ni se asume ningún permiso para él.
  */
-function assertKnownRole(user: { rol?: unknown }): void {
-  if (!isKnownRole(user.rol)) {
+function assertKnownRole(user?: { rol?: unknown }): void {
+  if (!user || !isKnownRole(user.rol)) {
     throw new AuthFlowError(es.errores.rolDesconocido);
   }
 }
 
 export const authApi = {
-  /** POST /api/auth/login — petición anónima. */
+  /** POST /api/auth/login — petición anónima tipada según contrato OpenAPI. */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await api.post<ApiEnvelope<LoginResponse>>('/auth/login', credentials, {
+    const response = await api.post<LoginResponseEnvelope>('/auth/login', credentials, {
       token: null,
     });
+    if (!response.data?.usuario) {
+      throw new AuthFlowError(es.errores.inesperado);
+    }
     assertKnownRole(response.data.usuario);
-    return response.data;
+    return response.data as LoginResponse;
   },
 
   /** POST /api/auth/register — el backend siempre crea cuentas con rol cliente. */
   async register(payload: RegisterRequest): Promise<AuthUser> {
-    const response = await api.post<ApiEnvelope<AuthUser>>('/auth/register', payload, {
+    const response = await api.post<RegisterResponseEnvelope>('/auth/register', payload, {
       token: null,
     });
-    return response.data;
+    return response.data as AuthUser;
   },
 
   /** GET /api/auth/me — identidad y rol vigentes según el servidor. */
   async me(): Promise<AuthUser> {
-    const response = await api.get<ApiEnvelope<AuthUser>>('/auth/me');
+    const response = await api.get<AuthMeResponseEnvelope>('/auth/me');
+    if (!response.data) {
+      throw new AuthFlowError(es.errores.inesperado);
+    }
     assertKnownRole(response.data);
-    return response.data;
+    return response.data as AuthUser;
   },
 };
