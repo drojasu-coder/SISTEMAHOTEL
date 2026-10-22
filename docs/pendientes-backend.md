@@ -35,3 +35,51 @@
   - En TypeScript 5.5, `AsyncIteratorObject` no existía en las librerías del compilador, provocando que `process.stdin` (de tipo `ReadStream`) presentara un error de incompatibilidad de método `next()` contra `NodeJS.ReadableStream`.
 - **Resolución adoptada:** se actualizó `typescript` a `5.6.3` de forma exacta en `backend/package.json`, versión que introduce soporte intrínseco para `AsyncIteratorObject` y compatibilidad limpia con `@types/node@26` sin alterar otras dependencias. Para garantizar que los scripts de utilidad en `scripts/` mantengan su tipado comprobado sin alterar el `rootDir: "./src"` de producción, se incorporó `tsconfig.scripts.json` y el script `typecheck:all`.
 - **Estado:** resuelto.
+
+## BE-008 · Inconsistencia en validación y persistencia de estado null en mesas
+
+- **Categoría:** defecto de validación / inconsistencia de contrato
+- **Revisión inspeccionada:** 2026-10-22 · `refactor/backend-architecture`
+- **Flujo afectado:** creación y actualización de mesas (`POST /api/mesas`, `PATCH /api/mesas/:id`).
+- **Comportamiento actual y evidencia:**
+  - **Inspección de código:**
+    - En `backend/src/validators/restaurante/mesa.validator.ts`, tanto `createMesaSchema` como `updateMesaSchema` declaran:
+      ```ts
+      estado: z.string().trim().max(20, "El estado no puede superar 20 caracteres").optional().nullable()
+      ```
+      lo que permite aceptar el valor `null`.
+    - En el modelo Sequelize (`backend/src/models/mesa.js`), la columna se define como:
+      ```js
+      estado: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: "disponible",
+      }
+      ```
+      lo que rechaza valores `NULL` a nivel de base de datos.
+    - No hay evidencia de que el backend rechace una cadena vacía (el validador no tiene `.min(1)`), pero el envío explícito de `null` causa un fallo de restricción en persistencia.
+  - **Reproducción real:**
+    - Se constató que al enviar `{ estado: null }` el validador responde favorablemente (pasa la validación Zod), pero la inserción/actualización falla con violación de restricción not-null en Sequelize/PostgreSQL.
+- **Resolución en frontend:**
+  - En `Frontend/src/features/mesas/schemas/mesaSchema.ts`, el formulario evita vaciar un estado existente en edición mostrando el mensaje neutral acordado: *"Conserve el estado actual o ingrese otro valor."* En creación, si el campo se deja en blanco, se omite del payload para que la base de datos aplique su valor por defecto (`disponible`).
+- **Criterio para cierre definitivo en backend:**
+  - Retirar `.nullable()` en los esquemas de validación de `mesa.validator.ts` para alinear la validación con la restricción `allowNull: false` de la tabla `mesas`.
+- **Estado:** pendiente en backend (mitigado y protegido en frontend).
+
+## BE-009 · Documentación OpenAPI incompleta en endpoints de mesas
+
+- **Categoría:** mejora de documentación / contrato OpenAPI
+- **Revisión inspeccionada:** 2026-10-22 · `refactor/backend-architecture`
+- **Flujo afectado:** documentación Swagger/OpenAPI del catálogo de mesas (`/api/mesas`).
+- **Estado de funcionamiento:** las operaciones del módulo (`GET /api/mesas`, `GET /api/mesas/:id`, `POST /api/mesas`, `PATCH /api/mesas/:id`, `DELETE /api/mesas/:id`) funcionan correctamente en tiempo de ejecución.
+- **Detalle de las diferencias observadas (inspección de código):**
+  1. **Esquemas de respuesta faltantes en OpenAPI:**
+     - En `backend/src/routes/restaurante/mesa.routes.ts`, las anotaciones JSDoc OpenAPI para las respuestas 200/201 carecen de `content.application/json.schema`. Por lo tanto, herramientas de tipado automático como `openapi-typescript` generan `content?: never`.
+  2. **Campos del request y respuestas de error omitidas:**
+     - El schema de `requestBody` en `POST /api/mesas` omite el campo opcional `estado`.
+     - No se documentan las respuestas de error esperadas (400, 401, 403, 404).
+- **Resolución en frontend:**
+  - El frontend utiliza contratos tipados explícitos en `Frontend/src/features/mesas/types.ts` (`Mesa`, `MesaResponse`, `MesasResponse`, etc.) para desacoplarse de la falta de schemas generados en OpenAPI y procesar el envoltorio `{ status: "success", data }`.
+- **Criterio para cierre definitivo en backend:**
+  - Incorporar componentes de schema para `Mesa` en OpenAPI, documentar el campo opcional `estado` en el alta y añadir los códigos de error estándar (400, 401, 403, 404).
+- **Estado:** pendiente en backend (no bloqueante / cubierto por tipos explícitos en frontend).

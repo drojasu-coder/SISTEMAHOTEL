@@ -30,7 +30,7 @@ export const MesasPage: React.FC = () => {
 
   /** Zonas presentes en el catálogo cargado: el backend no expone un catálogo de zonas. */
   const zonas = useMemo(() => {
-    if (!mesas) return [];
+    if (!Array.isArray(mesas)) return [];
     return Array.from(new Set(mesas.map((mesa) => mesa.zona).filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, 'es'),
     );
@@ -44,7 +44,7 @@ export const MesasPage: React.FC = () => {
   }, [sucursales]);
 
   const mesasFiltradas = useMemo(() => {
-    if (!mesas) return [];
+    if (!Array.isArray(mesas)) return [];
     return mesas.filter((mesa) => {
       const coincideSede =
         sedeSeleccionada === '' || String(mesa.sucursal_id) === sedeSeleccionada;
@@ -116,7 +116,7 @@ export const MesasPage: React.FC = () => {
       )}
 
       {/* Filtros por sede y zona */}
-      {!isLoading && !isError && mesas && mesas.length > 0 && (
+      {!isLoading && !isError && Array.isArray(mesas) && mesas.length > 0 && (
         <>
           {isErrorSucursales && (
             <Alert tone="warning">
@@ -157,7 +157,7 @@ export const MesasPage: React.FC = () => {
         </Card>
       )}
 
-      {!isLoading && !isError && mesas && mesas.length === 0 && (
+      {!isLoading && !isError && Array.isArray(mesas) && mesas.length === 0 && (
         <Card className="flex flex-col items-center justify-center gap-4 py-12 text-center">
           <UtensilsCrossed className="size-12 text-neutro-400" aria-hidden="true" />
           <div className="flex flex-col gap-1 max-w-md">

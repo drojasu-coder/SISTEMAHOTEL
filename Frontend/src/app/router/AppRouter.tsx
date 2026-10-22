@@ -10,6 +10,7 @@ import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { SedesPage } from '@/pages/SedesPage';
 import { HabitacionesPage } from '@/pages/HabitacionesPage';
+import { MesasPage } from '@/pages/MesasPage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
@@ -48,6 +49,8 @@ export const AppRouter: React.FC = () => {
                       <SedesPage />
                     ) : module.id === 'habitaciones' ? (
                       <HabitacionesPage />
+                    ) : module.id === 'restaurante' ? (
+                      <MesasPage />
                     ) : (
                       <ModulePlaceholderPage module={module} />
                     )

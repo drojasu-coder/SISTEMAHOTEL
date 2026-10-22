@@ -82,11 +82,14 @@ describe('Rutas protegidas por permisos (aplicación completa, fetch simulado)',
 
   it('cada módulo exige su permiso: gerente_restaurante solo entra a restaurante', async () => {
     tokenStorage.set('jwt-guardado');
-    global.fetch = vi.fn().mockResolvedValue(meResponse('gerente_restaurante'));
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).endsWith('/auth/me')) return Promise.resolve(meResponse('gerente_restaurante'));
+      return Promise.resolve(jsonResponse({ status: 'success', data: [] }));
+    });
 
     openApp('/admin/restaurante');
     expect(
-      await screen.findByRole('heading', { level: 1, name: /Restaurante y proveedores/i }),
+      await screen.findByRole('heading', { level: 1, name: /Mesas de HOTEL HUNAHPÚ/i }),
     ).toBeInTheDocument();
   });
 
