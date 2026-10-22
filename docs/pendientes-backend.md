@@ -108,8 +108,7 @@
   - El frontend utiliza contratos tipados explícitos en `Frontend/src/features/mesas/types.ts` (`Mesa`, `MesaResponse`, `MesasResponse`, etc.) para desacoplarse de la falta de schemas generados en OpenAPI y procesar el envoltorio `{ status: "success", data }`.
 - **Criterio para cierre definitivo en backend:**
   - Incorporar componentes de schema para `Mesa` en OpenAPI, documentar el campo opcional `estado` en el alta y añadir los códigos de error estándar (400, 401, 403, 404).
-- **Resolución definitiva:** se añadieron las definiciones completas de OpenAPI en `swagger.ts` (`Mesa`, `CreateMesaRequest`, `UpdateMesaRequest`, `MesaResponse`, `MesasResponse`), se documentó el campo opcional `estado` en el alta, y se enlazaron los esquemas de respuesta 200/201 y errores (400, 401, 403, 404) en `mesa.routes.ts`. Validado mediante pruebas unitarias (`openapi.test.ts`) y tipos TypeScript regenerados en `Frontend/src/api/generated/schema.ts`.
-- **Estado:** resuelto.
+- **Resolución definitiva:** se añadieron las definiciones completas de OpenAPI en `swagger.ts` (`Mesa`, `CreateMesaRequest`, `UpdateMesaRequest`, `MesaResponse`, `MesasResponse`), se documentó el campo opcional `estado` en el alta, y se enlazaron los esquemas de respuesta 200/201 y errores (400, 401, 403, 404) en `mesa.routes.ts`. Validado mediante pruebas unitarias (`openapi.test.ts`) y tipos TypeScript regenerados en `Frontend/src/api/generated/schema.ts`.\n- **Estado:** resuelto.
 
 ## BE-010 · Documentación OpenAPI incompleta en endpoints de parqueos
 
@@ -135,15 +134,15 @@
 - **Flujo afectado:** endpoints de reservas de habitación (`GET /api/reservas-habitacion`, `GET /api/reservas-habitacion/:id`, `POST /api/reservas-habitacion`).
 - **Estado de funcionamiento:** las operaciones del backend funcionan en tiempo de ejecución y aplican correctamente la autorización y filtros para rol cliente.
 - **Detalle de las diferencias observadas:**
-  1. En `backend/src/routes/habitaciones/reservaHabitacion.routes.ts`, las anotaciones Swagger para las respuestas 200 y 201 carecen de referencias a esquemas JSON (`content.application/json.schema`).
-  2. En `backend/src/docs/swagger.ts`, no existen esquemas definidos en `components.schemas` para `ReservaHabitacion`, `CreateReservaHabitacionRequest`, `ReservaHabitacionResponse` y `ReservasHabitacionResponse`.
-  3. En `backend/src/services/habitaciones/reservaHabitacion.service.ts`, `reservationInclude` asocia `TipoHabitacion` pero omite `Sucursal` dentro de la habitación asociada.
+  1. En `backend/src/routes/habitaciones/reservaHabitacion.routes.ts`, las anotaciones Swagger para las respuestas 200 y 201 carecían de referencias a esquemas JSON (`content.application/json.schema`).
+  2. En `backend/src/docs/swagger.ts`, no existían esquemas definidos en `components.schemas` para `ReservaHabitacion`, `CreateReservaHabitacionRequest`, `ReservaHabitacionResponse` y `ReservasHabitacionResponse`.
+  3. En `backend/src/services/habitaciones/reservaHabitacion.service.ts`, `reservationInclude` asociaba `TipoHabitacion` pero omitía `Sucursal` dentro de la habitación asociada.
 - **Criterio para cierre definitivo en backend:**
   - Definir los esquemas en `swagger.ts` con sus campos obligatorios (`required`).
   - Enlazar los esquemas a las rutas en `reservaHabitacion.routes.ts` para respuestas 200, 201 y errores (400, 401, 403, 404, 409, 422).
   - Incluir `Sucursal` en `reservationInclude` de `reservaHabitacion.service.ts`.
   - Validar mediante pruebas unitarias de OpenAPI y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
-- **Resolución definitiva:** se definieron esquemas completos en `swagger.ts` (`ReservaHabitacionUsuario`, `ReservaHabitacionTipo`, `ReservaHabitacionSucursal`, `ReservaHabitacionHabitacion`, `ReservaHabitacion`, `CreateReservaHabitacionRequest`, `ReservaHabitacionResponse`, `ReservaHabitacionCreatedResponse`, `ReservasHabitacionResponse`), se enlazaron a las rutas `reservaHabitacion.routes.ts` con sus códigos de error reales, se añadió `Sucursal` (con atributos públicos `id`, `nombre`, `activa`) al `reservationInclude` de `reservaHabitacion.service.ts`, y se regeneraron los tipos de transporte del frontend en `schema.ts`.
+- **Resolución definitiva:** se añadieron los esquemas `ReservaHabitacion`, `ReservaHabitacionDetalle`, `CreateReservaHabitacionRequest`, `ReservaHabitacionResponse` y `ReservasHabitacionResponse` con `required` explícito en `swagger.ts`, se asociaron en las anotaciones JSDoc de `reservaHabitacion.routes.ts`, se incluyó `Sucursal` en `reservationInclude` de `reservaHabitacion.service.ts`, se añadieron pruebas unitarias (`openapi.reservaHabitacion.test.ts`) y se regeneraron los tipos de TypeScript con `api:generate`.
 - **Estado:** resuelto.
 
 ## BE-012 · Endpoint de consulta de disponibilidad de habitaciones por fechas
@@ -152,28 +151,26 @@
 - **Revisión inspeccionada:** 2026-10-22 · `787114f`
 - **Flujo afectado:** búsqueda y selección de habitaciones previo a la creación de una reserva.
 - **Comportamiento actual y evidencia:**
-  - Actualmente, `GET /api/habitaciones` únicamente lista todas las habitaciones físicas registradas en la base de datos sin recibir parámetros de fecha ni comprobar ocupación o traslapes.
-  - La verificación de disponibilidad de fechas se realiza únicamente de forma reactiva al intentar crear la reserva con `POST /api/reservas-habitacion` (respondiendo 409 si colisiona).
-  - No existe un endpoint para que un cliente pueda consultar previamente qué habitaciones están efectivamente libres para un rango de fechas y número de huéspedes dado en una sede.
+  - Anteriormente, `GET /api/habitaciones` únicamente listaba todas las habitaciones físicas registradas en la base de datos sin recibir parámetros de fecha ni comprobar ocupación o traslapes.
+  - La verificación de disponibilidad de fechas se realizaba únicamente de forma reactiva al intentar crear la reserva con `POST /api/reservas-habitacion` (respondiendo 409 si colisionaba).
 - **Capacidad o cambio requerido en el backend:**
-  - Implementar la ruta `GET /api/habitaciones/disponibles` (debe declararse antes de `GET /api/habitaciones/:id` para evitar colisión de ruta en Express).
-  - Requiere autenticación (`authMiddleware`).
-  - Parámetros de consulta en query string:
-    * `sucursal_id` (obligatorio, entero positivo).
-    * `fecha_entrada` (obligatorio, fecha `AAAA-MM-DD`, no en el pasado).
-    * `fecha_salida` (obligatorio, fecha `AAAA-MM-DD`, posterior a `fecha_entrada`).
-    * `numero_huespedes` (obligatorio, entero positivo).
-    * `tipo_habitacion_id` (opcional, entero positivo).
-  - Reglas de negocio:
-    * Habitación física en estado distinto de `'mantenimiento'`.
-    * Capacidad máxima del tipo de habitación `>= numero_huespedes`.
-    * Sin reservas activas (`estado` en `'pendiente'` o `'confirmada'`) que se traslapen con el rango solicitado (`fecha_entrada < query.fecha_salida` y `fecha_salida > query.fecha_entrada`).
-    * Salida en la misma fecha que la entrada de otra reserva está permitida (consecutivas).
-  - Cálculos monetarios realizados por el servidor:
-    * Cálculo de noches: `getNights(fecha_entrada, fecha_salida)`.
-    * Tarifa por noche: obtenida de `TipoHabitacion.tarifa_noche`.
-    * Total estimado: calculado con utilidades del backend (`noches * tarifa_noche`).
-  - La consulta es informativa y de solo lectura: no toma bloqueos de fila ni aparta la habitación.
-  - Documentar el endpoint en OpenAPI (`swagger.ts` y anotaciones JSDoc en `habitacion.routes.ts`).
+  - Implementar la ruta `GET /api/habitaciones/disponibles` con authMiddleware, validación de query (`sucursal_id`, `fecha_entrada`, `fecha_salida`, `numero_huespedes`, `tipo_habitacion_id`), exclusión de mantenimiento y de traslapes con reservas pendientes/confirmadas, cálculo de noches e importe estimado por servidor sin apartar la habitación.
 - **Resolución definitiva:** se implementó el endpoint `GET /api/habitaciones/disponibles` con registro previo a `/:id`, protegido con `authMiddleware`, validación estricta de parámetros en `disponibilidadHabitacionQuerySchema`, y elegibilidad de habitaciones (sede, capacidad, tipo opcional, exclusión de mantenimiento y de solapamientos con pendientes/confirmadas, permitiendo estancias consecutivas). Incluye cálculo consistente de noches e importes con dos decimales sin escrituras colaterales ni bloqueos. Documentado en OpenAPI y validado con 25 pruebas de integración y contratos frontend regenerados.
 - **Estado:** resuelto.
+
+## BE-013 · Documentación OpenAPI en endpoints de carrito y carritoItems
+
+- **Categoría:** mejora de documentación / contrato OpenAPI
+- **Revisión inspeccionada:** 2026-10-22 · `6555138`
+- **Flujo afectado:** operaciones del carrito de compras y sus ítems (`/api/carritos`, `/api/carritos/actual`, `/api/carritos/:id`, `/api/carritos/:carritoId/items`).
+- **Estado de funcionamiento:** las operaciones del backend funcionan correctamente en tiempo de ejecución, asegurando transaccionalidad, aislamiento de usuario, unicidad de carrito activo y prevención de duplicados o referencias ajenas.
+- **Detalle de las diferencias observadas:**
+  1. En `backend/src/docs/swagger.ts`, los esquemas `Carrito`, `CarritoItem` y `CarritoItemsData` carecen de listas `required` explícitas para campos obligatorios no nulos, provocando que herramientas de tipado automático (`openapi-typescript`) generen todos los campos como opcionales en el cliente.
+  2. Faltan componentes dedicados para las respuestas estándar envueltas: `CarritoResponse`, `CarritoItemsResponse` y `CarritoItemResponse`.
+  3. En `backend/src/routes/carrito/carrito.routes.ts` y `backend/src/routes/carrito/carritoItem.routes.ts`, algunas anotaciones no vinculan los esquemas envoltorio completos o no documentan los esquemas de error estandarizados (400, 401, 403, 404, 409, 422).
+- **Criterio para cierre definitivo en backend:**
+  - Declarar listas `required` explícitas en `Carrito`, `CarritoItem` y `CarritoItemsData` en `swagger.ts`.
+  - Crear esquemas `CarritoResponse`, `CarritoItemsResponse`, `CarritoItemResponse` en `components.schemas`.
+  - Vincular las referencias en `carrito.routes.ts` y `carritoItem.routes.ts` para respuestas 200, 201, 204 y errores.
+  - Verificar con pruebas unitarias de OpenAPI y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
+- **Estado:** pendiente de backend.
