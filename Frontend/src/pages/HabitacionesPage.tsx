@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Plus, Bed } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Link } from "react-router-dom";
+import { Plus, Bed, Layers } from "lucide-react";
+import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/features/auth/AuthContext";
@@ -124,17 +125,25 @@ export const HabitacionesPage: React.FC = () => {
           </p>
         </div>
 
-        {canManageHabitaciones && (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleOpenCreate}
-            className="self-start sm:self-center"
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          <Link
+            to="/admin/tipos-habitacion"
+            className={buttonStyles({ variant: "ghost" })}
           >
-            <Plus className="size-4" aria-hidden="true" />
-            <span>{textosHabitaciones.nuevaHabitacion}</span>
-          </Button>
-        )}
+            <Layers className="size-4" aria-hidden="true" />
+            <span>{es.tiposHabitacion.titulo}</span>
+          </Link>
+          {canManageHabitaciones && (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleOpenCreate}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              <span>{textosHabitaciones.nuevaHabitacion}</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Mensaje de confirmación o alerta temporal */}

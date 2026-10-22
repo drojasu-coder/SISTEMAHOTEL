@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Plus, BedDouble } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Link } from "react-router-dom";
+import { Plus, BedDouble, Bed } from "lucide-react";
+import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/features/auth/AuthContext";
@@ -69,17 +70,25 @@ export const TiposHabitacionPage: React.FC = () => {
           </p>
         </div>
 
-        {canManageTipos && (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleOpenCreate}
-            className="self-start sm:self-center"
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          <Link
+            to="/admin/habitaciones"
+            className={buttonStyles({ variant: "ghost" })}
           >
-            <Plus className="size-4" aria-hidden="true" />
-            <span>{textosTiposHabitacion.nuevoTipo}</span>
-          </Button>
-        )}
+            <Bed className="size-4" aria-hidden="true" />
+            <span>{es.habitaciones.titulo}</span>
+          </Link>
+          {canManageTipos && (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleOpenCreate}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              <span>{textosTiposHabitacion.nuevoTipo}</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Alerta de confirmación */}

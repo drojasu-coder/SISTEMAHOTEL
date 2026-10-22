@@ -10,6 +10,7 @@ import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { SedesPage } from '@/pages/SedesPage';
 import { HabitacionesPage } from '@/pages/HabitacionesPage';
+import { TiposHabitacionPage } from '@/pages/TiposHabitacionPage';
 import { MesasPage } from '@/pages/MesasPage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -61,6 +62,11 @@ export const AppRouter: React.FC = () => {
             {/* Alias directo para sedes */}
             <Route element={<RequireAuth permission="configuracion.administrar" />}>
               <Route path="sedes" element={<SedesPage />} />
+            </Route>
+
+            {/* Tipos de habitación */}
+            <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
+              <Route path="tipos-habitacion" element={<TiposHabitacionPage />} />
             </Route>
           </Route>
         </Route>
