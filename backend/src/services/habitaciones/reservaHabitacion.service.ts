@@ -1852,13 +1852,31 @@ export const updateReservaHabitacion =
 
 export const deleteReservaHabitacion =
 
-  async (id: number) => {
+  async (id: number) => sequelize.transaction(async (
+
+    transaction: any
+
+  ) => {
 
     const reservaHabitacion =
 
       await ReservaHabitacion.findByPk(
 
-        id
+        id,
+
+        {
+
+          transaction,
+
+          lock:
+
+            transaction
+
+              .LOCK
+
+              .UPDATE,
+
+        }
 
       );
 
@@ -1880,11 +1898,45 @@ export const deleteReservaHabitacion =
 
 
 
+    const exposure =
+
+      await reservationFinancialExposure(
+
+        id,
+
+        transaction
+
+      );
+
+
+
+    if (exposure.processing > 0) {
+
+      throw new AppError(
+
+        409,
+
+        "RESERVATION_HAS_PROCESSING_PAYMENT",
+
+        "La reserva tiene un pago en procesamiento y no puede cancelarse"
+
+      );
+
+    }
+
+
+
     await reservaHabitacion.update(
 
       {
 
         estado: "cancelada",
+
+      },
+
+      {
+
+        transaction,
 
       }
 
@@ -1894,4 +1946,4 @@ export const deleteReservaHabitacion =
 
     return reservaHabitacion;
 
-  };
+  });
