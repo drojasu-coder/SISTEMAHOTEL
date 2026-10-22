@@ -126,6 +126,111 @@ const historicalCartIdsForReference = async (
   ];
 };
 
+/**
+ * Exposición financiera activa de una ReservaHabitacion, sin importar si el
+ * pago nació directamente de la reserva o de cualquiera de los carritos que
+ * histórica o actualmente contienen la referencia.
+ *
+ * La fila de ReservaHabitacion es el lock canónico de quienes pueden aumentar
+ * esta exposición. Por eso esta lectura no toma locks Pago: createPago y
+ * approveTransferencia deben bloquear primero la reserva y calcular dentro de
+ * la misma transacción. Los pagos se seleccionan una sola vez mediante OR,
+ * incluso ante datos heredados donde ambas llaves de origen estuvieran llenas.
+ */
+export const reservationFinancialExposure = async (
+  reservationId: number,
+  transaction: any,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    "habitacion",
+    reservationId,
+    transaction,
+  );
+  const origins: Record<string | symbol, unknown>[] = [
+    { reserva_habitacion_id: reservationId },
+  ];
+  if (cartIds.length > 0) {
+    origins.push({ carrito_id: { [Op.in]: cartIds } });
+  }
+
+  const payments = await Pago.findAll({
+    where: {
+      [Op.or]: origins,
+      estado: {
+        [Op.in]: [
+          "aprobado",
+          "reembolsado_parcial",
+          "reembolsado",
+          "procesando",
+        ],
+      },
+    },
+    attributes: ["id", "monto", "estado"],
+    transaction,
+  });
+  const uniquePayments = [
+    ...new Map<number, any>(
+      (payments as any[]).map((payment: any) => [
+        Number(payment.id),
+        payment,
+      ]),
+    ).values(),
+  ];
+  const approvedPayments = uniquePayments.filter((payment: any) =>
+    ["aprobado", "reembolsado_parcial", "reembolsado"].includes(
+      String(payment.estado),
+    ),
+  );
+  const refunds = approvedPayments.length > 0
+    ? await db.Reembolso.findAll({
+        where: {
+          pago_id: {
+            [Op.in]: approvedPayments.map((payment: any) => payment.id),
+          },
+          estado: "aprobado",
+        },
+        attributes: ["pago_id", "monto"],
+        transaction,
+      })
+    : [];
+  const refundedByPayment = new Map<number, number>();
+  for (const refund of refunds as any[]) {
+    const paymentId = Number(refund.pago_id);
+    refundedByPayment.set(
+      paymentId,
+      round(
+        (refundedByPayment.get(paymentId) ?? 0) + Number(refund.monto),
+      ),
+    );
+  }
+
+  const approved = round(
+    approvedPayments.reduce(
+      (sum: number, payment: any) =>
+        sum + Math.max(
+          0,
+          Number(payment.monto) -
+            (refundedByPayment.get(Number(payment.id)) ?? 0),
+        ),
+      0,
+    ),
+  );
+  const processing = round(
+    uniquePayments
+      .filter((payment: any) => payment.estado === "procesando")
+      .reduce(
+        (sum: number, payment: any) => sum + Number(payment.monto),
+        0,
+      ),
+  );
+
+  return {
+    approved,
+    processing,
+    total: round(approved + processing),
+  };
+};
+
 
 /**
  * Comprueba si una referencia genérica que estuvo en un carrito
@@ -280,44 +385,11 @@ export const isReservationFullyPaid = async (
   reservationTotal: number | string,
   transaction: any,
 ) => {
-  const directPaid = await approvedAmount(
-    { reserva_habitacion_id: reservationId },
+  const exposure = await reservationFinancialExposure(
+    reservationId,
     transaction,
   );
-  const roomItems = await CarritoItem.findAll({
-    where: { tipo_item: "habitacion", referencia_id: reservationId },
-    attributes: ["carrito_id"],
-    transaction,
-  });
-  const cartIds: number[] = [...new Set(
-    (roomItems as any[]).map((item: any) => Number(item.carrito_id)),
-  )];
-  const hasFullyPaidCart = await Promise.all(
-    cartIds.map(async (cartId) => {
-      const items = await CarritoItem.findAll({
-        where: { carrito_id: cartId },
-        attributes: ["tipo_item", "referencia_id", "precio", "cantidad"],
-        transaction,
-      });
-      if (
-        items.length !== 1 ||
-        (items[0] as any).tipo_item !== "habitacion" ||
-        Number((items[0] as any).referencia_id) !== reservationId
-      ) {
-        return false;
-      }
-      let cartTotal = 0;
-      for (const item of items as any[]) {
-        cartTotal += Number(item.precio) * Number(item.cantidad);
-      }
-      cartTotal = round(cartTotal);
-      if (cartTotal !== round(Number(reservationTotal))) return false;
-      const approvedRaw: any = await approvedCartAmount(cartId, transaction);
-      const approved = Number(approvedRaw);
-      return cartTotal > 0 && approved >= cartTotal;
-    }),
-  );
-  return directPaid >= round(Number(reservationTotal)) || hasFullyPaidCart.some(Boolean);
+  return exposure.approved >= round(Number(reservationTotal));
 };
 
 const confirmReservationIfFullyPaid = async (
@@ -435,7 +507,55 @@ const approvedAdvanceAmount = async (where: Record<string, unknown>, transaction
   return round(sum);
 };
 
-const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowPaid = false) => {
+const roomReservationIdsForCart = async (
+  carritoId: number,
+  transaction: any,
+) => {
+  const roomItems = await CarritoItem.findAll({
+    where: {
+      carrito_id: carritoId,
+      tipo_item: "habitacion",
+    },
+    attributes: ["referencia_id"],
+    order: [["referencia_id", "ASC"]],
+    transaction,
+  });
+
+  return [
+    ...new Set<number>(
+      (roomItems as any[]).map((item: any) => Number(item.referencia_id)),
+    ),
+  ].sort((left, right) => left - right);
+};
+
+const lockRoomReservations = async (
+  reservationIds: number[],
+  transaction: any,
+) => {
+  const reservations = [];
+  for (const reservationId of reservationIds) {
+    const reservation = await ReservaHabitacion.findByPk(reservationId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!reservation) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva seleccionada ya no se encuentra disponible",
+      );
+    }
+    reservations.push(reservation);
+  }
+  return reservations;
+};
+
+const validateOpenOrigin = async (
+  data: CreatePagoData,
+  transaction: any,
+  allowPaid = false,
+  serializeRoomExposure = false,
+) => {
   if (data.carrito_id !== undefined && data.carrito_id !== null) {
     const cart = await Carrito.findByPk(data.carrito_id, {
       transaction,
@@ -449,8 +569,21 @@ const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowP
         (cart.estado !== "activo" && !(allowPaid && cart.estado === "pagado"))) {
       throw new AppError(409, "CART_NOT_AVAILABLE", "El carrito ya no se encuentra disponible para pagos");
     }
+    const roomReservationIds = await roomReservationIdsForCart(
+      cart.id,
+      transaction,
+    );
+    const roomReservations = serializeRoomExposure
+      ? await lockRoomReservations(roomReservationIds, transaction)
+      : [];
     const totals = await cartTotals(cart.id, transaction, allowPaid);
-    return { key: { carrito_id: cart.id }, ...totals, origin: cart };
+    return {
+      key: { carrito_id: cart.id },
+      ...totals,
+      origin: cart,
+      roomReservationIds,
+      roomReservations,
+    };
   }
 
   const reservation = await ReservaHabitacion.findByPk(data.reserva_habitacion_id, {
@@ -473,6 +606,58 @@ const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowP
     requiredAdvance: 0,
     isOnlyRoom: true,
     origin: reservation,
+    roomReservationIds: [Number(reservation.id)],
+    roomReservations: [reservation],
+  };
+};
+
+const roomExposureBalance = async (
+  details: any,
+  transaction: any,
+) => {
+  if (!details.roomReservationIds?.length) {
+    return null;
+  }
+
+  const reservationsById = new Map<number, any>(
+    (details.roomReservations ?? []).map((reservation: any) => [
+      Number(reservation.id),
+      reservation,
+    ]),
+  );
+  let remaining = Number.POSITIVE_INFINITY;
+  let directExposure: Awaited<
+    ReturnType<typeof reservationFinancialExposure>
+  > | null = null;
+
+  for (const reservationId of details.roomReservationIds as number[]) {
+    const reservation = reservationsById.get(Number(reservationId));
+    if (!reservation) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva seleccionada ya no se encuentra disponible",
+      );
+    }
+    const exposure = await reservationFinancialExposure(
+      Number(reservationId),
+      transaction,
+    );
+    remaining = Math.min(
+      remaining,
+      round(Number(reservation.total) - exposure.total),
+    );
+    if (
+      details.origin?.constructor?.name === "ReservaHabitacion" &&
+      Number(details.origin.id) === Number(reservationId)
+    ) {
+      directExposure = exposure;
+    }
+  }
+
+  return {
+    remaining: round(remaining),
+    directExposure,
   };
 };
 
@@ -639,7 +824,18 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     );
     if (earlyReplay) return earlyReplay;
 
-    const details = await validateOpenOrigin(data, transaction);
+    /*
+     * Orden canónico para compromisos de habitación:
+     * Carrito (si existe) -> ReservaHabitacion por id ascendente -> Pago.
+     * Un pago directo comienza en ReservaHabitacion. Nunca se toma Pago antes
+     * de Carrito, preservando el orden corregido por QA-PAY-CONC-018.
+     */
+    const details = await validateOpenOrigin(
+      data,
+      transaction,
+      false,
+      true,
+    );
     const serializedReplay = await findIdempotencyReplay(
       data,
       amount,
@@ -648,12 +844,17 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     );
     if (serializedReplay) return serializedReplay;
 
-    const exposure = await committedOrProcessingExposure(details.key, transaction);
+    const roomBalance = await roomExposureBalance(details, transaction);
+    const exposure = roomBalance?.directExposure ??
+      await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
-    const remaining = round(details.total - exposure.total);
+    const originRemaining = round(details.total - exposure.total);
+    const remaining = roomBalance
+      ? round(Math.min(originRemaining, roomBalance.remaining))
+      : originRemaining;
     if (amount > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
@@ -905,7 +1106,14 @@ export const approveTransferencia = async (pagoId: number) =>
       monto: unlockedPayment.monto,
       metodo: unlockedPayment.metodo,
     } as CreatePagoData;
-    const origin = await validateOpenOrigin(originData, transaction, true);
+    // Conserva el mismo orden canónico que createPago: Carrito (si existe),
+    // ReservaHabitacion por id ascendente y finalmente Pago.
+    const origin = await validateOpenOrigin(
+      originData,
+      transaction,
+      true,
+      true,
+    );
     const payment = await Pago.findByPk(pagoId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "El pago no existe");
     if (payment.metodo !== "transferencia") {
@@ -921,15 +1129,22 @@ export const approveTransferencia = async (pagoId: number) =>
     }
     if (payment.estado !== "pendiente") throw new AppError(409, "PAYMENT_NOT_PENDING", "El pago no está pendiente");
     const details = origin;
-    const paid = await approvedAmount(details.key, transaction);
+    const roomBalance = await roomExposureBalance(details, transaction);
+    const exposure = roomBalance?.directExposure ??
+      await committedOrProcessingExposure(details.key, transaction);
+    const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
     const type = payment.tipo_pago as PagoTipo;
-    if (Number(payment.monto) > round(details.total - paid)) {
+    const originRemaining = round(details.total - exposure.total);
+    const remaining = roomBalance
+      ? round(Math.min(originRemaining, roomBalance.remaining))
+      : originRemaining;
+    if (Number(payment.monto) > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && Number(payment.monto) < round(details.total - paid)) {
+    if (details.isOnlyRoom && Number(payment.monto) < remaining) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (type === "anticipo") {

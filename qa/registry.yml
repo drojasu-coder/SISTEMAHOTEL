@@ -1790,6 +1790,170 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-020
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Pago directo y pago por carrito crean dos exposiciones Stripe activas
+      por el total de la misma ReservaHabitacion
+    invariant: >-
+      El dinero aprobado neto de reembolsos más los pagos procesando, agregado
+      por ReservaHabitacion.id a través del origen directo y de todos los
+      carritos que contienen la referencia, nunca debe superar el total de la
+      reserva. Para una reserva de Q100.00, un pago directo procesando de
+      Q100.00 debe impedir un segundo compromiso activo desde carrito.
+    reproduction:
+      phase: RED
+      scenario: A_DIRECTO_MAS_CARRITO
+      test_file: backend/tests/habitaciones/reservaHabitacion.aggregateExposure.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-020: pago directo y carrito agregan exposición por ReservaHabitacion sin superar su total"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.aggregateExposure.test.ts -t
+        "QA-RH-FIN-CANDIDATE-020: pago directo y carrito agregan exposición por
+        ReservaHabitacion sin superar su total"
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      concurrency: false
+      rationale: >-
+        El escenario secuencial A reprodujo la violación; no fue necesario
+        investigar expiración cross-cart ni una carrera concurrente.
+    expected:
+      safe_outcome: >-
+        Rechazar el segundo compromiso financiero al agregar la referencia o al
+        intentar pagar el carrito, sin crear un segundo PaymentIntent activo.
+      approved_net_max: "100.00"
+      processing_max_when_approved_net_zero: "100.00"
+      total_active_exposure_max: "100.00"
+      active_payment_intent_exposure_max: "100.00"
+      unexpected_500: false
+    actual:
+      reservation_create: "HTTP 201; id=1; pendiente; total Q100.00"
+      direct_payment: >-
+        HTTP 201; code null; Pago id=1; tarjeta; procesando; Q100.00;
+        reserva_habitacion_id=1
+      create_cart: "HTTP 201; id=1; code null"
+      add_same_reservation: "HTTP 201; code null; la referencia fue aceptada"
+      cart_payment: >-
+        HTTP 201; code null; Pago id=2; tarjeta; procesando; Q100.00;
+        carrito_id=1
+      rejection: none
+      unexpected_500: false
+      approved_net: "0.00"
+      processing_exposure: "200.00"
+      total_active_exposure: "200.00"
+      reservation_total: "100.00"
+      exposure_violation: true
+      red_result: "1 file failed, 1 test failed; 2 assertions financieras fallaron"
+    http_evidence:
+      reservation_status: 201
+      reservation_code: null
+      direct_payment_status: 201
+      direct_payment_code: null
+      cart_status: 201
+      cart_code: null
+      add_status: 201
+      add_code: null
+      cart_payment_status: 201
+      cart_payment_code: null
+      unexpected_500: false
+    database_evidence:
+      reservation: "id=1; estado=pendiente; total=Q100.00"
+      payment_rows: 2
+      direct_payment: >-
+        id=1; reserva_habitacion_id=1; carrito_id=null; tarjeta; procesando;
+        Q100.00; id_transaccion_externo=pi_rh_aggregate_020_1
+      cart_payment: >-
+        id=2; reserva_habitacion_id=null; carrito_id=1; tarjeta; procesando;
+        Q100.00; id_transaccion_externo=pi_rh_aggregate_020_2
+      approved_refunds: "0.00"
+      approved_net: "0.00"
+      processing_exposure: "200.00"
+      total_active_exposure: "200.00"
+      maximum_legitimate_exposure: "100.00"
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 2
+      first: >-
+        pi_rh_aggregate_020_1; requires_payment_method; 10000 minor units;
+        Q100.00; metadata reserva_habitacion_id=1,pago_id=1
+      second: >-
+        pi_rh_aggregate_020_2; requires_payment_method; 10000 minor units;
+        Q100.00; metadata carrito_id=1,pago_id=2
+      active_intent_exposure: "200.00"
+    suspected_execution_path: >-
+      createPago valida el pago directo y committedOrProcessingExposure consulta
+      únicamente la llave reserva_habitacion_id, por lo que crea P1 y PI1 por
+      Q100.00. carritoItem.resolveHabitacion solo consulta
+      isReservationFullyPaid, que agrega dinero aprobado pero no el pago directo
+      procesando, y permite persistir la misma referencia en el carrito. El
+      segundo createPago calcula committedOrProcessingExposure únicamente con
+      carrito_id=1, sin agregar la exposición directa ni la de otros carritos
+      asociados a ReservaHabitacion.id, y crea P2 y PI2 por otros Q100.00.
+    root_cause: >-
+      El saldo se calculaba por la llave inmediata del origen de Pago. Un pago
+      directo solo consultaba reserva_habitacion_id y un pago por carrito solo
+      consultaba carrito_id, por lo que ambos compromisos podían reservar el
+      total completo sin compartir un agregado ni un lock canónico de la
+      ReservaHabitacion.
+    correction: >-
+      reservationFinancialExposure agrega una sola vez cada Pago directo o de
+      cualquier carrito histórico/activo que contenga la ReservaHabitacion,
+      suma procesando y calcula aprobado neto restando únicamente Reembolsos
+      aprobados con piso cero por Pago. createPago y approveTransferencia
+      bloquean la ReservaHabitacion y validan ese saldo agregado dentro de la
+      misma transacción antes de persistir un compromiso. El segundo pago del
+      escenario se rechaza con 409 PAYMENT_EXCEEDS_BALANCE antes de crear Pago o
+      invocar Stripe.
+    concurrency: >-
+      El orden para carritos es Carrito -> ReservaHabitacion por id ascendente
+      -> Pago/Reembolso; el origen directo comienza por ReservaHabitacion. Los
+      incrementos de exposición quedan serializados por la fila canónica de la
+      reserva. No se introdujo Pago -> Carrito y la regresión determinista
+      QA-PAY-CONC-CANDIDATE-018 permaneció verde.
+    severity_recommendation: critical
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      qa_019_test_modified: false
+      qa_019_runtime_reexecuted: false
+      qa_019_regression_observed: none
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      safe_rejection: "HTTP 409 PAYMENT_EXCEEDS_BALANCE en el segundo pago"
+      payment_rows: 1
+      payment_intent_count: 1
+      real_stripe_calls: 0
+      approved_net: "0.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "100.00"
+      active_intent_exposure: "100.00"
+      maximum_legitimate_exposure: "100.00"
+      financial_violation: false
+      qa_pay_fin_candidate_007: "1 file passed, 1 test passed"
+      qa_pay_conc_candidate_018: "1 file passed, 1 test passed"
+      qa_rh_auth_candidate_019: "1 file passed, 1 test passed"
+      direct_room_existing_test: "1 passed, 39 skipped"
+      typecheck: green
+      stripe_mode: FULL_LOCAL_MOCK
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+      verified_at: "2026-10-22"
+
   - id: QA-RH-AUTH-CANDIDATE-019
     status: closed
     severity: critical
