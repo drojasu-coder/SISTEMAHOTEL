@@ -1,21 +1,34 @@
 /**
- * Gestión de claves de idempotencia para el flujo de Checkout.
+ * Gestión de claves de idempotencia e identificación de intentos para Checkout.
  *
- * Principios:
+ * Principios y Políticas de Resiliencia:
  * 1. Cada clave representa una operación lógica de pago para un carrito y usuario determinados.
- * 2. Si el usuario recarga la página o hay un fallo de red transitorio, se conserva la misma clave
- *    para permitir la recuperación mediante replay idempotente en el backend (HTTP 201 replay).
- * 3. Si el importe a pagar cambia (p. ej. cambio de reserva o tarifa), la clave previa se invalida
- *    y se genera una nueva para evitar colisiones 409 IDEMPOTENCY_CONFLICT.
- * 4. NUNCA se persiste el client_secret de Stripe ni datos de tarjetas en el navegador.
+ * 2. Si el usuario recarga la pestaña o hay un fallo de red, se conserva la misma clave y el identificador
+ *    del intento para permitir el replay idempotente en el backend (HTTP 201 replay) y la recuperación de estado.
+ * 3. stripe.confirmPayment terminado sin error NO borra la clave ni el intento: la aprobación local la realiza
+ *    el webhook del backend de forma asíncrona. La clave solo se limpia tras la confirmación terminal (estado 'aprobado').
+ * 4. Si el importe del carrito cambia mientras existe un intento pendiente o creado:
+ *    - NO se descarta ciegamente la clave previa ni se crea un nuevo intento de forma silenciosa.
+ *    - Se detecta la discrepancia para que la interfaz impida confirmar un importe obsoleto o generar cobros
+ *      incompatibles mientras el intento previo pueda ser procesado.
+ * 5. NUNCA se persiste el client_secret de Stripe ni datos de tarjetas en almacenamiento local o sesión.
  */
 
-const STORAGE_PREFIX = 'hunapu_checkout_idemp';
+const STORAGE_PREFIX = 'hunapu_checkout_attempt';
 
-interface StoredIdempotencyData {
+export interface StoredCheckoutAttempt {
   key: string;
   monto: number;
+  pagoId?: number;
   timestamp: number;
+}
+
+export interface CheckoutKeyResult {
+  key: string;
+  esReutilizada: boolean;
+  montoDifiere: boolean;
+  montoPrevio?: number;
+  pagoId?: number;
 }
 
 const buildStorageKey = (userId: number, carritoId: number): string =>
@@ -36,51 +49,95 @@ export const generateSecureIdempotencyKey = (
 };
 
 /**
- * Obtiene o crea una clave de idempotencia estable para la sesión actual del checkout.
- * Si el monto coincide con una operación previa en curso para el mismo carrito, la reutiliza.
- * Si no existe o el monto difiere, genera una nueva y actualiza sessionStorage.
+ * Obtiene el intento almacenado en sessionStorage para la sesión del checkout, si existe.
+ */
+export const getStoredCheckoutAttempt = (
+  userId: number,
+  carritoId: number
+): StoredCheckoutAttempt | null => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return null;
+  try {
+    const raw = window.sessionStorage.getItem(buildStorageKey(userId, carritoId));
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredCheckoutAttempt;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Obtiene o registra una clave de idempotencia estable para el checkout.
+ * Si ya existe una clave para este carrito/usuario:
+ * - Se conserva la clave previa para permitir la recuperación e idempotencia.
+ * - Si el monto actual difiere del monto con el que se inició el intento, se informa en `montoDifiere: true`
+ *   sin borrar la clave, para que la pantalla de checkout aplique la política de protección.
  */
 export const getOrCreateCheckoutIdempotencyKey = (
   userId: number,
   carritoId: number,
   monto: number
-): string => {
-  if (typeof window === 'undefined' || !window.sessionStorage) {
-    return generateSecureIdempotencyKey(userId, carritoId);
+): CheckoutKeyResult => {
+  const stored = getStoredCheckoutAttempt(userId, carritoId);
+
+  if (stored && typeof stored.key === 'string') {
+    const montoCoincide = Math.abs(Number(stored.monto) - Number(monto)) < 0.001;
+    return {
+      key: stored.key,
+      esReutilizada: true,
+      montoDifiere: !montoCoincide,
+      montoPrevio: stored.monto,
+      pagoId: stored.pagoId,
+    };
   }
 
-  const storageKey = buildStorageKey(userId, carritoId);
+  const newKey = generateSecureIdempotencyKey(userId, carritoId);
+  const data: StoredCheckoutAttempt = {
+    key: newKey,
+    monto: Number(monto),
+    timestamp: Date.now(),
+  };
 
-  try {
-    const raw = window.sessionStorage.getItem(storageKey);
-    if (raw) {
-      const parsed = JSON.parse(raw) as StoredIdempotencyData;
-      // Si el monto no ha cambiado, mantenemos la clave de la operación lógica en curso
-      if (
-        typeof parsed.key === 'string' &&
-        Math.abs(Number(parsed.monto) - Number(monto)) < 0.001
-      ) {
-        return parsed.key;
-      }
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    try {
+      window.sessionStorage.setItem(buildStorageKey(userId, carritoId), JSON.stringify(data));
+    } catch {
+      // Ignorar fallos de cuota
     }
+  }
 
-    // Si no existía o el monto cambió, generamos una nueva
-    const newKey = generateSecureIdempotencyKey(userId, carritoId);
-    const data: StoredIdempotencyData = {
-      key: newKey,
-      monto: Number(monto),
-      timestamp: Date.now(),
-    };
-    window.sessionStorage.setItem(storageKey, JSON.stringify(data));
-    return newKey;
+  return {
+    key: newKey,
+    esReutilizada: false,
+    montoDifiere: false,
+    montoPrevio: Number(monto),
+  };
+};
+
+/**
+ * Asocia el ID del pago local devuelto por el backend al intento almacenado.
+ */
+export const recordCheckoutPagoId = (
+  userId: number,
+  carritoId: number,
+  pagoId: number
+): void => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  try {
+    const stored = getStoredCheckoutAttempt(userId, carritoId);
+    if (stored) {
+      stored.pagoId = pagoId;
+      window.sessionStorage.setItem(buildStorageKey(userId, carritoId), JSON.stringify(stored));
+    }
   } catch {
-    // Respaldo seguro en caso de cuotas de storage o políticas estrictas
-    return generateSecureIdempotencyKey(userId, carritoId);
+    // Ignorar fallos de acceso a storage
   }
 };
 
 /**
- * Limpia la clave de idempotencia almacenada cuando el pago fue completado o cancelado definitivamente.
+ * Limpia la clave del intento almacenado.
+ * IMPORTANTE: Solo debe invocarse cuando el pago haya alcanzado un estado terminal definitivo
+ * verificado en el backend ('aprobado' o 'cancelado'). NO debe llamarse cuando confirmPayment
+ * termine en el navegador, ya que el resultado persistido sigue siendo asíncrono e incierto.
  */
 export const clearCheckoutIdempotencyKey = (
   userId: number,
@@ -90,6 +147,6 @@ export const clearCheckoutIdempotencyKey = (
   try {
     window.sessionStorage.removeItem(buildStorageKey(userId, carritoId));
   } catch {
-    // Ignorar errores de acceso a storage
+    // Ignorar fallos de acceso a storage
   }
 };

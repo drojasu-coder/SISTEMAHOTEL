@@ -86,6 +86,32 @@ export interface CreatePagoSuccessData {
 }
 
 /**
+ * Estados discriminados para la recuperación del intento activo en Stripe (BE-014).
+ * Permite distinguir si el intento requiere confirmación, está en procesamiento,
+ * fue completado en pasarela (webhook pendiente) o fue cancelado.
+ */
+export type IntentoActivoEstado =
+  | 'requiere_confirmacion'
+  | 'procesando'
+  | 'completado_en_pasarela'
+  | 'cancelado';
+
+/**
+ * Datos de recuperación autorizada de un intento de pago activo con tarjeta.
+ */
+export interface IntentoActivoData {
+  pago_id: number;
+  payment_intent_id: string;
+  client_secret: string | null;
+  estado_local: EstadoPago;
+  estado_pasarela: string;
+  estado_intento: IntentoActivoEstado;
+  monto: number;
+  moneda: string;
+  puede_confirmar: boolean;
+}
+
+/**
  * Envoltorio estándar de respuesta HTTP del backend.
  */
 export interface ApiResponse<T> {
@@ -97,6 +123,6 @@ export interface ApiResponse<T> {
 
 export type ResumenPagoResponse = ApiResponse<ResumenPagoData>;
 export type CreatePagoResponse = ApiResponse<CreatePagoSuccessData>;
-export type IntentoActivoPagoResponse = ApiResponse<CreatePagoSuccessData | null>;
+export type IntentoActivoPagoResponse = ApiResponse<IntentoActivoData | null>;
 export type PagoResponse = ApiResponse<Pago>;
 export type PagosResponse = ApiResponse<Pago[]>;

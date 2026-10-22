@@ -4,6 +4,7 @@ import { api } from '@/api/client/http';
 import type {
   CreatePagoInput,
   CreatePagoResponse,
+  IntentoActivoData,
   IntentoActivoPagoResponse,
   Pago,
   PagoResponse,
@@ -58,18 +59,23 @@ describe('pagosApi', () => {
 
   describe('getIntentoActivo', () => {
     it('obtiene el intento activo y client_secret cuando existe para el carrito', async () => {
+      const mockIntento: IntentoActivoData = {
+        pago_id: 42,
+        payment_intent_id: 'pi_test_active',
+        client_secret: 'pi_test_active_secret_foo',
+        estado_local: 'procesando',
+        estado_pasarela: 'requires_payment_method',
+        estado_intento: 'requiere_confirmacion',
+        monto: 1800,
+        moneda: 'GTQ',
+        puede_confirmar: true,
+      };
+
       const mockResponse: IntentoActivoPagoResponse = {
         success: true,
         statusCode: 200,
         message: 'Intento de pago activo obtenido',
-        data: {
-          pago_id: 42,
-          payment_intent_id: 'pi_test_active',
-          client_secret: 'pi_test_active_secret_foo',
-          estado: 'procesando',
-          monto: 1800,
-          moneda: 'GTQ',
-        },
+        data: mockIntento,
       };
 
       const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockResponse);
@@ -80,7 +86,7 @@ describe('pagosApi', () => {
       expect(getSpy).toHaveBeenCalledWith('/pagos/intento-activo', {
         params: { carrito_id: 15 },
       });
-      expect(result).toEqual(mockResponse.data);
+      expect(result).toEqual(mockIntento);
     });
 
     it('retorna null cuando no existe intento activo en proceso para el carrito', async () => {
@@ -100,14 +106,13 @@ describe('pagosApi', () => {
   });
 
   describe('create', () => {
-    it('envía la solicitud de pago con tarjeta y retorna los identificadores del intento', async () => {
+    it('envía los datos del pago y devuelve los identificadores y client_secret', async () => {
       const input: CreatePagoInput = {
         carrito_id: 15,
         monto: 1800,
         metodo: 'tarjeta',
         tipo_pago: 'total',
-        moneda: 'GTQ',
-        idempotency_key: 'idemp-test-123',
+        idempotency_key: 'chk-u1-c15-xyz',
       };
 
       const mockResponse: CreatePagoResponse = {
@@ -115,9 +120,9 @@ describe('pagosApi', () => {
         statusCode: 201,
         message: 'Pago creado correctamente',
         data: {
-          pago_id: 99,
-          payment_intent_id: 'pi_test_123',
-          client_secret: 'pi_test_123_secret_xyz',
+          pago_id: 88,
+          payment_intent_id: 'pi_123',
+          client_secret: 'pi_123_secret_abc',
           estado: 'procesando',
           monto: 1800,
           moneda: 'GTQ',
@@ -135,24 +140,24 @@ describe('pagosApi', () => {
   });
 
   describe('getById', () => {
-    it('obtiene el detalle del pago por su identificador numérico', async () => {
+    it('obtiene la entidad del pago por su identificador', async () => {
       const mockPago: Pago = {
-        id: 99,
+        id: 88,
         reserva_habitacion_id: null,
         carrito_id: 15,
         monto: 1800,
         metodo: 'tarjeta',
         estado: 'aprobado',
-        id_transaccion_externo: 'pi_test_123',
+        id_transaccion_externo: 'pi_123',
         moneda: 'GTQ',
         tipo_pago: 'total',
         pasarela: 'stripe',
-        idempotency_key: 'idemp-test-123',
-        fecha_pago: '2026-10-22T13:00:00.000Z',
+        idempotency_key: 'chk-u1-c15-xyz',
+        fecha_pago: '2026-10-22T14:30:00.000Z',
         codigo_error_externo: null,
         mensaje_error: null,
-        createdAt: '2026-10-22T12:59:00.000Z',
-        updatedAt: '2026-10-22T13:00:00.000Z',
+        createdAt: '2026-10-22T14:28:00.000Z',
+        updatedAt: '2026-10-22T14:30:00.000Z',
       };
 
       const mockResponse: PagoResponse = {
@@ -164,10 +169,10 @@ describe('pagosApi', () => {
 
       const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockResponse);
 
-      const result = await pagosApi.getById(99);
+      const result = await pagosApi.getById(88);
 
       expect(getSpy).toHaveBeenCalledTimes(1);
-      expect(getSpy).toHaveBeenCalledWith('/pagos/99');
+      expect(getSpy).toHaveBeenCalledWith('/pagos/88');
       expect(result).toEqual(mockPago);
     });
   });

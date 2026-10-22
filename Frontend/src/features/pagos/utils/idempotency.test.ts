@@ -3,6 +3,8 @@ import {
   getOrCreateCheckoutIdempotencyKey,
   clearCheckoutIdempotencyKey,
   generateSecureIdempotencyKey,
+  getStoredCheckoutAttempt,
+  recordCheckoutPagoId,
 } from './idempotency';
 
 describe('checkout idempotency helpers', () => {
@@ -16,34 +18,50 @@ describe('checkout idempotency helpers', () => {
   });
 
   it('conserva la misma clave de idempotencia al consultar con el mismo monto', () => {
-    const key1 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
-    const key2 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+    const res1 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+    const res2 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
 
-    expect(key1).toBe(key2);
+    expect(res1.key).toBe(res2.key);
+    expect(res2.esReutilizada).toBe(true);
+    expect(res2.montoDifiere).toBe(false);
   });
 
-  it('invalida y genera una nueva clave si el monto cambia (ej. cambio en el carrito)', () => {
-    const keyOriginal = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
-    const keyConNuevoMonto = getOrCreateCheckoutIdempotencyKey(5, 12, 2200);
+  it('conserva la clave pero detecta montoDifiere si el monto del carrito cambia durante un intento', () => {
+    const res1 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+    recordCheckoutPagoId(5, 12, 99);
 
-    expect(keyConNuevoMonto).not.toBe(keyOriginal);
-    expect(keyConNuevoMonto).toContain('chk-u5-c12-');
+    const res2 = getOrCreateCheckoutIdempotencyKey(5, 12, 2200);
+
+    // No debe borrar la clave silenciosamente; conserva la clave del intento previo y alerta la discrepancia
+    expect(res2.key).toBe(res1.key);
+    expect(res2.esReutilizada).toBe(true);
+    expect(res2.montoDifiere).toBe(true);
+    expect(res2.montoPrevio).toBe(1800);
+    expect(res2.pagoId).toBe(99);
+  });
+
+  it('permite asociar el ID de pago local al intento en curso', () => {
+    getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+    recordCheckoutPagoId(5, 12, 456);
+
+    const stored = getStoredCheckoutAttempt(5, 12);
+    expect(stored?.pagoId).toBe(456);
   });
 
   it('genera claves independientes para distintos carritos o usuarios', () => {
-    const keyUser1 = getOrCreateCheckoutIdempotencyKey(1, 10, 500);
-    const keyUser2 = getOrCreateCheckoutIdempotencyKey(2, 10, 500);
-    const keyOtroCarrito = getOrCreateCheckoutIdempotencyKey(1, 11, 500);
+    const resUser1 = getOrCreateCheckoutIdempotencyKey(1, 10, 500);
+    const resUser2 = getOrCreateCheckoutIdempotencyKey(2, 10, 500);
+    const resOtroCarrito = getOrCreateCheckoutIdempotencyKey(1, 11, 500);
 
-    expect(keyUser1).not.toBe(keyUser2);
-    expect(keyUser1).not.toBe(keyOtroCarrito);
+    expect(resUser1.key).not.toBe(resUser2.key);
+    expect(resUser1.key).not.toBe(resOtroCarrito.key);
   });
 
   it('limpia la clave al invocar clearCheckoutIdempotencyKey', () => {
-    const key1 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+    const res1 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
     clearCheckoutIdempotencyKey(5, 12);
-    const key2 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+    const res2 = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
 
-    expect(key2).not.toBe(key1);
+    expect(res2.key).not.toBe(res1.key);
   });
 });

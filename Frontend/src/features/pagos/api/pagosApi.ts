@@ -3,6 +3,7 @@ import type {
   CreatePagoInput,
   CreatePagoResponse,
   CreatePagoSuccessData,
+  IntentoActivoData,
   IntentoActivoPagoResponse,
   Pago,
   PagoResponse,
@@ -34,11 +35,13 @@ export const pagosApi = {
   },
 
   /**
-   * Recupera de forma autorizada un intento de pago activo con tarjeta ('procesando') para el carrito.
-   * Devuelve los datos necesarios (incluyendo client_secret fresco consultado de Stripe) o null si no hay intento activo.
+   * Recupera de forma autorizada y de solo lectura un intento de pago activo con tarjeta para el carrito.
+   * Devuelve los datos discriminados del intento (requiere_confirmacion, procesando, completado_en_pasarela, cancelado)
+   * o null si no existe ningún intento registrado para el carrito.
+   * Lanza ApiError si ocurre un error de comunicación con Stripe (502/503), evitando confundir fallos con ausencia de intento.
    * Endpoint: GET /api/pagos/intento-activo?carrito_id=:id
    */
-  getIntentoActivo: async (carritoId: number): Promise<CreatePagoSuccessData | null> => {
+  getIntentoActivo: async (carritoId: number): Promise<IntentoActivoData | null> => {
     const response = await api.get<IntentoActivoPagoResponse>('/pagos/intento-activo', {
       params: { carrito_id: carritoId },
     });
