@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
+    "@stripe/react-stripe-js": "^7.0.0",
+    "@stripe/stripe-js": "^10.1.0",
     "@tanstack/react-query": "^5.62.8",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

@@ -9,6 +9,10 @@ export const pagosQueryKeys = {
   resumenCarrito: (carritoId?: number, userId?: number) =>
     [...pagosQueryKeys.all, 'resumen', 'carrito', carritoId ?? 0, userId ?? 'anonymous'] as const,
 
+  // Intento de pago activo con tarjeta en curso para el carrito
+  intentoActivo: (carritoId?: number, userId?: number) =>
+    [...pagosQueryKeys.all, 'intentoActivo', carritoId ?? 0, userId ?? 'anonymous'] as const,
+
   // Detalle de un pago específico
   detail: (pagoId?: number, userId?: number) =>
     [...pagosQueryKeys.all, 'detail', pagoId ?? 0, userId ?? 'anonymous'] as const,

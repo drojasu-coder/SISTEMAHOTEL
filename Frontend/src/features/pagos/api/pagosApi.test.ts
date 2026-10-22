@@ -4,6 +4,7 @@ import { api } from '@/api/client/http';
 import type {
   CreatePagoInput,
   CreatePagoResponse,
+  IntentoActivoPagoResponse,
   Pago,
   PagoResponse,
   ResumenPagoData,
@@ -52,6 +53,49 @@ describe('pagosApi', () => {
         params: { reserva_habitacion_id: 8 },
       });
       expect(result).toEqual(mockResumen);
+    });
+  });
+
+  describe('getIntentoActivo', () => {
+    it('obtiene el intento activo y client_secret cuando existe para el carrito', async () => {
+      const mockResponse: IntentoActivoPagoResponse = {
+        success: true,
+        statusCode: 200,
+        message: 'Intento de pago activo obtenido',
+        data: {
+          pago_id: 42,
+          payment_intent_id: 'pi_test_active',
+          client_secret: 'pi_test_active_secret_foo',
+          estado: 'procesando',
+          monto: 1800,
+          moneda: 'GTQ',
+        },
+      };
+
+      const getSpy = vi.spyOn(api, 'get').mockResolvedValueOnce(mockResponse);
+
+      const result = await pagosApi.getIntentoActivo(15);
+
+      expect(getSpy).toHaveBeenCalledTimes(1);
+      expect(getSpy).toHaveBeenCalledWith('/pagos/intento-activo', {
+        params: { carrito_id: 15 },
+      });
+      expect(result).toEqual(mockResponse.data);
+    });
+
+    it('retorna null cuando no existe intento activo en proceso para el carrito', async () => {
+      const mockResponse: IntentoActivoPagoResponse = {
+        success: true,
+        statusCode: 200,
+        message: 'No hay intento de pago activo',
+        data: null,
+      };
+
+      vi.spyOn(api, 'get').mockResolvedValueOnce(mockResponse);
+
+      const result = await pagosApi.getIntentoActivo(15);
+
+      expect(result).toBeNull();
     });
   });
 

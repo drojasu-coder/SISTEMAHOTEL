@@ -61,7 +61,7 @@ export interface ResumenPagoData {
 }
 
 /**
- * Parámetros para iniciar un pago mediante POST /api/pagos.
+ * Parámetros para iniciar o reproducir un pago mediante POST /api/pagos.
  */
 export interface CreatePagoInput {
   carrito_id?: number;
@@ -74,7 +74,7 @@ export interface CreatePagoInput {
 }
 
 /**
- * Datos devueltos tras la creación exitosa de un intento de pago con tarjeta.
+ * Datos devueltos tras la creación o recuperación exitosa de un intento de pago con tarjeta.
  */
 export interface CreatePagoSuccessData {
   pago_id: number;
@@ -97,5 +97,6 @@ export interface ApiResponse<T> {
 
 export type ResumenPagoResponse = ApiResponse<ResumenPagoData>;
 export type CreatePagoResponse = ApiResponse<CreatePagoSuccessData>;
+export type IntentoActivoPagoResponse = ApiResponse<CreatePagoSuccessData | null>;
 export type PagoResponse = ApiResponse<Pago>;
 export type PagosResponse = ApiResponse<Pago[]>;
