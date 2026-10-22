@@ -3,7 +3,7 @@ import {Router} from "express";
 import * as authController from "../controllers/auth.controller";
 import {validateBody} from "../middlewares/validate.middleware";
 import {authMiddleware} from "../middlewares/auth.middleware";
-import{
+import {
     loginSchema,
     registerSchema,
 } from "../validators/auth.validator";
@@ -24,45 +24,26 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - nombre
- *               - email
- *               - password
- *             properties:
- *               nombre:
- *                 type: string
- *                 example: "Juan Pérez"
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "juan.perez@ejemplo.com"
- *               password:
- *                 type: string
- *                 format: password
- *                 example: "Password123!"
- *               telefono:
- *                 type: string
- *                 example: "55551234"
+ *             $ref: '#/components/schemas/RegisterRequest'
  *     responses:
  *       201:
  *         description: Usuario registrado correctamente
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               statusCode: 201
- *               data:
- *                 id: 1
- *                 nombre: "Juan Pérez"
- *                 email: "juan.perez@ejemplo.com"
- *                 telefono: "55551234"
- *                 rol: "cliente"
- *                 activo: true
+ *             schema:
+ *               $ref: '#/components/schemas/RegisterResponse'
  *       400:
- *         description: Datos inválidos
+ *         description: Datos de registro inválidos o cuerpo malformado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
  *       409:
  *         description: El correo electrónico ya se encuentra registrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
     "/register",
@@ -84,41 +65,32 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "juan.perez@ejemplo.com"
- *               password:
- *                 type: string
- *                 format: password
- *                 example: "Password123!"
+ *             $ref: '#/components/schemas/LoginRequest'
  *     responses:
  *       200:
  *         description: Inicio de sesión exitoso
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               statusCode: 200
- *               data:
- *                 accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
- *                 usuario:
- *                   id: 1
- *                   nombre: "Juan Pérez"
- *                   email: "juan.perez@ejemplo.com"
- *                   telefono: "55551234"
- *                   rol: "cliente"
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResponse'
  *       400:
- *         description: Datos inválidos
+ *         description: Credenciales enviadas con formato inválido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
  *       401:
  *         description: Correo electrónico o contraseña incorrectos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: La cuenta de usuario se encuentra deshabilitada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
     "/login",
@@ -141,20 +113,20 @@ router.post(
  *         description: Información del usuario obtenida correctamente
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               statusCode: 200
- *               data:
- *                 id: 1
- *                 nombre: "Juan Pérez"
- *                 email: "juan.perez@ejemplo.com"
- *                 telefono: "55551234"
- *                 rol: "cliente"
- *                 activo: true
+ *             schema:
+ *               $ref: '#/components/schemas/AuthMeResponse'
  *       401:
  *         description: Usuario no autenticado o sesión expirada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: La cuenta de usuario se encuentra deshabilitada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
     "/me",
