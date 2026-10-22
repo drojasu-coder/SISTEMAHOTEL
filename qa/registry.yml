@@ -305,21 +305,104 @@ findings:
     confidence: HIGH
 
   - id: QA-RA-FUNC-CANDIDATE-005
-    status: product_decision_required
+    status: closed
     severity: medium
     category: FUNC
-    current_behavior: >-
-      admin puede activo=false aunque haya ReservasActividad futuras
-      confirmadas; estas permanecen confirmadas, conservan instructor_id, no se
-      reasignan ni cancelan; nuevas reservas con instructor inactivo se rechazan;
-      reactivar una reserva con instructor inactivo también se rechaza.
-    documented_business_rule: NONE
-    classification: PRODUCT DECISION REQUIRED
+    invariant: >-
+      InstructorActividad no puede desactivarse mientras tenga al menos una
+      ReservaActividad futura activa asignada en estado confirmada. Antes debe
+      reasignarse o cancelarse explícitamente; la desactivación nunca cancela,
+      desasigna ni reasigna reservas automáticamente.
+    approved_product_rule:
+      future_active_reservations_block_deactivation: true
+      automatic_reservation_cancellation: false
+      historical_relations_preserved: true
+      inactive_instructor_assignable_to_new_reservations: false
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/actividades/instructorActividad.lifecycle.test.ts
+      test_name: "QA-RA-FUNC-CANDIDATE-005: rechaza desactivar un instructor con una reserva futura confirmada"
+      command: >-
+        npm --prefix backend test --
+        tests/actividades/instructorActividad.lifecycle.test.ts -t
+        "QA-RA-FUNC-CANDIDATE-005: rechaza desactivar un instructor con una reserva futura confirmada"
+      dynamic_scenario: "fecha local del hotel + 2 días, 10:00-11:00"
+    expected:
+      deactivation_http_status: 409
+      deactivation_error_code: INSTRUCTOR_HAS_FUTURE_RESERVATIONS
+      instructor_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_assignment_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+    actual_before_fix:
+      reservation_date: "2026-10-24"
+      deactivation_http_status: 200
+      deactivation_error_code: null
+      instructor_active_after_attempt: false
+      reservation_state_after_attempt: confirmada
+      reservation_instructor_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+      inactive_instructor_with_future_confirmed_reservation: true
+    http_evidence: >-
+      Una reserva con instructor activo fue creada por POST
+      /api/reservas-actividad con HTTP 201 en estado confirmada. PATCH
+      /api/instructores/{id} con activo=false recibió HTTP 200 sin código de
+      conflicto, en lugar de HTTP 409 INSTRUCTOR_HAS_FUTURE_RESERVATIONS.
+    database_evidence: >-
+      Consultas directas de PostgreSQL confirmaron antes del intento instructor
+      activo=true, reserva confirmada e instructor_id asignado. Después del PATCH,
+      el instructor quedó activo=false mientras la reserva futura continuó
+      confirmada con el mismo instructor_id; no hubo cancelación, desasignación ni
+      reasignación automática.
+    endpoint: PATCH /api/instructores/{id}
+    suspected_execution_path: >-
+      instructor.routes -> instructor.controller.update ->
+      instructor.service.update; el servicio obtiene el instructor y ejecuta
+      instructor.update(data) sin comprobar reservas futuras confirmadas.
+    red_result: >-
+      1 test failed con tres aserciones de evidencia: HTTP 200 en lugar de 409,
+      código INSTRUCTOR_HAS_FUTURE_RESERVATIONS ausente e instructor persistido
+      inactivo en lugar de activo. La reserva permaneció confirmada y asignada al
+      instructor ya inactivo.
+    scope: >-
+      Este RED cubre exclusivamente activo true->false con una reserva futura
+      confirmada. Se documenta, sin ampliar el RED, que canceladas, completadas
+      legítimas e históricas finalizadas no bloquean; un instructor inactivo no es
+      asignable/reactivable/reasignable y las relaciones históricas se preservan.
+    classification: BACKEND DEFECT
     confidence: HIGH
-    decision_required: >-
-      definir A) activo=false solo impide nuevas asignaciones y existentes siguen
-      válidas o B) significa que no puede prestar actividades y debe impedirse
-      desactivación con reservas futuras confirmadas.
+    root_cause: >-
+      instructor.service.update persistía activo=false sin una transacción, sin
+      bloquear la fila del instructor y sin consultar reservas confirmadas cuya
+      fecha y hora_fin todavía requirieran la prestación futura del instructor.
+    correction: >-
+      La actualización administrativa ahora bloquea Instructor con SELECT FOR
+      UPDATE dentro de una transacción y, exclusivamente en la transición
+      activo=true a activo=false, consulta reservas confirmadas asignadas cuya
+      fecha sea posterior a la fecha local del hotel o cuya fecha sea hoy y
+      hora_fin sea posterior a la hora local. Si existe alguna, revierte con HTTP
+      409 e INSTRUCTOR_HAS_FUTURE_RESERVATIONS sin modificar instructor ni
+      reserva. La zona horaria usa APP_TIMEZONE con America/Guatemala como valor
+      predeterminado, de forma coherente con QA-RA-FUNC-CANDIDATE-004.
+    final_verification:
+      database_guard: hotel_test_db
+      instructor_lifecycle: "1 passed"
+      reserva_actividad: "45 passed"
+      reserva_actividad_lifecycle_qa_004: "1 passed"
+      typecheck: green
+      deactivation_http_status: 409
+      deactivation_error_code: INSTRUCTOR_HAS_FUTURE_RESERVATIONS
+      instructor_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_assignment_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
 
   - id: QA-PAY-FIN-CANDIDATE-007
     status: closed
