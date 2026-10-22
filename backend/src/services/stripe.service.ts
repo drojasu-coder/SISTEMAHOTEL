@@ -38,6 +38,10 @@ class StripeService {
     }, idempotencyKey ? { idempotencyKey } : undefined);
   }
 
+  updatePaymentIntentMetadata(id: string, metadata: Record<string, string>) {
+    return this.getClient().paymentIntents.update(id, { metadata });
+  }
+
   retrievePaymentIntent(id: string) { return this.getClient().paymentIntents.retrieve(id); }
   cancelPaymentIntent(id: string) { return this.getClient().paymentIntents.cancel(id); }
 

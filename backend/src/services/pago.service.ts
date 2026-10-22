@@ -517,6 +517,80 @@ const findIdempotencyReplay = async (
   return existing;
 };
 
+const reconcileIdempotentPaymentIntent = async (
+  result: any,
+  data: CreatePagoData,
+  amount: number,
+  tipo: PagoTipo,
+) => {
+  const payment = result?.payment;
+  const intent = result?.intent;
+  if (
+    !data.idempotency_key ||
+    !payment ||
+    !intent ||
+    intent.metadata?.pago_id === String(payment.id)
+  ) {
+    return;
+  }
+
+  // The transaction has committed at this point. Re-read the payment so Stripe
+  // can never be redirected to a row that was rolled back during COMMIT.
+  const durablePayment = await Pago.findByPk(payment.id);
+  const expectedCartId = data.carrito_id != null
+    ? String(data.carrito_id)
+    : null;
+  const expectedReservationId = data.reserva_habitacion_id != null
+    ? String(data.reserva_habitacion_id)
+    : null;
+  const metadataCartId = intent.metadata?.carrito_id ?? null;
+  const metadataReservationId =
+    intent.metadata?.reserva_habitacion_id ?? null;
+
+  const sameEconomicOperation = Boolean(
+    durablePayment &&
+    durablePayment.idempotency_key === data.idempotency_key &&
+    durablePayment.metodo === "tarjeta" &&
+    durablePayment.pasarela === "stripe" &&
+    durablePayment.id_transaccion_externo === intent.id &&
+    Number(durablePayment.monto) === amount &&
+    durablePayment.moneda === "GTQ" &&
+    durablePayment.tipo_pago === tipo &&
+    (durablePayment.carrito_id ?? null) === (data.carrito_id ?? null) &&
+    (durablePayment.reserva_habitacion_id ?? null) ===
+      (data.reserva_habitacion_id ?? null) &&
+    intent.amount === toStripeAmount(amount, "GTQ") &&
+    intent.currency?.toLowerCase() === "gtq" &&
+    metadataCartId === expectedCartId &&
+    metadataReservationId === expectedReservationId &&
+    intent.metadata?.tipo_pago === tipo
+  );
+
+  if (!sameEconomicOperation) {
+    throw new AppError(
+      409,
+      "STRIPE_PAYMENT_MISMATCH",
+      "El PaymentIntent no corresponde al pago esperado",
+    );
+  }
+
+  try {
+    await stripeService.updatePaymentIntentMetadata(intent.id, {
+      ...(intent.metadata ?? {}),
+      pago_id: String(durablePayment.id),
+    });
+  } catch (error: any) {
+    if (error instanceof AppError) throw error;
+    const reconciliationError = new AppError(
+      502,
+      "STRIPE_METADATA_RECONCILIATION_FAILED",
+      "El pago fue persistido, pero no fue posible reconciliar sus metadatos en Stripe",
+    );
+    (reconciliationError as AppError & { cause?: unknown }).cause = error;
+    throw reconciliationError;
+  }
+};
+
 export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
   validateOrigin(data);
   if (!["tarjeta", "efectivo", "transferencia"].includes(data.metodo)) {
@@ -531,7 +605,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
   }
   const amount = money(data.monto);
 
-  return sequelize.transaction(async (transaction: any) => {
+  const result = await sequelize.transaction(async (transaction: any) => {
     await assertPaymentOriginOwnership(data, requester, transaction);
     const earlyReplay = await findIdempotencyReplay(
       data,
@@ -640,6 +714,9 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     }
     return payment;
   });
+
+  await reconcileIdempotentPaymentIntent(result, data, amount, tipo);
+  return result;
 };
 
 export const processStripeWebhook = async (object: any, eventType: string) =>

@@ -1107,3 +1107,150 @@ findings:
       test_modified_by_fixer: false
       migrations_modified: false
       unrelated_production_changes: none
+
+  - id: QA-PAY-TX-CANDIDATE-015
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Fallo de COMMIT + retry idempotente puede desacoplar Pago local y
+      PaymentIntent externo
+    invariant: >-
+      Si Stripe creó un PaymentIntent y luego falla el COMMIT local, un retry de
+      la misma operación con la misma idempotency_key debe conservar una
+      asociación reconciliable entre el Pago durable, el PaymentIntent y
+      metadata.pago_id. Nunca debe quedar un Pago B asociado a un intent
+      reutilizado cuya metadata.pago_id identifica al Pago A rollbackeado.
+    reproduction:
+      test_file: backend/tests/pagos/pagoCommitIdempotencyMismatch.test.ts
+      test_name: "QA-PAY-TX-CANDIDATE-015: conserva asociación reconciliable tras fallo de COMMIT y retry idempotente"
+      command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoCommitIdempotencyMismatch.test.ts -t
+        "QA-PAY-TX-CANDIDATE-015: conserva asociación reconciliable tras fallo de COMMIT y retry idempotente"
+      database: hotel_test_db
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+    expected:
+      retry_http_status: 201
+      retry_payment_intent: pi_commit_001
+      external_logical_creates: 1
+      intent_metadata_pago_id: "B.id"
+      local_external_pago_id_match: true
+      webhook_http_status: 200
+      final_payment_state: aprobado
+      final_cart_state: pagado
+      reconciliation_failure: false
+    actual:
+      first_http: "500 INTERNAL_SERVER_ERROR"
+      first_local_payment_id: 1
+      first_stripe_intent: pi_commit_001
+      first_intent_metadata_pago_id: "1"
+      commit_failure_injected: true
+      failure_after_stripe_success: true
+      failure_after_local_external_id_update: true
+      first_transaction_rollback: true
+      first_local_payment_durable: false
+      retry_same_idempotency_key: true
+      retry_http: 201
+      retry_local_payment_id: 2
+      retry_payment_intent: pi_commit_001
+      external_create_invocations: 2
+      external_logical_creates: 1
+      intent_metadata_after_retry_pago_id: "1"
+      local_external_pago_id_match: false
+      webhook: "409 STRIPE_PAYMENT_MISMATCH"
+      final_payment_state: procesando
+      final_cart_state: activo
+      external_intent_state: succeeded
+      reconciliation_failure: true
+      financial_violation: true
+      red_result: "1 failed; expected match/200/aprobado/pagado, received mismatch/409/procesando/activo"
+    http_evidence:
+      reserva_actividad: 201
+      create_cart: 201
+      add_activity: 201
+      first_payment: "500 INTERNAL_SERVER_ERROR"
+      retry_payment: 201
+      webhook_succeeded: "409 STRIPE_PAYMENT_MISMATCH"
+      unexpected_setup_or_injection_failure: false
+    database_evidence:
+      setup_total: "Q100.00"
+      after_first_attempt:
+        payment_rows: 0
+        pago_a_durable: false
+        carrito_estado: activo
+        cart_items: 1
+      after_retry:
+        payment_rows: 1
+        pago_b_id: 2
+        pago_b_estado: procesando
+        pago_b_monto: "100.00"
+        pago_b_external_id: pi_commit_001
+        pago_b_idempotency_key: qa-pay-tx-015-commit-key
+      after_webhook:
+        pago_b_estado: procesando
+        carrito_estado: activo
+    external_evidence:
+      payment_intent: pi_commit_001
+      amount_minor_units: 10000
+      currency: gtq
+      status_after_webhook_attempt: succeeded
+      immutable_metadata_pago_id: "1"
+      retry_requested_metadata_pago_id: "2"
+      logical_creates: 1
+    demonstrated_execution:
+      stripe_create_success_before_failure: true
+      local_external_id_update_success_before_failure: true
+      failure_in_commit_only: true
+      local_rollback_observed: true
+      stripe_intent_survived_rollback: true
+      retry_reused_same_intent: true
+      retry_preserved_original_metadata: true
+      webhook_rejected_due_to_old_pago_id: true
+    suspected_execution_path: >-
+      createPago crea Pago A, crea pi_commit_001 con metadata.pago_id=A y
+      persiste id_transaccion_externo dentro del callback transaccional. El fallo
+      ocurre después de que el callback retorna, en sequelize.transaction al
+      ejecutar COMMIT, fuera del bloque que compensa fallos de payment.update;
+      A se revierte pero el intent externo y su idempotency key sobreviven. El
+      retry no encuentra una fila local durable, crea B y vuelve a invocar
+      createPaymentIntent con la misma key; Stripe reutiliza pi_commit_001 sin
+      sustituir metadata A. B persiste con ese external ID. Finalmente
+      processStripeWebhook encuentra B por id_transaccion_externo y rechaza el
+      succeeded con STRIPE_PAYMENT_MISMATCH porque metadata.pago_id sigue siendo A,
+      dejando B procesando y el carrito activo aunque el intent está succeeded.
+    severity_recommendation: high
+    regressions_observed:
+      qa_pay_fin_candidate_010: none
+      qa_pay_conc_candidate_011: none
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      typecheck: pass
+      db_guard: green
+      production_files_modified: false
+      migrations_modified: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      typecheck: green
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+      first_transaction_rollback: true
+      first_local_payment_id: 1
+      first_local_payment_durable: false
+      retry_local_payment_id: 2
+      retry_payment_intent: pi_commit_001
+      external_logical_creates: 1
+      metadata_update_calls: ">=1"
+      final_metadata_pago_id: "2"
+      local_external_pago_id_match: true
+      webhook_http_status: 200
+      final_payment_state: aprobado
+      final_cart_state: pagado
+      reconciliation_failure: false
+      financial_violation: false
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
