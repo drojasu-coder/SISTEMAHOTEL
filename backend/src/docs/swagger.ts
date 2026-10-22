@@ -29,6 +29,14 @@ const options: swaggerJsdoc.Options = {
     description: "Registro, inicio de sesión y verificación de sesión",
   },
   {
+    name: "Habitaciones",
+    description: "Administración y consulta de disponibilidad de habitaciones",
+  },
+  {
+    name: "Reservas de Habitación",
+    description: "Reservas y disponibilidad de habitaciones del hotel",
+  },
+  {
     name: "Sucursales",
     description: "Administración de sucursales del hotel",
   },
@@ -2087,6 +2095,399 @@ UpdateBoletoParqueEstadoRequest: {
     },
   },
 },
+
+        ReservaHabitacionUsuario: {
+          type: "object",
+          required: ["id", "nombre", "email", "rol"],
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            nombre: {
+              type: "string",
+              example: "Juan Pérez",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "juan.perez@ejemplo.com",
+            },
+            rol: {
+              type: "string",
+              example: "cliente",
+            },
+            telefono: {
+              type: "string",
+              nullable: true,
+              example: "55551234",
+            },
+            activo: {
+              type: "boolean",
+              example: true,
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+            },
+          },
+        },
+
+        ReservaHabitacionTipo: {
+          type: "object",
+          required: ["id", "nombre", "capacidad_maxima", "tarifa_noche"],
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            nombre: {
+              type: "string",
+              example: "Suite Presidencial",
+            },
+            capacidad_maxima: {
+              type: "integer",
+              example: 4,
+            },
+            tarifa_noche: {
+              type: "string",
+              example: "450.00",
+              description: "Tarifa por noche en formato decimal con dos dígitos",
+            },
+            descripcion: {
+              type: "string",
+              nullable: true,
+              example: "Habitación espaciosa con vista panorámica",
+            },
+          },
+        },
+
+        ReservaHabitacionSucursal: {
+          type: "object",
+          required: ["id", "nombre"],
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            nombre: {
+              type: "string",
+              example: "Hotel Central Guatemala",
+            },
+            activa: {
+              type: "boolean",
+              example: true,
+            },
+          },
+        },
+
+        ReservaHabitacionHabitacion: {
+          type: "object",
+          required: [
+            "id",
+            "sucursal_id",
+            "tipo_habitacion_id",
+            "numero",
+            "estado",
+          ],
+          properties: {
+            id: {
+              type: "integer",
+              example: 10,
+            },
+            sucursal_id: {
+              type: "integer",
+              example: 1,
+            },
+            tipo_habitacion_id: {
+              type: "integer",
+              example: 1,
+            },
+            numero: {
+              type: "string",
+              example: "101",
+            },
+            estado: {
+              type: "string",
+              enum: ["disponible", "ocupada", "mantenimiento", "limpieza"],
+              example: "disponible",
+            },
+            TipoHabitacion: {
+              $ref: "#/components/schemas/ReservaHabitacionTipo",
+            },
+            Sucursal: {
+              $ref: "#/components/schemas/ReservaHabitacionSucursal",
+            },
+          },
+        },
+
+        ReservaHabitacion: {
+          type: "object",
+          required: [
+            "id",
+            "usuario_id",
+            "habitacion_id",
+            "fecha_entrada",
+            "fecha_salida",
+            "numero_huespedes",
+            "estado",
+            "total",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            usuario_id: {
+              type: "integer",
+              example: 3,
+            },
+            habitacion_id: {
+              type: "integer",
+              example: 10,
+            },
+            fecha_entrada: {
+              type: "string",
+              format: "date",
+              example: "2026-12-01",
+            },
+            fecha_salida: {
+              type: "string",
+              format: "date",
+              example: "2026-12-05",
+            },
+            numero_huespedes: {
+              type: "integer",
+              minimum: 1,
+              example: 2,
+            },
+            estado: {
+              type: "string",
+              enum: [
+                "pendiente",
+                "confirmada",
+                "cancelada",
+                "finalizada",
+                "expirada",
+              ],
+              example: "pendiente",
+            },
+            total: {
+              type: "string",
+              example: "1800.00",
+              description: "Monto total calculado por el servidor con formato decimal",
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+            },
+            Usuario: {
+              $ref: "#/components/schemas/ReservaHabitacionUsuario",
+            },
+            Habitacion: {
+              $ref: "#/components/schemas/ReservaHabitacionHabitacion",
+            },
+          },
+        },
+
+        CreateReservaHabitacionRequest: {
+          type: "object",
+          required: [
+            "habitacion_id",
+            "fecha_entrada",
+            "fecha_salida",
+            "numero_huespedes",
+          ],
+          additionalProperties: false,
+          properties: {
+            usuario_id: {
+              type: "integer",
+              minimum: 1,
+              example: 1,
+              description: "Opcional para clientes (asignado desde JWT); obligatorio para roles administrativos",
+            },
+            habitacion_id: {
+              type: "integer",
+              minimum: 1,
+              example: 10,
+            },
+            fecha_entrada: {
+              type: "string",
+              format: "date",
+              example: "2026-12-01",
+            },
+            fecha_salida: {
+              type: "string",
+              format: "date",
+              example: "2026-12-05",
+            },
+            numero_huespedes: {
+              type: "integer",
+              minimum: 1,
+              example: 2,
+            },
+          },
+        },
+
+        HabitacionDisponible: {
+          type: "object",
+          required: [
+            "id",
+            "numero",
+            "estado",
+            "sucursal_id",
+            "tipo_habitacion_id",
+            "noches",
+            "tarifa_noche",
+            "total_estimado",
+          ],
+          properties: {
+            id: {
+              type: "integer",
+              example: 10,
+            },
+            numero: {
+              type: "string",
+              example: "101",
+            },
+            estado: {
+              type: "string",
+              example: "disponible",
+            },
+            sucursal_id: {
+              type: "integer",
+              example: 1,
+            },
+            tipo_habitacion_id: {
+              type: "integer",
+              example: 1,
+            },
+            noches: {
+              type: "integer",
+              example: 4,
+            },
+            tarifa_noche: {
+              type: "string",
+              example: "450.00",
+              description: "Tarifa por noche en formato decimal con dos dígitos",
+            },
+            total_estimado: {
+              type: "string",
+              example: "1800.00",
+              description: "Monto total estimado para la estancia con dos decimales",
+            },
+            Sucursal: {
+              $ref: "#/components/schemas/ReservaHabitacionSucursal",
+            },
+            TipoHabitacion: {
+              $ref: "#/components/schemas/ReservaHabitacionTipo",
+            },
+          },
+        },
+
+        ReservaHabitacionResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Reserva de habitación obtenida correctamente",
+            },
+            data: {
+              $ref: "#/components/schemas/ReservaHabitacion",
+            },
+          },
+        },
+
+        ReservaHabitacionCreatedResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 201,
+            },
+            message: {
+              type: "string",
+              example: "Reserva de habitación creada correctamente",
+            },
+            data: {
+              $ref: "#/components/schemas/ReservaHabitacion",
+            },
+          },
+        },
+
+        ReservasHabitacionResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Reservas de habitación obtenidas correctamente",
+            },
+            data: {
+              type: "array",
+              items: {
+                $ref: "#/components/schemas/ReservaHabitacion",
+              },
+            },
+          },
+        },
+
+        DisponibilidadHabitacionesResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Habitaciones disponibles obtenidas correctamente",
+            },
+            data: {
+              type: "array",
+              items: {
+                $ref: "#/components/schemas/HabitacionDisponible",
+              },
+            },
+          },
+        },
 
         ErrorResponse: {
           type: "object",

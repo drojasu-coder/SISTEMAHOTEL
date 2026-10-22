@@ -43,6 +43,8 @@ const {
 
   TipoHabitacion,
 
+  Sucursal,
+
 } = db;
 
 
@@ -135,6 +137,16 @@ const reservationInclude = [
 
       },
 
+      {
+
+        model: Sucursal,
+
+        attributes: ["id", "nombre", "activa"],
+
+        required: false,
+
+      },
+
     ],
 
   },
@@ -193,7 +205,7 @@ const bloqueaDisponibilidad = (
 
  */
 
-const getTodayDate = () => {
+export const getTodayDate = () => {
 
   const timeZone = env.APP_TIMEZONE;
 
@@ -271,7 +283,7 @@ const getTodayDate = () => {
 
  */
 
-const validateDates = (
+export const validateDates = (
 
   fechaEntrada: string,
 
@@ -311,7 +323,7 @@ const validateDates = (
 
  */
 
-const validateNotPast = (
+export const validateNotPast = (
 
   fechaEntrada: string
 
@@ -437,7 +449,7 @@ const validateHabitacionReservable = (
 
  */
 
-const getNights = (
+export const getNights = (
 
   fechaEntrada: string,
 
@@ -845,7 +857,7 @@ const validateOverlap = async (
 
  */
 
-const calculateTotal = (
+export const calculateTotal = (
 
   fechaEntrada: string,
 

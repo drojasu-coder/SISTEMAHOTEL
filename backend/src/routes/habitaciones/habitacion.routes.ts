@@ -5,6 +5,7 @@ import { requireRole } from "../../middlewares/role.middleware";
 import {
   validateBody,
   validateParams,
+  validateQuery,
 } from "../../middlewares/validate.middleware";
 
 import { ROLES } from "../../constants/roles";
@@ -15,6 +16,7 @@ import {
   createHabitacionSchema,
   updateHabitacionSchema,
   habitacionIdSchema,
+  disponibilidadHabitacionQuerySchema,
 } from "../../validators/habitaciones/habitacion.validator";
 
 const router = Router();
@@ -84,6 +86,96 @@ router.get(
   "/",
   authMiddleware,
   habitacionController.getAllHabitaciones
+);
+
+/**
+ * @openapi
+ * /api/habitaciones/disponibles:
+ *   get:
+ *     tags:
+ *       - Habitaciones
+ *     summary: Consultar habitaciones disponibles
+ *     description: Consulta las habitaciones disponibles para una sede, rango de fechas y número de huéspedes. Requiere autenticación.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sucursal_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: ID de la sucursal (entero positivo)
+ *         example: 1
+ *       - in: query
+ *         name: fecha_entrada
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Fecha de entrada (AAAA-MM-DD)
+ *         example: "2026-12-01"
+ *       - in: query
+ *         name: fecha_salida
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Fecha de salida posterior a la entrada (AAAA-MM-DD)
+ *         example: "2026-12-05"
+ *       - in: query
+ *         name: numero_huespedes
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Número de huéspedes (entero positivo)
+ *         example: 2
+ *       - in: query
+ *         name: tipo_habitacion_id
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Filtro opcional por tipo de habitación
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Habitaciones disponibles obtenidas correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: "#/components/schemas/DisponibilidadHabitacionesResponse"
+ *       400:
+ *         description: Parámetros inválidos o formato incorrecto
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: "#/components/schemas/ValidationErrorResponse"
+ *       401:
+ *         description: Usuario no autenticado (AUTH_TOKEN_REQUIRED, INVALID_AUTH_FORMAT, INVALID_TOKEN, TOKEN_EXPIRED)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: "#/components/schemas/ErrorResponse"
+ *       404:
+ *         description: Sucursal no encontrada (SUCURSAL_NOT_FOUND)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: "#/components/schemas/ErrorResponse"
+ *       422:
+ *         description: Parámetros semánticamente inválidos (FECHAS_INVALIDAS, ROOM_RESERVATION_DATE_IN_PAST)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: "#/components/schemas/ErrorResponse"
+ */
+router.get(
+  "/disponibles",
+  authMiddleware,
+  validateQuery(disponibilidadHabitacionQuerySchema),
+  habitacionController.getHabitacionesDisponibles
 );
 
 /**

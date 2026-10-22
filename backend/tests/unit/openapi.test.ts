@@ -83,7 +83,79 @@ describe("generated OpenAPI contract", () => {
       0,
     );
 
-    expect(Object.keys(paths)).toHaveLength(93);
-    expect(operations).toBe(184);
+    expect(Object.keys(paths)).toHaveLength(94);
+    expect(operations).toBe(185);
+  });
+  it("contains complete reservas and disponibilidad schemas and contract responses (BE-011, BE-012)", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    // Component schemas
+    expect(schemas.ReservaHabitacionUsuario).toBeDefined();
+    expect(schemas.ReservaHabitacionTipo).toBeDefined();
+    expect(schemas.ReservaHabitacionSucursal).toBeDefined();
+    expect(schemas.ReservaHabitacionHabitacion).toBeDefined();
+    expect(schemas.ReservaHabitacion).toBeDefined();
+    expect(schemas.CreateReservaHabitacionRequest).toBeDefined();
+    expect(schemas.HabitacionDisponible).toBeDefined();
+    expect(schemas.ReservaHabitacionResponse).toBeDefined();
+    expect(schemas.ReservaHabitacionCreatedResponse).toBeDefined();
+    expect(schemas.ReservasHabitacionResponse).toBeDefined();
+    expect(schemas.DisponibilidadHabitacionesResponse).toBeDefined();
+
+    // CreateReservaHabitacionRequest: client sends 4 fields, admin sends optional usuario_id
+    expect(schemas.CreateReservaHabitacionRequest.required).toEqual([
+      "habitacion_id",
+      "fecha_entrada",
+      "fecha_salida",
+      "numero_huespedes",
+    ]);
+    expect(schemas.CreateReservaHabitacionRequest.properties.usuario_id).toBeDefined();
+
+    // GET /api/habitaciones/disponibles (BE-012)
+    const disponibles = paths["/api/habitaciones/disponibles"]?.get;
+    expect(disponibles).toBeDefined();
+    expect(disponibles.security).toEqual([{ bearerAuth: [] }]);
+    expect(disponibles.parameters).toHaveLength(5);
+    expect(disponibles.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/DisponibilidadHabitacionesResponse"
+    );
+    expect(disponibles.responses["400"]).toBeDefined();
+    expect(disponibles.responses["401"]).toBeDefined();
+    expect(disponibles.responses["404"]).toBeDefined();
+    expect(disponibles.responses["422"]).toBeDefined();
+
+    // Reservas endpoints (BE-011)
+    const reservasCollection = paths["/api/reservas-habitacion"];
+    const reservasResource = paths["/api/reservas-habitacion/{id}"];
+
+    // GET /api/reservas-habitacion
+    expect(reservasCollection.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/ReservasHabitacionResponse"
+    );
+    expect(reservasCollection.get.responses["401"]).toBeDefined();
+
+    // POST /api/reservas-habitacion
+    expect(reservasCollection.post.requestBody.content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/CreateReservaHabitacionRequest"
+    );
+    expect(reservasCollection.post.responses["201"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/ReservaHabitacionCreatedResponse"
+    );
+    expect(reservasCollection.post.responses["400"]).toBeDefined();
+    expect(reservasCollection.post.responses["401"]).toBeDefined();
+    expect(reservasCollection.post.responses["403"]).toBeDefined();
+    expect(reservasCollection.post.responses["404"]).toBeDefined();
+    expect(reservasCollection.post.responses["409"]).toBeDefined();
+    expect(reservasCollection.post.responses["422"]).toBeDefined();
+
+    // GET /api/reservas-habitacion/{id}
+    expect(reservasResource.get.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/ReservaHabitacionResponse"
+    );
+    expect(reservasResource.get.responses["400"]).toBeDefined();
+    expect(reservasResource.get.responses["401"]).toBeDefined();
+    expect(reservasResource.get.responses["403"]).toBeDefined();
+    expect(reservasResource.get.responses["404"]).toBeDefined();
   });
 });
