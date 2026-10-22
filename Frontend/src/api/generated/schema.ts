@@ -2397,7 +2397,7 @@ export interface paths {
         };
         /**
          * Listar mesas
-         * @description Obtiene todas las mesas disponibles en el restaurante.
+         * @description Obtiene todas las mesas disponibles en el restaurante junto con los datos de su sucursal.
          */
         get: {
             parameters: {
@@ -2413,7 +2413,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MesasResponse"];
+                    };
                 };
             };
         };
@@ -2431,14 +2433,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @example 1 */
-                        sucursal_id: number;
-                        /** @example Terraza */
-                        zona: string;
-                        /** @example 4 */
-                        capacidad: number;
-                    };
+                    "application/json": components["schemas"]["CreateMesaRequest"];
                 };
             };
             responses: {
@@ -2447,7 +2442,45 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MesaResponse"];
+                    };
+                };
+                /** @description Datos enviados inválidos o incompletos */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Permisos insuficientes (requiere admin o gerente_restaurante) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description La sucursal indicada no existe */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -2481,14 +2514,27 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MesaResponse"];
+                    };
+                };
+                /** @description Parámetro de ruta inválido */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
                 };
                 /** @description Mesa no encontrada */
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -2517,7 +2563,10 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Actualizar una mesa */
+        /**
+         * Actualizar una mesa
+         * @description Actualiza una mesa existente. Requiere rol administrador o gerente de restaurante. No admite sucursal_id y exige al menos un campo permitido.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -2529,11 +2578,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        zona?: string;
-                        capacidad?: number;
-                        estado?: string;
-                    };
+                    "application/json": components["schemas"]["UpdateMesaRequest"];
                 };
             };
             responses: {
@@ -2542,7 +2587,45 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["MesaResponse"];
+                    };
+                };
+                /** @description Datos enviados inválidos, cuerpo vacío o parámetros incorrectos */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Permisos insuficientes (requiere admin o gerente_restaurante) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Mesa no encontrada */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -12190,6 +12273,10 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+            Sucursal?: {
+                /** @example Hotel Central */
+                nombre?: string;
+            } | null;
         };
         CreateMesaRequest: {
             /** @example 1 */
@@ -12198,6 +12285,8 @@ export interface components {
             zona: string;
             /** @example 4 */
             capacidad: number;
+            /** @example disponible */
+            estado?: string;
         };
         UpdateMesaRequest: {
             /** @example interior */
@@ -12206,6 +12295,16 @@ export interface components {
             capacidad?: number;
             /** @example disponible */
             estado?: string;
+        };
+        MesaResponse: {
+            /** @example success */
+            status?: string;
+            data?: components["schemas"]["Mesa"];
+        };
+        MesasResponse: {
+            /** @example success */
+            status?: string;
+            data?: components["schemas"]["Mesa"][];
         };
         ReservaMesa: {
             /** @example 1 */
@@ -12262,6 +12361,12 @@ export interface components {
             tipo?: string;
             /** @example Cancha de tenis 1 */
             nombre?: string;
+            /** @example 50 */
+            precio_hora?: number;
+            /** @example 10 */
+            precio_equipo?: number;
+            /** @example 25 */
+            precio_instructor_hora?: number;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -12274,12 +12379,24 @@ export interface components {
             tipo: string;
             /** @example Cancha de tenis 1 */
             nombre: string;
+            /** @example 50 */
+            precio_hora?: number;
+            /** @example 10 */
+            precio_equipo?: number;
+            /** @example 25 */
+            precio_instructor_hora?: number;
         };
         UpdateRecursoActividadRequest: {
             /** @example pádel */
             tipo?: string;
             /** @example Cancha de pádel 1 */
             nombre?: string;
+            /** @example 50 */
+            precio_hora?: number;
+            /** @example 10 */
+            precio_equipo?: number;
+            /** @example 25 */
+            precio_instructor_hora?: number;
         };
         Instructor: {
             /** @example 1 */

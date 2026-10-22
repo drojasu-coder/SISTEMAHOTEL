@@ -64,7 +64,8 @@
   - En `Frontend/src/features/mesas/schemas/mesaSchema.ts`, el formulario evita vaciar un estado existente en edición mostrando el mensaje neutral acordado: *"Conserve el estado actual o ingrese otro valor."* En creación, si el campo se deja en blanco, se omite del payload para que la base de datos aplique su valor por defecto (`disponible`).
 - **Criterio para cierre definitivo en backend:**
   - Retirar `.nullable()` en los esquemas de validación de `mesa.validator.ts` para alinear la validación con la restricción `allowNull: false` de la tabla `mesas`.
-- **Estado:** pendiente en backend (mitigado y protegido en frontend).
+- **Resolución definitiva:** se retiró `.nullable()` en `createMesaSchema` y `updateMesaSchema` en `mesa.validator.ts`, alineando la validación Zod con la restricción `allowNull: false` de Sequelize/PostgreSQL. Se incorporaron pruebas unitarias (`mesa.validator.test.ts`) e integración HTTP (`postgres.mesas.http.test.ts`).
+- **Estado:** resuelto.
 
 ## BE-009 · Documentación OpenAPI incompleta en endpoints de mesas
 
@@ -82,4 +83,5 @@
   - El frontend utiliza contratos tipados explícitos en `Frontend/src/features/mesas/types.ts` (`Mesa`, `MesaResponse`, `MesasResponse`, etc.) para desacoplarse de la falta de schemas generados en OpenAPI y procesar el envoltorio `{ status: "success", data }`.
 - **Criterio para cierre definitivo en backend:**
   - Incorporar componentes de schema para `Mesa` en OpenAPI, documentar el campo opcional `estado` en el alta y añadir los códigos de error estándar (400, 401, 403, 404).
-- **Estado:** pendiente en backend (no bloqueante / cubierto por tipos explícitos en frontend).
+- **Resolución definitiva:** se añadieron las definiciones completas de OpenAPI en `swagger.ts` (`Mesa`, `CreateMesaRequest`, `UpdateMesaRequest`, `MesaResponse`, `MesasResponse`), se documentó el campo opcional `estado` en el alta, y se enlazaron los esquemas de respuesta 200/201 y errores (400, 401, 403, 404) en `mesa.routes.ts`. Validado mediante pruebas unitarias (`openapi.test.ts`) y tipos TypeScript regenerados en `Frontend/src/api/generated/schema.ts`.
+- **Estado:** resuelto.
