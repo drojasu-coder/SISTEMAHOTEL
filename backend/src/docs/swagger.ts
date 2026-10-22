@@ -25,6 +25,10 @@ const options: swaggerJsdoc.Options = {
 
     tags: [
   {
+    name: "Autenticación",
+    description: "Registro, inicio de sesión y verificación de sesión",
+  },
+  {
     name: "Sucursales",
     description: "Administración de sucursales del hotel",
   },
@@ -84,6 +88,216 @@ const options: swaggerJsdoc.Options = {
       },
 
       schemas: {
+        RegisterRequest: {
+          type: "object",
+          required: [
+            "nombre",
+            "email",
+            "password",
+          ],
+          additionalProperties: false,
+          properties: {
+            nombre: {
+              type: "string",
+              minLength: 2,
+              maxLength: 150,
+              example: "Juan Pérez",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              maxLength: 150,
+              example: "juan.perez@ejemplo.com",
+            },
+            password: {
+              type: "string",
+              format: "password",
+              minLength: 8,
+              maxLength: 72,
+              example: "Password123!",
+            },
+            telefono: {
+              type: "string",
+              nullable: true,
+              example: "55551234",
+            },
+          },
+        },
+
+        LoginRequest: {
+          type: "object",
+          required: [
+            "email",
+            "password",
+          ],
+          additionalProperties: false,
+          properties: {
+            email: {
+              type: "string",
+              format: "email",
+              example: "juan.perez@ejemplo.com",
+            },
+            password: {
+              type: "string",
+              format: "password",
+              minLength: 1,
+              example: "Password123!",
+            },
+          },
+        },
+
+        AuthUser: {
+          type: "object",
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            nombre: {
+              type: "string",
+              example: "Juan Pérez",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "juan.perez@ejemplo.com",
+            },
+            telefono: {
+              type: "string",
+              nullable: true,
+              example: "55551234",
+            },
+            rol: {
+              type: "string",
+              enum: [
+                "admin",
+                "recepcionista",
+                "gerente_restaurante",
+                "gerente_habitaciones",
+                "empleado_operativo",
+                "cliente",
+              ],
+              example: "cliente",
+            },
+          },
+        },
+
+        AuthUserWithStatus: {
+          type: "object",
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            nombre: {
+              type: "string",
+              example: "Juan Pérez",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              example: "juan.perez@ejemplo.com",
+            },
+            telefono: {
+              type: "string",
+              nullable: true,
+              example: "55551234",
+            },
+            rol: {
+              type: "string",
+              enum: [
+                "admin",
+                "recepcionista",
+                "gerente_restaurante",
+                "gerente_habitaciones",
+                "empleado_operativo",
+                "cliente",
+              ],
+              example: "cliente",
+            },
+            activo: {
+              type: "boolean",
+              example: true,
+            },
+          },
+        },
+
+        LoginData: {
+          type: "object",
+          properties: {
+            accessToken: {
+              type: "string",
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            },
+            usuario: {
+              $ref: "#/components/schemas/AuthUser",
+            },
+          },
+        },
+
+        LoginResponse: {
+          type: "object",
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Inicio de sesión exitoso",
+            },
+            data: {
+              $ref: "#/components/schemas/LoginData",
+            },
+          },
+        },
+
+        RegisterResponse: {
+          type: "object",
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 201,
+            },
+            message: {
+              type: "string",
+              example: "Usuario registrado correctamente",
+            },
+            data: {
+              $ref: "#/components/schemas/AuthUserWithStatus",
+            },
+          },
+        },
+
+        AuthMeResponse: {
+          type: "object",
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Usuario autenticado",
+            },
+            data: {
+              $ref: "#/components/schemas/AuthUserWithStatus",
+            },
+          },
+        },
+
         ServicioEvento: {
           type: "object",
           properties: {
