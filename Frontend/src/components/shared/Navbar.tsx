@@ -1,165 +1,95 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { MapPin, User, Shield, Hotel, Menu, X } from 'lucide-react';
-import logoPrincipal from '@/assets/branding/logo-principal.jpg';
+import React from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, LogOut, User } from 'lucide-react';
+import { Brand } from '@/components/shared/Brand';
+import { useAuth } from '@/features/auth/AuthContext';
+import { canAccessPanel } from '@/features/auth/permissions';
+import { cn } from '@/lib/cn';
+import { es } from '@/i18n/es';
+
+const actionClass =
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
 
 export const Navbar: React.FC = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const location = useLocation();
+  const navigate = useNavigate();
+  const { status, user, logout } = useAuth();
+  const hasPanel = user ? canAccessPanel(user.rol) : false;
 
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [location.pathname]);
-
-  const isActive = (path: string) => location.pathname === path;
+  const handleLogout = () => {
+    logout();
+    navigate('/', { replace: true });
+  };
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-charcoal-200/80 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
-        {/* Brand / Logo */}
-        <Link to="/" className="flex items-center gap-2 sm:gap-3 group shrink-0">
-          <img
-            src={logoPrincipal}
-            alt="Hotel Hunapú"
-            className="h-8 sm:h-10 w-auto object-contain hidden sm:block"
-            onError={(e) => {
-              (e.currentTarget as HTMLElement).style.display = 'none';
-            }}
-          />
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-bronze-700 text-white flex items-center justify-center font-bold shrink-0">
-              <Hotel className="w-4 h-4 sm:w-5 sm:h-5 text-gold-100" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-base sm:text-lg tracking-tight text-charcoal-900 leading-none">
-                Hotel Hunapú
-              </span>
-              <span className="text-[10px] sm:text-[11px] tracking-widest uppercase text-bronze-500 font-medium mt-0.5">
-                Guatemala
-              </span>
-            </div>
-          </div>
+    <header className="sticky top-0 z-40 border-b bg-white">
+      <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="rounded-md" aria-label={`${es.marca.nombre} — ${es.navegacion.inicio}`}>
+          <Brand />
         </Link>
 
-        {/* Center navigation links (desktop) */}
-        <nav className="hidden md:flex items-center gap-5 lg:gap-6 text-sm font-medium text-charcoal-700">
-          <Link
+        <nav aria-label={es.navegacion.principal} className="hidden items-center gap-6 md:flex">
+          <NavLink
             to="/"
-            className={`transition-colors hover:text-bronze-700 ${
-              isActive('/') ? 'text-bronze-700 font-semibold' : ''
-            }`}
+            end
+            className={({ isActive }) =>
+              cn(
+                'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                isActive ? 'text-bronce-700' : 'text-neutro-700',
+              )
+            }
           >
-            Inicio
-          </Link>
-          <span className="text-charcoal-400/60 cursor-not-allowed hover:text-charcoal-400 select-none" title="Próximamente">
-            Habitaciones
-          </span>
-          <span className="text-charcoal-400/60 cursor-not-allowed hover:text-charcoal-400 select-none" title="Próximamente">
-            Eventos
-          </span>
-          <span className="text-charcoal-400/60 cursor-not-allowed hover:text-charcoal-400 select-none" title="Próximamente">
-            Restaurante
-          </span>
-          <span className="text-charcoal-400/60 cursor-not-allowed hover:text-charcoal-400 select-none" title="Próximamente">
-            Bienestar
-          </span>
+            {es.navegacion.inicio}
+          </NavLink>
         </nav>
 
-        {/* Right action area */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Branch chip (visible on lg+) */}
-          <div className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cream-100 border border-gold-300/60 text-xs font-medium text-charcoal-700">
-            <MapPin className="w-3.5 h-3.5 text-bronze-700" />
-            <span>Hunapú Antigua</span>
-          </div>
-
-          {/* Admin link */}
-          <Link
-            to="/admin"
-            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-medium transition-colors ${
-              isActive('/admin')
-                ? 'bg-charcoal-900 text-white'
-                : 'text-charcoal-700 hover:bg-cream-100'
-            }`}
-            title="Área administrativa"
-          >
-            <Shield className="w-4 h-4 text-bronze-500" />
-            <span className="hidden sm:inline">Admin</span>
-          </Link>
-
-          {/* Login button */}
-          <Link
-            to="/login"
-            className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-              isActive('/login')
-                ? 'bg-bronze-500 text-white'
-                : 'bg-bronze-700 text-white hover:bg-bronze-500'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span>Ingresar</span>
-          </Link>
-
-          {/* Mobile hamburger menu button (< md) */}
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-charcoal-700 hover:text-charcoal-900 hover:bg-cream-100 transition-colors focus:outline-none focus:ring-2 focus:ring-bronze-500"
-            aria-label={isMobileMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
-            aria-expanded={isMobileMenuOpen}
-          >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+        <div className="flex items-center gap-2">
+          {status === 'authenticated' && user ? (
+            <>
+              <span className="hidden max-w-[10rem] truncate text-xs font-medium text-neutro-600 lg:inline">
+                {user.nombre}
+              </span>
+              <Link
+                to={hasPanel ? '/admin' : '/cuenta'}
+                aria-label={hasPanel ? es.navegacion.panel : es.navegacion.miCuenta}
+                className={cn(actionClass, 'bg-bronce-600 text-white hover:bg-bronce-700')}
+              >
+                {hasPanel ? (
+                  <LayoutDashboard className="size-4" aria-hidden="true" />
+                ) : (
+                  <User className="size-4" aria-hidden="true" />
+                )}
+                <span className="hidden sm:inline">
+                  {hasPanel ? es.navegacion.panel : es.navegacion.miCuenta}
+                </span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                aria-label={es.navegacion.cerrarSesion}
+                className={cn(actionClass, 'border-neutro-300 text-neutro-700 hover:bg-neutro-100')}
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                <span className="hidden sm:inline">{es.navegacion.cerrarSesion}</span>
+              </button>
+            </>
+          ) : status === 'loading' ? (
+            <span className="h-11 w-24 rounded-md bg-neutro-200 motion-safe:animate-pulse" aria-hidden="true" />
+          ) : (
+            <>
+              <Link
+                to="/registro"
+                className={cn(actionClass, 'hidden border-neutro-300 text-neutro-700 hover:bg-neutro-100 sm:inline-flex')}
+              >
+                {es.navegacion.crearCuenta}
+              </Link>
+              <Link to="/login" className={cn(actionClass, 'bg-bronce-600 text-white hover:bg-bronce-700')}>
+                <User className="size-4" aria-hidden="true" />
+                {es.navegacion.ingresar}
+              </Link>
+            </>
+          )}
         </div>
       </div>
-
-      {/* Mobile navigation dropdown (< md) */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-charcoal-200/80 bg-white shadow-lg animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="px-4 py-3 space-y-1">
-            <Link
-              to="/"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium min-h-[44px] transition-colors ${
-                isActive('/') ? 'bg-cream-100 text-bronze-700 font-semibold' : 'text-charcoal-700 hover:bg-cream-50'
-              }`}
-            >
-              <span>Inicio</span>
-            </Link>
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-charcoal-400 min-h-[44px]">
-              <span>Habitaciones</span>
-              <span className="text-[10px] uppercase tracking-wider bg-cream-100 text-bronze-700 px-2 py-0.5 rounded font-semibold">
-                Pronto
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-charcoal-400 min-h-[44px]">
-              <span>Eventos</span>
-              <span className="text-[10px] uppercase tracking-wider bg-cream-100 text-bronze-700 px-2 py-0.5 rounded font-semibold">
-                Pronto
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-charcoal-400 min-h-[44px]">
-              <span>Restaurante</span>
-              <span className="text-[10px] uppercase tracking-wider bg-cream-100 text-bronze-700 px-2 py-0.5 rounded font-semibold">
-                Pronto
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-charcoal-400 min-h-[44px]">
-              <span>Bienestar</span>
-              <span className="text-[10px] uppercase tracking-wider bg-cream-100 text-bronze-700 px-2 py-0.5 rounded font-semibold">
-                Pronto
-              </span>
-            </div>
-
-            <div className="pt-2 border-t border-charcoal-200/60 mt-2 space-y-2">
-              <div className="flex items-center gap-2 px-3 py-2 text-xs text-charcoal-700 bg-cream-50 rounded-lg">
-                <MapPin className="w-3.5 h-3.5 text-bronze-700 shrink-0" />
-                <span>Sede actual: <strong>Hunapú Antigua</strong></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };

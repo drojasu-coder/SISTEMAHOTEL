@@ -1,43 +1,42 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Hotel, ArrowLeft } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { Link, Navigate, useLocation } from 'react-router-dom';
+import { AuthPageLayout } from '@/components/shared/AuthPageLayout';
+import { Alert } from '@/components/ui/Feedback';
 import { LoginForm } from '@/features/auth/components/LoginForm';
+import { useAuth } from '@/features/auth/AuthContext';
+import { getPostLoginRoute } from '@/features/auth/routing';
+import { es } from '@/i18n/es';
 
 export const LoginPage: React.FC = () => {
+  const { status, user, notice } = useAuth();
+  const location = useLocation();
+  const from = (location.state as { from?: unknown } | null)?.from;
+
+  if (status === 'authenticated' && user) {
+    return <Navigate to={getPostLoginRoute(user, from)} replace />;
+  }
+
   return (
-    <div className="min-h-[calc(100vh-14rem)] flex items-center justify-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-5 sm:space-y-6">
-        <div className="text-center space-y-2">
+    <AuthPageLayout
+      title={es.auth.loginTitulo}
+      description={es.auth.loginDescripcion}
+      footer={
+        <>
+          {es.auth.sinCuenta}{' '}
           <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 text-xs text-charcoal-700 hover:text-bronze-700 transition-colors mb-1 py-1"
+            to="/registro"
+            state={location.state}
+            className="inline-flex min-h-11 items-center font-semibold text-bronce-700 underline-offset-2 hover:underline"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Volver a la página principal</span>
+            {es.auth.registrarse}
           </Link>
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-bronze-700 text-white flex items-center justify-center mx-auto shadow-md">
-            <Hotel className="w-5 h-5 sm:w-6 sm:h-6 text-gold-100" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-charcoal-900 tracking-tight">
-            Iniciar Sesión
-          </h1>
-          <p className="text-xs text-charcoal-700 px-2 leading-relaxed">
-            Ingrese sus credenciales para gestionar sus reservas y servicios.
-          </p>
-        </div>
-
-        <Card className="p-5 sm:p-8 shadow-md border-charcoal-200/80">
-          <LoginForm />
-        </Card>
-
-        <p className="text-center text-xs text-charcoal-400 px-2">
-          ¿Aún no tiene cuenta?{' '}
-          <span className="text-bronze-700 font-semibold cursor-pointer hover:underline">
-            Registrarse como cliente
-          </span>
-        </p>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-6">
+        {notice && <Alert tone="warning">{notice}</Alert>}
+        <LoginForm />
       </div>
-    </div>
+    </AuthPageLayout>
   );
 };

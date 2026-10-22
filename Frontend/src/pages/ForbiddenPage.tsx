@@ -1,42 +1,40 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldAlert, ArrowLeft, LogIn } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { ShieldAlert } from 'lucide-react';
+import { buttonStyles } from '@/components/ui/Button';
+import { useAuth } from '@/features/auth/AuthContext';
+import { getHomeRouteForUser } from '@/features/auth/routing';
+import { es } from '@/i18n/es';
 
 export const ForbiddenPage: React.FC = () => {
+  const { status, user } = useAuth();
+  const signedIn = status === 'authenticated' && user !== null;
+
   return (
-    <div className="min-h-[calc(100vh-14rem)] flex items-center justify-center py-10 sm:py-16 px-4 sm:px-6">
-      <div className="text-center max-w-md w-full space-y-5 sm:space-y-6">
-        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-status-danger-bg border border-status-danger/30 text-status-danger flex items-center justify-center mx-auto shadow-xs">
-          <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8" />
-        </div>
+    <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center gap-6 px-4 py-14 text-center">
+      <span className="rounded-full bg-error-50 p-4 text-error-600">
+        <ShieldAlert className="size-8" aria-hidden="true" />
+      </span>
 
-        <div className="space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-status-danger bg-status-danger-bg px-2.5 py-1 rounded-full">
-            Error 403
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-bold text-charcoal-900 mt-2">
-            Acceso No Autorizado
-          </h1>
-          <p className="text-xs sm:text-sm text-charcoal-700 max-w-sm mx-auto leading-relaxed">
-            No dispone de los permisos o del rol requerido para acceder a este módulo del sistema.
-          </p>
-        </div>
+      <div className="flex flex-col gap-2">
+        <p className="eyebrow text-error-600">{es.acceso.codigo}</p>
+        <h1 className="text-[2rem] leading-[2.375rem]">{es.acceso.titulo}</h1>
+        <p className="text-sm text-neutro-600">{es.acceso.descripcion}</p>
+      </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <Link to="/" className="w-full sm:w-auto">
-            <Button variant="secondary" className="w-full sm:w-auto gap-2 justify-center">
-              <ArrowLeft className="w-4 h-4" />
-              <span>Volver a Inicio</span>
-            </Button>
+      <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+        <Link to="/" className={buttonStyles({ variant: 'ghost', className: 'w-full sm:w-auto' })}>
+          {es.navegacion.inicio}
+        </Link>
+        {signedIn ? (
+          <Link to={getHomeRouteForUser(user)} className={buttonStyles({ className: 'w-full sm:w-auto' })}>
+            {es.navegacion.miEspacio}
           </Link>
-          <Link to="/login" className="w-full sm:w-auto">
-            <Button variant="primary" className="w-full sm:w-auto gap-2 justify-center">
-              <LogIn className="w-4 h-4" />
-              <span>Iniciar Sesión</span>
-            </Button>
+        ) : (
+          <Link to="/login" className={buttonStyles({ className: 'w-full sm:w-auto' })}>
+            {es.auth.loginBoton}
           </Link>
-        </div>
+        )}
       </div>
     </div>
   );
