@@ -1312,50 +1312,6 @@ export const updateReservaHabitacion =
 
 
 
-    const cambiaIdentidadEconomica =
-
-      data.usuario_id !== undefined ||
-
-      data.habitacion_id !== undefined ||
-
-      data.fecha_entrada !== undefined ||
-
-      data.fecha_salida !== undefined;
-
-
-
-    if (cambiaIdentidadEconomica) {
-
-      const exposure =
-
-        await reservationFinancialExposure(
-
-          id,
-
-          transaction
-
-        );
-
-
-
-      if (exposure.processing > 0) {
-
-        throw new AppError(
-
-          409,
-
-          "RESERVATION_HAS_PROCESSING_PAYMENT",
-
-          "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
-
-        );
-
-      }
-
-    }
-
-
-
     /**
 
      * Calculamos cómo quedaría finalmente
@@ -1514,9 +1470,15 @@ export const updateReservaHabitacion =
 
 
 
-      const habitacion =
+      const {
 
-        await validateReferences(
+        habitacion,
+
+        tipoHabitacion,
+
+      } =
+
+        await validateLockedReferences(
 
           usuarioId,
 
@@ -1532,9 +1494,7 @@ export const updateReservaHabitacion =
 
         numeroHuespedes,
 
-        habitacion
-
-          .TipoHabitacion
+        tipoHabitacion
 
           .capacidad_maxima
 
@@ -1587,6 +1547,50 @@ export const updateReservaHabitacion =
           id,
 
           transaction
+
+        );
+
+      }
+
+    }
+
+
+
+    const cambiaIdentidadEconomica =
+
+      data.usuario_id !== undefined ||
+
+      data.habitacion_id !== undefined ||
+
+      data.fecha_entrada !== undefined ||
+
+      data.fecha_salida !== undefined;
+
+
+
+    if (cambiaIdentidadEconomica) {
+
+      const exposure =
+
+        await reservationFinancialExposure(
+
+          id,
+
+          transaction
+
+        );
+
+
+
+      if (exposure.processing > 0) {
+
+        throw new AppError(
+
+          409,
+
+          "RESERVATION_HAS_PROCESSING_PAYMENT",
+
+          "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
 
         );
 

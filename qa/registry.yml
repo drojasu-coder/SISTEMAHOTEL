@@ -2486,3 +2486,168 @@ findings:
       migrations_modified: false
       existing_tests_modified: false
       verified_at: "2026-10-22"
+
+  - id: QA-RH-CONC-CANDIDATE-023
+    status: closed
+    severity: high
+    category: CONCURRENCY
+    title: >-
+      Dos PATCH concurrentes mueven dos reservas activas a la misma habitación
+      y al mismo intervalo
+    invariant: >-
+      Para una habitación y un intervalo, PostgreSQL debe terminar con como
+      máximo una ReservaHabitacion activa en estado pendiente o confirmada que
+      se solape con ese intervalo, incluso cuando dos reservas válidas distintas
+      se modifican simultáneamente mediante el endpoint PATCH.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts
+      test_name: "QA-RH-CONC-CANDIDATE-023: dos PATCH no pueden mover dos reservas activas a la misma habitación e intervalo"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts -t
+        "QA-RH-CONC-CANDIDATE-023: dos PATCH no pueden mover dos reservas
+        activas a la misma habitación e intervalo"
+      database: hotel_test_db
+      synchronization: "un único par no coordinado mediante Promise.all"
+      pairs: 1
+      concurrent_requests: 2
+      endpoint: PATCH /api/reservas-habitacion/{id}
+      requester_role: admin
+      reservation_owner: "mismo cliente para A y B"
+      payments_used: false
+      cart_used: false
+      stripe_used: false
+    scenario:
+      target_room_id: 3
+      target_interval: "2036-04-10 <= estancia < 2036-04-13"
+      reservation_a_initial: >-
+        id=1; habitación origen 1; pendiente; 2036-04-10 a 2036-04-13;
+        válida y fuera de la habitación destino
+      reservation_b_initial: >-
+        id=2; habitación origen 2; pendiente; 2036-04-10 a 2036-04-13;
+        válida y fuera de la habitación destino
+      initial_conflict: false
+      mutation: >-
+        Dos PATCH HTTP reales simultáneos intentaron mover A y B a habitación 3
+        y al intervalo 2036-04-10/2036-04-13.
+    expected:
+      active_overlap_count_max: 1
+      safe_http_outcome: >-
+        Como máximo un PATCH puede ser aplicado; el contendiente debe recibir
+        un conflicto controlado sin error 500.
+      unexpected_500: false
+    actual:
+      response_distribution: "2x HTTP 200 sin código de error"
+      reservation_a_final: >-
+        id=1; habitacion_id=3; pendiente; 2036-04-10 a 2036-04-13
+      reservation_b_final: >-
+        id=2; habitacion_id=3; pendiente; 2036-04-10 a 2036-04-13
+      active_overlap_count: 2
+      invariant_violated: true
+      red_result: >-
+        1 archivo falló, 1 test falló; expected ACTIVE_OVERLAP_COUNT <= 1,
+        received 2.
+    http_evidence:
+      request_a_status: 200
+      request_a_code: null
+      request_b_status: 200
+      request_b_code: null
+      unexpected_500: false
+      postgres_40P01_exposed: false
+      constraint_error_exposed: false
+      sequelize_error_exposed: false
+      deadlock_observed: false
+      timeout_observed: false
+    database_evidence:
+      query_scope: >-
+        Todas las filas de reservas_habitacion con habitacion_id=3, estado IN
+        (pendiente, confirmada), fecha_entrada < 2036-04-13 y fecha_salida >
+        2036-04-10, consultadas después de completar el par.
+      active_overlap_count: 2
+      overlapping_rows:
+        - "id=1; habitacion_id=3; pendiente; 2036-04-10/2036-04-13"
+        - "id=2; habitacion_id=3; pendiente; 2036-04-10/2036-04-13"
+      source_of_truth: PostgreSQL
+    lock_inspection:
+      source_reservation_rows: >-
+        Cada PATCH toma SELECT FOR UPDATE sobre su propia ReservaHabitacion de
+        origen; son filas distintas y esos locks no serializan el par.
+      destination_room_row: "no se observó lock en la ruta de actualización"
+      conflicting_reservation_rows: >-
+        La consulta de disponibilidad no toma lock sobre filas conflictivas.
+      shared_serialization_lock: "ninguno observado"
+      evidentiary_weight: >-
+        Inspección auxiliar; la confirmación se basa exclusivamente en el estado
+        final reproducido en PostgreSQL.
+    suspected_execution_path: >-
+      reservaHabitacion.routes -> reservaHabitacion.controller.updateReservaHabitacion
+      -> reservaHabitacion.service.updateReservaHabitacion. Cada transacción
+      bloquea únicamente su reserva fuente, calcula el destino, ejecuta
+      validateReferences y validateOverlap para la habitación destino sin tomar
+      un lock canónico compartido sobre esa habitación. Ambas transacciones
+      pueden observar cero solapes antes de ejecutar sus UPDATE independientes y
+      confirmar dos filas activas solapadas.
+    root_cause: >-
+      El PATCH ya era transaccional y bloqueaba con SELECT FOR UPDATE la
+      ReservaHabitacion origen, pero dos PATCH sobre reservas origen distintas no
+      compartían ese lock. La ruta de actualización usaba validateReferences,
+      que leía la habitación destino sin bloquearla, de modo que ambas
+      transacciones podían comprobar disponibilidad antes de que cualquiera
+      persistiera su UPDATE.
+    correction: >-
+      updateReservaHabitacion reutiliza validateLockedReferences después de
+      bloquear la ReservaHabitacion origen. Así toma SELECT FOR UPDATE sobre la
+      Habitacion destino antes de validateOverlap, tanto al cambiar de habitación
+      como al cambiar fechas en la misma habitación, y conserva la comprobación y
+      el UPDATE dentro de la misma transacción. La exposición financiera se
+      consulta después de habitación y disponibilidad solo para mutaciones
+      económicas; no se modificaron pagos, Stripe, migraciones ni schema.
+    concurrency: >-
+      El lock compartido canónico es la fila de Habitacion destino. El primer
+      PATCH que lo obtiene comprueba disponibilidad y persiste; el contendiente
+      espera y, al adquirirlo, observa la reserva ya confirmada por PostgreSQL y
+      recibe HTTP 409 HABITACION_NO_DISPONIBLE. El orden queda
+      ReservaHabitacion origen -> Habitacion destino -> disponibilidad ->
+      Pago/Reembolso cuando corresponda, sin retries, delays, mutex de Node ni
+      advisory locks.
+    severity_recommendation: high
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      red_focused: "1 file failed, 1 test failed por ACTIVE_OVERLAP_COUNT=2"
+      patch_concurrency_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts
+      patch_concurrency: "1 file passed, 1 test passed"
+      winner: >-
+        No determinista entre A y B; un PATCH persiste y el contendiente queda
+        rechazado por el overlap serializado.
+      safe_http_outcome: >-
+        1x HTTP 200 y 1x HTTP 409 HABITACION_NO_DISPONIBLE; sin 500, timeout ni
+        40P01.
+      final_active_overlap_count_max: 1
+      payment_mutation_binding_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts
+      payment_mutation_binding: "1 file passed, 1 test passed"
+      cancel_processing_payment_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cancelProcessingPayment.test.ts
+      cancel_processing_payment: "1 file passed, 1 test passed"
+      minimal_update_availability_command: >-
+        npm --prefix backend test -- tests/habitaciones/reservaHabitacion.test.ts
+        -t "13\\. rechaza un traslape exacto|27\\. admin puede modificar una
+        reserva"
+      minimal_update_availability: "1 file passed, 2 tests passed, 34 skipped"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      synchronization: "Promise.all sin spies ni barreras"
+      pairs_executed: 1
+      requests_executed: 2
+      production_files_modified:
+        - backend/src/services/habitaciones/reservaHabitacion.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
