@@ -44,7 +44,7 @@
   3. En `backend/src/routes/carrito/carrito.routes.ts` y `backend/src/routes/carrito/carritoItem.routes.ts`, algunas anotaciones no vinculaban los esquemas envoltorio completos o no documentaban los esquemas de error estandarizados (400, 401, 403, 404, 409, 422).
 - **Criterio para cierre definitivo en backend:**
   - Declarar listas `required` explícitas en `Carrito`, `CarritoItem` y `CarritoItemsData` en `swagger.ts` con soporte de `nullable` real para campos nulos (`expira_en`, `descripcion`, `promocion_id`).
-  - Crear esquemas `CarritoResponse`, `CarritosResponse`, `CarritoItemsResponse`, `CarritoItemResponse` y `CreateCarritoItemRequest` en `components.schemas`.
+  - Crear esquemas `CarritoResponse`, `CarritosResponse`, `CarritoItemsResponse`, `CarritoItemResponse` y `CreateCarritoItemRequest` en `components.schemas``.
   - Vincular las referencias en `carrito.routes.ts` y `carritoItem.routes.ts` para respuestas 200, 201, 204 y errores.
   - Verificar con pruebas unitarias de OpenAPI, pruebas HTTP contra `hotel_test_db` y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
 - **Resolución definitiva:** Esquemas (`Carrito`, `CarritoItem`, `CarritoItemsData`, `CreateCarritoItemRequest`, `CarritoResponse`, `CarritosResponse`, `CarritoItemsResponse`, `CarritoItemResponse`) documentados con `required` explícito y `nullable` real en `swagger.ts` y rutas. Validado con 14 pruebas OpenAPI, 9 pruebas HTTP sobre `hotel_test_db` (crear, listar, colisión 409, referencia ajena 403, duplicado 409 y retiro 204 conservando reserva), tipos regenerados en `schema.ts`, adición integrada en confirmación/detalle de reservas y ruta `/carrito` activada para clientes.
@@ -53,7 +53,7 @@
 ## BE-014 · Documentación OpenAPI, esquemas de contrato y recuperación de intento activo en pagos
 
 - **Categoría:** mejora de documentación / contrato OpenAPI y recuperación funcional de pagos
-- **Revisión inspeccionada:** 2026-10-22 · `58a606f`
+- **Revisión inspeccionada:** 2026-10-23 · `refactor/backend-architecture`
 - **Flujo afectado:** operaciones de checkout y pagos (`/api/pagos`, `/api/pagos/intento-activo`, `/api/pagos/resumen`, `/api/pagos/:id`, `/api/pagos/stripe/webhook`).
 - **Estado de funcionamiento:** las operaciones del backend funcionan correctamente en tiempo de ejecución: `POST /api/pagos` crea los pagos y PaymentIntents de Stripe, valida propiedad del origen y unicidad de idempotencia con replay seguro si se reenvía la misma clave; `GET /api/pagos/resumen` calcula importes y saldos; `GET /api/pagos/:id` consulta el estado garantizando aislamiento de usuario; y el webhook de Stripe confirma transiciones hacia `aprobado`, `pagado` y `confirmada`.
 - **Detalle de las diferencias observadas:**
@@ -66,5 +66,9 @@
   - Vincular las referencias `$ref` en `pago.routes.ts` para respuestas 200, 201 y esquemas de error (400, 401, 403, 404, 409, 422).
   - Verificar con pruebas de esquema OpenAPI y pruebas HTTP contra `hotel_test_db`.
   - Regenerar tipos en `Frontend/src/api/generated/schema.ts`.
-- **Resolución parcial:** Implementado endpoint de recuperación de intento activo y conciliación de cancelaciones en `pago.service.ts` y rutas; esquemas OpenAPI documentados en `swagger.ts` y rutas; 17 pruebas de integración HTTP sobre `hotel_test_db` pasando (incluyendo 20 replays concurrentes, recuperación de intentos y reconciliación de cancelaciones conservando aprobaciones concurrentes); tipos regenerados en `schema.ts`. Integradas pantallas `CheckoutPage` y `PagoResultadoPage` en frontend con 25 pruebas unitarias passing. Pendiente la comprobación interactiva en navegador con tarjeta de prueba en vivo y recepción de webhook local.
+- **Resolución parcial:** Implementado endpoint de recuperación de intento activo y conciliación de cancelaciones en `pago.service.ts` y rutas; esquemas OpenAPI documentados en `swagger.ts` y rutas; 17 pruebas de integración HTTP sobre `hotel_test_db` pasando; tipos regenerados en `schema.ts`. Verificación en vivo:
+  - Pago exitoso verificado en vivo con Stripe sandbox (Pago 3, Carrito 4, Reserva 4).
+  - Rechazo de tarjeta verificado en vivo mediante webhook de Stripe `payment_intent.payment_failed` (Pago 4, Carrito 5, `card_declined`).
+  - Identificado bloqueo funcional en recuperación interactiva cuando expira el carrito (15 min TTL) antes de confirmar con tarjeta válida.
+  - Preparada Reserva 5 para la prueba pendiente de desafío 3D Secure (`4000 0027 6000 3184`).
 - **Estado:** integración/verificación pendiente.

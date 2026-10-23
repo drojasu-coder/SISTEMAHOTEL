@@ -2,32 +2,12 @@
 
 ## Estado actual
 - **Estado de BE-014:** Integración / Verificación pendiente.
-- **Razón del bloqueo interactivo:**
-  1. Ausencia de `VITE_STRIPE_PUBLISHABLE_KEY` en `Frontend/.env` (`pk_test_...` correspondiente a la cuenta de prueba activa `acct_1U1gMOLtJcRjbnjR`).
-  2. Ausencia de navegador web interactivo en la sesión para interactuar manualmente con Stripe Elements e ingresar desafíos 3DS de prueba.
-- **Aclaración sobre Webhooks y Puerto del Servidor:**
-  - La presencia de `STRIPE_WEBHOOK_SECRET` en `backend/.env` valida que el formato es reconocido, pero **el secreto de firma debe corresponder al listener activo** generado en cada sesión de Stripe CLI.
-  - **Puerto efectivo del servidor backend:** Puerto **`4000`** (`PORT` en `backend/src/config/env.ts` y consumido por el frontend en `Frontend/src/app/config/env.ts` como `http://localhost:4000/api`).
-  - **Ruta real del Webhook:** `/api/pagos/stripe/webhook` (con parser `express.raw({ type: "application/json" })` en `backend/src/app.ts`, ejecutado antes de los middlewares JSON).
-  - **Comando exacto para reenvío local con Stripe CLI:**
-    ```bash
-    stripe listen --forward-to localhost:4000/api/pagos/stripe/webhook
-    ```
-    *(Este comando genera al iniciar una línea con el secreto de firma efímero `whsec_...`, el cual debe coincidir con el `STRIPE_WEBHOOK_SECRET` del backend para validar la firma de eventos).*
-
-## Configuración local verificada (sin secretos)
-- **Backend (`backend/.env`):**
-  - `PORT`: 4000 (puerto efectivo del servidor Express).
-  - `STRIPE_SECRET_KEY`: Configurada en modo de prueba (`sk_test_...`).
-  - `STRIPE_WEBHOOK_SECRET`: Configurada (`whsec_...`).
-  - Base de datos de pruebas: `hotel_test_db` en puerto 55432 (disponible y verificada).
-- **Frontend (`Frontend/.env`):**
-  - `VITE_API_BASE_URL`: `http://localhost:4000/api`.
-  - `VITE_STRIPE_PUBLISHABLE_KEY`: **Ausente / no configurada**. Impide a Stripe.js cargar el iframe de Elements en el navegador.
-- **Herramientas de entorno:**
-  - Stripe CLI disponible en `/usr/local/bin/stripe` (autenticado como Administrador en `Entorno de prueba de tecnologia y computacion · sandbox acct_1U1gMOLtJcRjbnjR`).
-  - Base de datos `hotel_postgres_test` activa en puerto `55432`.
-  - Servidor Express backend en reposo (no se dejaron procesos demonios no controlados activos).
+- **Entorno verificado:**
+  - Base de datos autorizada: `hotel_test_db` en puerto `55432` (PostgreSQL en Docker `hotel_postgres_test`).
+  - Backend: Puerto `4000` (`NODE_ENV=test`, `http://localhost:4000/api`).
+  - Frontend: Puerto `5173` (`http://localhost:5173`).
+  - Stripe CLI: Listener activo reenviando a `http://localhost:4000/api/pagos/stripe/webhook`.
+  - Cuenta cliente: `qa-cliente-1@hotel.test` (ID 1, rol `cliente`).
 
 ## Cobertura automatizada implementada y verificada
 Ejecutada con el runner del proyecto (**Vitest**, `npm --prefix backend test tests/pagos/pago.intentoActivo.test.ts` y suites de frontend):
@@ -39,48 +19,50 @@ Ejecutada con el runner del proyecto (**Vitest**, `npm --prefix backend test tes
 6. **Aislamiento por usuario e idempotencia:** Identificación con `userId` en claves de consulta y persistencia de clave de idempotencia (`PagoResultadoPage.test.tsx` casos 1, 2, 5, 6; `pago.idempotency.concurrency.test.ts`).
 7. **Fin del polling sin falso positivo:** Manejo de estado procesando y límite de sondeo sin asumir estados no comprobados (`PagoResultadoPage.test.tsx` caso 8).
 
+---
+
 ## Distinción de comprobaciones y estado de los escenarios
 
-| Escenario | Comprobación en navegador real con Stripe de prueba | Cobertura automatizada | Estado técnico |
+| Escenario | Comprobación en navegador real con Stripe de prueba | Cobertura automatizada | Evidencia consultada y estado técnico |
 |---|---|---|---|
-| **A. Pago exitoso** | Pendiente (falta clave pública frontend y navegador interactivo) | Sí (`pago.intentoActivo.test.ts`, `CheckoutPage.test.tsx`) | Lógica integrada y tipada; pendiente verificación interactiva E2E. |
-| **B. Autenticación 3D Secure** | Pendiente (requiere desafío modal en navegador interactivo) | Sí (manejo de `requires_action` en `CheckoutPage.tsx`) | Manejo de acción requerido cubierto con mocks de Stripe.js. |
-| **C. Tarjeta rechazada y recuperación** | Pendiente | Sí (`pago.intentoActivo.test.ts` casos 3 y 4; `CheckoutPage.test.tsx`) | Intento se mantiene recuperable sin crear cobro duplicado ni desbordar saldo. |
-| **D. Recarga o regreso al checkout con intento pendiente** | Pendiente | Sí (`pago.intentoActivo.test.ts` caso 1; `CheckoutPage.test.tsx`) | `GET /api/pagos/intento-activo` recupera client_secret del intento pendiente sin crear nuevo pago. |
-| **E. Protección contra doble envío** | Pendiente | Sí (`pago.idempotency.concurrency.test.ts` y caso 8 de `pago.intentoActivo.test.ts`) | Bloqueo por clave de idempotencia y control transaccional de exposición de saldo. |
+| **A. Pago exitoso** | **Comprobado en vivo** | Sí (`pago.intentoActivo.test.ts`, `CheckoutPage.test.tsx`) | **Verificado en BD y Stripe:** Pago ID 3 (`pi_3UTnNoLtJcRjbnjR14NWkZJn`, GTQ 450.00), Carrito 4 (`pagado`), Reserva 4 (`confirmada`). Tarjeta Visa `4242` sin desafío 3DS (`three_d_secure: null`). |
+| **B. Autenticación 3D Secure** | **Pendiente de desafío interactivo** | Sí (manejo de `requires_action` en `CheckoutPage.tsx`) | Pago 3 se procesó como tarjeta directa sin 3DS. Se preparó **Reserva 5** (ID 5, GTQ 450.00, 2026-11-23 a 2026-11-26) para validar el modal con tarjeta `4000 0027 6000 3184`. |
+| **C. Tarjeta rechazada y recuperación** | **Parcialmente comprobado (Rechazo verificado en vivo; recuperación bloqueada por TTL de carrito)** | Sí (`pago.intentoActivo.test.ts` casos 3 y 4; `CheckoutPage.test.tsx`) | **Rechazo verificado:** Pago ID 4 (`pi_3UTnQqLtJcRjbnjR0dARZc3p`, GTQ 300.00), tarjeta `4002 0000 0000 0002` generó webhook `payment_intent.payment_failed` persistido en BD (`card_declined`). En Stripe el intent quedó en `requires_payment_method`. **Recuperación bloqueada:** Al expirar el Carrito 5 (TTL 15 min), el frontend bloquea `/checkout` con `<SinCarrito>`. |
+| **D. Recarga o regreso al checkout con intento pendiente** | **Comprobado por contrato de API / Pendiente en navegador** | Sí (`pago.intentoActivo.test.ts` caso 1; `CheckoutPage.test.tsx`) | `GET /api/pagos/intento-activo?carrito_id=5` retorna el intento activo (`pi_3UTnQqLtJcRjbnjR0dARZc3p`, `puede_confirmar: true`) sin duplicar filas en `pagos`. |
+| **E. Protección contra doble envío** | **Comprobado por prueba de concurrencia** | Sí (`pago.idempotency.concurrency.test.ts` y caso 8 de `pago.intentoActivo.test.ts`) | Bloqueo estricto por clave de idempotencia transaccional y validación de saldo expuesto (`committedOrProcessingExposure`). |
 
 ---
 
-## Guía para la Comprobación Manual en Vivo (Paso a Paso)
+## Hallazgo y Bloqueo en la Recuperación tras Expiración de Carrito
 
-Una vez que el usuario agregue la clave pública en `Frontend/.env`:
+1. **Condición observada:**
+   - La prueba de rechazo con tarjeta `4002...` se realizó sobre el Carrito 5 a las `18:43 UTC`, generando el Pago 4 (`rechazado`) y dejando el PaymentIntent `pi_3UTnQqLtJcRjbnjR0dARZc3p` en Stripe en estado `requires_payment_method`.
+   - A las `18:58 UTC` venció el TTL de 15 minutos del Carrito 5, pasando a estado `expirado`.
+2. **Comportamiento en Backend vs Frontend:**
+   - **Backend:** `GET /api/pagos/intento-activo?carrito_id=5` permite consultar y retornar el `client_secret` de `pi_3UTnQqLtJcRjbnjR0dARZc3p` con `puede_confirmar: true` aun con el carrito expirado.
+   - **Frontend:** La pantalla `/checkout` consulta obligatoriamente `GET /api/carritos/actual`. Al estar el Carrito 5 expirado, la API responde 404 (`ACTIVE_CART_NOT_FOUND`) y el componente muestra `<SinCarrito>` en lugar del formulario de pago.
+3. **Implicación:**
+   - El usuario no puede recuperar el PaymentIntent existente desde la interfaz una vez que el carrito expira.
+   - Si el usuario reincorpora la reserva a un nuevo carrito (Carrito 6), el flujo habitual de checkout crearía un nuevo PaymentIntent, dejando el anterior huérfano en Stripe con riesgo de cobro concurrente o incompatibilidad.
 
-1. **Configurar la clave pública en el frontend:**
-   Añadir en `Frontend/.env`:
-   ```bash
-   VITE_STRIPE_PUBLISHABLE_KEY=pk_test_... # Clave pública de prueba de acct_1U1gMOLtJcRjbnjR
-   ```
-2. **Iniciar el reenvío de webhooks locales con Stripe CLI:**
-   En una terminal independiente:
-   ```bash
-   stripe listen --forward-to localhost:4000/api/pagos/stripe/webhook
-   ```
-   *Nota: Copiar el secreto `whsec_...` que imprime `stripe listen` y actualizarlo temporalmente en `backend/.env` (`STRIPE_WEBHOOK_SECRET=whsec_...`) para que coincida exactamente con la sesión activa.*
-3. **Iniciar el backend apuntando a hotel_test_db:**
-   ```bash
-   NODE_ENV=test TEST_DATABASE_URL=postgres://hotel_user:hotel_password@localhost:55432/hotel_test_db npm --prefix backend run dev
-   ```
-4. **Iniciar el frontend:**
-   ```bash
-   npm --prefix Frontend run dev
-   ```
-5. **Ejecutar el recorrido interactivo en navegador:**
-   - Iniciar sesión como cliente (`/login`).
-   - Crear una reserva de habitación en `/reservar` y añadirla al carrito.
-   - Navegar a `/checkout`.
-   - Pulsar "Preparar pago" (acción explícita para crear el intento).
-   - Probar tarjetas oficiales de prueba de Stripe:
-     - **Éxito:** `4242 4242 4242 4242` (cualquier fecha futura y CVC).
-     - **3D Secure:** `4000 0027 6000 3184` (superar el modal de autenticación de prueba).
-     - **Rechazo:** `4002 0000 0000 0002` (verificar que no se duplica el cobro y permite reintentar con otra tarjeta).
-   - Tras completar la confirmación, verificar que la pantalla redirige a `/pagos/:id/resultado`, el webhook confirma el evento en consola y la reserva cambia a estado `confirmada` y carrito a `pagado`.
+---
+
+## Procedimiento para Continuar las Pruebas
+
+### Paso 1: Prueba de Autenticación 3D Secure (Reserva 5)
+1. Abrir en el navegador: [http://localhost:5173/mis-reservas/5](http://localhost:5173/mis-reservas/5) (Reserva #5, fechas 2026-11-23 a 2026-11-26, GTQ 450.00).
+2. Pulsar **"Añadir al carrito"** y navegar a `/checkout`.
+3. Pulsar **"Preparar pago"**.
+4. En el formulario de Stripe Elements, ingresar la tarjeta de prueba 3DS:
+   - Número: `4000 0027 6000 3184`
+   - Fecha y CVC: cualquier fecha futura y 3 dígitos.
+5. Confirmar el pago y validar que se despliegue el modal interactivo de autenticación de Stripe ("Complete authentication").
+6. Pulsar **"Complete"** en el modal de prueba y verificar la redirección a `/pagos/:id/resultado`.
+
+### Paso 2: Prueba Limpia de Rechazo y Recuperación en una Sola Sesión
+Para validar el criterio de recuperación dentro de la ventana de vigencia (15 min):
+1. Usar el Carrito 6 ya existente con la Reserva 3 (GTQ 300.00), o preparar una reserva adicional si Carrito 6 llegara a vencer.
+2. En `/checkout`, pulsar **"Preparar pago"**.
+3. **Paso A (Rechazo):** Ingresar tarjeta `4002 0000 0000 0002` y pulsar pagar. Verificar el mensaje de rechazo en pantalla.
+4. **Paso B (Recuperación inmediata sin recargar ni abandonar la sesión):** Sin salir de la pantalla, ingresar inmediatamente la tarjeta de éxito `4242 4242 4242 4242` y pulsar pagar.
+5. Verificar que el mismo PaymentIntent es confirmado exitosamente y que la reserva transiciona a `confirmada`.
