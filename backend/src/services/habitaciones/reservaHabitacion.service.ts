@@ -1466,6 +1466,38 @@ export const updateReservaHabitacion =
 
 
 
+    const cambiaIdentidadEconomica =
+
+      data.usuario_id !== undefined ||
+
+      data.habitacion_id !== undefined ||
+
+      data.fecha_entrada !== undefined ||
+
+      data.fecha_salida !== undefined;
+
+
+
+    const cambiaTotal =
+
+      data.habitacion_id !== undefined ||
+
+      data.fecha_entrada !== undefined ||
+
+      data.fecha_salida !== undefined;
+
+
+
+    let proposedTotal =
+
+      String(
+
+        reservaHabitacion.total
+
+      );
+
+
+
     /**
 
      * Detectamos si una reserva que antes NO
@@ -1612,19 +1644,27 @@ export const updateReservaHabitacion =
 
       }
 
+
+
+      if (cambiaIdentidadEconomica) {
+
+        proposedTotal =
+
+          calculateTotal(
+
+            fechaEntrada,
+
+            fechaSalida,
+
+            tipoHabitacion
+
+              .tarifa_noche
+
+          );
+
+      }
+
     }
-
-
-
-    const cambiaIdentidadEconomica =
-
-      data.usuario_id !== undefined ||
-
-      data.habitacion_id !== undefined ||
-
-      data.fecha_entrada !== undefined ||
-
-      data.fecha_salida !== undefined;
 
 
 
@@ -1656,109 +1696,39 @@ export const updateReservaHabitacion =
 
       }
 
-    }
-
-
-
-    let total:
-
-      | string
-
-      | undefined;
-
-
-
-    /**
-
-     * Solo recalculamos total si cambia algo
-
-     * que afecta directamente al precio.
-
-     */
-
-    if (
-
-      data.fecha_entrada !==
-
-        undefined ||
-
-      data.fecha_salida !==
-
-        undefined ||
-
-      data.habitacion_id !==
-
-        undefined
-
-    ) {
-
-      const habitacion =
-
-        await Habitacion.findByPk(
-
-          habitacionId,
-
-          {
-
-            include: [
-
-              {
-
-                model:
-
-                  TipoHabitacion,
-
-              },
-
-            ],
-
-            transaction,
-
-          }
-
-        );
-
 
 
       if (
 
-        !habitacion ||
+        exposure.total >
 
-        !habitacion.TipoHabitacion
+          Number(proposedTotal)
 
       ) {
 
         throw new AppError(
 
-          404,
+          409,
 
-          "HABITACION_NOT_FOUND",
+          "PAYMENT_EXCEEDS_NEW_TOTAL",
 
-          "La habitación no fue encontrada"
+          "Los pagos existentes exceden el nuevo total de la reserva"
 
         );
 
       }
 
-
-
-      total =
-
-        calculateTotal(
-
-          fechaEntrada,
-
-          fechaSalida,
-
-          habitacion
-
-            .TipoHabitacion
-
-            .tarifa_noche
-
-        );
-
     }
+
+
+
+    const total =
+
+      cambiaTotal
+
+        ? proposedTotal
+
+        : undefined;
 
 
 

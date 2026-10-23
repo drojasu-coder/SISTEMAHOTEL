@@ -1790,6 +1790,187 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-028
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      ReservaHabitacion permite reducir el total debajo de un pago directo ya
+      aprobado sin ajuste ni reembolso
+    invariant: >-
+      Para una ReservaHabitacion, approved net + processing nunca puede superar
+      el total vigente. Con processing=0 y approved net mayor que cero, un PATCH
+      no puede reducir el total debajo del aprobado sin ajuste o reembolso
+      explícito; debe responder HTTP 409 PAYMENT_EXCEEDS_NEW_TOTAL o un código
+      financiero semánticamente equivalente y conservar el snapshot original.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.approvedPaymentMutation.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-028: rechaza reducir el total debajo del pago aprobado"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.approvedPaymentMutation.test.ts
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_origin: direct
+      cart_used: false
+      refund_requested: false
+      payment_intent_count: 1
+      local_payment_count: 1
+      dates: "2026-11-01 a 2026-11-04; PATCH fecha_salida=2026-11-02"
+    expected:
+      patch_status: 409
+      patch_code: >-
+        PAYMENT_EXCEEDS_NEW_TOTAL o código financiero semánticamente equivalente
+      reservation_snapshot: unchanged
+      payment_snapshot: unchanged
+      approved_amount: "300.00"
+      processing_amount: "0.00"
+      current_obligation: "300.00"
+      approved_exceeds_obligation: false
+      refund_created: false
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      reservation_id: 1
+      initial_reservation: >-
+        habitacion_id=1; 2026-11-01/2026-11-04; confirmada; total Q300.00
+      payment_create: >-
+        HTTP 201; code null; Pago id=1 tarjeta DIRECTO procesando Q300.00;
+        PaymentIntent pi_rh_approved_mutation_028_001
+      webhook: >-
+        HTTP 200; code null; payment_intent.succeeded local simulado
+      before_patch: >-
+        Pago aprobado Q300.00; reservationFinancialExposure approved=300,
+        processing=0, total=300; reembolsos=0
+      patch: >-
+        HTTP 200; code null; fecha_salida 2026-11-04 -> 2026-11-02; total
+        Q300.00 -> Q100.00
+      after_patch: >-
+        habitacion_id=1; 2026-11-01/2026-11-02; confirmada; Pago aprobado
+        Q300.00; approved=300; processing=0; obligación vigente Q100.00;
+        reembolsos=0
+      approved_exceeds_obligation: true
+      refund_created: false
+      financial_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 5 aserciones soft: PATCH 200 sin
+        código financiero, fechas/total mutados, snapshot no atómico y aprobado
+        Q300.00 mayor que obligación Q100.00.
+    http_evidence:
+      reservation_create_status: 201
+      reservation_create_code: null
+      payment_create_status: 201
+      payment_create_code: null
+      webhook_status: 200
+      webhook_code: null
+      patch_status: 200
+      patch_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_reservation: >-
+        id=1; habitacion_id=1; fecha_entrada=2026-11-01;
+        fecha_salida=2026-11-04; estado=confirmada; total=300.00
+      before_payment: >-
+        id=1; reserva_habitacion_id=1; carrito_id=null; tarjeta; stripe;
+        aprobado; monto=300.00; reembolsos_aprobados=0.00
+      before_exposure_helper: "approved=300; processing=0; total=300"
+      after_reservation: >-
+        id=1; habitacion_id=1; fecha_entrada=2026-11-01;
+        fecha_salida=2026-11-02; estado=confirmada; total=100.00
+      after_payment: >-
+        id=1; reserva_habitacion_id=1; carrito_id=null; tarjeta; stripe;
+        aprobado; monto=300.00; reembolsos_aprobados=0.00
+      after_exposure_helper: "approved=300; processing=0; total=300"
+      local_payment_count: 1
+      refund_count: 0
+      payment_intent_count: 1
+      current_obligation: "100.00"
+      approved_exceeds_obligation: true
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      intent_id: pi_rh_approved_mutation_028_001
+      intent_amount_minor: 30000
+      intent_status: succeeded
+      create_calls: 1
+      succeeded_webhook_calls: 1
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+    suspected_execution_path: >-
+      PATCH /api/reservas-habitacion/{id} entra a updateReservaHabitacion, bloquea
+      la ReservaHabitacion y consulta reservationFinancialExposure cuando cambia
+      fecha_salida. La protección financiera solo rechaza exposure.processing >
+      0; con approved=300 y processing=0 continúa, recalcula una noche por
+      Q100.00 y persiste el UPDATE sin comparar approved net contra el nuevo
+      total. El Pago aprobado permanece intacto y no se crea reembolso.
+    root_cause: >-
+      updateReservaHabitacion protegía la identidad económica únicamente cuando
+      reservationFinancialExposure.processing era mayor que cero. No comparaba
+      la exposición agregada total, incluido el aprobado neto post-reembolsos,
+      contra el total propuesto antes del UPDATE.
+    correction: >-
+      updateReservaHabitacion reutiliza la habitación destino ya bloqueada y sus
+      fechas efectivas para calcular el total propuesto con calculateTotal;
+      conserva primero el rechazo específico de pagos procesando y después exige
+      reservationFinancialExposure.total <= proposedTotal, rechazando con HTTP
+      409 PAYMENT_EXCEEDS_NEW_TOTAL antes de persistir cuando se viola.
+    severity_recommendation: high
+    regressions_observed:
+      qa_021: >-
+        none; escenario distinto: succeeded y aprobación ocurrieron antes del
+        PATCH, que recibió processing=0. No se reejecutó QA-021.
+      qa_027: >-
+        none observed; escenario directo sin carrito, QA-027 no fue ejercido ni
+        reabierto y conserva rejected/not reproduced.
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard_confirmed_in_all_integration_runs: true
+      focused:
+        file: backend/tests/habitaciones/reservaHabitacion.approvedPaymentMutation.test.ts
+        result: "PASS; 1 archivo, 1 test"
+        patch_status: 409
+        patch_code: PAYMENT_EXCEEDS_NEW_TOTAL
+        initial_total: "300.00"
+        proposed_total: "100.00"
+        final_total: "300.00"
+        payment_state: aprobado
+        approved_amount: "300.00"
+        processing_amount: "0.00"
+        final_obligation: "300.00"
+        approved_exceeds_final_obligation: false
+        refund_count: 0
+        financial_violation: false
+        reservation_snapshot: unchanged
+        payment_snapshot: unchanged
+      related:
+        qa_020: "PASS; reservaHabitacion.aggregateExposure.test.ts; 1/1"
+        qa_021: "PASS; reservaHabitacion.paymentMutationBinding.test.ts; 1/1"
+        qa_023: "PASS; reservaHabitacion.patchConcurrency.test.ts; 1/1"
+        qa_025: "PASS; reservaHabitacion.lifecycle.test.ts; 1/1"
+      typecheck:
+        command: "cd backend; npx tsc --noEmit"
+        result: pass
+      production_file_modified: backend/src/services/habitaciones/reservaHabitacion.service.ts
+      tests_modified: false
+      migrations_modified: false
+      verified_at: "2026-10-22"
+
   - id: QA-RH-FIN-CANDIDATE-027
     status: rejected
     severity: high
