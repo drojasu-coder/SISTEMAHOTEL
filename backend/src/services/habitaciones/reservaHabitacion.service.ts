@@ -352,6 +352,44 @@ const validateNotPast = (
 
 /**
 
+ * Una reserva solo puede finalizar cuando su
+
+ * fecha de salida ya llegó en la fecha local del hotel.
+
+ */
+
+const validateReservationHasFinished = (
+
+  fechaSalida: string
+
+) => {
+
+  if (
+
+    fechaSalida >
+
+    getTodayDate()
+
+  ) {
+
+    throw new AppError(
+
+      409,
+
+      "RESERVATION_NOT_FINISHED",
+
+      "La reserva todavía no ha finalizado"
+
+    );
+
+  }
+
+};
+
+
+
+/**
+
  * Valida la capacidad máxima definida por
 
  * el tipo de habitación.
@@ -1373,6 +1411,28 @@ export const updateReservaHabitacion =
       data.estado ??
 
       estadoActual;
+
+
+
+    if (
+
+      estadoActual !==
+
+        "finalizada" &&
+
+      estadoDestino ===
+
+        "finalizada"
+
+    ) {
+
+      validateReservationHasFinished(
+
+        fechaSalida
+
+      );
+
+    }
 
 
 

@@ -1790,6 +1790,100 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FUNC-CANDIDATE-025
+    status: closed
+    severity: medium
+    category: FUNC
+    title: >-
+      ReservaHabitacion permite finalizar anticipadamente una estancia futura y
+      libera indebidamente su disponibilidad
+    approved_product_rule:
+      future_reservation_can_be_finalized: false
+      completion_condition: "fecha_salida <= fecha local actual"
+      future_completion_error: "HTTP 409 / RESERVATION_NOT_FINISHED"
+      early_checkout_supported: false
+      room_remains_blocked_on_rejected_completion: true
+    invariant: >-
+      Una ReservaHabitacion confirmada cuya fecha_salida sea futura respecto de
+      la fecha local del hotel no puede pasar a finalizada; el rechazo debe ser
+      controlado, no debe mutar PostgreSQL y una nueva reserva traslapada debe
+      continuar siendo rechazada.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/reservaHabitacion.lifecycle.test.ts
+      test_name: "QA-RH-FUNC-CANDIDATE-025: rechaza finalizar una estancia cuya fecha_salida sigue futura"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.lifecycle.test.ts
+      endpoint: PATCH /api/reservas-habitacion/{id}
+      requester_role: admin
+      setup_state: confirmada
+      dates: "fecha_entrada=hoy local +2; fecha_salida=hoy local +4"
+      timezone: America/Guatemala
+      payments_used: false
+      cart_used: false
+      stripe_used: false
+    expected:
+      finalize_http_status: 409
+      finalize_code: RESERVATION_NOT_FINISHED
+      persisted_state_after_attempt: confirmada
+      overlapping_create_http_status: 409
+      overlapping_create_code: HABITACION_NO_DISPONIBLE
+      overlapping_persisted_rows: 1
+    actual:
+      hotel_local_today: "2026-10-22"
+      fecha_entrada: "2026-10-24"
+      fecha_salida: "2026-10-26"
+      initial_persisted_state: confirmada
+      finalize_http_status: 200
+      finalize_code: null
+      persisted_state_after_attempt: finalizada
+      overlapping_create_http_status: 201
+      overlapping_create_code: null
+      overlapping_persisted_rows: 2
+      invariant_violated: true
+      red_result: "1 archivo falló, 1 test falló con 6 aserciones soft"
+    http_evidence:
+      finalize_attempt: >-
+        HTTP 200 sin code; success=true y mensaje "Reserva de habitación
+        actualizada correctamente".
+      overlap_attempt: >-
+        HTTP 201 sin code; success=true y mensaje "Reserva de habitación creada
+        correctamente".
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      original_row_after_attempt: >-
+        id=1; habitacion_id=1; fecha_entrada=2026-10-24;
+        fecha_salida=2026-10-26; estado=finalizada
+      overlapping_row_created: >-
+        id=2; habitacion_id=1; fecha_entrada=2026-10-24;
+        fecha_salida=2026-10-26; estado=pendiente
+      overlapping_row_count: 2
+      state_preserved: false
+      availability_remained_blocked: false
+    suspected_execution_path: >-
+      reservaHabitacion.routes PATCH /:id ->
+      reservaHabitacion.controller.updateReservaHabitacion ->
+      reservaHabitacion.service.updateReservaHabitacion. El servicio bloquea la
+      fila por ID y calcula estadoActual/estadoDestino, pero no valida la fecha
+      local del hotel cuando estadoDestino es finalizada; incorpora estado al
+      updateData y persiste el UPDATE. Como finalizada no bloquea disponibilidad,
+      el POST traslapado posterior supera validateOverlap y crea otra fila.
+    severity_recommendation: high
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: "1 file failed, 1 test failed por la violación esperada"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
   - id: QA-RH-DATA-CANDIDATE-024
     status: closed
     severity: high
