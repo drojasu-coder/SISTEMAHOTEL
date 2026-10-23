@@ -165,7 +165,13 @@ export const reservationFinancialExposure = async (
         ],
       },
     },
-    attributes: ["id", "monto", "estado"],
+    attributes: [
+      "id",
+      "monto",
+      "estado",
+      "carrito_id",
+      "reserva_habitacion_id",
+    ],
     transaction,
   });
   const uniquePayments = [
@@ -204,25 +210,121 @@ export const reservationFinancialExposure = async (
     );
   }
 
-  const approved = round(
-    approvedPayments.reduce(
-      (sum: number, payment: any) =>
-        sum + Math.max(
+  const toCents = (value: unknown) =>
+    Math.round(Number(value) * 100);
+  const allocateCartCents = async (
+    carritoId: number,
+    amountCents: number,
+  ) => {
+    if (amountCents <= 0) return 0;
+
+    const items = await CarritoItem.findAll({
+      where: { carrito_id: carritoId },
+      attributes: [
+        "id",
+        "tipo_item",
+        "referencia_id",
+        "precio",
+        "cantidad",
+      ],
+      order: [["id", "ASC"]],
+      transaction,
+    });
+    const weightedItems = (items as any[])
+      .map((item: any) => ({
+        id: Number(item.id),
+        isTarget:
+          item.tipo_item === "habitacion" &&
+          Number(item.referencia_id) === Number(reservationId),
+        weight: Math.max(
           0,
-          Number(payment.monto) -
-            (refundedByPayment.get(Number(payment.id)) ?? 0),
+          toCents(Number(item.precio) * Number(item.cantidad)),
         ),
+      }))
+      .filter((item: any) => item.weight > 0);
+    const totalWeight = weightedItems.reduce(
+      (sum: number, item: any) => sum + item.weight,
       0,
-    ),
-  );
-  const processing = round(
-    uniquePayments
-      .filter((payment: any) => payment.estado === "procesando")
-      .reduce(
-        (sum: number, payment: any) => sum + Number(payment.monto),
-        0,
-      ),
-  );
+    );
+    if (totalWeight <= 0) return 0;
+
+    const totalWeightBigInt = BigInt(totalWeight);
+    const shares = weightedItems.map((item: any) => {
+      const numerator = BigInt(amountCents) * BigInt(item.weight);
+      return {
+        ...item,
+        cents: Number(numerator / totalWeightBigInt),
+        remainder: numerator % totalWeightBigInt,
+      };
+    });
+    let undistributed = amountCents - shares.reduce(
+      (sum: number, share: any) => sum + share.cents,
+      0,
+    );
+    shares.sort((left: any, right: any) => {
+      if (left.remainder === right.remainder) return left.id - right.id;
+      return left.remainder > right.remainder ? -1 : 1;
+    });
+    for (let index = 0; index < shares.length && undistributed > 0; index += 1) {
+      shares[index].cents += 1;
+      undistributed -= 1;
+    }
+
+    return shares
+      .filter((share: any) => share.isTarget)
+      .reduce((sum: number, share: any) => sum + share.cents, 0);
+  };
+
+  let approvedCents = 0;
+  let processingCents = 0;
+  const cartApprovedCents = new Map<number, number>();
+  const cartProcessingCents = new Map<number, number>();
+  for (const payment of uniquePayments as any[]) {
+    const directReservationId = payment.reserva_habitacion_id == null
+      ? null
+      : Number(payment.reserva_habitacion_id);
+    const isApproved = [
+      "aprobado",
+      "reembolsado_parcial",
+      "reembolsado",
+    ].includes(String(payment.estado));
+    const paymentCents = isApproved
+      ? Math.max(
+          0,
+          toCents(payment.monto) -
+            toCents(refundedByPayment.get(Number(payment.id)) ?? 0),
+        )
+      : payment.estado === "procesando"
+        ? toCents(payment.monto)
+        : 0;
+
+    // Ante datos heredados con ambas llaves, el origen directo tiene
+    // precedencia para que un mismo Pago nunca se atribuya dos veces.
+    if (directReservationId !== null) {
+      if (directReservationId === Number(reservationId)) {
+        if (isApproved) approvedCents += paymentCents;
+        if (payment.estado === "procesando") processingCents += paymentCents;
+      }
+      continue;
+    }
+
+    const carritoId = payment.carrito_id == null
+      ? null
+      : Number(payment.carrito_id);
+    if (carritoId === null) continue;
+    const targetMap = isApproved ? cartApprovedCents : cartProcessingCents;
+    targetMap.set(carritoId, (targetMap.get(carritoId) ?? 0) + paymentCents);
+  }
+
+  for (const [carritoId, amountCents] of cartApprovedCents) {
+    approvedCents += await allocateCartCents(carritoId, amountCents);
+  }
+  for (const [carritoId, amountCents] of cartProcessingCents) {
+    processingCents += await allocateCartCents(carritoId, amountCents);
+  }
+
+  const approved = round(approvedCents / 100);
+  const processing = round(processingCents / 100);
 
   return {
     approved,
@@ -625,7 +727,7 @@ const roomExposureBalance = async (
       reservation,
     ]),
   );
-  let remaining = Number.POSITIVE_INFINITY;
+  let remaining = 0;
   let directExposure: Awaited<
     ReturnType<typeof reservationFinancialExposure>
   > | null = null;
@@ -643,9 +745,8 @@ const roomExposureBalance = async (
       Number(reservationId),
       transaction,
     );
-    remaining = Math.min(
-      remaining,
-      round(Number(reservation.total) - exposure.total),
+    remaining = round(
+      remaining + Math.max(0, Number(reservation.total) - exposure.total),
     );
     if (
       details.origin?.constructor?.name === "ReservaHabitacion" &&
@@ -858,7 +959,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     if (amount > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && amount < remaining) {
+    if (details.isOnlyRoom && amount < originRemaining) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (tipo === "anticipo") {
@@ -1144,7 +1245,7 @@ export const approveTransferencia = async (pagoId: number) =>
     if (Number(payment.monto) > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && Number(payment.monto) < remaining) {
+    if (details.isOnlyRoom && Number(payment.monto) < originRemaining) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (type === "anticipo") {

@@ -1790,6 +1790,212 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-030
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un pago total parcial de carrito multi-habitación se acepta y su monto se
+      atribuye íntegramente a cada ReservaHabitacion
+    invariant: >-
+      Un carrito con dos ReservaHabitacion de Q100.00 cada una y total Q200.00
+      no puede aceptar tipo_pago=total por Q100.00 ni crear Pago o PaymentIntent.
+      Un único pago compartido tampoco puede contarse íntegramente para cada
+      reserva de modo que la exposición atribuida exceda el dinero real o ambas
+      reservas sean tratadas como totalmente pagadas mientras el carrito conserva
+      saldo.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.multiRoomCartPayment.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-030: un carrito multi-habitación no duplica ni acepta exposición parcial como pago total"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.multiRoomCartPayment.test.ts
+      result: "1 archivo falló; 1 test falló con 3 aserciones soft"
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      real_charges: false
+      reservation_count: 2
+      cart_count: 1
+      cart_item_count: 2
+      payment_attempt_count: 1
+      persisted_payment_count: 1
+      payment_intent_count: 1
+      webhook_count: 1
+      direct_payment_count: 0
+      cash_payment_count: 0
+      second_cart_count: 0
+    expected:
+      partial_total_attempt: >-
+        HTTP 4xx controlado; cero Pago persistido y cero PaymentIntent creado
+      cart_state: activo
+      cart_total: "200.00"
+      cart_item_count: 2
+      reservation_totals: "A=100.00; B=100.00"
+      real_approved_plus_processing_maximum_at_attempt: "0.00"
+      attributed_exposure_maximum: >-
+        no mayor que el dinero real aprobado más procesando y sin declarar ambas
+        reservas totalmente pagadas cuando el carrito conserva Q100.00 de saldo
+      unexpected_500: false
+    actual:
+      setup: >-
+        Cliente id=1; dos habitaciones distintas id=1/2 con tarifa Q100.00;
+        ReservaHabitacion A=1 y B=2, ambas pendientes, una noche dinámica
+        2026-11-02/2026-11-03 y total Q100.00 cada una.
+      cart_before_payment: >-
+        Carrito id=1 activo; GET items HTTP 200; PostgreSQL item_count=2 y suma
+        persistida Q200.00; items de A/B intactos.
+      exposure_before: >-
+        reservationFinancialExposure A approved=0 processing=0 total=0; B
+        approved=0 processing=0 total=0; isReservationFullyPaid=false/false.
+      payment_attempt: >-
+        POST /api/pagos con carrito_id=1, monto Q100.00, metodo=tarjeta y
+        tipo_pago=total respondió HTTP 201, code null. Creó Pago id=1 en estado
+        procesando por Q100.00 y creó PaymentIntent local.
+      payment_intent: >-
+        id=pi_rh_multi_room_cart_030_001; amount=10000 minor units/Q100.00;
+        requires_payment_method antes del webhook; metadata pago_id=1,
+        carrito_id=1, tipo_pago=total.
+      persisted_before_webhook: >-
+        PostgreSQL contiene exactamente un Pago de carrito, tarjeta, total,
+        procesando Q100.00, reserva_habitacion_id null e intent asociado; dinero
+        real approved=Q0.00, processing=Q100.00.
+      webhook: >-
+        Mock cambió únicamente el intent a succeeded; POST webhook real respondió
+        HTTP 200, code null, {received:true}; constructEvent tuvo una llamada.
+      final_cart: >-
+        PostgreSQL carrito id=1 activo, item_count=2, total por items Q200.00.
+        GET resumen HTTP 200 informó total=200, aprobado=100 y saldo=100.
+      final_reservations: >-
+        A id=1 pendiente Q100.00 y B id=2 pendiente Q100.00; exactamente dos
+        ReservaHabitacion persistidas en el escenario.
+      final_payment: >-
+        Exactamente un Pago id=1, carrito_id=1, tarjeta, tipo total, aprobado,
+        Q100.00, sin reembolsos aprobados e intent
+        pi_rh_multi_room_cart_030_001.
+      final_money: >-
+        Dinero PostgreSQL real: approved net Q100.00, processing Q0.00,
+        approved+processing Q100.00.
+      final_exposures: >-
+        reservationFinancialExposure A approved=100 processing=0 total=100; B
+        approved=100 processing=0 total=100; suma atribuida Q200.00 frente a
+        Q100.00 real.
+      financial_decisions: >-
+        isReservationFullyPaid(A,Q100)=true e isReservationFullyPaid(B,Q100)=true
+        aunque el resumen persistido del carrito conserva saldo Q100.00.
+      subpayment_accepted_as_full: true
+      attribution_duplicated: true
+      attributed_sum_exceeds_real: true
+      incorrect_fully_paid_decision: true
+      financial_violation: true
+      unexpected_500: false
+      fallback_full_payment: not_run
+      red_result: >-
+        La prueba falló porque el subpago total Q100 fue aceptado con Pago/Intent,
+        la exposición A+B fue Q200 frente a Q100 real y ambas decisiones de pago
+        completo fueron true mientras el carrito aún debía Q100.
+    http_evidence:
+      reservation_create_statuses: "201,201"
+      cart_create_status: 201
+      add_item_statuses: "201,201"
+      list_items_status: 200
+      partial_payment_status: 201
+      partial_payment_code: null
+      webhook_status: 200
+      webhook_code: null
+      cart_summary_status: 200
+      cart_summary_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      cart: "id=1; estado=activo; items=2; total_items=200.00"
+      reservation_a: "id=1; habitacion_id=1; estado=pendiente; total=100.00"
+      reservation_b: "id=2; habitacion_id=2; estado=pendiente; total=100.00"
+      payment: >-
+        id=1; carrito_id=1; reserva_habitacion_id=null; monto=100.00;
+        metodo=tarjeta; tipo_pago=total; estado=aprobado; refunds=0.00
+      payment_count: 1
+      real_approved_net: "100.00"
+      real_processing: "0.00"
+      real_approved_plus_processing: "100.00"
+      exposure_a: "approved=100; processing=0; total=100"
+      exposure_b: "approved=100; processing=0; total=100"
+      attributed_exposure_sum: "200.00"
+      cart_approved: "100.00"
+      cart_balance: "100.00"
+      cart_items_intact: true
+    suspected_execution_path: >-
+      createPago -> validateOpenOrigin calcula total del carrito Q200 y bloquea
+      ambas reservas. roomExposureBalance itera A/B, obtiene exposición cero y
+      reduce remaining al mínimo individual Q100, por lo que la validación de
+      only-room compara monto Q100 contra remaining Q100 en vez del total Q200 y
+      permite Pago/Intent. Después del succeeded, reservationFinancialExposure
+      descubre carrito_id=1 por cada CarritoItem y selecciona para A y para B el
+      mismo Pago completo Q100. isReservationFullyPaid compara ese Q100 repetido
+      con cada total individual Q100 y devuelve true para ambas. applyCartPaid sí
+      observa approved del carrito Q100 menor que Q200 y conserva el carrito
+      activo, haciendo observable la decisión contradictoria.
+    root_cause:
+      payment_validation: >-
+        roomExposureBalance reducía el saldo al mínimo pendiente de una sola
+        ReservaHabitacion y la regla de pago completo comparaba Q100 contra ese
+        mínimo, no contra el saldo agregado Q200 del carrito.
+      attribution: >-
+        reservationFinancialExposure atribuía a cada reserva el monto completo
+        de todo Pago cuyo carrito histórico contuviera la referencia; no
+        distribuía el dinero compartido entre los CarritoItem.
+    correction:
+      production_file: backend/src/services/pago.service.ts
+      payment_validation: >-
+        El saldo pagable de habitaciones se agrega entre las reservas y la regla
+        de pago completo se compara con total del carrito menos aprobado neto
+        menos procesando, antes de Pago.create y Stripe.
+      attribution: >-
+        Los pagos de carrito se distribuyen proporcionalmente por el valor
+        persistido de cada CarritoItem, en centavos y con residuo determinista;
+        pagos directos conservan atribución íntegra y precedencia en datos
+        heredados con doble origen.
+      refunds: >-
+        Solo reembolsos aprobados reducen primero el monto aprobado de cada Pago;
+        luego se distribuye el aprobado neto, separado de procesando.
+      concurrency: >-
+        Se conserva Carrito -> ReservaHabitacion por id ascendente -> Pago; no se
+        agregaron checks fuera de la transacción ni se alteraron locks.
+    severity_recommendation: high
+    regressions:
+      qa_016: >-
+        no reejecutado por la lista de comandos autorizada; la monotonicidad del
+        webhook de refund no cambió y la atribución solo descuenta refunds aprobados
+      qa_020: >-
+        GREEN; la exposición agregada directa más carrito continúa sin superar
+        el total de ReservaHabitacion
+      qa_027: >-
+        rejected permanece cerrado; no DELETE, segundo pago ni segundo carrito
+      qa_028: "GREEN; reducción de obligación bajo aprobado sigue rechazada"
+      qa_029: >-
+        no reejecutado por alcance explícito; no se modificó PATCH, cancelación
+        ni la política de pagos procesando
+    verification:
+      focused: >-
+        GREEN: multiRoomCartPayment 1/1; aggregateExposure 1/1;
+        approvedPaymentMutation 1/1; pagoActividad.reuse 1/1;
+        pago.idempotency.concurrency 3/3
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      production_files_modified: true
+      production_files: [backend/src/services/pago.service.ts]
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      registry_entries_modified: "solo QA-RH-FIN-CANDIDATE-030"
+      verified_at: "2026-10-23"
+
   - id: QA-RH-FIN-CANDIDATE-029
     status: closed
     severity: high
