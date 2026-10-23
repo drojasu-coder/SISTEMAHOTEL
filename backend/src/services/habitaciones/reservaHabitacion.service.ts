@@ -96,6 +96,52 @@ interface UpdateReservaHabitacionData {
 
 
 
+const reservationExposureWithoutProcessing =
+
+  async (
+
+    id: number,
+
+    transaction: any,
+
+    message: string
+
+  ) => {
+
+    const exposure =
+
+      await reservationFinancialExposure(
+
+        id,
+
+        transaction
+
+      );
+
+
+
+    if (exposure.processing > 0) {
+
+      throw new AppError(
+
+        409,
+
+        "RESERVATION_HAS_PROCESSING_PAYMENT",
+
+        message
+
+      );
+
+    }
+
+
+
+    return exposure;
+
+  };
+
+
+
 const reservationInclude = [
 
   {
@@ -1414,6 +1460,18 @@ export const updateReservaHabitacion =
 
 
 
+    const seEstaCancelando =
+
+      estadoActual !==
+
+        "cancelada" &&
+
+      estadoDestino ===
+
+        "cancelada";
+
+
+
     if (
 
       estadoActual !==
@@ -1668,37 +1726,35 @@ export const updateReservaHabitacion =
 
 
 
-    if (cambiaIdentidadEconomica) {
+    if (
+
+      cambiaIdentidadEconomica ||
+
+      seEstaCancelando
+
+    ) {
 
       const exposure =
 
-        await reservationFinancialExposure(
+        await reservationExposureWithoutProcessing(
 
           id,
 
-          transaction
+          transaction,
+
+          seEstaCancelando
+
+            ? "La reserva tiene un pago en procesamiento y no puede cancelarse"
+
+            : "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
 
         );
-
-
-
-      if (exposure.processing > 0) {
-
-        throw new AppError(
-
-          409,
-
-          "RESERVATION_HAS_PROCESSING_PAYMENT",
-
-          "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
-
-        );
-
-      }
 
 
 
       if (
+
+        cambiaIdentidadEconomica &&
 
         exposure.total >
 
@@ -1932,31 +1988,15 @@ export const deleteReservaHabitacion =
 
 
 
-    const exposure =
-
-      await reservationFinancialExposure(
+    await reservationExposureWithoutProcessing(
 
         id,
 
-        transaction
-
-      );
-
-
-
-    if (exposure.processing > 0) {
-
-      throw new AppError(
-
-        409,
-
-        "RESERVATION_HAS_PROCESSING_PAYMENT",
+        transaction,
 
         "La reserva tiene un pago en procesamiento y no puede cancelarse"
 
       );
-
-    }
 
 
 

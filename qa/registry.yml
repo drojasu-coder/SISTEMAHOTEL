@@ -1790,6 +1790,208 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-029
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      PATCH permite cancelar una ReservaHabitacion mientras su PaymentIntent
+      directo permanece procesando y cobrable
+    invariant: >-
+      Si reservationFinancialExposure.processing es mayor que cero, ninguna ruta
+      puede pasar ReservaHabitacion a cancelada. PATCH con payload exclusivamente
+      {estado: cancelada} debe responder HTTP 409
+      RESERVATION_HAS_PROCESSING_PAYMENT y conservar reserva pendiente, Pago
+      procesando e intent asociado no cancelado, sin ejecutar webhook.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.patchCancelProcessingPayment.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-029: PATCH no cancela una ReservaHabitacion con PaymentIntent procesando"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchCancelProcessingPayment.test.ts
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_origin: direct
+      payment_method: tarjeta
+      cart_used: false
+      cash_used: false
+      second_payment_used: false
+      refund_used: false
+      reservation_count: 1
+      local_payment_count: 1
+      payment_intent_count: 1
+    expected:
+      patch_status: 409
+      patch_code: RESERVATION_HAS_PROCESSING_PAYMENT
+      reservation_state: pendiente
+      reservation_total: "100.00"
+      payment_state: procesando
+      approved_amount: "0.00"
+      processing_amount: "100.00"
+      intent_canceled: false
+      webhook_executed: false
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      reservation_create: >-
+        HTTP 201; id=1; estado pendiente; fechas futuras dinámicas
+        2026-11-02/2026-11-03; total exacto Q100.00
+      payment_create: >-
+        HTTP 201; Pago id=1; tarjeta DIRECTO; procesando; Q100.00;
+        PaymentIntent pi_rh_patch_cancel_029_001
+      before_patch: >-
+        PostgreSQL: una ReservaHabitacion pendiente Q100.00 y un Pago procesando
+        Q100.00; reservationFinancialExposure approved=0, processing=100,
+        total=100; intent requires_payment_method; no succeeded previo
+      patch_payload: '{"estado":"cancelada"}'
+      patch_result: >-
+        HTTP 200; code null; ReservaHabitacion persistida como cancelada; Pago
+        permanece procesando Q100.00; exposición approved=0, processing=100,
+        total=100; intent no cancelado; cancelCalls=0
+      webhook_first: >-
+        Intent original cambiado únicamente en mock a succeeded; webhook real
+        payment_intent.succeeded respondió HTTP 409 RESERVATION_NOT_AVAILABLE.
+        PostgreSQL quedó con reserva cancelada, Pago procesando, approved=0,
+        processing=100 y sin reembolso aprobado.
+      webhook_exact_replay: >-
+        El mismo evento evt_rh_patch_cancel_029_001 se reenvió sin cambios y
+        volvió a responder HTTP 409 RESERVATION_NOT_AVAILABLE; el estado
+        PostgreSQL no cambió.
+      external_state: "PaymentIntent succeeded; neto externo Q100.00"
+      local_state: >-
+        Reserva cancelada; Pago procesando Q100.00; aprobado neto Q0.00;
+        processing Q100.00; reembolsos aprobados Q0.00
+      durable_divergence: "Q100.00 externo succeeded frente a Q0.00 local aprobado"
+      financial_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 4 aserciones soft: PATCH devolvió 200
+        en vez de 409, no entregó RESERVATION_HAS_PROCESSING_PAYMENT, persistió
+        cancelada y dejó la divergencia financiera durable tras webhook y replay.
+    http_evidence:
+      reservation_create_status: 201
+      payment_create_status: 201
+      patch_endpoint: PATCH /api/reservas-habitacion/1
+      patch_authorization: GERENTE_HABITACIONES
+      patch_status: 200
+      patch_code: null
+      first_webhook_status: 409
+      first_webhook_code: RESERVATION_NOT_AVAILABLE
+      replay_status: 409
+      replay_code: RESERVATION_NOT_AVAILABLE
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_patch:
+        reservation: "id=1; pendiente; total=100.00"
+        payment: >-
+          id=1; reserva_habitacion_id=1; tarjeta; procesando; monto=100.00;
+          external_id=pi_rh_patch_cancel_029_001
+        exposure_helper: "approved=0; processing=100; total=100"
+      after_patch:
+        reservation: "id=1; cancelada; total=100.00"
+        payment: "id=1; procesando; monto=100.00; reembolsos_aprobados=0.00"
+        exposure_helper: "approved=0; processing=100; total=100"
+      after_first_webhook:
+        reservation_state: cancelada
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        approved_refunds: "0.00"
+      after_exact_replay:
+        reservation_state: cancelada
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        approved_refunds: "0.00"
+      reservation_count: 1
+      local_payment_count: 1
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 1
+      intent_id: pi_rh_patch_cancel_029_001
+      amount_minor: 10000
+      currency: gtq
+      status_before_patch: requires_payment_method
+      status_after_patch: requires_payment_method
+      intent_canceled_after_patch: false
+      status_after_simulation: succeeded
+      create_calls: 1
+      cancel_calls: 0
+      retrieve_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      event_id: evt_rh_patch_cancel_029_001
+      same_event_delivered_twice: true
+    suspected_execution_path: >-
+      PATCH /api/reservas-habitacion/{id} entra a updateReservaHabitacion y toma
+      lock de la reserva. Sin embargo, cambiaIdentidadEconomica solo incluye
+      usuario_id, habitacion_id, fecha_entrada y fecha_salida; un PATCH que cambia
+      únicamente estado no llama reservationFinancialExposure. updateData persiste
+      estado=cancelada con HTTP 200. Al llegar payment_intent.succeeded,
+      processStripeWebhook intenta reconciliar el Pago pero validateOpenOrigin
+      detecta la reserva terminal, responde RESERVATION_NOT_AVAILABLE y revierte
+      la aprobación. El replay repite el rollback, dejando Stripe succeeded y el
+      Pago local procesando de forma durable.
+    root_cause: >-
+      La protección de updateReservaHabitacion contra exposición procesando está
+      condicionada a cambiaIdentidadEconomica y omite las transiciones de estado,
+      incluida pendiente -> cancelada. PATCH y DELETE aplican por ello políticas
+      financieras distintas sobre la misma transición terminal.
+    correction: >-
+      Se añadió reservationExposureWithoutProcessing, helper compartido por
+      PATCH y DELETE que usa reservationFinancialExposure y bloquea antes del
+      UPDATE toda cancelación efectiva con exposición processing mayor que cero.
+    severity_recommendation: high
+    regressions_observed:
+      qa_022: >-
+        No ejercido ni reabierto: QA-022 protege DELETE; esta reproducción usa
+        exclusivamente PATCH.
+      qa_021: >-
+        No ejercido ni reabierto: payload exclusivamente estado=cancelada, sin
+        mutar habitación, fechas, usuario ni total.
+      qa_028: >-
+        No ejercido ni reabierto: antes del PATCH approved=0 y processing=100;
+        QA-028 cubre approved mayor que cero con processing=0.
+    verification:
+      focused: "1 file failed, 1 test failed por la violación financiera reproducida"
+      db_guard: green
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-23"
+    final_verification:
+      database: hotel_test_db
+      db_guard: pass
+      focused: "PASS 1/1"
+      qa_022: PASS
+      qa_021: PASS
+      qa_028: PASS
+      lifecycle: PASS
+      typecheck: PASS
+      patch_status: 409
+      patch_code: RESERVATION_HAS_PROCESSING_PAYMENT
+      reservation_state: pendiente
+      payment_state: procesando
+      payment_amount: "100.00"
+      approved_amount: "0.00"
+      processing_amount: "100.00"
+      intent_canceled: false
+      webhook_executed: false
+      divergence: false
+      financial_violation: false
+      existing_tests_modified: false
+      migrations_modified: false
+      production_file: backend/src/services/habitaciones/reservaHabitacion.service.ts
+
   - id: QA-RH-FIN-CANDIDATE-028
     status: closed
     severity: high
