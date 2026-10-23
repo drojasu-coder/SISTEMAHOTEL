@@ -1790,6 +1790,123 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-027
+    status: rejected
+    severity: high
+    category: FIN
+    title: >-
+      El carrito pagado impide eliminar el item y conserva la exposición
+      aprobada de ReservaHabitacion
+    invariant: >-
+      Un Pago aprobado mediante carrito debe conservar permanentemente el vínculo
+      económico histórico con ReservaHabitacion.id. Eliminar posteriormente el
+      CarritoItem no puede ocultar el aprobado neto, hacer parecer impaga la
+      reserva ni permitir un segundo compromiso financiero completo.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.cartApprovedHistory.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-027: conserva el historial aprobado de una ReservaHabitacion al eliminar su item"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cartApprovedHistory.test.ts
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      reservation_count: 1
+      cart_item_count_at_payment: 1
+    expected:
+      safe_outcome: >-
+        DELETE rechazado conservando el item y el vínculo, o eliminación que
+        conserve aprobado Q100.00 y rechace un segundo Pago/PaymentIntent.
+      maximum_legitimate_exposure: "100.00"
+      unexpected_500: false
+    actual:
+      ids: "reserva=1; carrito=1; item=1; pago_historico=1"
+      reservation_total: "100.00"
+      add_item: "HTTP 201; code null; item persistido por Q100.00"
+      historical_payment: >-
+        Pago id=1; origen carrito_id=1; tarjeta; aprobado; Q100.00;
+        PaymentIntent pi_rh_cart_history_027_1 succeeded local simulado
+      exposure_before_delete: >-
+        reservationFinancialExposure: aprobado Q100.00; procesando Q0.00; total
+        activo Q100.00
+      delete_item: "HTTP 409 CART_NOT_ACTIVE"
+      item_after_delete: present
+      historical_payment_after_delete: "persistido; tarjeta; aprobado; Q100.00"
+      exposure_after_delete: >-
+        reservationFinancialExposure: aprobado Q100.00; procesando Q0.00; total
+        activo Q100.00
+      historical_link_preserved: true
+      second_direct_payment: "HTTP 409 RESERVATION_ALREADY_PAID"
+      second_payment_persisted: false
+      payment_intent_count: 1
+      local_payment_count: 1
+      real_approved_net: "100.00"
+      final_processing: "0.00"
+      final_total_active: "100.00"
+      maximum_legitimate_exposure: "100.00"
+      financial_violation: false
+      unexpected_500: false
+      focused_result: "1 file passed; 1 test passed"
+    http_evidence:
+      add_status: 201
+      add_code: null
+      cart_payment_status: 201
+      cart_payment_code: null
+      webhook_status: 200
+      webhook_code: null
+      delete_status: 409
+      delete_code: CART_NOT_ACTIVE
+      second_direct_status: 409
+      second_direct_code: RESERVATION_ALREADY_PAID
+      unexpected_500: false
+    database_evidence:
+      item_before_delete: present
+      item_after_delete: present
+      historical_payment_persisted: true
+      historical_payment_state: aprobado
+      historical_payment_amount: "100.00"
+      approved_detected_before: "100.00"
+      processing_detected_before: "0.00"
+      approved_detected_after: "100.00"
+      processing_detected_after: "0.00"
+      second_payment_persisted: false
+      local_payment_count: 1
+      real_approved_net: "100.00"
+      final_processing: "0.00"
+      final_total_active: "100.00"
+    rejection_reason: >-
+      El webhook aprobado cubre el total Q100.00 y applyCartPaid cambia el carrito
+      a pagado. El DELETE exige un carrito activo y responde 409 CART_NOT_ACTIVE
+      antes de destruir el item, por lo que historicalCartIdsForReference todavía
+      encuentra carrito_id=1. reservationFinancialExposure conserva aprobado
+      Q100.00 y el intento directo posterior es rechazado antes de Pago.create y
+      antes de un segundo PaymentIntent. La pérdida histórica hipotetizada no se
+      produjo mediante la API real.
+    suspected_execution_path: >-
+      processStripeWebhook aprueba Pago y applyCartPaid marca Carrito pagado. El
+      DELETE entra por carritoItem.remove y getCartForAccess(requireActive=true)
+      rechaza CART_NOT_ACTIVE, conservando CarritoItem. createPago directo bloquea
+      ReservaHabitacion, reservationFinancialExposure vuelve a descubrir el
+      carrito por ese item y validateOpenOrigin rechaza RESERVATION_ALREADY_PAID.
+    severity_recommendation: high_if_reproduced
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file passed, 1 test passed"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_charges: false
+      qa_020_regression_observed: false
+      qa_014_regression_observed: false
+      qa_020_and_014_tests_reexecuted: false
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
   - id: QA-RH-FUNC-CANDIDATE-026
     status: closed
     severity: medium
