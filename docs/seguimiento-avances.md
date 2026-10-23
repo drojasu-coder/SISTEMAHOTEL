@@ -83,3 +83,39 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - `npm --prefix Frontend run typecheck`: 0 errores de tipado (código de salida 0).
   - `npm --prefix Frontend test`: 268 pruebas aprobadas en 27 archivos (1 archivo omitido por integración de red real).
 - **Bloqueos:** Ninguno.
+
+---
+
+## Tarea 4: Revisión acotada de navegación
+
+- **Estado:** Completada y verificada.
+- **Detalle de auditoría y verificación:**
+  - **Auditoría de enlaces y rutas internas:** Se inspeccionaron todas las etiquetas `<Link>` y `<NavLink>` en `Frontend/src/`. Todas las rutas de destino coinciden exactamente con rutas registradas y activas en `Frontend/src/app/router/AppRouter.tsx` (rutas públicas `/`, `/reservar`, `/mis-reservas`, `/mis-reservas/habitacion/:id`, `/carrito`, `/checkout`, `/pagos/:id/resultado`, `/login`, `/registro`, `/cuenta`, y administrativas `/admin`, `/admin/habitaciones`, `/admin/reservas`, `/admin/reservas/:id`, `/admin/tipos-habitacion`, `/admin/parqueos`, `/admin/amenidades`, `/admin/mesas`, `/admin/sedes`). No existen enlaces rotos hacia rutas inexistentes.
+  - **Accesibilidad desde navegación y subnavegación:**
+    - Se constató que todas las pantallas implementadas son accesibles desde menús principales (`Navbar`, `AdminLayout` con `PANEL_MODULES`) o barras de subnavegación contextuales (en `HabitacionesPage` se conectan accesos directos hacia `Reservas` (`/admin/reservas`), `Tipos de habitación` (`/admin/tipos-habitacion`) y `Parqueos` (`/admin/parqueos`)).
+  - **Enlaces de retorno en vistas profundas:**
+    - `AdminReservaDetallePage` cuenta con enlace de retorno visible hacia `/admin/reservas`.
+    - `DetalleReservaHabitacionPage` cuenta con enlace de retorno hacia `/mis-reservas`.
+    - `CheckoutPage` cuenta con botón de retorno al carrito (`/carrito`).
+    - `PagoResultadoPage` ofrece acciones de retorno a `/mis-reservas` y `/carrito`.
+    - `AdminLayout` incluye enlace persistente "Volver al sitio" hacia `/`.
+  - **Visibilidad y protección de acciones por rol:**
+    - Acciones de mutación (crear/editar/eliminar) en habitaciones, tipos, amenidades, parqueos, mesas y sedes están estrictamente condicionadas a los permisos del usuario mediante `hasPermission(...)` (p. ej., `canManageHabitaciones`, `canManageTipos`, `canManageParqueos`, etc.). Los botones correspondientes no se renderizan para roles no autorizados.
+    - Menús del panel (`PANEL_MODULES`) filtran dinámicamente las opciones según los roles autorizados por el backend en `getPanelModules(...)`.
+  - **Distinción metodológica de comprobaciones:**
+    - *Revisión estática de código:* Verificación cruzada entre `AppRouter.tsx`, `permissions.ts`, layouts y componentes.
+    - *Pruebas de componentes y rutas:* 268 pruebas unitarias y de integración aprobadas (`npm --prefix Frontend test`).
+    - *Comprobación visual real:* Detenida la inspección gráfica directa por ausencia de navegador gráfico/servidor headless interactivo en el entorno, pero verificada la cobertura mediante renderizado de Testing Library en jsdom.
+- **Archivos relevantes:**
+  - `Frontend/src/app/router/AppRouter.tsx`
+  - `Frontend/src/layouts/AdminLayout.tsx`
+  - `Frontend/src/layouts/GuestLayout.tsx`
+  - `Frontend/src/components/shared/Navbar.tsx`
+  - `Frontend/src/features/auth/permissions.ts`
+  - `Frontend/src/pages/HabitacionesPage.tsx`
+  - `Frontend/src/pages/AdminReservasPage.tsx`
+  - `Frontend/src/pages/AdminReservaDetallePage.tsx`
+- **Comandos ejecutados y resultados:**
+  - `npm --prefix Frontend run typecheck`: 0 errores.
+  - `npm --prefix Frontend test`: 268 pruebas aprobadas (27 archivos de test).
+- **Bloqueos:** Ninguno para el alcance de navegación.
