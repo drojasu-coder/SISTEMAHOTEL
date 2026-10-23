@@ -3,14 +3,24 @@
 ## Estado actual
 - **Estado de BE-014:** Integración / Verificación pendiente.
 - **Razón:** La comprobación interactiva de extremo a extremo con Stripe Elements y autenticación 3DS en navegador real requiere configuración pendiente (`VITE_STRIPE_PUBLISHABLE_KEY` en `Frontend/.env` y navegador con entorno gráfico interactivo).
-- **Aclaración sobre Webhooks:** La presencia de `STRIPE_WEBHOOK_SECRET` en `backend/.env` valida que el secreto de firma está configurado, pero **no garantiza** que el webhook local esté recibiéndose correctamente en tiempo de ejecución (requiere reenvío activo mediante `stripe listen --forward-to localhost:3000/api/pagos/stripe/webhook` durante el cobro).
+- **Aclaración sobre Webhooks y Puerto del Servidor:**
+  - La presencia de `STRIPE_WEBHOOK_SECRET` en `backend/.env` valida que el secreto de firma está configurado, pero **no garantiza** que el webhook local esté recibiéndose correctamente en tiempo de ejecución.
+  - **Puerto efectivo del servidor backend:** El backend está configurado en el puerto **`4000`** (`PORT` por defecto en `backend/src/config/env.ts` y consumido por el frontend en `Frontend/src/app/config/env.ts` como `http://localhost:4000/api`).
+  - **Ruta real del Webhook:** `/api/pagos/stripe/webhook` (manejado en `backend/src/app.ts` con parser raw express antes de los middlewares de json).
+  - **Comando exacto para reenvío local con Stripe CLI:**
+    ```bash
+    stripe listen --forward-to localhost:4000/api/pagos/stripe/webhook
+    ```
+    *(Nota: Se aclara que cualquier referencia histórica previa al puerto 3000 fue una errata; el puerto real y efectivo de este proyecto es 4000).*
 
 ## Configuración local verificada (sin secretos)
 - **Backend (`backend/.env`):**
+  - `PORT`: 4000 (puerto efectivo del servidor Express).
   - `STRIPE_SECRET_KEY`: Configurada en modo de prueba (`sk_test_...`).
   - `STRIPE_WEBHOOK_SECRET`: Configurada (`whsec_...`).
   - Base de datos de pruebas: `hotel_test_db` en puerto 55432 (disponible y verificada).
 - **Frontend (`Frontend/.env`):**
+  - `VITE_API_BASE_URL`: `http://localhost:4000/api`
   - `VITE_STRIPE_PUBLISHABLE_KEY`: Ausente / no configurada. Bloquea la carga real de Stripe Elements en el navegador.
 - **Herramientas de entorno:**
   - Stripe CLI disponible en `/usr/local/bin/stripe`.
