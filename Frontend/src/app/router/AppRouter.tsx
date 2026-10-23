@@ -15,6 +15,8 @@ import { MesasPage } from '@/pages/MesasPage';
 import { ServiciosPage } from '@/pages/ServiciosPage';
 import { AmenidadesPage } from '@/pages/AmenidadesPage';
 import { ParqueosPage } from '@/pages/ParqueosPage';
+import { AdminReservasPage } from '@/pages/AdminReservasPage';
+import { AdminReservaDetallePage } from '@/pages/AdminReservaDetallePage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RESERVAS_ROUTES } from '@/features/reservas';
@@ -38,13 +40,14 @@ export const AppRouter: React.FC = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registro" element={<RegisterPage />} />
-          <Route path="/forbidden" element={<ForbiddenPage />} />
+          <Route path="/cuenta" element={<AccountPage />} />
           <Route path="/403" element={<ForbiddenPage />} />
 
-          {/* Cuenta mínima: cualquier rol conocido con sesión verificada */}
+          {/* Rutas de Carrito */}
+          <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
+
+          {/* Rutas de Checkout y Pagos */}
           <Route element={<RequireAuth />}>
-            <Route path="/cuenta" element={<AccountPage />} />
-            <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
             <Route path={PAGOS_ROUTES.CHECKOUT} element={<CheckoutPage />} />
             <Route path="/pagos/:id/resultado" element={<PagoResultadoPage />} />
           </Route>
@@ -99,6 +102,12 @@ export const AppRouter: React.FC = () => {
             {/* Espacios de parqueo */}
             <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
               <Route path="parqueos" element={<ParqueosPage />} />
+            </Route>
+
+            {/* Consulta administrativa de reservas de habitación */}
+            <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
+              <Route path="reservas" element={<AdminReservasPage />} />
+              <Route path="reservas/:id" element={<AdminReservaDetallePage />} />
             </Route>
           </Route>
         </Route>

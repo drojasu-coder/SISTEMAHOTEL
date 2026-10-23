@@ -73,10 +73,25 @@ export const reservasApi = {
   },
 
   /**
+   * Consulta todas las reservas para personal administrativo autorizado.
+   * Endpoint: GET /api/reservas-habitacion.
+   *
+   * Para roles administrativos (admin, recepcionista, gerente_habitaciones),
+   * el backend no restringe por usuario_id y retorna el catálogo completo con relaciones.
+   */
+  getAllAdmin: async (): Promise<ReservaHabitacion[]> => {
+    const response = await api.get<ReservasHabitacionResponse>(
+      '/reservas-habitacion'
+    );
+    return response.data;
+  },
+
+  /**
    * Consulta el detalle de una reserva específica por identificador.
    * Endpoint: GET /api/reservas-habitacion/:id.
    *
-   * Si la reserva pertenece a otro usuario, el backend responde HTTP 403 INSUFFICIENT_PERMISSIONS.
+   * Si la reserva pertenece a otro usuario y el solicitante no es personal administrativo,
+   * el backend responde HTTP 403 INSUFFICIENT_PERMISSIONS.
    */
   getById: async (id: number): Promise<ReservaHabitacion> => {
     const response = await api.get<ReservaHabitacionResponse>(

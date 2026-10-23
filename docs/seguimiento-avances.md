@@ -46,3 +46,40 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - `npm --prefix Frontend run typecheck`: TypeScript compiló sin errores.
   - `npm --prefix Frontend test`: 261 pruebas aprobadas en 26 archivos (1 archivo omitido por integración de red real).
 - **Bloqueos:** Ninguno.
+
+---
+
+## Tarea 3: Consulta administrativa de reservas de habitación
+
+- **Estado:** Completada y verificada.
+- **Detalle de implementación:**
+  - **Inspección de endpoints y permisos:** `GET /api/reservas-habitacion` y `GET /api/reservas-habitacion/:id` devuelven el catálogo completo para roles administrativos (`admin`, `recepcionista`, `gerente_habitaciones`) con relaciones `Usuario`, `Habitacion`, `TipoHabitacion` y `Sucursal`, sin paginación en servidor.
+  - **Cliente HTTP y separación de claves:** Se añadió `reservasApi.getAllAdmin()` en `Frontend/src/features/reservas/api/reservasApi.ts`. Se definieron claves de consulta exclusivas `reservasAdminQueryKeys` parametrizadas por `userId` y filtros, totalmente desacopladas de las consultas de clientes ("Mis reservas").
+  - **Pantallas y componentes creados:**
+    - `Frontend/src/features/reservas/admin/types.ts`: Estados de filtro y claves de consulta administrativas.
+    - `Frontend/src/features/reservas/admin/textos.ts`: Textos en español, trato de usted y nomenclatura formal.
+    - `Frontend/src/features/reservas/admin/hooks/useAdminReservas.ts`: Hooks con TanStack React Query (`useAdminReservasQuery`, `useAdminReservaDetalleQuery`).
+    - `Frontend/src/features/reservas/admin/components/AdminReservasFilters.tsx`: Filtros por búsqueda de texto (cliente, correo, habitación o identificador), sede hotelera y estado de reserva, con botón para restablecer y contador de coincidencias.
+    - `Frontend/src/features/reservas/admin/components/AdminReservasList.tsx`: Cuadrícula responsiva con identificador, cliente, sede, habitación y tipo, fechas de estancia, duración en noches, cantidad de huéspedes, badge de estado (`ReservaEstadoBadge`), importe registrado en GTQ y botón de detalle.
+    - `Frontend/src/pages/AdminReservasPage.tsx`: Vista principal de listado con carga (`LoadingNotice`), alerta de error con reintento, estado de catálogo vacío y estado de filtros sin coincidencias.
+    - `Frontend/src/pages/AdminReservaDetallePage.tsx`: Vista de detalle individual accesible por URL directa (`/admin/reservas/:id`) y tras recarga, con datos completos del cliente, estancia, fechas, desglose financiero en GTQ y enlace de retorno.
+  - **Enrutamiento y navegación:** Conectadas rutas `/admin/reservas` y `/admin/reservas/:id` bajo `RequireAuth` con permiso `habitaciones.gestionar` en `Frontend/src/app/router/AppRouter.tsx`. Añadido enlace de navegación cruzada en `Frontend/src/pages/HabitacionesPage.tsx`.
+  - **Pruebas unitarias:** Creadas 7 pruebas unitarias completas en `Frontend/src/features/reservas/admin/AdminReservasPage.test.tsx` cubriendo renderizado de datos reales, filtros combinados, catálogo vacío, error con reintento, detalle por URL directa y manejo de reserva inexistente.
+- **Archivos relevantes:**
+  - `Frontend/src/features/reservas/api/reservasApi.ts`
+  - `Frontend/src/features/reservas/admin/types.ts`
+  - `Frontend/src/features/reservas/admin/textos.ts`
+  - `Frontend/src/features/reservas/admin/hooks/useAdminReservas.ts`
+  - `Frontend/src/features/reservas/admin/components/AdminReservasFilters.tsx`
+  - `Frontend/src/features/reservas/admin/components/AdminReservasList.tsx`
+  - `Frontend/src/features/reservas/admin/index.ts`
+  - `Frontend/src/pages/AdminReservasPage.tsx`
+  - `Frontend/src/pages/AdminReservaDetallePage.tsx`
+  - `Frontend/src/pages/HabitacionesPage.tsx`
+  - `Frontend/src/app/router/AppRouter.tsx`
+  - `Frontend/src/features/reservas/admin/AdminReservasPage.test.tsx`
+- **Comandos ejecutados y resultados:**
+  - `npm --prefix Frontend test src/features/reservas/admin/AdminReservasPage.test.tsx`: 7/7 pruebas aprobadas.
+  - `npm --prefix Frontend run typecheck`: 0 errores de tipado (código de salida 0).
+  - `npm --prefix Frontend test`: 268 pruebas aprobadas en 27 archivos (1 archivo omitido por integración de red real).
+- **Bloqueos:** Ninguno.

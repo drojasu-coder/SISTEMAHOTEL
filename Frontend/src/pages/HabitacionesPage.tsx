@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Bed, Layers, Car } from "lucide-react";
+import { Plus, Bed, Layers, Car, CalendarCheck } from "lucide-react";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
@@ -126,6 +126,13 @@ export const HabitacionesPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          <Link
+            to="/admin/reservas"
+            className={buttonStyles({ variant: "ghost" })}
+          >
+            <CalendarCheck className="size-4" aria-hidden="true" />
+            <span>Reservas</span>
+          </Link>
           <Link
             to="/admin/tipos-habitacion"
             className={buttonStyles({ variant: "ghost" })}
