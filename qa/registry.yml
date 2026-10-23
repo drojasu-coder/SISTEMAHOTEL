@@ -1790,6 +1790,165 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-AUTH-SEC-CANDIDATE-033
+    status: closed
+    severity: high
+    category: AUTH
+    title: >-
+      Cliente autenticado puede consultar proveedores, productos de proveedores
+      y cuentas por pagar internas
+    invariant: >-
+      Un usuario con rol cliente debe recibir HTTP 403 en las lecturas de
+      proveedores, relaciones proveedor-producto y cuentas por pagar. Son datos
+      administrativos sin ownership; admin conserva acceso.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/auth/proveedorFinancialReads.auth.test.ts
+      test_name: "QA-AUTH-SEC-CANDIDATE-033: cliente no consulta proveedores, productos de proveedores ni cuentas por pagar"
+      command: >-
+        npm --prefix backend test --
+        tests/auth/proveedorFinancialReads.auth.test.ts
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_used: false
+      customer_payments_used: false
+      cart_used: false
+    scenario:
+      client: "id=1; rol=cliente; JWT obtenido mediante login real"
+      admin: "id=2; rol=admin; JWT obtenido mediante login real"
+      proveedor: >-
+        id=1; nombre=Proveedor QA 033; nit=QA033; contacto=Contacto Interno QA
+        033; telefono=55550333; email=qa033@example.test
+      proveedor_producto: >-
+        id=1; proveedor_id=1; nombre_producto=Insumo interno QA 033;
+        descripcion=Relación proveedor-producto QA 033
+      cuenta_por_pagar: >-
+        id=1; proveedor_id=1; monto=3300.33; estado=pendiente;
+        fecha_vencimiento=2026-11-30
+    expected:
+      client_list_proveedores: "HTTP 403"
+      client_get_proveedor: "HTTP 403"
+      client_list_proveedor_productos: "HTTP 403"
+      client_get_proveedor_producto: "HTTP 403"
+      client_list_cuentas_por_pagar: "HTTP 403"
+      client_get_cuenta_por_pagar: "HTTP 403"
+      internal_data_exposed: false
+      admin_access: allowed
+      database_modified_by_reads: false
+    actual:
+      client_list_proveedores: "HTTP 200; code null; contiene proveedor id=1 y todos sus datos de contacto"
+      client_get_proveedor: "HTTP 200; code null; devuelve proveedor id=1 y todos sus datos de contacto"
+      client_list_proveedor_productos: "HTTP 200; code null; contiene relación id=1"
+      client_get_proveedor_producto: "HTTP 200; code null; devuelve relación id=1"
+      client_list_cuentas_por_pagar: "HTTP 200; code null; contiene cuenta id=1, monto, estado y vencimiento"
+      client_get_cuenta_por_pagar: "HTTP 200; code null; devuelve cuenta id=1, monto, estado y vencimiento"
+      admin_control: "Proveedor por ID HTTP 200; cuenta por pagar por ID HTTP 200"
+      internal_data_exposed: true
+      database_modified_by_reads: false
+      authorization_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 12 aserciones soft: los seis GET del
+        cliente respondieron 200 en lugar de 403 y cada respuesta incluyó el
+        fixture administrativo interno correspondiente.
+    http_evidence:
+      client_list_proveedores_status: 200
+      client_list_proveedores_code: null
+      provider_data_returned: true
+      client_get_proveedor_status: 200
+      client_get_proveedor_code: null
+      internal_provider_body_returned: true
+      client_list_proveedor_productos_status: 200
+      client_list_proveedor_productos_code: null
+      provider_product_data_returned: true
+      client_get_proveedor_producto_status: 200
+      client_get_proveedor_producto_code: null
+      provider_product_body_returned: true
+      client_list_cuentas_por_pagar_status: 200
+      client_list_cuentas_por_pagar_code: null
+      account_payable_data_returned: true
+      client_get_cuenta_por_pagar_status: 200
+      client_get_cuenta_por_pagar_code: null
+      account_payable_body_returned: true
+      admin_get_proveedor_status: 200
+      admin_get_cuenta_por_pagar_status: 200
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      proveedores_count_before_and_after_reads: 1
+      proveedor_productos_count_before_and_after_reads: 1
+      cuentas_por_pagar_count_before_and_after_reads: 1
+      proveedor_snapshot_unchanged: true
+      proveedor_producto_snapshot_unchanged: true
+      cuenta_por_pagar_snapshot_unchanged: true
+      database_modified_by_reads: false
+    gerente_restaurante_policy_observed: >-
+      Las mutaciones POST/PATCH/DELETE de las tres familias declaran
+      requireRole(admin, gerente_restaurante); las lecturas GET omiten por
+      completo requireRole.
+    suspected_execution_path: >-
+      GET /api/proveedores y GET /api/proveedores/{id}, GET
+      /api/proveedor-productos y GET /api/proveedor-productos/{id}, y GET
+      /api/cuentas-por-pagar y GET /api/cuentas-por-pagar/{id} ejecutan solo
+      authMiddleware antes de validar parámetros/controlador. Los controllers
+      llaman servicios globales findAll/findByPk sin autorización por rol, por lo
+      que cualquier usuario autenticado recibe los registros internos.
+    root_cause: >-
+      Los seis GET estaban protegidos únicamente por authMiddleware y omitían
+      requireRole, aunque cada router ya definía rolesGestionProveedores con
+      admin y gerente_restaurante para las mutaciones. Por ello cualquier rol
+      autenticado alcanzaba los controllers y sus consultas globales.
+    correction: >-
+      Se agregó requireRole(...rolesGestionProveedores) inmediatamente después
+      de authMiddleware en los GET de lista y detalle de proveedores,
+      proveedor-productos y cuentas-por-pagar. El middleware reutilizado emite
+      el 403 estándar antes de validar parámetros o consultar datos y conserva
+      acceso global para admin y gerente_restaurante.
+    severity_recommendation: high
+    verification:
+      focused_command: >-
+        npm --prefix backend test --
+        tests/auth/proveedorFinancialReads.auth.test.ts
+      focused: "1 file passed, 1 test passed"
+      client_list_proveedores: "HTTP 403; sin datos internos"
+      client_get_proveedor: "HTTP 403; sin datos internos"
+      client_list_proveedor_productos: "HTTP 403; sin datos internos"
+      client_get_proveedor_producto: "HTTP 403; sin datos internos"
+      client_list_cuentas_por_pagar: "HTTP 403; sin datos internos"
+      client_get_cuenta_por_pagar: "HTTP 403; sin datos internos"
+      admin_control: "Proveedor por ID HTTP 200; cuenta por pagar por ID HTTP 200"
+      gerente_restaurante_control: >-
+        Preservado estáticamente por la constante compartida
+        rolesGestionProveedores=[ROLES.ADMIN, ROLES.GERENTE_RESTAURANTE]; no
+        existe test relacionado que ejecute este rol y el test oficial no se
+        modificó.
+      internal_data_exposed: false
+      database_modified_by_reads: false
+      authorization_violation: false
+      related_provider_tests: "No existen otros archivos de test del módulo"
+      related_proveedor_producto_tests: "No existen otros archivos de test del módulo"
+      related_cuenta_por_pagar_tests: "No existen otros archivos de test del módulo"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      qa_032_regression_observed: none
+      qa_032_test_executed: false
+      production_files_modified:
+        - backend/src/routes/proveedores/proveedor.routes.ts
+        - backend/src/routes/proveedores/proveedorProducto.routes.ts
+        - backend/src/routes/proveedores/cuentaPorPagar.routes.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-23"
+    final_verification: >-
+      GREEN: el archivo oficial pasó 1/1 con guardia hotel_test_db; los seis GET
+      del cliente devolvieron 403 sin exponer fixtures, los controles admin
+      devolvieron 200 y los snapshots/conteos PostgreSQL permanecieron iguales.
+      No había otros tests de proveedor, proveedorProducto ni cuentaPorPagar;
+      npx tsc --noEmit finalizó sin errores.
+
   - id: QA-AUTH-SEC-CANDIDATE-032
     status: closed
     severity: high

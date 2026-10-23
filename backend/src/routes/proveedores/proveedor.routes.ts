@@ -30,7 +30,12 @@ const rolesGestionProveedores = [ROLES.ADMIN, ROLES.GERENTE_RESTAURANTE];
  *         description: Usuario no autenticado
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  */
-router.get("/", authMiddleware, proveedorController.getAllProveedores);
+router.get(
+  "/",
+  authMiddleware,
+  requireRole(...rolesGestionProveedores),
+  proveedorController.getAllProveedores
+);
 
 /**
  * @openapi
@@ -59,6 +64,7 @@ router.get("/", authMiddleware, proveedorController.getAllProveedores);
 router.get(
   "/:id",
   authMiddleware,
+  requireRole(...rolesGestionProveedores),
   validateParams(proveedorIdSchema),
   proveedorController.getProveedorById
 );
