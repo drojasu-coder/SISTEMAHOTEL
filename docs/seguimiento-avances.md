@@ -9,8 +9,9 @@ Este documento registra de forma continua el avance técnico, archivos modificad
 - **Estado:** Completada la verificación de configuración y cobertura automatizada; comprobación interactiva en navegador detenida por bloqueo documentado.
 - **Detalle de implementación / verificación:**
   - Verificada la configuración local sin revelar secretos: backend cuenta con `STRIPE_SECRET_KEY` y `STRIPE_WEBHOOK_SECRET` de prueba; frontend carece de `VITE_STRIPE_PUBLISHABLE_KEY`.
-  - Cobertura automatizada revisada: verificados todos los casos de resiliencia transaccional (rechazo de tarjeta, recuperación de intento, protección contra cobro incompatible ante éxito pendiente de webhook, aislamiento por usuario, desajuste de importe, fin de sondeo).
-  - Estado de BE-014 mantenido en: *integración/verificación pendiente* hasta que se cuente con la clave pública de frontend y entorno interactivo.
+  - La presencia de `STRIPE_WEBHOOK_SECRET` no garantiza que el webhook local esté recibiéndose correctamente (se requiere reenvío activo mediante `stripe listen`).
+  - Cobertura automatizada revisada con Vitest (`npm --prefix backend test tests/pagos/pago.intentoActivo.test.ts`): verificados todos los casos de resiliencia transaccional (rechazo de tarjeta, recuperación de intento, protección contra cobro incompatible ante éxito pendiente de webhook, aislamiento por usuario, desajuste de importe, fin de sondeo).
+  - Estado de BE-014 mantenido en: *integración/verificación pendiente* hasta que se cuente con la clave pública de frontend, reenvío activo de webhooks y entorno interactivo.
 - **Archivos relevantes:**
   - `docs/seguimiento-integracion-pagos.md`
   - `backend/tests/pagos/pago.intentoActivo.test.ts`
@@ -90,7 +91,7 @@ Este documento registra de forma continua el avance técnico, archivos modificad
 
 - **Estado:** Completada y verificada.
 - **Detalle de auditoría y verificación:**
-  - **Auditoría de enlaces y rutas internas:** Se inspeccionaron todas las etiquetas `<Link>` y `<NavLink>` en `Frontend/src/`. Todas las rutas de destino coinciden exactamente con rutas registradas y activas en `Frontend/src/app/router/AppRouter.tsx` (rutas públicas `/`, `/reservar`, `/mis-reservas`, `/mis-reservas/habitacion/:id`, `/carrito`, `/checkout`, `/pagos/:id/resultado`, `/login`, `/registro`, `/cuenta`, y administrativas `/admin`, `/admin/habitaciones`, `/admin/reservas`, `/admin/reservas/:id`, `/admin/tipos-habitacion`, `/admin/parqueos`, `/admin/amenidades`, `/admin/mesas`, `/admin/sedes`). No existen enlaces rotos hacia rutas inexistentes.
+  - **Auditoría de enlaces y rutas internas:** Se inspeccionaron todas las etiquetas `<Link>` y `<NavLink>` en `Frontend/src/`. Todas las rutas de destino coinciden exactamente con rutas registradas y activas en `Frontend/src/app/router/AppRouter.tsx` (rutas públicas `/`, `/reservar`, `/mis-reservas`, `/mis-reservas/:id`, `/carrito`, `/checkout`, `/pagos/:id/resultado`, `/login`, `/registro`, `/cuenta`, y administrativas `/admin`, `/admin/habitaciones`, `/admin/reservas`, `/admin/reservas/:id`, `/admin/tipos-habitacion`, `/admin/parqueos`, `/admin/amenidades`, `/admin/restaurante`, `/admin/configuracion` con alias `/admin/sedes`). No existen enlaces rotos hacia rutas inexistentes.
   - **Accesibilidad desde navegación y subnavegación:**
     - Se constató que todas las pantallas implementadas son accesibles desde menús principales (`Navbar`, `AdminLayout` con `PANEL_MODULES`) o barras de subnavegación contextuales (en `HabitacionesPage` se conectan accesos directos hacia `Reservas` (`/admin/reservas`), `Tipos de habitación` (`/admin/tipos-habitacion`) y `Parqueos` (`/admin/parqueos`)).
   - **Enlaces de retorno en vistas profundas:**
@@ -102,10 +103,6 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - **Visibilidad y protección de acciones por rol:**
     - Acciones de mutación (crear/editar/eliminar) en habitaciones, tipos, amenidades, parqueos, mesas y sedes están estrictamente condicionadas a los permisos del usuario mediante `hasPermission(...)` (p. ej., `canManageHabitaciones`, `canManageTipos`, `canManageParqueos`, etc.). Los botones correspondientes no se renderizan para roles no autorizados.
     - Menús del panel (`PANEL_MODULES`) filtran dinámicamente las opciones según los roles autorizados por el backend en `getPanelModules(...)`.
-  - **Distinción metodológica de comprobaciones:**
-    - *Revisión estática de código:* Verificación cruzada entre `AppRouter.tsx`, `permissions.ts`, layouts y componentes.
-    - *Pruebas de componentes y rutas:* 268 pruebas unitarias y de integración aprobadas (`npm --prefix Frontend test`).
-    - *Comprobación visual real:* Detenida la inspección gráfica directa por ausencia de navegador gráfico/servidor headless interactivo en el entorno, pero verificada la cobertura mediante renderizado de Testing Library en jsdom.
 - **Archivos relevantes:**
   - `Frontend/src/app/router/AppRouter.tsx`
   - `Frontend/src/layouts/AdminLayout.tsx`
@@ -119,3 +116,24 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - `npm --prefix Frontend run typecheck`: 0 errores.
   - `npm --prefix Frontend test`: 268 pruebas aprobadas (27 archivos de test).
 - **Bloqueos:** Ninguno para el alcance de navegación.
+
+---
+
+## Conciliación y Verificaciones Complementarias
+
+- **Backlog y numeración de pendientes:**
+  - Se aclara que los códigos `BE-007` (compatibilidad TypeScript) y `BE-008`/`BE-009` (validación y endpoints de mesas) corresponden a tareas históricas ya cerradas. No se reutilizan ni crean numeraciones inventadas.
+  - El único pendiente abierto en `docs/pendientes-backend.md` es `BE-014` (*integración/verificación pendiente*), supeditado a la verificación interactiva en vivo con tarjeta de prueba y confirmación de recepción local del webhook.
+  - Se reafirma que la mera presencia de claves de Stripe en `.env` no garantiza que el webhook local se esté recibiendo.
+- **Rutas vigentes y aclaración de erratas de redacción:**
+  - *Detalle de reserva cliente:* La ruta real configurada es `/mis-reservas/:id` (asociada a `DetalleReservaHabitacionPage`). La mención previa a `/mis-reservas/habitacion/:id` fue una errata de redacción.
+  - *Restaurante y Mesas:* La ruta vigente en `PANEL_MODULES` y `AppRouter.tsx` es `/admin/restaurante` (que renderiza `MesasPage`). La ruta `/admin/mesas` no existe en el router ni es enlazada por ningún componente.
+  - *Gestión de Sedes:* La ruta principal del panel es `/admin/configuracion` (módulo de configuración, permiso `configuracion.administrar`, renderiza `SedesPage`), disponiendo además del alias `/admin/sedes` en `AppRouter.tsx`.
+- **Verificaciones con ejecutores nativos del proyecto:**
+  - Suite de pagos ejecutada con Vitest: `npm --prefix backend test tests/pagos/pago.intentoActivo.test.ts` (10/10 pruebas pasando). Se subsana la errata de redacción que citaba Jest.
+  - Verificación de tipos backend: `npm --prefix backend run typecheck:all` (0 errores).
+  - Compilación de producción frontend: `npm --prefix Frontend run build` (0 errores, bundle generado en `Frontend/dist/`).
+- **Prueba focalizada de acceso y aislamiento administrativo en reservas:**
+  - Se creó y ejecutó la suite `backend/tests/habitaciones/reservaHabitacion.adminAccess.test.ts` contra `hotel_test_db`.
+  - Se comprobó empíricamente que los tres roles contemplados en `habitaciones.gestionar` (`admin`, `recepcionista`, `gerente_habitaciones`) tienen acceso completo a listar todas las reservas y consultar el detalle de cualquier reserva por ID.
+  - Se comprobó que el rol `cliente` únicamente puede listar sus propias reservas y recibe `403 INSUFFICIENT_PERMISSIONS` al intentar consultar una reserva ajena por ID.
