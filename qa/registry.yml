@@ -1790,6 +1790,174 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-DATA-CANDIDATE-024
+    status: closed
+    severity: high
+    category: DATA
+    title: >-
+      ReservaHabitacion permite persistir rangos de fecha, totales, estados y
+      cantidades de huéspedes estructuralmente inválidos
+    invariant: >-
+      Toda fila de reservas_habitacion debe tener fecha_salida posterior a
+      fecha_entrada, total mayor o igual que cero, estado dentro del dominio
+      pendiente/confirmada/cancelada/finalizada/expirada y numero_huespedes mayor
+      o igual que uno, incluso ante escrituras internas o directas mediante el
+      modelo real que no pasan por validadores HTTP ni servicios.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/reservaHabitacion.integrity.test.ts
+      test_names:
+        - "QA-RH-DATA-CANDIDATE-024 A rechaza fecha_salida igual a fecha_entrada"
+        - "QA-RH-DATA-CANDIDATE-024 B rechaza total negativo"
+        - "QA-RH-DATA-CANDIDATE-024 C rechaza estado fuera del dominio"
+        - "QA-RH-DATA-CANDIDATE-024 D rechaza numero_huespedes cero"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.integrity.test.ts
+      write_path: ReservaHabitacion.create
+      endpoint: N/A
+      stripe_used: false
+      payments_or_carts_used: false
+    expected:
+      model_direct_write: rejected
+      persisted_rows_per_scenario: 0
+      date_range: fecha_salida_greater_than_fecha_entrada
+      total: greater_than_or_equal_to_zero
+      estado:
+        - pendiente
+        - confirmada
+        - cancelada
+        - finalizada
+        - expirada
+      numero_huespedes: greater_than_or_equal_to_one
+    actual:
+      date_range_equal: accepted_and_persisted
+      negative_total: accepted_and_persisted
+      invalid_state: accepted_and_persisted
+      zero_guests: accepted_and_persisted
+      model_rejections: 0
+      database_rejections: 0
+      postgres_error_codes: none
+      violated_constraint_names: none
+      red_result: "1 file failed, 4 tests failed por las violaciones esperadas"
+    constraint_precheck:
+      source: >-
+        pg_constraint filtrado por schema public, tabla reservas_habitacion y
+        contype='c', con pg_get_constraintdef y convalidated
+      check_constraint_count: 0
+      check_constraints: []
+      names_and_definitions: none
+    database_evidence:
+      source_of_truth: PostgreSQL
+      scenario_a:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-10;
+          numero_huespedes=1; estado=pendiente; total=100.00
+        postgres_error_code: null
+        constraint_name: null
+      scenario_b:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-11;
+          numero_huespedes=1; estado=pendiente; total=-1.00
+        postgres_error_code: null
+        constraint_name: null
+      scenario_c:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-11;
+          numero_huespedes=1; estado=inventada; total=100.00
+        postgres_error_code: null
+        constraint_name: null
+      scenario_d:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-11;
+          numero_huespedes=0; estado=pendiente; total=100.00
+        postgres_error_code: null
+        constraint_name: null
+      cleanup:
+        selector: "usuario email qa-rh-data-024-%@hotel.test"
+        deleted_own_invalid_rows_per_scenario: 1
+        invalid_rows_left_after_each_scenario: 0
+        unrelated_rows_deleted: 0
+    http_evidence:
+      applicable: false
+      reason: >-
+        El candidato comprueba integridad persistida mediante el modelo real y
+        PostgreSQL; no pertenece a un endpoint y no se ejecutó HTTP.
+    domain_evidence:
+      estado: >-
+        reservaHabitacion.validator.ts y EstadoReservaHabitacion en
+        reservaHabitacion.service.ts declaran pendiente, confirmada, cancelada,
+        finalizada y expirada; el modelo y la migración histórica solo usan
+        STRING(20).
+      numero_huespedes: >-
+        reservaHabitacion.validator.ts exige entero positivo; el modelo y la
+        migración histórica solo usan INTEGER NOT NULL.
+    suspected_execution_path: >-
+      ReservaHabitacion.create ejecuta INSERT a través del modelo
+      src/models/reservahabitacion.js. El modelo solo declara tipos,
+      nulabilidad, longitud/default y no contiene validators para estos cuatro
+      invariantes. La migración histórica de reservas_habitacion tampoco agregó
+      CHECK constraints, por lo que PostgreSQL acepta y conserva cada valor.
+    root_cause: >-
+      La tabla reservas_habitacion tenía columnas NOT NULL, pero ninguna
+      restricción CHECK para la cronología, el total, el dominio de estado o el
+      mínimo de huéspedes; por ello una escritura que evitara servicio y
+      validadores podía persistir valores estructuralmente inválidos.
+    correction:
+      migration: backend/src/migrations/20261022000000-enforce-reserva-habitacion-integrity.js
+      constraints:
+        - reservas_habitacion_fecha_rango_valid_check
+        - reservas_habitacion_total_nonnegative_check
+        - reservas_habitacion_estado_valid_check
+        - reservas_habitacion_huespedes_positive_check
+      concurrency: >-
+        El up usa una transacción y ACCESS EXCLUSIVE LOCK antes del precheck y
+        de agregar los cuatro constraints, evitando una escritura concurrente
+        entre la validación de filas existentes y la activación de las reglas.
+      data_cleanup: none_required
+      invalid_rows_found_before_migration:
+        fecha_salida_no_posterior: 0
+        total_negativo: 0
+        estado_fuera_dominio: 0
+        numero_huespedes_menor_uno: 0
+    severity_recommendation: high
+    severity_rationale: >-
+      Se reproducen cuatro invariantes esenciales e independientes, incluyendo
+      cronología, monto financiero, estado de negocio y ocupación; cualquier
+      escritura interna o directa puede introducir filas imposibles.
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      isolated: "1 file passed; 1 test passed, 3 skipped"
+      focused: "1 file passed; 4 tests passed"
+      constraints:
+        count: 4
+        all_validated: true
+        up_down_up: pass
+        nullability_preserved: true
+        valid_data_snapshot_preserved: true
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      invalid_rows_left_after_cleanup: 0
+      production_files_modified: true
+      migrations_modified: true
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
   - id: QA-RH-FIN-CANDIDATE-022
     status: closed
     severity: high
