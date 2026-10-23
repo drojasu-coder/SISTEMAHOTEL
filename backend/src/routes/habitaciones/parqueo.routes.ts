@@ -28,6 +28,9 @@ const rolesGestionHabitaciones = [
  *     responses:
  *       200:
  *         description: Parqueos obtenidos correctamente
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ParqueosResponse' }
  *       401:
  *         description: Usuario no autenticado
  *         content:
@@ -52,6 +55,9 @@ router.get("/", authMiddleware, parqueoController.getAllParqueos);
  *     responses:
  *       200:
  *         description: Parqueo obtenido correctamente
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ParqueoResponse' }
  *       400:
  *         description: ID inválido
  *         content:
@@ -83,15 +89,13 @@ router.get("/:id", authMiddleware, validateParams(parqueoIdSchema), parqueoContr
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required: [sucursal_id, numero]
- *             properties:
- *               sucursal_id: { type: integer, minimum: 1, example: 1 }
- *               numero: { type: string, minLength: 1, maxLength: 10, example: "A-01" }
- *               estado: { type: string, enum: [disponible, ocupado, mantenimiento], example: disponible }
+ *             $ref: '#/components/schemas/CreateParqueoRequest'
  *     responses:
  *       201:
  *         description: Parqueo creado correctamente
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ParqueoResponse' }
  *       400:
  *         description: Datos inválidos
  *         content:
@@ -144,14 +148,13 @@ router.post(
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               sucursal_id: { type: integer, minimum: 1 }
- *               numero: { type: string, minLength: 1, maxLength: 10 }
- *               estado: { type: string, enum: [disponible, ocupado, mantenimiento] }
+ *             $ref: '#/components/schemas/UpdateParqueoRequest'
  *     responses:
  *       200:
  *         description: Parqueo actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ParqueoResponse' }
  *       400:
  *         description: Datos inválidos
  *         content:
@@ -203,6 +206,9 @@ router.patch(
  *     responses:
  *       200:
  *         description: Parqueo eliminado correctamente
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ParqueoDeleteResponse' }
  *       400:
  *         description: ID inválido
  *         content:

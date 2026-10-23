@@ -41,6 +41,10 @@ const options: swaggerJsdoc.Options = {
     description: "Administración de sucursales del hotel",
   },
   {
+    name: "Parqueos",
+    description: "Catálogo y gestión de espacios de parqueo",
+  },
+  {
     name: "Mesas",
     description: "Administración de mesas del restaurante",
   },
@@ -1023,116 +1027,350 @@ CarritoItemResponse: {
   },
 },
 
-Sucursal: {
-  type: "object",
+        Sucursal: {
+          type: "object",
+          required: [
+            "id",
+            "nombre",
+            "activa",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            nombre: {
+              type: "string",
+              example: "Hotel Central",
+            },
+            direccion: {
+              type: "string",
+              nullable: true,
+              example: "Zona 10",
+            },
+            ciudad: {
+              type: "string",
+              nullable: true,
+              example: "Guatemala",
+            },
+            telefono: {
+              type: "string",
+              nullable: true,
+              example: "22223333",
+            },
+            activa: {
+              type: "boolean",
+              example: true,
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+            },
+          },
+        },
 
-  properties: {
-    id: {
-      type: "integer",
-      example: 1,
-    },
+        CreateSucursalRequest: {
+          type: "object",
+          required: [
+            "nombre",
+          ],
+          additionalProperties: false,
+          properties: {
+            nombre: {
+              type: "string",
+              minLength: 1,
+              maxLength: 150,
+              example: "Hotel Central",
+            },
+            direccion: {
+              type: "string",
+              maxLength: 255,
+              nullable: true,
+              example: "Zona 10",
+            },
+            ciudad: {
+              type: "string",
+              maxLength: 100,
+              nullable: true,
+              example: "Guatemala",
+            },
+            telefono: {
+              type: "string",
+              maxLength: 20,
+              nullable: true,
+              example: "22223333",
+            },
+          },
+        },
 
-    nombre: {
-      type: "string",
-      example: "Hotel Central",
-    },
+        UpdateSucursalRequest: {
+          type: "object",
+          minProperties: 1,
+          additionalProperties: false,
+          properties: {
+            nombre: {
+              type: "string",
+              minLength: 1,
+              maxLength: 150,
+              example: "Hotel Central Renovado",
+            },
+            direccion: {
+              type: "string",
+              maxLength: 255,
+              nullable: true,
+              example: "Zona 10",
+            },
+            ciudad: {
+              type: "string",
+              maxLength: 100,
+              nullable: true,
+              example: "Guatemala",
+            },
+            telefono: {
+              type: "string",
+              maxLength: 20,
+              nullable: true,
+              example: "22224444",
+            },
+            activa: {
+              type: "boolean",
+              example: true,
+            },
+          },
+        },
 
-    direccion: {
-      type: "string",
-      example: "Zona 10",
-    },
+        SucursalResponse: {
+          type: "object",
+          required: [
+            "status",
+            "data",
+          ],
+          properties: {
+            status: {
+              type: "string",
+              example: "success",
+            },
+            data: {
+              $ref: "#/components/schemas/Sucursal",
+            },
+          },
+        },
 
-    ciudad: {
-      type: "string",
-      example: "Guatemala",
-    },
+        SucursalesResponse: {
+          type: "object",
+          required: [
+            "status",
+            "data",
+          ],
+          properties: {
+            status: {
+              type: "string",
+              example: "success",
+            },
+            data: {
+              type: "array",
+              items: {
+                $ref: "#/components/schemas/Sucursal",
+              },
+            },
+          },
+        },
 
-    telefono: {
-      type: "string",
-      example: "22223333",
-    },
+        Parqueo: {
+          type: "object",
+          required: [
+            "id",
+            "sucursal_id",
+            "numero",
+            "estado",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: {
+              type: "integer",
+              example: 1,
+            },
+            sucursal_id: {
+              type: "integer",
+              example: 1,
+            },
+            numero: {
+              type: "string",
+              maxLength: 10,
+              example: "A-01",
+            },
+            estado: {
+              type: "string",
+              enum: ["disponible", "ocupado", "mantenimiento"],
+              example: "disponible",
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time",
+            },
+            Sucursal: {
+              type: "object",
+              nullable: true,
+              properties: {
+                id: {
+                  type: "integer",
+                  example: 1,
+                },
+                nombre: {
+                  type: "string",
+                  example: "Hotel Central",
+                },
+              },
+            },
+          },
+        },
 
-    activa: {
-      type: "boolean",
-      example: true,
-    },
+        CreateParqueoRequest: {
+          type: "object",
+          required: [
+            "sucursal_id",
+            "numero",
+          ],
+          additionalProperties: false,
+          properties: {
+            sucursal_id: {
+              type: "integer",
+              minimum: 1,
+              example: 1,
+            },
+            numero: {
+              type: "string",
+              minLength: 1,
+              maxLength: 10,
+              example: "A-01",
+            },
+            estado: {
+              type: "string",
+              enum: ["disponible", "ocupado", "mantenimiento"],
+              example: "disponible",
+            },
+          },
+        },
 
-    createdAt: {
-      type: "string",
-      format: "date-time",
-    },
+        UpdateParqueoRequest: {
+          type: "object",
+          minProperties: 1,
+          additionalProperties: false,
+          properties: {
+            sucursal_id: {
+              type: "integer",
+              minimum: 1,
+              example: 1,
+            },
+            numero: {
+              type: "string",
+              minLength: 1,
+              maxLength: 10,
+              example: "A-01",
+            },
+            estado: {
+              type: "string",
+              enum: ["disponible", "ocupado", "mantenimiento"],
+              example: "disponible",
+            },
+          },
+        },
 
-    updatedAt: {
-      type: "string",
-      format: "date-time",
-    },
-  },
-},
+        ParqueoResponse: {
+          type: "object",
+          required: [
+            "success",
+            "statusCode",
+            "message",
+            "data",
+          ],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Parqueo obtenido correctamente",
+            },
+            data: {
+              $ref: "#/components/schemas/Parqueo",
+            },
+          },
+        },
 
-CreateSucursalRequest: {
-  type: "object",
+        ParqueosResponse: {
+          type: "object",
+          required: [
+            "success",
+            "statusCode",
+            "message",
+            "data",
+          ],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Parqueos obtenidos correctamente",
+            },
+            data: {
+              type: "array",
+              items: {
+                $ref: "#/components/schemas/Parqueo",
+              },
+            },
+          },
+        },
 
-  required: [
-    "nombre",
-  ],
-
-  additionalProperties: false,
-
-  properties: {
-    nombre: {
-      type: "string",
-      example: "Hotel Central",
-    },
-
-    direccion: {
-      type: "string",
-      example: "Zona 10",
-    },
-
-    ciudad: {
-      type: "string",
-      example: "Guatemala",
-    },
-
-    telefono: {
-      type: "string",
-      example: "22223333",
-    },
-  },
-},
-
-UpdateSucursalRequest: {
-  type: "object",
-
-  additionalProperties: false,
-
-  properties: {
-    nombre: {
-      type: "string",
-      example: "Hotel Central Renovado",
-    },
-
-    direccion: {
-      type: "string",
-      example: "Zona 10",
-    },
-
-    ciudad: {
-      type: "string",
-      example: "Guatemala",
-    },
-
-    telefono: {
-      type: "string",
-      example: "22224444",
-    },
-
-    activa: {
-      type: "boolean",
-      example: true,
-    },
-  },
-},
+        ParqueoDeleteResponse: {
+          type: "object",
+          required: [
+            "success",
+            "statusCode",
+            "message",
+            "data",
+          ],
+          properties: {
+            success: {
+              type: "boolean",
+              example: true,
+            },
+            statusCode: {
+              type: "integer",
+              example: 200,
+            },
+            message: {
+              type: "string",
+              example: "Parqueo eliminado correctamente",
+            },
+            data: {
+              nullable: true,
+              example: null,
+            },
+          },
+        },
 
 Mesa: {
   type: "object",

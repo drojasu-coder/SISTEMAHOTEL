@@ -322,4 +322,152 @@ describe("generated OpenAPI contract", () => {
     expect(pagoResource.get.responses["403"]).toBeDefined();
     expect(pagoResource.get.responses["404"]).toBeDefined();
   });
+
+  it("contains complete sucursales schemas and contract responses (BE-006)", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    // Component schemas
+    expect(schemas.Sucursal).toBeDefined();
+    expect(schemas.CreateSucursalRequest).toBeDefined();
+    expect(schemas.UpdateSucursalRequest).toBeDefined();
+    expect(schemas.SucursalResponse).toBeDefined();
+    expect(schemas.SucursalesResponse).toBeDefined();
+
+    // Required fields & nullability
+    expect(schemas.Sucursal.required).toEqual([
+      "id",
+      "nombre",
+      "activa",
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(schemas.Sucursal.properties.direccion.nullable).toBe(true);
+    expect(schemas.Sucursal.properties.ciudad.nullable).toBe(true);
+    expect(schemas.Sucursal.properties.telefono.nullable).toBe(true);
+    expect(schemas.CreateSucursalRequest.required).toEqual(["nombre"]);
+    expect(schemas.UpdateSucursalRequest.minProperties).toBe(1);
+
+    // Endpoints
+    const sucursalesCollection = paths["/api/sucursales"];
+    const sucursalResource = paths["/api/sucursales/{id}"];
+
+    // GET /api/sucursales
+    expect(sucursalesCollection.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/SucursalesResponse"
+    );
+
+    // POST /api/sucursales
+    expect(sucursalesCollection.post.requestBody.content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/CreateSucursalRequest"
+    );
+    expect(sucursalesCollection.post.responses["201"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/SucursalResponse"
+    );
+    expect(sucursalesCollection.post.responses["400"]).toBeDefined();
+    expect(sucursalesCollection.post.responses["401"]).toBeDefined();
+    expect(sucursalesCollection.post.responses["403"]).toBeDefined();
+
+    // GET /api/sucursales/{id}
+    expect(sucursalResource.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/SucursalResponse"
+    );
+    expect(sucursalResource.get.responses["400"]).toBeDefined();
+    expect(sucursalResource.get.responses["404"]).toBeDefined();
+
+    // PATCH /api/sucursales/{id}
+    expect(sucursalResource.patch.requestBody.content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/UpdateSucursalRequest"
+    );
+    expect(sucursalResource.patch.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/SucursalResponse"
+    );
+    expect(sucursalResource.patch.responses["400"]).toBeDefined();
+    expect(sucursalResource.patch.responses["404"]).toBeDefined();
+
+    // DELETE /api/sucursales/{id}
+    expect(sucursalResource.delete.responses["204"]).toBeDefined();
+    expect(sucursalResource.delete.responses["404"]).toBeDefined();
+    expect(sucursalResource.delete.responses["409"]).toBeDefined();
+  });
+
+  it("contains complete parqueos schemas and contract responses (BE-010)", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    // Component schemas
+    expect(schemas.Parqueo).toBeDefined();
+    expect(schemas.CreateParqueoRequest).toBeDefined();
+    expect(schemas.UpdateParqueoRequest).toBeDefined();
+    expect(schemas.ParqueoResponse).toBeDefined();
+    expect(schemas.ParqueosResponse).toBeDefined();
+    expect(schemas.ParqueoDeleteResponse).toBeDefined();
+
+    // Required fields & contracts
+    expect(schemas.Parqueo.required).toEqual([
+      "id",
+      "sucursal_id",
+      "numero",
+      "estado",
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(schemas.CreateParqueoRequest.required).toEqual(["sucursal_id", "numero"]);
+    expect(schemas.CreateParqueoRequest.additionalProperties).toBe(false);
+    expect(schemas.UpdateParqueoRequest.minProperties).toBe(1);
+
+    // Endpoints
+    const parqueosCollection = paths["/api/parqueos"];
+    const parqueoResource = paths["/api/parqueos/{id}"];
+
+    // GET /api/parqueos
+    expect(parqueosCollection.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/ParqueosResponse"
+    );
+    expect(parqueosCollection.get.responses["401"]).toBeDefined();
+
+    // POST /api/parqueos
+    expect(parqueosCollection.post.requestBody.content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/CreateParqueoRequest"
+    );
+    expect(parqueosCollection.post.responses["201"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/ParqueoResponse"
+    );
+    expect(parqueosCollection.post.responses["400"]).toBeDefined();
+    expect(parqueosCollection.post.responses["401"]).toBeDefined();
+    expect(parqueosCollection.post.responses["403"]).toBeDefined();
+    expect(parqueosCollection.post.responses["404"]).toBeDefined();
+    expect(parqueosCollection.post.responses["409"]).toBeDefined();
+
+    // GET /api/parqueos/{id}
+    expect(parqueoResource.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/ParqueoResponse"
+    );
+    expect(parqueoResource.get.responses["400"]).toBeDefined();
+    expect(parqueoResource.get.responses["401"]).toBeDefined();
+    expect(parqueoResource.get.responses["404"]).toBeDefined();
+
+    // PATCH /api/parqueos/{id}
+    expect(parqueoResource.patch.requestBody.content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/UpdateParqueoRequest"
+    );
+    expect(parqueoResource.patch.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/ParqueoResponse"
+    );
+    expect(parqueoResource.patch.responses["400"]).toBeDefined();
+    expect(parqueoResource.patch.responses["401"]).toBeDefined();
+    expect(parqueoResource.patch.responses["403"]).toBeDefined();
+    expect(parqueoResource.patch.responses["404"]).toBeDefined();
+    expect(parqueoResource.patch.responses["409"]).toBeDefined();
+
+    // DELETE /api/parqueos/{id}
+    expect(parqueoResource.delete.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/ParqueoDeleteResponse"
+    );
+    expect(parqueoResource.delete.responses["400"]).toBeDefined();
+    expect(parqueoResource.delete.responses["401"]).toBeDefined();
+    expect(parqueoResource.delete.responses["403"]).toBeDefined();
+    expect(parqueoResource.delete.responses["404"]).toBeDefined();
+    expect(parqueoResource.delete.responses["409"]).toBeDefined();
+  });
 });

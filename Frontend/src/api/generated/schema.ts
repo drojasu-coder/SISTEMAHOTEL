@@ -1843,11 +1843,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            data?: components["schemas"]["Sucursal"][];
-                        };
+                        "application/json": components["schemas"]["SucursalesResponse"];
                     };
                 };
                 /** @description Error interno del servidor */
@@ -1875,12 +1871,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @example Sucursal Central */
-                        nombre: string;
-                        /** @example Zona 10, Ciudad */
-                        direccion?: string;
-                    };
+                    "application/json": components["schemas"]["CreateSucursalRequest"];
                 };
             };
             responses: {
@@ -1889,28 +1880,45 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["SucursalResponse"];
+                    };
                 };
                 /** @description Datos inválidos */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
                 };
                 /** @description Usuario no autenticado */
                 401: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description Usuario sin permisos */
                 403: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Conflicto al crear la sucursal */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -1945,10 +1953,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            success?: boolean;
-                            data?: components["schemas"]["Sucursal"];
-                        };
+                        "application/json": components["schemas"]["SucursalResponse"];
                     };
                 };
                 /** @description ID inválido */
@@ -1956,14 +1961,18 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
                 };
                 /** @description Sucursal no encontrada */
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -1991,19 +2000,50 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description ID inválido */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Usuario sin permisos */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Sucursal no encontrada */
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description La sucursal está siendo utilizada */
                 409: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -2024,10 +2064,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        nombre?: string;
-                        activa?: boolean;
-                    };
+                    "application/json": components["schemas"]["UpdateSucursalRequest"];
                 };
             };
             responses: {
@@ -2036,21 +2073,45 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["SucursalResponse"];
+                    };
                 };
                 /** @description Datos inválidos */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Usuario sin permisos */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description Sucursal no encontrada */
                 404: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
             };
         };
@@ -6582,7 +6643,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ParqueosResponse"];
+                    };
                 };
                 /** @description Usuario no autenticado */
                 401: {
@@ -6609,17 +6672,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        /** @example 1 */
-                        sucursal_id: number;
-                        /** @example A-01 */
-                        numero: string;
-                        /**
-                         * @example disponible
-                         * @enum {string}
-                         */
-                        estado?: "disponible" | "ocupado" | "mantenimiento";
-                    };
+                    "application/json": components["schemas"]["CreateParqueoRequest"];
                 };
             };
             responses: {
@@ -6628,7 +6681,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ParqueoResponse"];
+                    };
                 };
                 /** @description Datos inválidos */
                 400: {
@@ -6708,7 +6763,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ParqueoResponse"];
+                    };
                 };
                 /** @description ID inválido */
                 400: {
@@ -6761,7 +6818,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ParqueoDeleteResponse"];
+                    };
                 };
                 /** @description ID inválido */
                 400: {
@@ -6827,12 +6886,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": {
-                        sucursal_id?: number;
-                        numero?: string;
-                        /** @enum {string} */
-                        estado?: "disponible" | "ocupado" | "mantenimiento";
-                    };
+                    "application/json": components["schemas"]["UpdateParqueoRequest"];
                 };
             };
             responses: {
@@ -6841,7 +6895,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ParqueoResponse"];
+                    };
                 };
                 /** @description Datos inválidos */
                 400: {
@@ -12498,43 +12554,126 @@ export interface components {
         };
         Sucursal: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example Hotel Central */
-            nombre?: string;
+            nombre: string;
             /** @example Zona 10 */
-            direccion?: string;
+            direccion?: string | null;
             /** @example Guatemala */
-            ciudad?: string;
+            ciudad?: string | null;
             /** @example 22223333 */
-            telefono?: string;
+            telefono?: string | null;
             /** @example true */
-            activa?: boolean;
+            activa: boolean;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updatedAt: string;
         };
         CreateSucursalRequest: {
             /** @example Hotel Central */
             nombre: string;
             /** @example Zona 10 */
-            direccion?: string;
+            direccion?: string | null;
             /** @example Guatemala */
-            ciudad?: string;
+            ciudad?: string | null;
             /** @example 22223333 */
-            telefono?: string;
+            telefono?: string | null;
         };
         UpdateSucursalRequest: {
             /** @example Hotel Central Renovado */
             nombre?: string;
             /** @example Zona 10 */
-            direccion?: string;
+            direccion?: string | null;
             /** @example Guatemala */
-            ciudad?: string;
+            ciudad?: string | null;
             /** @example 22224444 */
-            telefono?: string;
+            telefono?: string | null;
             /** @example true */
             activa?: boolean;
+        };
+        SucursalResponse: {
+            /** @example success */
+            status: string;
+            data: components["schemas"]["Sucursal"];
+        };
+        SucursalesResponse: {
+            /** @example success */
+            status: string;
+            data: components["schemas"]["Sucursal"][];
+        };
+        Parqueo: {
+            /** @example 1 */
+            id: number;
+            /** @example 1 */
+            sucursal_id: number;
+            /** @example A-01 */
+            numero: string;
+            /**
+             * @example disponible
+             * @enum {string}
+             */
+            estado: "disponible" | "ocupado" | "mantenimiento";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            Sucursal?: {
+                /** @example 1 */
+                id?: number;
+                /** @example Hotel Central */
+                nombre?: string;
+            } | null;
+        };
+        CreateParqueoRequest: {
+            /** @example 1 */
+            sucursal_id: number;
+            /** @example A-01 */
+            numero: string;
+            /**
+             * @example disponible
+             * @enum {string}
+             */
+            estado?: "disponible" | "ocupado" | "mantenimiento";
+        };
+        UpdateParqueoRequest: {
+            /** @example 1 */
+            sucursal_id?: number;
+            /** @example A-01 */
+            numero?: string;
+            /**
+             * @example disponible
+             * @enum {string}
+             */
+            estado?: "disponible" | "ocupado" | "mantenimiento";
+        };
+        ParqueoResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Parqueo obtenido correctamente */
+            message: string;
+            data: components["schemas"]["Parqueo"];
+        };
+        ParqueosResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Parqueos obtenidos correctamente */
+            message: string;
+            data: components["schemas"]["Parqueo"][];
+        };
+        ParqueoDeleteResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Parqueo eliminado correctamente */
+            message: string;
+            /** @example null */
+            data: unknown;
         };
         Mesa: {
             /** @example 1 */

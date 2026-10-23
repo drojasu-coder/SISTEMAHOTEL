@@ -1,3 +1,37 @@
+## BE-006 · Documentación OpenAPI en sucursales y convención de envoltorio
+
+- **Categoría:** mejora de documentación / contrato OpenAPI
+- **Revisión inspeccionada:** 2026-10-22 · `refactor/backend-architecture`
+- **Flujo afectado:** catálogo y gestión de sedes (`/api/sucursales`, `/api/sucursales/:id`).
+- **Estado de funcionamiento:** las operaciones del módulo (`GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `DELETE /:id`) funcionan correctamente en tiempo de ejecución.
+- **Detalle de las diferencias observadas:**
+  1. En `backend/src/docs/swagger.ts`, el esquema `Sucursal` carecía de `required` explícito y `nullable: true` para campos opcionales (`direccion`, `ciudad`, `telefono`).
+  2. Faltaban los esquemas envoltorio `SucursalResponse` y `SucursalesResponse` con el formato real `{ status: "success", data }`.
+  3. En `backend/src/routes/sucursales/sucursal.routes.ts`, `GET /` documentaba erróneamente un envoltorio `{ success: true, data }` y las mutaciones carecían de referencias formales `$ref` o respuestas de error completas (400, 401, 403, 404, 409).
+- **Criterio para cierre definitivo en backend:**
+  - Declarar `required: ["id", "nombre", "activa", "createdAt", "updatedAt"]` y `nullable: true` en `Sucursal` en `swagger.ts`.
+  - Crear esquemas `SucursalResponse` y `SucursalesResponse` en `components.schemas`.
+  - Vincular las referencias `$ref` en `sucursal.routes.ts` para respuestas 200, 201, 204 y esquemas de error (400, 401, 403, 404, 409).
+  - Verificar con pruebas unitarias de OpenAPI y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
+- **Resolución definitiva:** Esquemas (`Sucursal`, `CreateSucursalRequest`, `UpdateSucursalRequest`, `SucursalResponse`, `SucursalesResponse`) documentados con `required` explícito, nulabilidad fiel y referencias `$ref` en rutas. Validado mediante suite `openapi.test.ts` (9/9 pruebas pasando), tipos TypeScript regenerados en `schema.ts`, y suite de frontend (261 pruebas pasando).
+- **Estado:** resuelto.
+
+## BE-010 · Documentación OpenAPI en endpoints de parqueos
+
+- **Categoría:** mejora de documentación / contrato OpenAPI
+- **Revisión inspeccionada:** 2026-10-22 · `refactor/backend-architecture`
+- **Flujo afectado:** catálogo y gestión de espacios de parqueo (`/api/parqueos`, `/api/parqueos/:id`).
+- **Estado de funcionamiento:** las operaciones del módulo (`GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `DELETE /:id`) funcionan correctamente en tiempo de ejecución garantizando aislamiento y restricciones de integridad.
+- **Detalle de las diferencias observadas:**
+  1. En `backend/src/docs/swagger.ts`, no existían esquemas canónicos para `Parqueo`, `CreateParqueoRequest`, `UpdateParqueoRequest`, `ParqueoResponse`, `ParqueosResponse` ni `ParqueoDeleteResponse`, ni el tag `Parqueos`.
+  2. En `backend/src/routes/habitaciones/parqueo.routes.ts`, las anotaciones carecían de `content.application/json.schema` en respuestas exitosas (200, 201).
+- **Criterio para cierre definitivo en backend:**
+  - Declarar tag `Parqueos` y esquemas canónicos `Parqueo`, `CreateParqueoRequest`, `UpdateParqueoRequest`, `ParqueoResponse`, `ParqueosResponse` y `ParqueoDeleteResponse` en `swagger.ts`.
+  - Vincular las referencias `$ref` en `parqueo.routes.ts` para respuestas 200, 201 y códigos de error (400, 401, 403, 404, 409).
+  - Verificar con pruebas unitarias de OpenAPI y regenerar los tipos en `Frontend/src/api/generated/schema.ts`.
+- **Resolución definitiva:** Tag y esquemas (`Parqueo`, `CreateParqueoRequest`, `UpdateParqueoRequest`, `ParqueoResponse`, `ParqueosResponse`, `ParqueoDeleteResponse`) definidos en `swagger.ts` y vinculados en `parqueo.routes.ts`. Verificado mediante suite `openapi.test.ts` (9/9 pruebas pasando), tipos regenerados en `schema.ts`, y pruebas de frontend (261 pruebas pasando).
+- **Estado:** resuelto.
+
 ## BE-013 · Documentación OpenAPI en endpoints de carrito y carritoItems
 
 - **Categoría:** mejora de documentación / contrato OpenAPI
