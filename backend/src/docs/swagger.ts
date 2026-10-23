@@ -85,6 +85,10 @@ const options: swaggerJsdoc.Options = {
     description: "Venta y administración de boletos del parque",
   },
   {
+    name: "Pagos",
+    description: "Operaciones de checkout, registro de pagos y recuperación de intentos",
+  },
+  {
     name: "Carritos",
     description: "Operaciones y ciclo de vida del carrito de compras",
   },
@@ -2596,6 +2600,232 @@ UpdateBoletoParqueEstadoRequest: {
               items: {
                 $ref: "#/components/schemas/HabitacionDisponible",
               },
+            },
+          },
+        },
+
+        Pago: {
+          type: "object",
+          required: [
+            "id",
+            "monto",
+            "metodo",
+            "estado",
+            "moneda",
+            "tipo_pago",
+            "createdAt",
+            "updatedAt",
+          ],
+          properties: {
+            id: { type: "integer", example: 42 },
+            reserva_habitacion_id: { type: "integer", nullable: true, example: null },
+            carrito_id: { type: "integer", nullable: true, example: 15 },
+            monto: {
+              oneOf: [
+                { type: "string", example: "1800.00" },
+                { type: "number", example: 1800 },
+              ],
+            },
+            metodo: {
+              type: "string",
+              enum: ["tarjeta", "efectivo", "transferencia"],
+              example: "tarjeta",
+            },
+            estado: {
+              type: "string",
+              enum: [
+                "pendiente",
+                "procesando",
+                "aprobado",
+                "rechazado",
+                "cancelado",
+                "reembolsado",
+                "reembolsado_parcial",
+              ],
+              example: "procesando",
+            },
+            id_transaccion_externo: { type: "string", nullable: true, example: "pi_123456789" },
+            moneda: { type: "string", example: "GTQ" },
+            tipo_pago: {
+              type: "string",
+              enum: ["total", "anticipo", "saldo"],
+              example: "total",
+            },
+            pasarela: { type: "string", nullable: true, example: "stripe" },
+            idempotency_key: { type: "string", nullable: true, example: "chk-u1-c15-xyz" },
+            fecha_pago: { type: "string", format: "date-time", nullable: true, example: "2026-10-22T14:30:00.000Z" },
+            codigo_error_externo: { type: "string", nullable: true, example: null },
+            mensaje_error: { type: "string", nullable: true, example: null },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+
+        CreatePagoRequest: {
+          type: "object",
+          required: ["monto", "metodo", "moneda"],
+          additionalProperties: false,
+          properties: {
+            carrito_id: { type: "integer", minimum: 1, nullable: true },
+            reserva_habitacion_id: { type: "integer", minimum: 1, nullable: true },
+            monto: {
+              oneOf: [
+                { type: "number", minimum: 0.01 },
+                { type: "string", pattern: "^\\d+(\\.\\d{1,2})?$" },
+              ],
+              example: 1800,
+            },
+            metodo: {
+              type: "string",
+              enum: ["tarjeta", "efectivo", "transferencia"],
+              example: "tarjeta",
+            },
+            tipo_pago: {
+              type: "string",
+              enum: ["total", "anticipo", "saldo"],
+              example: "total",
+            },
+            moneda: { type: "string", enum: ["GTQ"], example: "GTQ" },
+            idempotency_key: { type: "string", maxLength: 150, nullable: true, example: "chk-u1-c15-xyz" },
+          },
+        },
+
+        CreatePagoResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: { type: "boolean", example: true },
+            statusCode: { type: "integer", example: 201 },
+            message: { type: "string", example: "Pago creado correctamente" },
+            data: {
+              oneOf: [
+                {
+                  type: "object",
+                  required: ["pago_id", "estado", "monto", "moneda"],
+                  properties: {
+                    pago_id: { type: "integer", example: 42 },
+                    payment_intent_id: { type: "string", example: "pi_123456789" },
+                    client_secret: { type: "string", example: "pi_123_secret_abc" },
+                    estado: { type: "string", example: "procesando" },
+                    monto: {
+                      oneOf: [{ type: "number" }, { type: "string" }],
+                      example: 1800,
+                    },
+                    moneda: { type: "string", example: "GTQ" },
+                  },
+                },
+                { $ref: "#/components/schemas/Pago" },
+              ],
+            },
+          },
+        },
+
+        ResumenPagoData: {
+          type: "object",
+          required: ["total", "anticipo_requerido", "aprobado", "saldo"],
+          properties: {
+            total: { type: "number", example: 1800 },
+            anticipo_requerido: { type: "number", example: 1800 },
+            aprobado: { type: "number", example: 0 },
+            saldo: { type: "number", example: 1800 },
+          },
+        },
+
+        ResumenPagoResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: { type: "boolean", example: true },
+            statusCode: { type: "integer", example: 200 },
+            message: { type: "string", example: "Resumen de pago obtenido correctamente" },
+            data: { $ref: "#/components/schemas/ResumenPagoData" },
+          },
+        },
+
+        IntentoActivoData: {
+          type: "object",
+          required: [
+            "pago_id",
+            "payment_intent_id",
+            "client_secret",
+            "estado_local",
+            "estado_pasarela",
+            "estado_intento",
+            "monto",
+            "moneda",
+            "puede_confirmar",
+          ],
+          properties: {
+            pago_id: { type: "integer", example: 42 },
+            payment_intent_id: { type: "string", nullable: true, example: "pi_123456789" },
+            client_secret: { type: "string", nullable: true, example: "pi_123_secret_abc" },
+            estado_local: {
+              type: "string",
+              enum: [
+                "pendiente",
+                "procesando",
+                "aprobado",
+                "rechazado",
+                "cancelado",
+                "reembolsado",
+                "reembolsado_parcial",
+              ],
+              example: "procesando",
+            },
+            estado_pasarela: { type: "string", example: "requires_payment_method" },
+            estado_intento: {
+              type: "string",
+              enum: [
+                "requiere_confirmacion",
+                "procesando",
+                "completado_en_pasarela",
+                "cancelado",
+              ],
+              example: "requiere_confirmacion",
+            },
+            monto: { type: "number", example: 1800 },
+            moneda: { type: "string", example: "GTQ" },
+            puede_confirmar: { type: "boolean", example: true },
+          },
+        },
+
+        IntentoActivoPagoResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: { type: "boolean", example: true },
+            statusCode: { type: "integer", example: 200 },
+            message: { type: "string", example: "Intento de pago activo obtenido correctamente" },
+            data: {
+              oneOf: [
+                { $ref: "#/components/schemas/IntentoActivoData" },
+                { type: "null" },
+              ],
+            },
+          },
+        },
+
+        PagoResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: { type: "boolean", example: true },
+            statusCode: { type: "integer", example: 200 },
+            message: { type: "string", example: "Pago obtenido correctamente" },
+            data: { $ref: "#/components/schemas/Pago" },
+          },
+        },
+
+        PagosResponse: {
+          type: "object",
+          required: ["success", "statusCode", "message", "data"],
+          properties: {
+            success: { type: "boolean", example: true },
+            statusCode: { type: "integer", example: 200 },
+            message: { type: "string", example: "Pagos obtenidos correctamente" },
+            data: {
+              type: "array",
+              items: { $ref: "#/components/schemas/Pago" },
             },
           },
         },

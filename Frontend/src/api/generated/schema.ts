@@ -4633,7 +4633,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PagosResponse"];
+                    };
                 };
                 /** @description Filtros inválidos */
                 400: {
@@ -4642,6 +4644,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
             };
@@ -4660,7 +4671,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CreatePagoRequest"];
                 };
             };
             responses: {
@@ -4670,19 +4681,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        /**
-                         * @example {
-                         *       "data": {
-                         *         "pago_id": 42,
-                         *         "payment_intent_id": "pi_test_example",
-                         *         "client_secret": "pi_test_example_secret_example",
-                         *         "estado": "procesando",
-                         *         "monto": 1000,
-                         *         "moneda": "GTQ"
-                         *       }
-                         *     }
-                         */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["CreatePagoResponse"];
                     };
                 };
                 /** @description Datos inválidos */
@@ -4694,6 +4693,24 @@ export interface paths {
                         "application/json": components["schemas"]["ValidationErrorResponse"];
                     };
                 };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No autorizado */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Carrito o reserva no encontrada */
                 404: {
                     headers: {
@@ -4703,7 +4720,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description El pago no puede aplicarse */
+                /** @description El pago excede el saldo o conflicto de idempotencia */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -4755,20 +4772,34 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        /**
-                         * @example {
-                         *       "success": true,
-                         *       "statusCode": 200,
-                         *       "message": "Resumen de pago obtenido correctamente",
-                         *       "data": {
-                         *         "total": 10000,
-                         *         "anticipo_requerido": 5000,
-                         *         "aprobado": 5000,
-                         *         "saldo": 5000
-                         *       }
-                         *     }
-                         */
-                        "application/json": unknown;
+                        "application/json": components["schemas"]["ResumenPagoResponse"];
+                    };
+                };
+                /** @description Parámetros inválidos */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No autorizado */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
                 /** @description Carrito o reserva no encontrada */
@@ -4782,6 +4813,93 @@ export interface paths {
                 };
                 /** @description Debe indicarse exactamente un origen */
                 422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pagos/intento-activo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recuperar intento de pago activo con tarjeta
+         * @description Consulta de solo lectura que recupera el intento de pago con tarjeta en curso para un carrito o reserva de habitación, verificando su estado real en Stripe. Si no existe un intento activo o en trámite, retorna data: null.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    carrito_id?: number;
+                    reserva_habitacion_id?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Intento de pago activo obtenido o verificado */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IntentoActivoPagoResponse"];
+                    };
+                };
+                /** @description Parámetros inválidos */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No autorizado */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Carrito o reserva no encontrada */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Error al consultar Stripe */
+                502: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -4825,7 +4943,27 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PagoResponse"];
+                    };
+                };
+                /** @description ID inválido */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
                 };
                 /** @description Usuario sin permisos */
                 403: {
@@ -4836,7 +4974,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Pago, carrito o reserva no encontrado */
+                /** @description Pago no encontrado */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -4886,7 +5024,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["PagoResponse"];
+                    };
                 };
                 /** @description ID inválido */
                 400: {
@@ -4895,6 +5035,24 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ValidationErrorResponse"];
+                    };
+                };
+                /** @description No autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No autorizado */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
                 /** @description Pago no encontrado */
@@ -4964,6 +5122,13 @@ export interface paths {
                 };
                 /** @description Datos inválidos */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No autenticado */
+                401: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -13009,6 +13174,168 @@ export interface components {
             /** @example Habitaciones disponibles obtenidas correctamente */
             message: string;
             data: components["schemas"]["HabitacionDisponible"][];
+        };
+        Pago: {
+            /** @example 42 */
+            id: number;
+            /** @example null */
+            reserva_habitacion_id?: number | null;
+            /** @example 15 */
+            carrito_id?: number | null;
+            monto: string | number;
+            /**
+             * @example tarjeta
+             * @enum {string}
+             */
+            metodo: "tarjeta" | "efectivo" | "transferencia";
+            /**
+             * @example procesando
+             * @enum {string}
+             */
+            estado: "pendiente" | "procesando" | "aprobado" | "rechazado" | "cancelado" | "reembolsado" | "reembolsado_parcial";
+            /** @example pi_123456789 */
+            id_transaccion_externo?: string | null;
+            /** @example GTQ */
+            moneda: string;
+            /**
+             * @example total
+             * @enum {string}
+             */
+            tipo_pago: "total" | "anticipo" | "saldo";
+            /** @example stripe */
+            pasarela?: string | null;
+            /** @example chk-u1-c15-xyz */
+            idempotency_key?: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-10-22T14:30:00.000Z
+             */
+            fecha_pago?: string | null;
+            /** @example null */
+            codigo_error_externo?: string | null;
+            /** @example null */
+            mensaje_error?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePagoRequest: {
+            carrito_id?: number | null;
+            reserva_habitacion_id?: number | null;
+            /** @example 1800 */
+            monto: number | string;
+            /**
+             * @example tarjeta
+             * @enum {string}
+             */
+            metodo: "tarjeta" | "efectivo" | "transferencia";
+            /**
+             * @example total
+             * @enum {string}
+             */
+            tipo_pago?: "total" | "anticipo" | "saldo";
+            /**
+             * @example GTQ
+             * @enum {string}
+             */
+            moneda: "GTQ";
+            /** @example chk-u1-c15-xyz */
+            idempotency_key?: string | null;
+        };
+        CreatePagoResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 201 */
+            statusCode: number;
+            /** @example Pago creado correctamente */
+            message: string;
+            data: {
+                /** @example 42 */
+                pago_id: number;
+                /** @example pi_123456789 */
+                payment_intent_id?: string;
+                /** @example pi_123_secret_abc */
+                client_secret?: string;
+                /** @example procesando */
+                estado: string;
+                /** @example 1800 */
+                monto: number | string;
+                /** @example GTQ */
+                moneda: string;
+            } | components["schemas"]["Pago"];
+        };
+        ResumenPagoData: {
+            /** @example 1800 */
+            total: number;
+            /** @example 1800 */
+            anticipo_requerido: number;
+            /** @example 0 */
+            aprobado: number;
+            /** @example 1800 */
+            saldo: number;
+        };
+        ResumenPagoResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Resumen de pago obtenido correctamente */
+            message: string;
+            data: components["schemas"]["ResumenPagoData"];
+        };
+        IntentoActivoData: {
+            /** @example 42 */
+            pago_id: number;
+            /** @example pi_123456789 */
+            payment_intent_id: string | null;
+            /** @example pi_123_secret_abc */
+            client_secret: string | null;
+            /**
+             * @example procesando
+             * @enum {string}
+             */
+            estado_local: "pendiente" | "procesando" | "aprobado" | "rechazado" | "cancelado" | "reembolsado" | "reembolsado_parcial";
+            /** @example requires_payment_method */
+            estado_pasarela: string;
+            /**
+             * @example requiere_confirmacion
+             * @enum {string}
+             */
+            estado_intento: "requiere_confirmacion" | "procesando" | "completado_en_pasarela" | "cancelado";
+            /** @example 1800 */
+            monto: number;
+            /** @example GTQ */
+            moneda: string;
+            /** @example true */
+            puede_confirmar: boolean;
+        };
+        IntentoActivoPagoResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Intento de pago activo obtenido correctamente */
+            message: string;
+            data: components["schemas"]["IntentoActivoData"] | null;
+        };
+        PagoResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Pago obtenido correctamente */
+            message: string;
+            data: components["schemas"]["Pago"];
+        };
+        PagosResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Pagos obtenidos correctamente */
+            message: string;
+            data: components["schemas"]["Pago"][];
         };
         ErrorResponse: {
             /** @example false */

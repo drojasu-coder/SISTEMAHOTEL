@@ -524,6 +524,58 @@ const findIdempotencyReplay = async (
   return existing;
 };
 
+
+const reconcileCanceledStripePayments = async (
+  originKey: Record<string, unknown>,
+  details: { origin: any; total: number },
+  transaction: any
+) => {
+  const candidates = await Pago.findAll({
+    where: {
+      ...originKey,
+      metodo: "tarjeta",
+      estado: { [Op.in]: ["procesando", "rechazado"] },
+      id_transaccion_externo: { [Op.ne]: null },
+    },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  for (const p of candidates) {
+    try {
+      const intent = await stripeService.retrievePaymentIntent(p.id_transaccion_externo);
+      if (intent.status === "canceled") {
+        await p.update({ estado: "cancelado" }, { transaction });
+      } else if (intent.status === "succeeded" && p.estado !== "aprobado") {
+        await p.update(
+          {
+            estado: "aprobado",
+            fecha_pago: new Date(),
+            codigo_error_externo: null,
+            mensaje_error: null,
+          },
+          { transaction }
+        );
+        const paid = await approvedAmount(originKey, transaction);
+        await applyCartPaid(details.origin, details.total, paid, transaction);
+        if (details.origin?.constructor?.name === "ReservaHabitacion") {
+          await confirmReservationIfFullyPaid(details.origin.id, transaction);
+        }
+      } else if (
+        p.estado === "rechazado" &&
+        ["requires_payment_method", "requires_confirmation", "requires_action", "processing"].includes(
+          intent.status
+        )
+      ) {
+        // Intento recuperable: en pasarela sigue activo; reservar capacidad para evitar cobro concurrente incompatible
+        await p.update({ estado: "procesando" }, { transaction });
+      }
+    } catch {
+      // Ignorar fallos de red hacia Stripe durante la reconciliación silenciosa
+    }
+  }
+};
+
 export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
   validateOrigin(data);
   if (!PAYMENT_METHODS.includes(data.metodo)) {
@@ -560,6 +612,8 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       transaction,
     );
     if (serializedReplay) return serializedReplay;
+
+    await reconcileCanceledStripePayments(details.key, details, transaction);
 
     const exposure = await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
@@ -958,3 +1012,118 @@ export const crearPago = createPago;
 export const obtenerResumenFinanciero = getResumenPago;
 export const getPaymentSummary = getResumenPago;
 export const aprobarPagoTransferencia = approveTransferencia;
+
+
+export type IntentoActivoEstado =
+  | "requiere_confirmacion"
+  | "procesando"
+  | "completado_en_pasarela"
+  | "cancelado";
+
+export interface IntentoActivoData {
+  pago_id: number;
+  payment_intent_id: string | null;
+  client_secret: string | null;
+  estado_local: string;
+  estado_pasarela: string;
+  estado_intento: IntentoActivoEstado;
+  monto: number;
+  moneda: string;
+  puede_confirmar: boolean;
+}
+
+export const getIntentoActivo = async (
+  origin: { carrito_id?: number; reserva_habitacion_id?: number },
+  requester: RequesterContext,
+): Promise<IntentoActivoData | null> => {
+  validateOrigin({ ...origin, monto: 1, metodo: "efectivo" });
+
+  const originKey = origin.carrito_id
+    ? { carrito_id: origin.carrito_id }
+    : { reserva_habitacion_id: origin.reserva_habitacion_id };
+
+  return sequelize.transaction(async (transaction: any) => {
+    await assertPaymentOriginOwnership(origin, requester, transaction);
+
+    const payment = await Pago.findOne({
+      where: {
+        ...originKey,
+        metodo: "tarjeta",
+        estado: {
+          [Op.in]: ["procesando", "rechazado", "pendiente"],
+        },
+      },
+      order: [["id", "DESC"]],
+      transaction,
+    });
+
+    if (!payment) {
+      return null;
+    }
+
+    if (!payment.id_transaccion_externo) {
+      return {
+        pago_id: payment.id,
+        payment_intent_id: null,
+        client_secret: null,
+        estado_local: payment.estado,
+        estado_pasarela: "sin_identificador",
+        estado_intento: "procesando",
+        monto: Number(payment.monto),
+        moneda: payment.moneda,
+        puede_confirmar: false,
+      };
+    }
+
+    let intent: Awaited<ReturnType<typeof stripeService.retrievePaymentIntent>>;
+    try {
+      intent = await stripeService.retrievePaymentIntent(payment.id_transaccion_externo);
+    } catch {
+      throw new AppError(
+        502,
+        "STRIPE_RETRIEVAL_FAILED",
+        "No fue posible consultar el estado del pago en Stripe",
+      );
+    }
+
+    let estado_intento: IntentoActivoEstado;
+    let puede_confirmar = false;
+
+    switch (intent.status) {
+      case "requires_payment_method":
+      case "requires_confirmation":
+      case "requires_action":
+        estado_intento = "requiere_confirmacion";
+        puede_confirmar = true;
+        break;
+      case "processing":
+        estado_intento = "procesando";
+        puede_confirmar = false;
+        break;
+      case "succeeded":
+        estado_intento = "completado_en_pasarela";
+        puede_confirmar = false;
+        break;
+      case "canceled":
+        estado_intento = "cancelado";
+        puede_confirmar = false;
+        break;
+      default:
+        estado_intento = "procesando";
+        puede_confirmar = false;
+        break;
+    }
+
+    return {
+      pago_id: payment.id,
+      payment_intent_id: intent.id,
+      client_secret: puede_confirmar ? intent.client_secret : null,
+      estado_local: payment.estado,
+      estado_pasarela: intent.status,
+      estado_intento,
+      monto: Number(payment.monto),
+      moneda: payment.moneda,
+      puede_confirmar,
+    };
+  });
+};

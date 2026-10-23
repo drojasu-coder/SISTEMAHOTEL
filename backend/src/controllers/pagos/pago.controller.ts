@@ -85,3 +85,18 @@ export const reembolso = async (req: Request, res: Response, next: NextFunction)
     res.status(200).json({ success: true, statusCode: 200, message: "Reembolso procesado correctamente", data });
   } catch (error) { next(error); }
 };
+
+export const intentoActivo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await pagoService.getIntentoActivo({
+      carrito_id: req.query.carrito_id ? Number(req.query.carrito_id) : undefined,
+      reserva_habitacion_id: req.query.reserva_habitacion_id ? Number(req.query.reserva_habitacion_id) : undefined,
+    }, req.user!);
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: data ? "Intento de pago activo obtenido correctamente" : "No existe un intento de pago activo",
+      data,
+    });
+  } catch (error) { next(error); }
+};

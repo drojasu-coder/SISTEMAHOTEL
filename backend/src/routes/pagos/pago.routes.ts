@@ -4,7 +4,14 @@ import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
 import { validateBody, validateParams, validateQuery } from "../../middlewares/validate.middleware";
 import { PAYMENT_ADMINISTRATIVE_ROLES } from "../../utils/paymentOwnership";
-import { createPagoSchema, pagoIdSchema, pagoQuerySchema, resumenPagoQuerySchema } from "../../validators/pagos/pago.validator";
+import {
+  createPagoSchema,
+  createReembolsoSchema,
+  intentoActivoQuerySchema,
+  pagoIdSchema,
+  pagoQuerySchema,
+  resumenPagoQuerySchema,
+} from "../../validators/pagos/pago.validator";
 
 const router = Router();
 const managementRoles = PAYMENT_ADMINISTRATIVE_ROLES;
@@ -41,70 +48,47 @@ router.use(authMiddleware);
  *       required: true
  *       content:
  *         application/json:
- *           examples:
- *             efectivo:
- *               summary: Pago en efectivo
- *               value:
- *                 carrito_id: 21
- *                 reserva_habitacion_id: null
- *                 monto: 1000
- *                 metodo: efectivo
- *                 tipo_pago: total
- *                 moneda: GTQ
- *                 idempotency_key: swagger-efectivo-001
- *             transferencia:
- *               summary: Transferencia pendiente de aprobación
- *               value:
- *                 carrito_id: 22
- *                 reserva_habitacion_id: null
- *                 monto: 5000
- *                 metodo: transferencia
- *                 tipo_pago: anticipo
- *                 moneda: GTQ
- *                 idempotency_key: swagger-transfer-001
- *             tarjeta:
- *               summary: Pago con tarjeta
- *               value:
- *                 carrito_id: 21
- *                 reserva_habitacion_id: null
- *                 monto: 1000
- *                 metodo: tarjeta
- *                 tipo_pago: saldo
- *                 moneda: GTQ
- *                 idempotency_key: swagger-card-001
+ *           schema:
+ *             $ref: '#/components/schemas/CreatePagoRequest'
  *     responses:
  *       201:
  *         description: Pago creado correctamente
  *         content:
  *           application/json:
- *             example:
- *               data:
- *                 pago_id: 42
- *                 payment_intent_id: pi_test_example
- *                 client_secret: pi_test_example_secret_example
- *                 estado: procesando
- *                 monto: 1000
- *                 moneda: GTQ
+ *             schema:
+ *               $ref: '#/components/schemas/CreatePagoResponse'
  *       400:
  *         description: Datos inválidos
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Carrito o reserva no encontrada
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       422:
- *         description: Datos de pago o método no válidos
+ *       409:
+ *         description: El pago excede el saldo o conflicto de idempotencia
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: El pago no puede aplicarse
+ *       422:
+ *         description: Datos de pago o método no válidos
  *         content:
  *           application/json:
  *             schema:
@@ -130,13 +114,24 @@ router.post("/", validateBody(createPagoSchema), controller.create);
  *       - { in: query, name: carrito_id, schema: { type: integer, minimum: 1 } }
  *       - { in: query, name: reserva_habitacion_id, schema: { type: integer, minimum: 1 } }
  *     responses:
- *       200: { description: Pagos obtenidos correctamente }
+ *       200:
+ *         description: Pagos obtenidos correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PagosResponse'
  *       400:
  *         description: Filtros inválidos
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/", validateQuery(pagoQuerySchema), controller.getAll);
 
@@ -155,15 +150,26 @@ router.get("/", validateQuery(pagoQuerySchema), controller.getAll);
  *         description: Resumen de pago obtenido correctamente
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               statusCode: 200
- *               message: Resumen de pago obtenido correctamente
- *               data:
- *                 total: 10000
- *                 anticipo_requerido: 5000
- *                 aprobado: 5000
- *                 saldo: 5000
+ *             schema:
+ *               $ref: '#/components/schemas/ResumenPagoResponse'
+ *       400:
+ *         description: Parámetros inválidos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Carrito o reserva no encontrada
  *         content:
@@ -181,6 +187,60 @@ router.get("/resumen", validateQuery(resumenPagoQuerySchema), controller.resumen
 
 /**
  * @openapi
+ * /api/pagos/intento-activo:
+ *   get:
+ *     tags: [Pagos]
+ *     summary: Recuperar intento de pago activo con tarjeta
+ *     description: >
+ *       Consulta de solo lectura que recupera el intento de pago con tarjeta en curso
+ *       para un carrito o reserva de habitación, verificando su estado real en Stripe.
+ *       Si no existe un intento activo o en trámite, retorna data: null.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - { in: query, name: carrito_id, schema: { type: integer, minimum: 1 } }
+ *       - { in: query, name: reserva_habitacion_id, schema: { type: integer, minimum: 1 } }
+ *     responses:
+ *       200:
+ *         description: Intento de pago activo obtenido o verificado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/IntentoActivoPagoResponse'
+ *       400:
+ *         description: Parámetros inválidos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Carrito o reserva no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       502:
+ *         description: Error al consultar Stripe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get("/intento-activo", validateQuery(intentoActivoQuerySchema), controller.intentoActivo);
+
+/**
+ * @openapi
  * /api/pagos/{id}/aprobar-transferencia:
  *   post:
  *     tags: [Pagos]
@@ -188,9 +248,32 @@ router.get("/resumen", validateQuery(resumenPagoQuerySchema), controller.resumen
  *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer, minimum: 1 } }]
  *     responses:
- *       200: { description: Transferencia aprobada correctamente }
+ *       200:
+ *         description: Transferencia aprobada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PagoResponse'
+ *       400:
+ *         description: ID inválido
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationErrorResponse'
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Usuario sin permisos
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
- *         description: Pago, carrito o reserva no encontrado
+ *         description: Pago no encontrado
  *         content:
  *           application/json:
  *             schema:
@@ -201,7 +284,6 @@ router.get("/resumen", validateQuery(resumenPagoQuerySchema), controller.resumen
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       403: { description: Usuario sin permisos, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
  */
 router.post("/:id/aprobar-transferencia", requireRole(...managementRoles), validateParams(pagoIdSchema), controller.aprobarTransferencia);
 
@@ -214,14 +296,36 @@ router.post("/:id/aprobar-transferencia", requireRole(...managementRoles), valid
  *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer, minimum: 1 } }]
  *     responses:
- *       200: { description: Pago obtenido correctamente }
+ *       200:
+ *         description: Pago obtenido correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PagoResponse'
  *       400:
  *         description: ID inválido
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ValidationErrorResponse'
- *       404: { description: Pago no encontrado, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ *       401:
+ *         description: No autenticado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: No autorizado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Pago no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/:id", validateParams(pagoIdSchema), controller.getById);
 
@@ -252,12 +356,12 @@ router.get("/:id", validateParams(pagoIdSchema), controller.getById);
  *     responses:
  *       200: { description: Reembolso procesado correctamente }
  *       400: { description: Datos inválidos }
+ *       401: { description: No autenticado }
  *       403: { description: Permisos insuficientes (INSUFFICIENT_PERMISSIONS) }
  *       404: { description: Pago no encontrado }
  *       409: { description: Conflicto de negocio (monto excede el pagado) }
  *       422: { description: Regla de negocio no cumplida }
  */
-import { createReembolsoSchema } from "../../validators/pagos/pago.validator";
 router.post("/:id/reembolso", requireRole(...managementRoles), validateParams(pagoIdSchema), validateBody(createReembolsoSchema), controller.reembolso);
 
 export default router;

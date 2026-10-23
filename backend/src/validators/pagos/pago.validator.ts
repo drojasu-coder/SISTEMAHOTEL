@@ -42,6 +42,14 @@ export const resumenPagoQuerySchema = z.object({
   "Debe indicar exactamente un carrito o una reserva de habitación",
 );
 
+export const intentoActivoQuerySchema = z.object({
+  carrito_id: positiveId.optional(),
+  reserva_habitacion_id: positiveId.optional(),
+}).strict().refine(
+  (value) => Boolean(value.carrito_id) !== Boolean(value.reserva_habitacion_id),
+  "Debe indicar exactamente un carrito o una reserva de habitación",
+);
+
 export const createReembolsoSchema = z.object({
   monto: z.union([
     z.number().positive(),

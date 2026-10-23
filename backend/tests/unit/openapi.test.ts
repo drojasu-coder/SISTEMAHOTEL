@@ -83,8 +83,8 @@ describe("generated OpenAPI contract", () => {
       0,
     );
 
-    expect(Object.keys(paths)).toHaveLength(94);
-    expect(operations).toBe(185);
+    expect(Object.keys(paths)).toHaveLength(95);
+    expect(operations).toBe(186);
   });
   it("contains complete reservas and disponibilidad schemas and contract responses (BE-011, BE-012)", () => {
     const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
@@ -255,5 +255,71 @@ describe("generated OpenAPI contract", () => {
     expect(itemResource.delete.responses["403"]).toBeDefined();
     expect(itemResource.delete.responses["404"]).toBeDefined();
     expect(itemResource.delete.responses["409"]).toBeDefined();
+  });
+  it("contains complete pagos schemas and contract responses (BE-014)", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    // Component schemas
+    expect(schemas.Pago).toBeDefined();
+    expect(schemas.CreatePagoRequest).toBeDefined();
+    expect(schemas.CreatePagoResponse).toBeDefined();
+    expect(schemas.ResumenPagoData).toBeDefined();
+    expect(schemas.ResumenPagoResponse).toBeDefined();
+    expect(schemas.IntentoActivoData).toBeDefined();
+    expect(schemas.IntentoActivoPagoResponse).toBeDefined();
+    expect(schemas.PagoResponse).toBeDefined();
+    expect(schemas.PagosResponse).toBeDefined();
+
+    // Required fields & contracts
+    expect(schemas.CreatePagoRequest.required).toEqual(["monto", "metodo", "moneda"]);
+    expect(schemas.IntentoActivoData.properties.payment_intent_id.nullable).toBe(true);
+
+    // Endpoints
+    const pagosCollection = paths["/api/pagos"];
+    const pagosResumen = paths["/api/pagos/resumen"];
+    const pagosIntentoActivo = paths["/api/pagos/intento-activo"];
+    const pagoResource = paths["/api/pagos/{id}"];
+
+    // GET /api/pagos
+    expect(pagosCollection.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/PagosResponse"
+    );
+
+    // POST /api/pagos
+    expect(pagosCollection.post.requestBody.content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/CreatePagoRequest"
+    );
+    expect(pagosCollection.post.responses["201"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/CreatePagoResponse"
+    );
+    expect(pagosCollection.post.responses["400"]).toBeDefined();
+    expect(pagosCollection.post.responses["401"]).toBeDefined();
+    expect(pagosCollection.post.responses["409"]).toBeDefined();
+    expect(pagosCollection.post.responses["422"]).toBeDefined();
+
+    // GET /api/pagos/resumen
+    expect(pagosResumen.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/ResumenPagoResponse"
+    );
+    expect(pagosResumen.get.responses["400"]).toBeDefined();
+    expect(pagosResumen.get.responses["401"]).toBeDefined();
+    expect(pagosResumen.get.responses["404"]).toBeDefined();
+
+    // GET /api/pagos/intento-activo
+    expect(pagosIntentoActivo.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/IntentoActivoPagoResponse"
+    );
+    expect(pagosIntentoActivo.get.responses["400"]).toBeDefined();
+    expect(pagosIntentoActivo.get.responses["401"]).toBeDefined();
+
+    // GET /api/pagos/{id}
+    expect(pagoResource.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/PagoResponse"
+    );
+    expect(pagoResource.get.responses["400"]).toBeDefined();
+    expect(pagoResource.get.responses["401"]).toBeDefined();
+    expect(pagoResource.get.responses["403"]).toBeDefined();
+    expect(pagoResource.get.responses["404"]).toBeDefined();
   });
 });

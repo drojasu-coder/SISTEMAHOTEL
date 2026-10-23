@@ -78,8 +78,8 @@ export interface CreatePagoInput {
  */
 export interface CreatePagoSuccessData {
   pago_id: number;
-  payment_intent_id?: string;
-  client_secret?: string;
+  payment_intent_id?: string | null;
+  client_secret?: string | null;
   estado: EstadoPago;
   monto: number;
   moneda: string;
@@ -101,7 +101,7 @@ export type IntentoActivoEstado =
  */
 export interface IntentoActivoData {
   pago_id: number;
-  payment_intent_id: string;
+  payment_intent_id: string | null;
   client_secret: string | null;
   estado_local: EstadoPago;
   estado_pasarela: string;
