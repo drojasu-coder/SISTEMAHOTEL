@@ -1,13 +1,39 @@
+import { Op } from "sequelize";
+
 import { AppError } from "../../utils/AppError";
 
 const db = require("../../models");
 
 const {
+  sequelize,
   Habitacion,
   Sucursal,
   TipoHabitacion,
   ReservaHabitacion,
 } = db;
+
+const getTodayDate = () => {
+  const timeZone =
+    process.env.APP_TIMEZONE ||
+    "America/Guatemala";
+
+  const parts = new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }
+  ).formatToParts(new Date());
+
+  const getPart = (type: string) =>
+    parts.find(
+      (part) => part.type === type
+    )?.value;
+
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+};
 
 interface CreateHabitacionData {
   sucursal_id: number;
@@ -98,8 +124,17 @@ export const createHabitacion = async (
 export const updateHabitacion = async (
   id: number,
   data: UpdateHabitacionData
-) => {
-  const habitacion = await Habitacion.findByPk(id);
+) => sequelize.transaction(async (transaction: any) => {
+  /**
+   * Esta ruta bloquea Habitación objetivo -> consulta reservas sin bloquearlas.
+   * Crear reserva usa Habitación -> disponibilidad -> INSERT; el PATCH de
+   * reserva conserva Reserva origen -> Habitación destino -> disponibilidad.
+   * No tomar luego locks de Reserva evita invertir el orden de QA-023.
+   */
+  const habitacion = await Habitacion.findByPk(id, {
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
 
   if (!habitacion) {
     throw new AppError(
@@ -111,7 +146,8 @@ export const updateHabitacion = async (
 
   if (data.sucursal_id !== undefined) {
     const sucursal = await Sucursal.findByPk(
-      data.sucursal_id
+      data.sucursal_id,
+      { transaction }
     );
 
     if (!sucursal) {
@@ -125,7 +161,8 @@ export const updateHabitacion = async (
 
   if (data.tipo_habitacion_id !== undefined) {
     const tipoHabitacion = await TipoHabitacion.findByPk(
-      data.tipo_habitacion_id
+      data.tipo_habitacion_id,
+      { transaction }
     );
 
     if (!tipoHabitacion) {
@@ -152,6 +189,7 @@ export const updateHabitacion = async (
         sucursal_id: sucursalId,
         numero,
       },
+      transaction,
     });
 
     if (
@@ -166,10 +204,40 @@ export const updateHabitacion = async (
     }
   }
 
-  await habitacion.update(data);
+  if (
+    data.estado === "mantenimiento" &&
+    habitacion.estado !== "mantenimiento"
+  ) {
+    const reservaFuturaActiva =
+      await ReservaHabitacion.findOne({
+        where: {
+          habitacion_id: id,
+          estado: {
+            [Op.in]: [
+              "pendiente",
+              "confirmada",
+            ],
+          },
+          fecha_salida: {
+            [Op.gt]: getTodayDate(),
+          },
+        },
+        transaction,
+      });
+
+    if (reservaFuturaActiva) {
+      throw new AppError(
+        409,
+        "ROOM_HAS_FUTURE_RESERVATIONS",
+        "La habitación tiene reservas futuras activas y no puede entrar en mantenimiento"
+      );
+    }
+  }
+
+  await habitacion.update(data, { transaction });
 
   return habitacion;
-};
+});
 
 export const deleteHabitacion = async (
   id: number

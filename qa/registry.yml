@@ -1790,6 +1790,167 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FUNC-CANDIDATE-026
+    status: closed
+    severity: medium
+    category: FUNC
+    title: >-
+      Habitación permite entrar en mantenimiento mientras conserva una
+      ReservaHabitacion futura activa
+    approved_product_rule:
+      maintenance_with_future_active_reservations: forbidden
+      maintenance_conflict_error: "HTTP 409 / ROOM_HAS_FUTURE_RESERVATIONS"
+      automatic_cancellation: false
+      automatic_reassignment: false
+      cleaning_is_temporary: true
+      cleaning_blocks_future_reservations: false
+    invariant: >-
+      Una Habitación no puede cambiar a mantenimiento mientras tenga una
+      ReservaHabitacion futura activa. El endpoint administrativo debe responder
+      HTTP 409 ROOM_HAS_FUTURE_RESERVATIONS y conservar tanto el estado de la
+      habitación como la reserva y su asociación. Limpieza, por ser temporal, no
+      bloquea por sí sola la creación de una reserva futura válida.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/habitacion.lifecycle.test.ts
+      test_name: "QA-RH-FUNC-CANDIDATE-026: rechaza mantenimiento con una reserva futura activa y permite reservar limpieza"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/habitacion.lifecycle.test.ts
+      maintenance_endpoint: PATCH /api/habitaciones/{id}
+      reservation_endpoint: POST /api/reservas-habitacion
+      requester_role: admin
+      reservation_owner_role: cliente
+      dates: "fecha_entrada=hoy local +2; fecha_salida=hoy local +4"
+      timezone: "APP_TIMEZONE o America/Guatemala"
+      active_state: pendiente
+      active_state_basis: >-
+        Es el estado natural producido por POST y pertenece al conjunto vigente
+        pendiente/confirmada que bloquea disponibilidad.
+      payments_used: false
+      cart_used: false
+      stripe_used: false
+    expected:
+      maintenance_http_status: 409
+      maintenance_code: ROOM_HAS_FUTURE_RESERVATIONS
+      room_state_after_attempt: disponible
+      reservation_state_after_attempt: pendiente
+      reservation_room_after_attempt: unchanged
+      automatic_cancellation: false
+      automatic_reassignment: false
+      maintenance_room_with_future_active_reservation: false
+      cleaning_reservation_http_status: 201
+    actual:
+      hotel_local_today: "2026-10-22"
+      fecha_entrada: "2026-10-24"
+      fecha_salida: "2026-10-26"
+      future: true
+      initial_room_state: disponible
+      initial_reservation_state: pendiente
+      maintenance_http_status: 200
+      maintenance_code: null
+      room_state_after_attempt: mantenimiento
+      reservation_state_after_attempt: pendiente
+      reservation_room_after_attempt: 1
+      automatic_cancellation: false
+      automatic_reassignment: false
+      maintenance_room_with_future_active_reservation: true
+      cleaning_tested: true
+      cleaning_reservation_http_status: 201
+      cleaning_reservation_code: null
+      invariant_violated: true
+      red_result: >-
+        1 archivo falló, 1 test falló con 3 aserciones soft: HTTP 200 en lugar
+        de 409, código ausente y estado mantenimiento persistido en lugar de
+        conservar disponible.
+    http_evidence:
+      reservation_create: "HTTP 201; code null; estado pendiente"
+      maintenance_attempt: >-
+        HTTP 200 sin code; success=true y mensaje "Habitación actualizada
+        correctamente".
+      cleaning_reservation: "HTTP 201; code null; estado pendiente"
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_maintenance: >-
+        habitación id=1 estado=disponible; reserva id=1 habitacion_id=1,
+        2026-10-24/2026-10-26, estado=pendiente.
+      after_maintenance: >-
+        habitación id=1 estado=mantenimiento; reserva id=1 habitacion_id=1,
+        2026-10-24/2026-10-26, estado=pendiente.
+      reservation_unchanged: true
+      reservation_assignment_preserved: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+      cleaning_subcase: >-
+        habitación id=2 estado=limpieza aceptó por API la reserva id=2,
+        habitacion_id=2, 2026-10-24/2026-10-26, estado=pendiente.
+    suspected_execution_path: >-
+      habitacion.routes PATCH /:id -> habitacion.controller.updateHabitacion ->
+      habitacion.service.updateHabitacion. El servicio obtiene la Habitación,
+      valida únicamente referencias y unicidad cuando corresponden, y ejecuta
+      habitacion.update(data) sin consultar reservas_habitacion futuras en
+      estado pendiente o confirmada. Por ello persiste mantenimiento y deja la
+      reserva futura intacta y asociada.
+    root_cause: >-
+      updateHabitacion no tenía una regla de transición a mantenimiento ni una
+      transacción que serializara esa transición con la creación o el traslado
+      de reservas. Persistía estado=mantenimiento sin consultar reservas activas
+      cuya fecha_salida aún fuera posterior a la fecha local del hotel.
+    correction: >-
+      updateHabitacion ahora ejecuta el flujo completo dentro de una transacción,
+      bloquea la Habitación objetivo con SELECT FOR UPDATE y, únicamente en una
+      transición efectiva hacia mantenimiento, consulta reservas de esa misma
+      habitación en estado pendiente o confirmada con fecha_salida posterior a
+      la fecha local actual. Ante conflicto lanza AppError HTTP 409
+      ROOM_HAS_FUTURE_RESERVATIONS antes del UPDATE. No cancela, reasigna ni
+      modifica reservas; limpieza conserva su comportamiento.
+    concurrency: >-
+      La ruta de Habitación usa Habitación objetivo -> consulta de reservas sin
+      lock -> UPDATE de Habitación. POST de ReservaHabitacion usa Habitación ->
+      disponibilidad -> INSERT, por lo que ambos flujos se serializan sobre la
+      misma fila. PATCH de ReservaHabitacion conserva el orden corregido en
+      QA-RH-CONC-CANDIDATE-023: ReservaHabitacion origen -> Habitación destino ->
+      disponibilidad -> UPDATE. La nueva ruta no toma locks de reservas después
+      del lock de habitación, evitando invertir ese orden.
+    severity_recommendation: medium
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      red_focused: "1 file failed, 1 test failed por la violación esperada"
+      focused_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/habitacion.lifecycle.test.ts
+      focused_test: "1 file passed, 1 test passed"
+      maintenance_conflict: "HTTP 409 / ROOM_HAS_FUTURE_RESERVATIONS"
+      room_and_reservation_preserved: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+      cleaning_reservation: "HTTP 201; persisted pendiente in the same room"
+      maintenance_without_future_reservations: "NOT TESTED; no existing Habitación/update test was found"
+      module_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.test.ts
+      module_test: "1 file passed, 36 tests passed"
+      qa_025_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.lifecycle.test.ts
+      qa_025: "1 file passed, 1 test passed"
+      qa_023_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts
+      qa_023: "1 file passed, 1 test passed"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified:
+        - backend/src/services/habitaciones/habitacion.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-22"
+
   - id: QA-RH-FUNC-CANDIDATE-025
     status: closed
     severity: medium
