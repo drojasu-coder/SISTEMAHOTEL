@@ -1790,6 +1790,170 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-AUTH-SEC-CANDIDATE-032
+    status: closed
+    severity: high
+    category: AUTH
+    title: >-
+      Cliente autenticado consulta facturas e ítems fiscales pertenecientes a
+      otro usuario
+    invariant: >-
+      Un cliente autenticado solo puede consultar sus propios datos fiscales.
+      Una Factura del Cliente A y cualquier FacturaItem ligado no pueden aparecer
+      en listas ni consultas directas del Cliente B; un administrador autorizado
+      puede conservar lectura global.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/auth/facturaOwnership.test.ts
+      test_name: "QA-AUTH-SEC-CANDIDATE-032: cliente no consulta facturas ni ítems fiscales de otro usuario"
+      command: >-
+        npm --prefix backend test -- tests/auth/facturaOwnership.test.ts
+      database: hotel_test_db
+      stripe_used: false
+      payments_used: false
+      cart_used: false
+      clients_created_through_public_register: true
+      client_b_token_obtained_through_login: true
+    scenario:
+      client_a: "id=1; rol=cliente"
+      client_b: "id=2; rol=cliente"
+      factura_a: >-
+        id=1; usuario_id=1; nit=NIT-QA-A-032; nombre_fiscal=Cliente A Fiscal
+        QA 032; direccion_fiscal=Avenida Privada QA 032, Guatemala;
+        subtotal=125.00; iva=15.00; total=140.00; estado=pendiente
+      factura_item_a: >-
+        id=1; factura_id=1; descripcion=Servicio privado QA AUTH 032;
+        cantidad=2; precio_unitario=62.50; subtotal=125.00
+    expected:
+      client_b_list_facturas: "HTTP 403 o HTTP 200 filtrado sin factura A"
+      client_b_get_factura_a: "HTTP 403 o 404"
+      client_b_list_factura_items: "HTTP 403 o HTTP 200 filtrado sin ítem A"
+      client_b_get_factura_item_a: "HTTP 403 o 404"
+      fiscal_data_exposed: false
+      owner_access: allowed
+      admin_global_access: allowed
+      database_modified_by_reads: false
+    actual:
+      client_b_list_facturas: >-
+        HTTP 200; code null; la lista contiene Factura id=1 de usuario_id=1
+      client_b_get_factura_a: >-
+        HTTP 200; code null; devuelve Factura id=1, usuario_id=1 y los datos
+        fiscales exactos de Cliente A
+      client_b_list_factura_items: >-
+        HTTP 200; code null; la lista contiene FacturaItem id=1 ligado a
+        factura_id=1
+      client_b_get_factura_item_a: >-
+        HTTP 200; code null; devuelve FacturaItem id=1 ligado a factura_id=1
+      owner_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      admin_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      fiscal_data_exposed: true
+      database_modified_by_reads: false
+      authorization_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 7 aserciones soft: ambas listas
+        incluyeron recursos ajenos, ambas consultas directas respondieron 200 y
+        devolvieron los recursos del Cliente A, y se expusieron sus datos fiscales.
+    http_evidence:
+      client_b_list_facturas_status: 200
+      client_b_list_facturas_code: null
+      foreign_factura_present_in_list: true
+      client_b_get_factura_status: 200
+      client_b_get_factura_code: null
+      foreign_factura_body_returned: true
+      fiscal_data_exposed: true
+      client_b_list_factura_items_status: 200
+      client_b_list_factura_items_code: null
+      foreign_item_present_in_list: true
+      client_b_get_factura_item_status: 200
+      client_b_get_factura_item_code: null
+      foreign_item_body_returned: true
+      owner_factura_status: 200
+      owner_item_status: 200
+      admin_factura_status: 200
+      admin_item_status: 200
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      factura_count_before_and_after_reads: 1
+      factura_item_count_before_and_after_reads: 1
+      factura_snapshot_unchanged: true
+      factura_item_snapshot_unchanged: true
+      database_modified_by_reads: false
+      factura: >-
+        id=1; usuario_id=1; nit=NIT-QA-A-032; nombre_fiscal=Cliente A Fiscal
+        QA 032; direccion_fiscal=Avenida Privada QA 032, Guatemala;
+        subtotal=125.00; iva=15.00; porcentaje_iva=12.00; total=140.00;
+        estado=pendiente
+      factura_item: >-
+        id=1; factura_id=1; descripcion=Servicio privado QA AUTH 032;
+        cantidad=2; precio_unitario=62.50; subtotal=125.00
+    suspected_execution_path: >-
+      GET /api/facturas y GET /api/facturas/{id} aplican únicamente
+      authMiddleware y los controllers llaman getAllFacturas/findAll o
+      getFacturaById/findByPk sin recibir ni comparar req.user. GET
+      /api/factura-items y GET /api/factura-items/{id} siguen el mismo patrón:
+      autentican, pero getAllFacturaItems/findAll y getFacturaItemById/findByPk
+      no enlazan el ítem con Factura.usuario_id ni verifican propietario o rol.
+    root_cause: >-
+      Los endpoints GET autenticaban la solicitud, pero los controllers no
+      propagaban req.user a los services. Las consultas findAll/findByPk se
+      ejecutaban sin condiciones de propietario y FacturaItem no enlazaba su
+      factura para comprobar Factura.usuario_id.
+    correction: >-
+      Los controllers de lectura ahora pasan exclusivamente req.user validado por
+      authMiddleware. Para rol cliente, Factura aplica usuario_id en el WHERE de
+      PostgreSQL y las consultas de FacturaItem usan un INNER JOIN requerido con
+      Factura y WHERE Factura.usuario_id. Las consultas por id combinan id y
+      propiedad y responden 404 cuando el recurso no está dentro del scope. Los
+      demás roles autenticados conservan el acceso global previo y las mutaciones
+      siguen usando helpers internos sin cambios de autorización.
+    severity_recommendation: high
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed; 7 aserciones de autorización fallaron"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-23"
+    final_verification:
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_named: "1 file passed, 1 test passed"
+      focused_file: "1 file passed, 1 test passed"
+      client_b_list_facturas: "HTTP 200; lista vacía; factura ajena ausente"
+      client_b_get_factura_a: "HTTP 404 FACTURA_NOT_FOUND; body ajeno ausente"
+      client_b_list_factura_items: "HTTP 200; lista vacía; ítem ajeno ausente"
+      client_b_get_factura_item_a: >-
+        HTTP 404 FACTURA_ITEM_NOT_FOUND; body ajeno ausente
+      fiscal_data_exposed: false
+      owner_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      admin_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      database_modified_by_reads: false
+      authorization_violation: false
+      related_factura_tests: "no existen otros archivos de test de Factura"
+      related_factura_item_tests: "no existen otros archivos de test de FacturaItem"
+      requested_typecheck_command: >-
+        npm --prefix backend exec tsc -- --noEmit devolvió ayuda de tsc y exit 1
+        por interpretación del wrapper npm local
+      fallback_typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: green
+      production_files_modified:
+        - backend/src/controllers/habitaciones/factura.controller.ts
+        - backend/src/controllers/habitaciones/facturaItem.controller.ts
+        - backend/src/services/habitaciones/factura.service.ts
+        - backend/src/services/habitaciones/facturaItem.service.ts
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+      verified_at: "2026-10-23"
+
   - id: QA-RH-FIN-CANDIDATE-031
     status: closed
     severity: medium

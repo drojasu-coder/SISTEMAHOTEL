@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import { getIvaValue } from "../configuracion.service";
+import { ROLES, Role } from "../../constants/roles";
 
 const db = require("../../models");
 const { Factura, FacturaItem, Usuario } = db;
@@ -17,6 +18,11 @@ type UpdateFacturaData = Partial<CreateFacturaData> & {
   estado?: "pendiente" | "pagada" | "anulada";
 };
 
+interface RequestingUser {
+  id: number;
+  rol: Role;
+}
+
 const validateUsuario = async (usuarioId: number) => {
   const usuario = await Usuario.findByPk(usuarioId);
   if (!usuario) {
@@ -30,11 +36,35 @@ const calculateTotals = (subtotal: number, porcentajeIva: number) => {
   return { subtotal, iva, total, porcentaje_iva: porcentajeIva };
 };
 
-export const getAllFacturas = async () =>
-  Factura.findAll({ order: [["id", "ASC"]] });
-
-export const getFacturaById = async (id: number) => {
+const getFacturaByIdOrFail = async (id: number) => {
   const factura = await Factura.findByPk(id);
+  if (!factura) {
+    throw new AppError(404, "FACTURA_NOT_FOUND", "La factura no fue encontrada");
+  }
+  return factura;
+};
+
+export const getAllFacturas = async (requestingUser: RequestingUser) =>
+  Factura.findAll({
+    where:
+      requestingUser.rol === ROLES.CLIENTE
+        ? { usuario_id: requestingUser.id }
+        : undefined,
+    order: [["id", "ASC"]],
+  });
+
+export const getFacturaById = async (
+  id: number,
+  requestingUser: RequestingUser
+) => {
+  const factura = await Factura.findOne({
+    where: {
+      id,
+      ...(requestingUser.rol === ROLES.CLIENTE
+        ? { usuario_id: requestingUser.id }
+        : {}),
+    },
+  });
   if (!factura) {
     throw new AppError(404, "FACTURA_NOT_FOUND", "La factura no fue encontrada");
   }
@@ -56,7 +86,7 @@ export const createFactura = async (data: CreateFacturaData) => {
 };
 
 export const updateFactura = async (id: number, data: UpdateFacturaData) => {
-  const factura = await getFacturaById(id);
+  const factura = await getFacturaByIdOrFail(id);
   if (data.usuario_id !== undefined) {
     await validateUsuario(data.usuario_id);
   }
@@ -77,7 +107,7 @@ export const updateFactura = async (id: number, data: UpdateFacturaData) => {
 };
 
 export const deleteFactura = async (id: number) => {
-  const factura = await getFacturaById(id);
+  const factura = await getFacturaByIdOrFail(id);
   const facturaItem = await FacturaItem.findOne({ where: { factura_id: id } });
   if (facturaItem) {
     throw new AppError(
@@ -92,7 +122,7 @@ export const deleteFactura = async (id: number) => {
 };
 
 export const recalcularTotales = async (facturaId: number) => {
-  const factura = await getFacturaById(facturaId);
+  const factura = await getFacturaByIdOrFail(facturaId);
   const facturaItems = await FacturaItem.findAll({
     where: { factura_id: facturaId },
   });
