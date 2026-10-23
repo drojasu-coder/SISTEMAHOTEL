@@ -23,15 +23,14 @@
 - **Flujo afectado:** operaciones de checkout y pagos (`/api/pagos`, `/api/pagos/intento-activo`, `/api/pagos/resumen`, `/api/pagos/:id`, `/api/pagos/stripe/webhook`).
 - **Estado de funcionamiento:** las operaciones del backend funcionan correctamente en tiempo de ejecución: `POST /api/pagos` crea los pagos y PaymentIntents de Stripe, valida propiedad del origen y unicidad de idempotencia con replay seguro si se reenvía la misma clave; `GET /api/pagos/resumen` calcula importes y saldos; `GET /api/pagos/:id` consulta el estado garantizando aislamiento de usuario; y el webhook de Stripe confirma transiciones hacia `aprobado`, `pagado` y `confirmada`.
 - **Detalle de las diferencias observadas:**
-  1. En `backend/src/docs/swagger.ts`, no existen esquemas para `Pago`, `ResumenPagoData`, `CreatePagoRequest`, `PagoCreatedData`, `PagoCreatedResponse`, `ResumenPagoResponse` ni `PagoResponse`.
-  2. En `backend/src/routes/pagos/pago.routes.ts`, los endpoints emplean ejemplos planos (`example:`) en lugar de referencias formales (`$ref: '#/components/schemas/...'`).
-  3. Recuperación autorizada de intento en curso: si el cliente pierde su clave de idempotencia o ingresa desde una sesión distinta mientras existe un pago en estado `procesando` con tarjeta, un nuevo intento lanza `409 PAYMENT_EXCEEDS_BALANCE` porque la capacidad financiera queda reservada. Se requiere un endpoint formal `GET /api/pagos/intento-activo?carrito_id=X` que permita recuperar el `client_secret` fresco de Stripe si sigue activo, o transicionar localmente a `cancelado` si en Stripe el intento expiró/fue cancelado.
+  1. En `backend/src/docs/swagger.ts`, no existían esquemas para `Pago`, `ResumenPagoData`, `CreatePagoRequest`, `PagoCreatedData`, `PagoCreatedResponse`, `ResumenPagoResponse` ni `PagoResponse`.
+  2. En `backend/src/routes/pagos/pago.routes.ts`, los endpoints empleaban ejemplos planos (`example:`) en lugar de referencias formales (`$ref: '#/components/schemas/...'`).
+  3. Recuperación autorizada de intento en curso: si el cliente pierde su clave de idempotencia o ingresa desde una sesión distinta mientras existe un pago en estado `procesando` con tarjeta, un nuevo intento lanza `409 PAYMENT_EXCEEDS_BALANCE` porque la capacidad financiera queda reservada.
 - **Criterio para cierre definitivo en backend:**
-  - Implementar `GET /api/pagos/intento-activo?carrito_id=X` con verificación de propiedad del carrito, consulta de PaymentIntent en Stripe y sincronización de estado.
+  - Implementar `GET /api/pagos/intento-activo?carrito_id=X` con verificación de propiedad del carrito, consulta de PaymentIntent en Stripe y sincronización de estado sin escrituras en GET.
   - Declarar esquemas canónicos `Pago`, `ResumenPagoData`, `CreatePagoRequest`, `PagoCreatedData`, `PagoCreatedResponse`, `ResumenPagoResponse` y `PagoResponse` en `backend/src/docs/swagger.ts`.
   - Vincular las referencias `$ref` en `pago.routes.ts` para respuestas 200, 201 y esquemas de error (400, 401, 403, 404, 409, 422).
   - Verificar con pruebas de esquema OpenAPI y pruebas HTTP contra `hotel_test_db`.
   - Regenerar tipos en `Frontend/src/api/generated/schema.ts`.
-- **Parte del frontend que queda pendiente:**
-  - El frontend utiliza tipos manuales centralizados en `Frontend/src/features/pagos/types.ts` y cliente HTTP preparado en `Frontend/src/features/pagos/api/pagosApi.ts`.
-- **Estado:** backend disponible / integración pendiente.
+- **Resolución parcial:** Implementado endpoint de recuperación de intento activo y conciliación de cancelaciones en `pago.service.ts` y rutas; esquemas OpenAPI documentados en `swagger.ts` y rutas; 17 pruebas de integración HTTP sobre `hotel_test_db` pasando (incluyendo 20 replays concurrentes, recuperación de intentos y reconciliación de cancelaciones conservando aprobaciones concurrentes); tipos regenerados en `schema.ts`. Integradas pantallas `CheckoutPage` y `PagoResultadoPage` en frontend con 25 pruebas unitarias passing. Pendiente la comprobación interactiva en navegador con tarjeta de prueba en vivo y recepción de webhook local.
+- **Estado:** integración/verificación pendiente.
