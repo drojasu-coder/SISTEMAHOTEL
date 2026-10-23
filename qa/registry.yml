@@ -1790,6 +1790,127 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-RH-FIN-CANDIDATE-031
+    status: closed
+    severity: medium
+    category: FIN
+    title: >-
+      El resumen por ReservaHabitacion omite pagos aprobados originados en su
+      carrito
+    invariant: >-
+      GET /api/pagos/resumen?reserva_habitacion_id=:id debe representar la misma
+      realidad financiera que reservationFinancialExposure y PostgreSQL sin
+      importar si el pago de la reserva nació directamente o mediante carrito.
+      Para una reserva Q100 pagada por un único carrito, el resumen debe informar
+      aprobado neto Q100 y saldo Q0; tras un reembolso aprobado debe descontar el
+      reembolso semánticamente.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.paymentSummary.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-031: el resumen de ReservaHabitacion incluye el pago y reembolso de su carrito"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.paymentSummary.test.ts
+      result: "1 archivo falló; 1 test falló por la violación financiera esperada"
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      real_charges: false
+    expected:
+      endpoint: "GET /api/pagos/resumen?reserva_habitacion_id=1"
+      http_status: 200
+      semantic_summary: "total=100.00; net approved=100.00; remaining=0.00"
+      financial_source: reservationFinancialExposure
+      unexpected_500: false
+    actual:
+      setup: >-
+        Cliente id=1; ReservaHabitacion id=1 Q100.00; Carrito id=1 con un item
+        habitación Q100.00; Pago tarjeta id=1, origen carrito, Q100.00.
+      stripe: >-
+        PaymentIntent local pi_rh_summary_031_001 por 10000 unidades menores;
+        succeeded mediante webhook local; una creación, un webhook, cero red.
+      persisted_state: >-
+        Reserva confirmada Q100.00; carrito pagado con un item; Pago aprobado
+        Q100.00, carrito_id=1, reserva_habitacion_id=null; reembolsado aprobado
+        Q0.00; neto aprobado Q100.00; saldo real Q0.00.
+      aggregate: >-
+        reservationFinancialExposure devolvió approved=100, processing=0,
+        total=100.
+      summary: >-
+        HTTP 200; campos total=100, anticipo_requerido=0, aprobado=0, saldo=100.
+        Semánticamente devolvió net approved Q0 y remaining Q100.
+      initial_match: false
+      refund: >-
+        No ejecutado conforme al protocolo: la comparación inicial ya confirmó
+        la divergencia. createRefund tuvo cero llamadas.
+      unexpected_500: false
+    http_evidence:
+      create_reservation_status: 201
+      create_cart_status: 201
+      add_item_status: 201
+      create_payment_status: 201
+      payment_webhook_status: 200
+      reservation_summary_status: 200
+      reservation_summary_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      reservation: "id=1; total=100.00; estado=confirmada"
+      cart: "id=1; estado=pagado; item_count=1"
+      payment: >-
+        id=1; carrito_id=1; reserva_habitacion_id=null; monto=100.00;
+        estado=aprobado; approved_refunded=0.00
+      gross_approved: "100.00"
+      approved_refunded: "0.00"
+      net_approved: "100.00"
+      remaining: "0.00"
+      reservation_exposure: "approved=100; processing=0; total=100"
+    suspected_execution_path: >-
+      pago.controller.resumen entrega reserva_habitacion_id a getResumenPago;
+      validateOpenOrigin construye details.key exclusivamente como
+      {reserva_habitacion_id: 1}; getResumenPago llama approvedAmount(details.key),
+      que solo selecciona pagos directos y no los pagos de carritos históricos.
+      reservationFinancialExposure sí descubre el carrito por CarritoItem y
+      atribuye su aprobado neto, por lo que ambos caminos divergen.
+    root_cause: >-
+      getResumenPago calculaba aprobado con la llave directa de
+      ReservaHabitacion, aunque la exposición financiera canónica también
+      incluye y atribuye pagos de sus carritos históricos.
+    correction: >-
+      Para origen ReservaHabitacion, getResumenPago reutiliza
+      reservationFinancialExposure dentro de la misma transacción y toma solo
+      su campo approved; el resumen de carrito conserva approvedAmount.
+    severity_recommendation: medium
+    regressions:
+      qa_020: >-
+        GREEN: reservaHabitacion.aggregateExposure.test.ts verificó exposición
+        agregada directa y de carrito sin superar el total
+      qa_030: >-
+        GREEN: reservaHabitacion.multiRoomCartPayment.test.ts verificó la
+        atribución proporcional sin duplicación y el resumen de carrito
+    verification:
+      focused: >-
+        GREEN: 1 archivo, 1 test; incluyó naturalmente reembolso aprobado Q40,
+        aprobado neto Q60 y saldo Q40
+      related:
+        - "GREEN: reservaHabitacion.multiRoomCartPayment.test.ts (1 archivo, 1 test)"
+        - "GREEN: reservaHabitacion.aggregateExposure.test.ts (1 archivo, 1 test)"
+        - "GREEN: reservaHabitacion.approvedPaymentMutation.test.ts (1 archivo, 1 test)"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      production_files_modified: true
+      production_files: "backend/src/services/pago.service.ts"
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      registry_entries_modified: "solo QA-RH-FIN-CANDIDATE-031"
+      verified_at: "2026-10-23"
+
   - id: QA-RH-FIN-CANDIDATE-030
     status: closed
     severity: high

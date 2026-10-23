@@ -1275,7 +1275,9 @@ export const getResumenPago = async (
     validateOrigin({ ...origin, monto: 1, metodo: "efectivo" });
     await assertPaymentOriginOwnership(origin, requester, transaction);
     const details = await validateOpenOrigin(origin as CreatePagoData, transaction, true);
-    const paid = await approvedAmount(details.key, transaction);
+    const paid = details.origin.constructor?.name === "ReservaHabitacion"
+      ? (await reservationFinancialExposure(details.origin.id, transaction)).approved
+      : await approvedAmount(details.key, transaction);
     return {
       total: details.total,
       anticipo_requerido: details.requiredAdvance,
