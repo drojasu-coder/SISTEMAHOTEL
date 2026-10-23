@@ -5,6 +5,10 @@ import type {
   AmenidadesResponse,
   CreateAmenidadInput,
   UpdateAmenidadInput,
+  ReservaAmenidad,
+  ReservaAmenidadResponse,
+  ReservasAmenidadResponse,
+  CreateReservaAmenidadInput,
 } from "../types";
 
 export const amenidadesApi = {
@@ -43,6 +47,35 @@ export const amenidadesApi = {
     data: UpdateAmenidadInput
   ): Promise<Amenidad> => {
     const response = await api.patch<AmenidadResponse>(`/amenidades/${id}`, data);
+    return response.data;
+  },
+};
+
+export const reservasAmenidadApi = {
+  /**
+   * Creación de reserva de amenidad para el cliente autenticado.
+   * POST /api/reservas-amenidad
+   */
+  create: async (data: CreateReservaAmenidadInput): Promise<ReservaAmenidad> => {
+    const response = await api.post<ReservaAmenidadResponse>("/reservas-amenidad", data);
+    return response.data;
+  },
+
+  /**
+   * Listado de reservas de amenidad (propias para clientes, todas para admin).
+   * GET /api/reservas-amenidad
+   */
+  getAll: async (): Promise<ReservaAmenidad[]> => {
+    const response = await api.get<ReservasAmenidadResponse>("/reservas-amenidad");
+    return response.data;
+  },
+
+  /**
+   * Detalle individual de reserva de amenidad por identificador.
+   * GET /api/reservas-amenidad/:id
+   */
+  getById: async (id: number): Promise<ReservaAmenidad> => {
+    const response = await api.get<ReservaAmenidadResponse>(`/reservas-amenidad/${id}`);
     return response.data;
   },
 };
