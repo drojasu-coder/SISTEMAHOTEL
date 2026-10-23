@@ -150,3 +150,34 @@ export const clearCheckoutIdempotencyKey = (
     // Ignorar fallos de acceso a storage
   }
 };
+
+/**
+ * Limpia la clave de idempotencia almacenada solo si el intento guardado corresponde
+ * exactamente al pago mostrado (mismo pagoId o misma clave de idempotencia).
+ *
+ * Políticas:
+ * - Visitar el resultado de un pago anterior NO debe borrar la identificación de un intento posterior.
+ * - Si carritoId es null o undefined, NO debe ejecutar utilidades que exijan un ID de carrito.
+ */
+export const clearMatchingStoredAttempt = (
+  userId: number,
+  carritoId: number | null | undefined,
+  pagoId: number,
+  idempotencyKey?: string | null
+): boolean => {
+  if (carritoId === null || carritoId === undefined || !Number.isInteger(carritoId) || carritoId <= 0) {
+    return false;
+  }
+  const stored = getStoredCheckoutAttempt(userId, carritoId);
+  if (!stored) return false;
+
+  const matchesPagoId = stored.pagoId !== undefined && stored.pagoId === pagoId;
+  const matchesKey = Boolean(idempotencyKey && stored.key === idempotencyKey);
+
+  if (matchesPagoId || matchesKey) {
+    clearCheckoutIdempotencyKey(userId, carritoId);
+    return true;
+  }
+
+  return false;
+};

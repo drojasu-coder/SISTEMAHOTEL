@@ -23,6 +23,9 @@ import { MisReservasPage } from '@/pages/MisReservasPage';
 import { DetalleReservaHabitacionPage } from '@/pages/DetalleReservaHabitacionPage';
 import { CarritoPage } from '@/pages/CarritoPage';
 import { CARRITO_ROUTES } from '@/features/carrito';
+import { CheckoutPage } from '@/pages/CheckoutPage';
+import { PagoResultadoPage } from '@/pages/PagoResultadoPage';
+import { PAGOS_ROUTES } from '@/features/pagos';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -42,6 +45,8 @@ export const AppRouter: React.FC = () => {
           <Route element={<RequireAuth />}>
             <Route path="/cuenta" element={<AccountPage />} />
             <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
+            <Route path={PAGOS_ROUTES.CHECKOUT} element={<CheckoutPage />} />
+            <Route path="/pagos/:id/resultado" element={<PagoResultadoPage />} />
           </Route>
 
           {/* Flujo de reservas del cliente */}

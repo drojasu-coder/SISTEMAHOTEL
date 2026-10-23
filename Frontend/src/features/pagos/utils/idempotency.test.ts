@@ -5,6 +5,7 @@ import {
   generateSecureIdempotencyKey,
   getStoredCheckoutAttempt,
   recordCheckoutPagoId,
+  clearMatchingStoredAttempt,
 } from './idempotency';
 
 describe('checkout idempotency helpers', () => {
@@ -65,3 +66,48 @@ describe('checkout idempotency helpers', () => {
     expect(res2.key).not.toBe(res1.key);
   });
 });
+
+  describe('clearMatchingStoredAttempt', () => {
+    it('no ejecuta nada ni falla si carritoId es null o no válido', () => {
+      const res = clearMatchingStoredAttempt(5, null, 123);
+      expect(res).toBe(false);
+
+      const resUndefined = clearMatchingStoredAttempt(5, undefined, 123);
+      expect(resUndefined).toBe(false);
+    });
+
+    it('no borra la clave si el intento almacenado pertenece a un pagoId posterior o diferente', () => {
+      getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+      recordCheckoutPagoId(5, 12, 200); // Intento posterior 200
+
+      // Visitar el resultado de un pago anterior (pagoId = 150)
+      const cleaned = clearMatchingStoredAttempt(5, 12, 150, 'chk-otra-clave');
+      expect(cleaned).toBe(false);
+
+      // El intento posterior (200) sigue intacto
+      const stored = getStoredCheckoutAttempt(5, 12);
+      expect(stored).not.toBeNull();
+      expect(stored?.pagoId).toBe(200);
+    });
+
+    it('borra la clave si el intento almacenado coincide con el pagoId mostrado', () => {
+      getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+      recordCheckoutPagoId(5, 12, 200);
+
+      const cleaned = clearMatchingStoredAttempt(5, 12, 200);
+      expect(cleaned).toBe(true);
+
+      const stored = getStoredCheckoutAttempt(5, 12);
+      expect(stored).toBeNull();
+    });
+
+    it('borra la clave si coincide por idempotencyKey aunque pagoId no estuviera registrado', () => {
+      const keyRes = getOrCreateCheckoutIdempotencyKey(5, 12, 1800);
+
+      const cleaned = clearMatchingStoredAttempt(5, 12, 999, keyRes.key);
+      expect(cleaned).toBe(true);
+
+      const stored = getStoredCheckoutAttempt(5, 12);
+      expect(stored).toBeNull();
+    });
+  });
