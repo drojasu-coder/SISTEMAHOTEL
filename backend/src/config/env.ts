@@ -80,7 +80,22 @@ const validateDatabase = (values: Env) => {
       url.pathname !== "/hotel_test_db"
     ) {
       throw new Error(
-        "TEST_DATABASE_URL debe apuntar exclusivamente a localhost:55432/hotel_test_db",
+        "TEST_DATABASE_URL debe apuntar exclusivamente a localhost:55432/hotel_test_db (o puerto 55433 para pruebas aisladas)",
+      );
+    }
+  } else if (values.NODE_ENV === "development") {
+    if (!values.DATABASE_URL) {
+      throw new Error("DATABASE_URL es obligatoria en el ambiente development");
+    }
+    const url = parseDatabaseUrl(values.DATABASE_URL, "DATABASE_URL");
+    if (
+      ["127.0.0.1", "localhost"].includes(url.hostname) &&
+      (["55432", "55433"].includes(url.port) || url.pathname === "/hotel_test_db")
+    ) {
+      throw new Error(
+        "Configuración contradictoria: En NODE_ENV=development, DATABASE_URL apunta a la base de pruebas (hotel_test_db / puerto 55432). " +
+        "Para desarrollo habitual debe conectarse a hotel_db en puerto 5432. " +
+        "Si desea iniciar el servidor contra la base de pruebas para comprobaciones manuales, ejecute 'npm run dev:test'.",
       );
     }
   } else if (!values.DATABASE_URL) {
