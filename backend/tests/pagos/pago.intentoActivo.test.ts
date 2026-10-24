@@ -232,11 +232,14 @@ describe("GET /api/pagos/intento-activo y recuperación de pagos (BE-014)", () =
       status: "canceled",
     } as any);
 
-    vi.spyOn(stripeService, "createPaymentIntent").mockResolvedValueOnce({
+    vi.spyOn(stripeService, "createPaymentIntent").mockImplementation(async (amount, currency, metadata) => ({
       id: "pi_test_new_successful",
       client_secret: "pi_test_new_secret",
       status: "requires_payment_method",
-    } as any);
+      amount: Math.round(Number(amount) * 100),
+      currency: String(currency).toLowerCase(),
+      metadata: { ...metadata },
+    } as any));
 
     const postResponse = await request(app)
       .post("/api/pagos")
@@ -261,13 +264,15 @@ describe("GET /api/pagos/intento-activo y recuperación de pagos (BE-014)", () =
     const { user, carrito } = await setupCartWithItem();
 
     let createCallCount = 0;
-    vi.spyOn(stripeService, "createPaymentIntent").mockImplementation(async (amount) => {
+    vi.spyOn(stripeService, "createPaymentIntent").mockImplementation(async (amount, currency, metadata) => {
       createCallCount++;
       return {
         id: `pi_distinct_${createCallCount}`,
         client_secret: `secret_distinct_${createCallCount}`,
         status: "requires_payment_method",
-        amount,
+        amount: Math.round(Number(amount) * 100),
+        currency: String(currency).toLowerCase(),
+        metadata: { ...metadata },
       } as any;
     });
 
@@ -369,11 +374,14 @@ describe("GET /api/pagos/intento-activo y recuperación de pagos (BE-014)", () =
       status: "canceled",
     } as any);
 
-    vi.spyOn(stripeService, "createPaymentIntent").mockResolvedValueOnce({
+    vi.spyOn(stripeService, "createPaymentIntent").mockImplementation(async (amount, currency, metadata) => ({
       id: "pi_test_new_intent",
       client_secret: "pi_test_new_secret",
       status: "requires_payment_method",
-    } as any);
+      amount: Math.round(Number(amount) * 100),
+      currency: String(currency).toLowerCase(),
+      metadata: { ...metadata },
+    } as any));
 
     const postResponse = await request(app)
       .post("/api/pagos")

@@ -7,14 +7,16 @@ export type TestDatabase = Record<string, any> & {
   Sequelize: typeof Sequelize;
 };
 
-const EXPECTED_DATABASE_URL =
-  "postgres://hotel_test_user:hotel_test_password@127.0.0.1:55432/hotel_test_db";
+const ALLOWED_TEST_DATABASE_URLS = [
+  "postgres://hotel_test_user:hotel_test_password@127.0.0.1:55432/hotel_test_db",
+  "postgres://hotel_test_user:hotel_test_password@127.0.0.1:55433/hotel_test_db",
+];
 
 export const createIsolatedTestDatabase = async (): Promise<TestDatabase> => {
   const url = process.env.TEST_DATABASE_URL;
-  if (url !== EXPECTED_DATABASE_URL) {
+  if (!url || !ALLOWED_TEST_DATABASE_URLS.includes(url)) {
     throw new Error(
-      "Refusing database tests: TEST_DATABASE_URL is not the isolated hotel_test_db URL",
+      "Refusing database tests: TEST_DATABASE_URL is not an allowed isolated hotel_test_db URL",
     );
   }
 

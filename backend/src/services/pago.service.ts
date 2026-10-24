@@ -829,12 +829,27 @@ const findIdempotencyReplay = async (
 
 const reconcileCanceledStripePayments = async (
   originKey: Record<string, unknown>,
-  details: { origin: any; total: number },
+  details: { origin: any; total: number; roomReservationIds?: number[] },
   transaction: any
 ) => {
+  const origins: Record<string | symbol, unknown>[] = [{ ...originKey }];
+  if (details.roomReservationIds && details.roomReservationIds.length > 0) {
+    for (const resId of details.roomReservationIds) {
+      origins.push({ reserva_habitacion_id: resId });
+      const historicalCarts = await historicalCartIdsForReference(
+        "habitacion",
+        resId,
+        transaction,
+      );
+      if (historicalCarts.length > 0) {
+        origins.push({ carrito_id: { [Op.in]: historicalCarts } });
+      }
+    }
+  }
+
   const candidates = await Pago.findAll({
     where: {
-      ...originKey,
+      [Op.or]: origins,
       metodo: "tarjeta",
       estado: { [Op.in]: ["procesando", "rechazado"] },
       id_transaccion_externo: { [Op.ne]: null },
@@ -864,13 +879,26 @@ const reconcileCanceledStripePayments = async (
           await confirmReservationIfFullyPaid(details.origin.id, transaction);
         }
       } else if (
-        p.estado === "rechazado" &&
         ["requires_payment_method", "requires_confirmation", "requires_action", "processing"].includes(
           intent.status
         )
       ) {
+        if (p.carrito_id && originKey.carrito_id && Number(p.carrito_id) !== Number(originKey.carrito_id)) {
+          const oldCart = await Carrito.findByPk(p.carrito_id, { transaction });
+          if (oldCart && ["expirado", "cancelado"].includes(String(oldCart.estado).toLowerCase())) {
+            try {
+              await stripeService.cancelPaymentIntent(p.id_transaccion_externo);
+            } catch {
+              // Ignorar fallo al cancelar en Stripe si ya estuviera cancelado
+            }
+            await p.update({ estado: "cancelado" }, { transaction });
+            continue;
+          }
+        }
         // Intento recuperable: en pasarela sigue activo; reservar capacidad para evitar cobro concurrente incompatible
-        await p.update({ estado: "procesando" }, { transaction });
+        if (p.estado === "rechazado") {
+          await p.update({ estado: "procesando" }, { transaction });
+        }
       }
     } catch {
       // Ignorar fallos de red hacia Stripe durante la reconciliación silenciosa
@@ -885,13 +913,7 @@ const reconcileIdempotentPaymentIntent = async (
 ) => {
   const payment = result?.payment;
   const intent = result?.intent;
-  if (
-    !data.idempotency_key ||
-    !payment ||
-    !intent ||
-    !intent.metadata?.pago_id ||
-    intent.metadata.pago_id === String(payment.id)
-  ) {
+  if (!data.idempotency_key || !payment || !intent) {
     return;
   }
 
@@ -908,6 +930,10 @@ const reconcileIdempotentPaymentIntent = async (
   const metadataReservationId =
     intent.metadata?.reserva_habitacion_id ?? null;
 
+  const matchesCart = metadataCartId === null || metadataCartId === expectedCartId;
+  const matchesReservation = metadataReservationId === null || metadataReservationId === expectedReservationId;
+  const matchesTipo = !intent.metadata?.tipo_pago || intent.metadata.tipo_pago === tipo;
+
   const sameEconomicOperation = Boolean(
     durablePayment &&
     durablePayment.idempotency_key === data.idempotency_key &&
@@ -922,9 +948,9 @@ const reconcileIdempotentPaymentIntent = async (
       (data.reserva_habitacion_id ?? null) &&
     intent.amount === toStripeAmount(amount, PAYMENT_CURRENCY) &&
     intent.currency?.toLowerCase() === PAYMENT_CURRENCY.toLowerCase() &&
-    metadataCartId === expectedCartId &&
-    metadataReservationId === expectedReservationId &&
-    intent.metadata?.tipo_pago === tipo
+    matchesCart &&
+    matchesReservation &&
+    matchesTipo
   );
 
   if (!sameEconomicOperation) {
@@ -933,6 +959,10 @@ const reconcileIdempotentPaymentIntent = async (
       "STRIPE_PAYMENT_MISMATCH",
       "El PaymentIntent no corresponde al pago esperado",
     );
+  }
+
+  if (intent.metadata?.pago_id === String(durablePayment.id)) {
+    return;
   }
 
   try {

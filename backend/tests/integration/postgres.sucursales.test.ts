@@ -31,7 +31,7 @@ describe("isolated PostgreSQL sucursales module", () => {
 
   it("keeps CRUD behavior and alphabetical listing", async () => {
     const created = await sucursalService.create({
-      nombre: `Sucursal piloto ${Date.now()}`,
+      nombre: `Sucursal Piloto ${Date.now()}`,
       direccion: "Prueba",
       ciudad: "Guatemala",
     });
@@ -44,9 +44,10 @@ describe("isolated PostgreSQL sucursales module", () => {
 
     expect(updated.nombre).toContain("actualizada");
     expect(found.id).toBe(created.id);
-    expect(all.map((item: { nombre: string }) => item.nombre)).toEqual(
-      [...all.map((item: { nombre: string }) => item.nombre)].sort(),
+    const sortedExpected = [...all.map((item: { nombre: string }) => item.nombre)].sort((a, b) =>
+      a.localeCompare(b, "es", { sensitivity: "base" }),
     );
+    expect(all.map((item: { nombre: string }) => item.nombre)).toEqual(sortedExpected);
 
     await sucursalService.remove(created.id);
     await expect(sucursalService.getById(created.id)).rejects.toMatchObject({
@@ -58,18 +59,20 @@ describe("isolated PostgreSQL sucursales module", () => {
   it("preserves the conflict when a branch has rooms", async () => {
     const branch = await sucursalService.create({
       nombre: `Sucursal ocupada ${Date.now()}`,
+      direccion: "Prueba",
+      ciudad: "Guatemala",
     });
     createdBranchIds.push(branch.id);
-    const roomType = await database.TipoHabitacion.create({
-      nombre: `Tipo ${Date.now()}`,
+    const tipo = await database.TipoHabitacion.create({
+      nombre: `Tipo prueba ${Date.now()}`,
+      tarifa_noche: 300,
       capacidad_maxima: 2,
-      tarifa_noche: 100,
     });
-    createdRoomTypeIds.push(roomType.id);
+    createdRoomTypeIds.push(tipo.id);
     const room = await database.Habitacion.create({
       sucursal_id: branch.id,
-      tipo_habitacion_id: roomType.id,
-      numero: `P${Date.now() % 1000000}`,
+      tipo_habitacion_id: tipo.id,
+      numero: `S-${Date.now().toString().slice(-4)}`,
       estado: "disponible",
     });
     createdRoomIds.push(room.id);
@@ -78,12 +81,5 @@ describe("isolated PostgreSQL sucursales module", () => {
       statusCode: 409,
       code: "BRANCH_IN_USE",
     });
-
-    await room.destroy({ force: true });
-    createdRoomIds.splice(createdRoomIds.indexOf(room.id), 1);
-    await roomType.destroy({ force: true });
-    createdRoomTypeIds.splice(createdRoomTypeIds.indexOf(roomType.id), 1);
-    await sucursalService.remove(branch.id);
-    createdBranchIds.splice(createdBranchIds.indexOf(branch.id), 1);
   });
 });
