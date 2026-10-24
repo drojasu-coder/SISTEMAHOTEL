@@ -1,23 +1,6 @@
 # Seguimiento de Integración de Pagos (BE-014)
 
-## Estado actual
-- **Estado de BE-014:** Integración / Verificación pendiente.
-- **Entorno verificado:**
-  - Base de datos autorizada: `hotel_test_db` en puerto `55432` (PostgreSQL en Docker `hotel_postgres_test`).
-  - Backend: Puerto `4000` (`NODE_ENV=test`, `http://localhost:4000/api`).
-  - Frontend: Puerto `5173` (`http://localhost:5173`).
-  - Stripe CLI: Listener activo reenviando a `http://localhost:4000/api/pagos/stripe/webhook`.
-  - Cuenta cliente: `qa-cliente-1@hotel.test` (ID 1, rol `cliente`).
-
-## Cobertura automatizada implementada y verificada
-Ejecutada con el runner del proyecto (**Vitest**, `npm --prefix backend test tests/pagos/pago.intentoActivo.test.ts` y suites de frontend):
-1. **Rechazo y recuperación:** Recuperación de PaymentIntent en `requires_payment_method` tras rechazo de tarjeta (`pago.intentoActivo.test.ts` casos 3 y 4; `CheckoutPage.test.tsx`).
-2. **Protección contra cobros incompatibles:** Si Stripe confirma éxito mientras el webhook local sigue en proceso o rechazado, `committedOrProcessingExposure` bloquea un cobro concurrente excedente con error 409 `PAYMENT_EXCEEDS_BALANCE` (`pago.intentoActivo.test.ts` casos 8, 9, 10; `CheckoutPage.test.tsx`).
-3. **Cancelación externa:** Reconciliación segura de cancelaciones liberando reservas o carritos solo si no hay aprobación concurrente (`pago.intentoActivo.test.ts` casos 7 y 10; `PagoResultadoPage.test.tsx` casos 3 y 4).
-4. **Pago local sin identificador externo:** Distinción y recuperación sin fallar (`pago.intentoActivo.test.ts` caso 5; `CheckoutPage.test.tsx`).
-5. **Cambio de importe con intento pendiente:** Verificación estricta contra saldo de servidor que impide confirmar un intento obsoleto o crear otro cobro mientras esté activo (`CheckoutPage.test.tsx`).
-6. **Aislamiento por usuario e idempotencia:** Identificación con `userId` en claves de consulta y persistencia de clave de idempotencia (`PagoResultadoPage.test.tsx` casos 1, 2, 5, 6; `pago.idempotency.concurrency.test.ts`).
-7. **Fin del polling sin falso positivo:** Manejo de estado procesando y límite de sondeo sin asumir estados no comprobados (`PagoResultadoPage.test.tsx` caso 8).
+Este documento registra el progreso, la arquitectura técnica, las decisiones de diseño y las verificaciones manuales y automatizadas correspondientes al lote de pagos con Stripe Checkout y Payment Element (**BE-014**).
 
 ---
 
@@ -44,6 +27,22 @@ Ejecutada con el runner del proyecto (**Vitest**, `npm --prefix backend test tes
 3. **Implicación:**
    - El usuario no puede recuperar el PaymentIntent existente desde la interfaz una vez que el carrito expira.
    - Si el usuario reincorpora la reserva a un nuevo carrito (Carrito 6), el flujo habitual de checkout crearía un nuevo PaymentIntent, dejando el anterior huérfano en Stripe con riesgo de cobro concurrente o incompatibilidad.
+
+---
+
+## Integración de Mejoras de QA y Consistencia de Pagos (`qa/backend-automation`)
+
+En el commit `ee68e78` se integraron las mejoras de consistencia y concurrencia desarrolladas por José en `origin/qa/backend-automation`:
+1. **Exposición financiera multi-habitación y carritos históricos (`reservationFinancialExposure`):**
+   - Agrega la validación de pagos directos y pagos distribuidos desde carritos para reservas de habitación, evitando desbordamientos de saldo cuando una reserva transita por múltiples carritos o sufre pagos parciales/totales.
+2. **Reconciliación de metadatos en Stripe tras commit (`reconcileIdempotentPaymentIntent`):**
+   - Asegura que ante replays por clave de idempotencia, el `client_secret` y los metadatos en Stripe (`pago_id`) queden enlazados con la fila persistida durablemente tras el commit.
+3. **Orden canónico de locks en webhooks de Stripe:**
+   - Previene interbloqueos (deadlocks) en PostgreSQL al ordenar los locks transaccionales: Carrito -> Reservas en orden ascendente por ID -> Pagos.
+4. **Protección de carritos en procesamiento:**
+   - Bloquea mutaciones (añadir/quitar items) sobre carritos mientras existan pagos en estado `procesando`.
+5. **Alineación con la reconciliación de intentos cancelados:**
+   - Se preservó y combinó la reconciliación previa `reconcileCanceledStripePayments` con el nuevo `roomExposureBalance`.
 
 ---
 
