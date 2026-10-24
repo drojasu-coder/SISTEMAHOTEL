@@ -1925,6 +1925,14 @@ UpdateReservaActividadRequest: {
 
 Amenidad: {
   type: "object",
+  required: [
+    "id",
+    "sucursal_id",
+    "nombre",
+    "aforo_maximo",
+    "createdAt",
+    "updatedAt",
+  ],
   properties: {
     id: {
       type: "integer",
@@ -1949,6 +1957,45 @@ Amenidad: {
     updatedAt: {
       type: "string",
       format: "date-time",
+    },
+    Sucursal: {
+      type: "object",
+      nullable: true,
+      properties: {
+        id: { type: "integer", example: 1 },
+        nombre: { type: "string", example: "Hotel Hunapú Central" },
+      },
+    },
+  },
+},
+
+AmenidadResponse: {
+  type: "object",
+  required: ["status", "data"],
+  properties: {
+    status: {
+      type: "string",
+      example: "success",
+    },
+    data: {
+      $ref: "#/components/schemas/Amenidad",
+    },
+  },
+},
+
+AmenidadesResponse: {
+  type: "object",
+  required: ["status", "data"],
+  properties: {
+    status: {
+      type: "string",
+      example: "success",
+    },
+    data: {
+      type: "array",
+      items: {
+        $ref: "#/components/schemas/Amenidad",
+      },
     },
   },
 },
@@ -1997,6 +2044,16 @@ UpdateAmenidadRequest: {
 
 ReservaAmenidad: {
   type: "object",
+  required: [
+    "id",
+    "usuario_id",
+    "amenidad_id",
+    "fecha",
+    "franja_horaria",
+    "estado",
+    "createdAt",
+    "updatedAt",
+  ],
   properties: {
     id: {
       type: "integer",
@@ -2045,6 +2102,80 @@ ReservaAmenidad: {
     updatedAt: {
       type: "string",
       format: "date-time",
+    },
+    Amenidad: {
+      type: "object",
+      nullable: true,
+      properties: {
+        id: { type: "integer", example: 1 },
+        nombre: { type: "string", example: "Piscina" },
+        aforo_maximo: { type: "integer", example: 20 },
+        sucursal_id: { type: "integer", example: 1 },
+        Sucursal: {
+          type: "object",
+          nullable: true,
+          properties: {
+            id: { type: "integer", example: 1 },
+            nombre: { type: "string", example: "Hotel Hunapú Central" },
+          },
+        },
+      },
+    },
+    Usuario: {
+      type: "object",
+      nullable: true,
+      properties: {
+        id: { type: "integer", example: 3 },
+        nombre: { type: "string", example: "Juan Pérez" },
+        email: { type: "string", example: "juan@example.com" },
+      },
+    },
+  },
+},
+
+ReservaAmenidadResponse: {
+  type: "object",
+  required: ["success", "statusCode", "message", "data"],
+  properties: {
+    success: {
+      type: "boolean",
+      example: true,
+    },
+    statusCode: {
+      type: "integer",
+      example: 200,
+    },
+    message: {
+      type: "string",
+      example: "Reserva de amenidad obtenida correctamente",
+    },
+    data: {
+      $ref: "#/components/schemas/ReservaAmenidad",
+    },
+  },
+},
+
+ReservasAmenidadResponse: {
+  type: "object",
+  required: ["success", "statusCode", "message", "data"],
+  properties: {
+    success: {
+      type: "boolean",
+      example: true,
+    },
+    statusCode: {
+      type: "integer",
+      example: 200,
+    },
+    message: {
+      type: "string",
+      example: "Reservas de amenidad obtenidas correctamente",
+    },
+    data: {
+      type: "array",
+      items: {
+        $ref: "#/components/schemas/ReservaAmenidad",
+      },
     },
   },
 },

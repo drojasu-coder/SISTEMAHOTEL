@@ -10797,8 +10797,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Listar todas las reservas de amenidad
-         * @description Operación administrativa disponible únicamente para administradores.
+         * Listar reservas de amenidad
+         * @description Permite listar reservas de amenidad. Los administradores obtienen el listado global del hotel; los clientes obtienen exclusivamente sus propias reservas de amenidad.
          */
         get: {
             parameters: {
@@ -10815,15 +10815,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example true */
-                            success?: boolean;
-                            /** @example 200 */
-                            statusCode?: number;
-                            /** @example Reservas de amenidad obtenidas correctamente */
-                            message?: string;
-                            data?: components["schemas"]["ReservaAmenidad"][];
-                        };
+                        "application/json": components["schemas"]["ReservasAmenidadResponse"];
                     };
                 };
                 /** @description Usuario no autenticado */
@@ -10833,7 +10825,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Usuario sin permisos administrativos */
+                /** @description Rol no autorizado */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -10865,7 +10857,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReservaAmenidadResponse"];
+                    };
                 };
                 /** @description Datos, fecha o franja horaria inválidos */
                 400: {
@@ -10926,7 +10920,7 @@ export interface paths {
         };
         /**
          * Obtener una reserva de amenidad por ID
-         * @description Operación administrativa disponible únicamente para administradores.
+         * @description Permite consultar el detalle de una reserva de amenidad. Los administradores pueden consultar cualquier reserva; los clientes solo pueden consultar las que les pertenecen (403 si pertenece a otro usuario).
          */
         get: {
             parameters: {
@@ -10944,7 +10938,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReservaAmenidadResponse"];
+                    };
                 };
                 /** @description ID inválido */
                 400: {
@@ -10960,7 +10956,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Usuario sin permisos administrativos */
+                /** @description No tiene permisos para acceder a esta reserva */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -11021,7 +11017,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ReservaAmenidadResponse"];
+                    };
                 };
                 /** @description Estado o ID inválido */
                 400: {
@@ -11037,7 +11035,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description Usuario sin permisos administrativos */
+                /** @description Solo los administradores pueden cambiar el estado */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -11088,11 +11086,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            /** @example success */
-                            status?: string;
-                            data?: components["schemas"]["Amenidad"][];
-                        };
+                        "application/json": components["schemas"]["AmenidadesResponse"];
                     };
                 };
             };
@@ -11117,7 +11111,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AmenidadResponse"];
+                    };
                 };
                 /** @description Datos inválidos */
                 400: {
@@ -11179,7 +11175,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AmenidadResponse"];
+                    };
                 };
                 /** @description ID inválido */
                 400: {
@@ -11278,7 +11276,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["AmenidadResponse"];
+                    };
                 };
                 /** @description Datos o ID inválidos */
                 400: {
@@ -12903,17 +12903,33 @@ export interface components {
         };
         Amenidad: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example 1 */
-            sucursal_id?: number;
+            sucursal_id: number;
             /** @example Piscina */
-            nombre?: string;
+            nombre: string;
             /** @example 20 */
-            aforo_maximo?: number;
+            aforo_maximo: number;
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updatedAt: string;
+            Sucursal?: {
+                /** @example 1 */
+                id?: number;
+                /** @example Hotel Hunapú Central */
+                nombre?: string;
+            } | null;
+        };
+        AmenidadResponse: {
+            /** @example success */
+            status: string;
+            data: components["schemas"]["Amenidad"];
+        };
+        AmenidadesResponse: {
+            /** @example success */
+            status: string;
+            data: components["schemas"]["Amenidad"][];
         };
         CreateAmenidadRequest: {
             /** @example 1 */
@@ -12931,18 +12947,18 @@ export interface components {
         };
         ReservaAmenidad: {
             /** @example 1 */
-            id?: number;
+            id: number;
             /** @example 3 */
-            usuario_id?: number;
+            usuario_id: number;
             /** @example 1 */
-            amenidad_id?: number;
+            amenidad_id: number;
             /**
              * Format: date
              * @example 2026-10-20
              */
-            fecha?: string;
+            fecha: string;
             /** @example 10:00-12:00 */
-            franja_horaria?: string;
+            franja_horaria: string;
             /** @example camastro */
             mobiliario?: string | null;
             /** @example AMENITY-550e8400-e29b-41d4-a716-446655440000 */
@@ -12951,11 +12967,53 @@ export interface components {
              * @example confirmada
              * @enum {string}
              */
-            estado?: "confirmada" | "cancelada" | "usada";
+            estado: "confirmada" | "cancelada" | "usada";
             /** Format: date-time */
-            createdAt?: string;
+            createdAt: string;
             /** Format: date-time */
-            updatedAt?: string;
+            updatedAt: string;
+            Amenidad?: {
+                /** @example 1 */
+                id?: number;
+                /** @example Piscina */
+                nombre?: string;
+                /** @example 20 */
+                aforo_maximo?: number;
+                /** @example 1 */
+                sucursal_id?: number;
+                Sucursal?: {
+                    /** @example 1 */
+                    id?: number;
+                    /** @example Hotel Hunapú Central */
+                    nombre?: string;
+                } | null;
+            } | null;
+            Usuario?: {
+                /** @example 3 */
+                id?: number;
+                /** @example Juan Pérez */
+                nombre?: string;
+                /** @example juan@example.com */
+                email?: string;
+            } | null;
+        };
+        ReservaAmenidadResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Reserva de amenidad obtenida correctamente */
+            message: string;
+            data: components["schemas"]["ReservaAmenidad"];
+        };
+        ReservasAmenidadResponse: {
+            /** @example true */
+            success: boolean;
+            /** @example 200 */
+            statusCode: number;
+            /** @example Reservas de amenidad obtenidas correctamente */
+            message: string;
+            data: components["schemas"]["ReservaAmenidad"][];
         };
         CreateReservaAmenidadRequest: {
             /** @example 1 */

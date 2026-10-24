@@ -67,6 +67,10 @@ router.use(
  *     responses:
  *       201:
  *         description: Reserva creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReservaAmenidadResponse'
  *       400:
  *         description: Datos, fecha o franja horaria inválidos
  *       401:
@@ -103,10 +107,11 @@ router.post(
  *   get:
  *     tags:
  *       - Reservas de Amenidad
- *     summary: Listar todas las reservas de amenidad
+ *     summary: Listar reservas de amenidad
  *     description: >
- *       Operación administrativa disponible únicamente
- *       para administradores.
+ *       Permite listar reservas de amenidad. Los administradores
+ *       obtienen el listado global del hotel; los clientes obtienen
+ *       exclusivamente sus propias reservas de amenidad.
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -115,31 +120,18 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 statusCode:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Reservas de amenidad obtenidas correctamente
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/ReservaAmenidad'
+ *               $ref: '#/components/schemas/ReservasAmenidadResponse'
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Usuario sin permisos administrativos
+ *         description: Rol no autorizado
  */
-// Solo el administrador puede consultar todas las reservas.
+// Administradores obtienen todas las reservas; clientes únicamente las propias.
 router.get(
   "/",
   requireRole(
-    ROLES.ADMIN
+    ROLES.ADMIN,
+    ROLES.CLIENTE
   ),
   reservaAmenidadController.getAll
 );
@@ -152,8 +144,10 @@ router.get(
  *       - Reservas de Amenidad
  *     summary: Obtener una reserva de amenidad por ID
  *     description: >
- *       Operación administrativa disponible únicamente
- *       para administradores.
+ *       Permite consultar el detalle de una reserva de amenidad.
+ *       Los administradores pueden consultar cualquier reserva;
+ *       los clientes solo pueden consultar las que les pertenecen
+ *       (403 si pertenece a otro usuario).
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -166,19 +160,24 @@ router.get(
  *     responses:
  *       200:
  *         description: Reserva encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReservaAmenidadResponse'
  *       400:
  *         description: ID inválido
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Usuario sin permisos administrativos
+ *         description: No tiene permisos para acceder a esta reserva
  *       404:
  *         description: Reserva no encontrada
  */
 router.get(
   "/:id",
   requireRole(
-    ROLES.ADMIN
+    ROLES.ADMIN,
+    ROLES.CLIENTE
   ),
   validateParams(
     idParamSchema
@@ -217,12 +216,16 @@ router.get(
  *     responses:
  *       200:
  *         description: Estado actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ReservaAmenidadResponse'
  *       400:
  *         description: Estado o ID inválido
  *       401:
  *         description: Usuario no autenticado
  *       403:
- *         description: Usuario sin permisos administrativos
+ *         description: Solo los administradores pueden cambiar el estado
  *       404:
  *         description: Reserva no encontrada
  *       409:

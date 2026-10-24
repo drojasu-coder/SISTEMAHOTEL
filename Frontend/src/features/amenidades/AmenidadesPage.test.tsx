@@ -37,6 +37,8 @@ const mockAmenidades: Amenidad[] = [
     sucursal_id: 1,
     nombre: "Piscina Climatizada",
     aforo_maximo: 25,
+    createdAt: "2026-10-20T10:00:00.000Z",
+    updatedAt: "2026-10-20T10:00:00.000Z",
     Sucursal: { nombre: "Hotel Hunapú Antigua" },
   },
   {
@@ -44,6 +46,8 @@ const mockAmenidades: Amenidad[] = [
     sucursal_id: 1,
     nombre: "Gimnasio Fitness",
     aforo_maximo: 15,
+    createdAt: "2026-10-20T10:00:00.000Z",
+    updatedAt: "2026-10-20T10:00:00.000Z",
     Sucursal: { nombre: "Hotel Hunapú Antigua" },
   },
   {
@@ -51,6 +55,8 @@ const mockAmenidades: Amenidad[] = [
     sucursal_id: 2,
     nombre: "Sauna Finlandés",
     aforo_maximo: 8,
+    createdAt: "2026-10-20T10:00:00.000Z",
+    updatedAt: "2026-10-20T10:00:00.000Z",
     Sucursal: { nombre: "Hotel Hunapú Atitlán" },
   },
 ];

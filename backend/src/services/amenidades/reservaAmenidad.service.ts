@@ -15,6 +15,7 @@ const {
   ReservaAmenidad,
   Amenidad,
   Usuario,
+  Sucursal,
 } = db;
 
 interface CreateReservaAmenidadData {
@@ -42,6 +43,16 @@ const reservaAmenidadInclude = [
       "id",
       "nombre",
       "aforo_maximo",
+      "sucursal_id",
+    ],
+    include: [
+      {
+        model: Sucursal,
+        attributes: [
+          "id",
+          "nombre",
+        ],
+      },
     ],
   },
   {
@@ -403,9 +414,17 @@ const validateCapacity = (
 };
 
 export const getAll =
-  async () => {
+  async (
+    requester?: { id: number; rol: string }
+  ) => {
+    const where: any = {};
+    if (requester && requester.rol === "cliente") {
+      where.usuario_id = requester.id;
+    }
+
     return ReservaAmenidad.findAll(
       {
+        where,
         include:
           reservaAmenidadInclude,
 
@@ -425,7 +444,8 @@ export const getAll =
 
 export const getById =
   async (
-    id: number
+    id: number,
+    requester?: { id: number; rol: string }
   ) => {
     const reserva =
       await ReservaAmenidad.findByPk(
@@ -441,6 +461,18 @@ export const getById =
         404,
         "AMENITY_RESERVATION_NOT_FOUND",
         "La reserva de amenidad solicitada no existe"
+      );
+    }
+
+    if (
+      requester &&
+      requester.rol === "cliente" &&
+      reserva.usuario_id !== requester.id
+    ) {
+      throw new AppError(
+        403,
+        "INSUFFICIENT_PERMISSIONS",
+        "No tiene permisos para acceder a esta reserva de amenidad"
       );
     }
 

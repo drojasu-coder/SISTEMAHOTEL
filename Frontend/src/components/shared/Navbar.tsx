@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, User } from 'lucide-react';
+import { LayoutDashboard, LogOut, User, ShoppingCart } from 'lucide-react';
 import { Brand } from '@/components/shared/Brand';
 import { useAuth } from '@/features/auth/AuthContext';
 import { canAccessPanel } from '@/features/auth/permissions';
@@ -8,7 +8,7 @@ import { cn } from '@/lib/cn';
 import { es } from '@/i18n/es';
 import { RESERVAS_ROUTES } from '@/features/reservas';
 import { CARRITO_ROUTES } from '@/features/carrito';
-import { ShoppingCart } from 'lucide-react';
+import { AMENIDADES_ROUTES } from '@/features/amenidades';
 
 const actionClass =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
@@ -55,6 +55,17 @@ export const Navbar: React.FC = () => {
                 }
               >
                 {es.navegacion.reservar}
+              </NavLink>
+              <NavLink
+                to={AMENIDADES_ROUTES.CATALOGO}
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                    isActive ? 'text-bronce-700' : 'text-neutro-700',
+                  )
+                }
+              >
+                {es.amenidades.titulo}
               </NavLink>
               {status === 'authenticated' && user?.rol === 'cliente' && (
                 <>
@@ -118,18 +129,20 @@ export const Navbar: React.FC = () => {
               </button>
             </>
           ) : status === 'loading' ? (
-            <span className="h-11 w-24 rounded-md bg-neutro-200 motion-safe:animate-pulse" aria-hidden="true" />
+            <span className="text-xs text-neutro-400">{es.comunes.cargando}</span>
           ) : (
             <>
               <Link
+                to="/login"
+                className={cn(actionClass, 'border-neutro-300 text-neutro-700 hover:bg-neutro-100')}
+              >
+                {es.navegacion.ingresar}
+              </Link>
+              <Link
                 to="/registro"
-                className={cn(actionClass, 'hidden border-neutro-300 text-neutro-700 hover:bg-neutro-100 sm:inline-flex')}
+                className={cn(actionClass, 'bg-bronce-600 text-white hover:bg-bronce-700')}
               >
                 {es.navegacion.crearCuenta}
-              </Link>
-              <Link to="/login" className={cn(actionClass, 'bg-bronce-600 text-white hover:bg-bronce-700')}>
-                <User className="size-4" aria-hidden="true" />
-                {es.navegacion.ingresar}
               </Link>
             </>
           )}

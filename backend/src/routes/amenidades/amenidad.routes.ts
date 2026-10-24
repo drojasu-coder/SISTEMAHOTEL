@@ -23,17 +23,10 @@ const router = Router();
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: success
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Amenidad'
+ *               $ref: '#/components/schemas/AmenidadesResponse'
  */
 router.get("/", amenidadController.getAll);
+
 /**
  * @openapi
  * /api/amenidades/{id}:
@@ -51,6 +44,10 @@ router.get("/", amenidadController.getAll);
  *     responses:
  *       200:
  *         description: Amenidad encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AmenidadResponse'
  *       400:
  *         description: ID inválido
  *       404:
@@ -79,6 +76,10 @@ router.use(requireRole(ROLES.ADMIN));
  *     responses:
  *       201:
  *         description: Amenidad creada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AmenidadResponse'
  *       400:
  *         description: Datos inválidos
  *       401:
@@ -89,6 +90,7 @@ router.use(requireRole(ROLES.ADMIN));
  *         description: Sucursal no encontrada
  */
 router.post("/", validateBody(createAmenidadSchema), amenidadController.create);
+
 /**
  * @openapi
  * /api/amenidades/{id}:
@@ -114,6 +116,10 @@ router.post("/", validateBody(createAmenidadSchema), amenidadController.create);
  *     responses:
  *       200:
  *         description: Amenidad actualizada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AmenidadResponse'
  *       400:
  *         description: Datos o ID inválidos
  *       401:
@@ -124,6 +130,7 @@ router.post("/", validateBody(createAmenidadSchema), amenidadController.create);
  *         description: Amenidad no encontrada
  */
 router.patch("/:id", validateParams(idParamSchema), validateBody(updateAmenidadSchema), amenidadController.update);
+
 /**
  * @openapi
  * /api/amenidades/{id}:

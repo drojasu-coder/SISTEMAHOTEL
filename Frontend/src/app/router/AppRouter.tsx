@@ -28,6 +28,10 @@ import { CARRITO_ROUTES } from '@/features/carrito';
 import { CheckoutPage } from '@/pages/CheckoutPage';
 import { PagoResultadoPage } from '@/pages/PagoResultadoPage';
 import { PAGOS_ROUTES } from '@/features/pagos';
+import { AMENIDADES_ROUTES } from '@/features/amenidades';
+import { CatalogoAmenidadesPage } from '@/pages/CatalogoAmenidadesPage';
+import { MisReservasAmenidadesPage } from '@/pages/MisReservasAmenidadesPage';
+import { DetalleReservaAmenidadPage } from '@/pages/DetalleReservaAmenidadPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -52,7 +56,14 @@ export const AppRouter: React.FC = () => {
             <Route path="/pagos/:id/resultado" element={<PagoResultadoPage />} />
           </Route>
 
-          {/* Flujo de reservas del cliente */}
+          {/* Flujo de amenidades del cliente */}
+          <Route path={AMENIDADES_ROUTES.CATALOGO} element={<CatalogoAmenidadesPage />} />
+          <Route element={<RequireAuth />}>
+            <Route path={AMENIDADES_ROUTES.MIS_RESERVAS} element={<MisReservasAmenidadesPage />} />
+            <Route path="/mis-reservas/amenidades/:id" element={<DetalleReservaAmenidadPage />} />
+          </Route>
+
+          {/* Flujo de reservas de habitación del cliente */}
           <Route path={RESERVAS_ROUTES.NUEVA} element={<CrearReservaPage />} />
           <Route path={RESERVAS_ROUTES.MIS_RESERVAS} element={<MisReservasPage />} />
           <Route path="/mis-reservas/:id" element={<DetalleReservaHabitacionPage />} />

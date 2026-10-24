@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { BedDouble, Plus } from 'lucide-react';
+import { BedDouble, Plus, Sparkles } from 'lucide-react';
 import { getApiErrorMessage } from '@/api/errors';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas';
+import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ClienteReservasGate } from '@/features/mis-reservas/components/ClienteReservasGate';
 import { ReservaCard } from '@/features/mis-reservas/components/ReservaCard';
 import { reservaNecesitaCatalogoSedes } from '@/features/mis-reservas/formato';
@@ -36,6 +37,25 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
+      {/* Pestañas de navegación entre habitaciones y amenidades */}
+      <div className="flex border-b border-neutro-200">
+        <Link
+          to={RESERVAS_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-bronce-600 px-4 py-3 text-sm font-semibold text-bronce-700"
+          aria-current="page"
+        >
+          <BedDouble className="size-4" aria-hidden="true" />
+          <span>Reservas de Habitación</span>
+        </Link>
+        <Link
+          to={AMENIDADES_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+        >
+          <Sparkles className="size-4" aria-hidden="true" />
+          <span>Pases de Amenidades</span>
+        </Link>
+      </div>
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <p className="eyebrow">{textosMisReservas.subtitulo}</p>
@@ -133,12 +153,6 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
   );
 };
 
-/**
- * Listado de reservas de habitación del cliente autenticado.
- *
- * La ruta global se conecta fuera de este archivo. El backend filtra las
- * reservas propias; esta pantalla nunca solicita un listado administrativo.
- */
 export const MisReservasPage: React.FC = () => (
   <ClienteReservasGate>
     {(user) => <MisReservasContenido userId={user.id} />}

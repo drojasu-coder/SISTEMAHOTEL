@@ -1072,24 +1072,57 @@ describe(
     );
 
     it(
-      "23. cliente no puede listar todas las reservas",
+      "23. cliente lista exclusivamente sus reservas propias y anónimo es rechazado",
       async () => {
-        const cliente =
+        const amenidad =
+          await createAmenidad();
+
+        const cliente1 =
           await createAuthenticatedUser();
 
-        const response =
+        const cliente2 =
+          await createAuthenticatedUser();
+
+        await request(app)
+          .post("/api/reservas-amenidad")
+          .set(
+            "Authorization",
+            `Bearer ${cliente1.token}`
+          )
+          .send({
+            amenidad_id: amenidad.id,
+            fecha: "2027-06-15",
+            franja_horaria: "09:00-10:00",
+          });
+
+        await request(app)
+          .post("/api/reservas-amenidad")
+          .set(
+            "Authorization",
+            `Bearer ${cliente2.token}`
+          )
+          .send({
+            amenidad_id: amenidad.id,
+            fecha: "2027-06-15",
+            franja_horaria: "11:00-12:00",
+          });
+
+        const responseCliente1 =
           await request(app)
-            .get(
-              "/api/reservas-amenidad"
-            )
+            .get("/api/reservas-amenidad")
             .set(
               "Authorization",
-              `Bearer ${cliente.token}`
+              `Bearer ${cliente1.token}`
             );
 
-        expect(
-          response.status
-        ).toBe(403);
+        expect(responseCliente1.status).toBe(200);
+        expect(responseCliente1.body.data).toHaveLength(1);
+        expect(responseCliente1.body.data[0].usuario_id).toBe(cliente1.usuario.id);
+
+        const responseAnonimo =
+          await request(app).get("/api/reservas-amenidad");
+
+        expect(responseAnonimo.status).toBe(401);
       }
     );
 
@@ -1173,6 +1206,19 @@ describe(
           franja_horaria:
             "10:00-11:00",
         });
+
+    const responseOwner =
+      await request(app)
+        .get(
+          `/api/reservas-amenidad/${created.body.data.id}`
+        )
+        .set(
+          "Authorization",
+          `Bearer ${owner.token}`
+        );
+
+    expect(responseOwner.status).toBe(200);
+    expect(responseOwner.body.data.id).toBe(created.body.data.id);
 
     const response =
       await request(app)

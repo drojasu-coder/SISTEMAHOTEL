@@ -8,14 +8,14 @@ import * as reservaAmenidadService
   from "../../services/amenidades/reservaAmenidad.service";
 
 export const getAll = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
     const data =
       await reservaAmenidadService
-        .getAll();
+        .getAll(req.user);
 
     res.status(200).json({
       success: true,
@@ -40,7 +40,8 @@ export const getById = async (
         .getById(
           Number(
             req.params.id
-          )
+          ),
+          req.user
         );
 
     res.status(200).json({
