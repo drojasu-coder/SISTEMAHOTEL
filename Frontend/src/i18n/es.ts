@@ -370,6 +370,7 @@ export const es = {
 
     nuevaAmenidad: "Nueva amenidad",
     editarAmenidad: "Editar amenidad",
+    crearPrimera: "Registrar primera amenidad",
 
     buscarLabel: "Buscar amenidad por nombre",
     buscarPlaceholder: "Buscar por nombre (ej. Piscina Climatizada)...",
@@ -412,6 +413,10 @@ export const es = {
       "No se encontraron amenidades registradas en este momento.",
     sinResultados:
       "No se encontraron amenidades con los criterios de búsqueda y filtros seleccionados.",
+    sinResultadosTitulo:
+      "No se encontraron amenidades con los criterios de búsqueda y filtros seleccionados.",
+    sinResultadosDesc:
+      "Intente modificando el término de búsqueda o seleccionando otra sede.",
     limpiarFiltros: "Limpiar filtros",
 
     sedeNoEspecificada: "Sede no especificada",
@@ -468,6 +473,72 @@ export const es = {
       },
       volverMisReservas: "Volver a Mis Reservas",
       reservaNoEncontrada: "La reserva de amenidad solicitada no fue encontrada o no pertenece a su cuenta.",
+    },
+    adminReservas: {
+      titulo: "Reservas de Amenidades",
+      subtitulo: "Servicios e Instalaciones",
+      descripcion:
+        "Supervise las reservaciones de amenidades de todas las sedes, verifique los pases de acceso y gestione su estado operativo.",
+      volverAlPanel: "Volver al panel",
+      irGestionAmenidades: "Catálogo de amenidades",
+      buscarPlaceholder: "Buscar por ID, cliente o correo...",
+      todasLasSedes: "Todas las sedes",
+      todasLasAmenidades: "Todas las amenidades",
+      todosLosEstados: "Todos los estados",
+      filtrarPorFecha: "Filtrar por fecha",
+      todasLasFechas: "Cualquier fecha",
+      limpiarFiltros: "Limpiar filtros",
+      cargando: "Cargando reservas de amenidades...",
+      errorCargar: "No fue posible cargar las reservas de amenidades",
+      reintentar: "Reintentar",
+      sinReservasTitulo: "No hay reservas de amenidades registradas",
+      sinReservasDesc:
+        "Aún no se han recibido reservaciones para las amenidades en el hotel.",
+      sinResultados:
+        "No se encontraron reservas con los criterios de búsqueda y filtros seleccionados.",
+      reservasMostradas: (count: number) =>
+        count === 1 ? "1 reserva mostrada" : `${count} reservas mostradas`,
+      colId: "ID",
+      colCliente: "Cliente",
+      colAmenidad: "Amenidad",
+      colSede: "Sede",
+      colFecha: "Fecha",
+      colHorario: "Horario",
+      colMobiliario: "Mobiliario",
+      colEstado: "Estado",
+      colAcciones: "Acciones",
+      verDetalle: "Ver detalle",
+      cambiarEstado: "Cambiar estado",
+      marcarUsada: "Marcar como usada",
+      cancelarReserva: "Cancelar reserva",
+      confirmarAccionTitulo: "Confirmar actualización de estado",
+      confirmarMarcarUsada:
+        "¿Desea registrar esta reserva como completada / usada? Esta acción es definitiva.",
+      confirmarCancelar:
+        "¿Desea cancelar esta reserva de amenidad? Se liberará el aforo correspondiente para esa franja horaria.",
+      confirmarBoton: "Confirmar",
+      cerrarBoton: "Cerrar",
+      procesando: "Actualizando estado...",
+      estadoActualizadoExito:
+        "El estado de la reserva ha sido actualizado correctamente.",
+      errorActualizarEstado:
+        "No fue posible actualizar el estado de la reserva.",
+      estadoFinalNoModificable:
+        "La reserva se encuentra en un estado terminal (cancelada o usada) y ya no puede modificarse.",
+      detalleTitulo: "Detalle de Reserva de Amenidad",
+      detalleSubtitulo: "Supervisión Administrativa",
+      volverAlListado: "Volver a la lista de reservas",
+      clienteInfo: "Información del Cliente",
+      amenidadInfo: "Información de la Amenidad",
+      reservaInfo: "Detalles del Acceso",
+      codigoQrTitulo: "Código QR y Pase de Entrada",
+      codigoAcceso: "Código de acceso",
+      noEspecificado: "No especificado",
+      reservaNoEncontrada:
+        "La reserva de amenidad solicitada no existe o no se pudo cargar.",
+      noExiste: "La reserva de amenidad solicitada no existe o no se pudo cargar.",
+      noExisteDesc: (id: number | string) =>
+        `No fue posible recuperar la información de la reserva #${id}. Verifique que el identificador sea correcto.`,
     },
   },
   parqueos: {

@@ -11,6 +11,7 @@ export type ReservaAmenidadEstado = ReservaAmenidad["estado"];
 export type ReservasAmenidadResponse = components["schemas"]["ReservasAmenidadResponse"];
 export type ReservaAmenidadResponse = components["schemas"]["ReservaAmenidadResponse"];
 export type CreateReservaAmenidadInput = components["schemas"]["CreateReservaAmenidadRequest"];
+export type UpdateReservaAmenidadEstadoInput = components["schemas"]["UpdateReservaAmenidadEstadoRequest"];
 
 export interface AmenidadSucursal {
   id?: number;
@@ -20,4 +21,12 @@ export interface AmenidadSucursal {
 export interface AmenidadesFiltersState {
   search: string;
   sucursalId: number | "all";
+}
+
+export interface ReservasAmenidadAdminFiltersState {
+  search: string;
+  sucursalId: number | "all";
+  amenidadId: number | "all";
+  fecha: string;
+  estado: ReservaAmenidadEstado | "all";
 }

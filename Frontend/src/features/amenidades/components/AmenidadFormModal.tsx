@@ -24,20 +24,27 @@ import type { Amenidad } from "../types";
 import type { Sucursal } from "@/features/sedes/types";
 
 interface AmenidadFormModalProps {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
-  amenidad: Amenidad | null;
+  amenidad?: Amenidad | null;
+  initialData?: Amenidad | null;
   sedes: Sucursal[];
   onSuccess: (message: string) => void;
 }
 
 export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
-  open,
+  open: propOpen,
+  isOpen,
   onClose,
-  amenidad,
+  amenidad: propAmenidad,
+  initialData,
   sedes,
   onSuccess,
 }) => {
+  const open = propOpen ?? isOpen ?? false;
+  const amenidad = propAmenidad ?? initialData ?? null;
+
   const isEditing = Boolean(amenidad);
   const title = isEditing
     ? textosAmenidades.editarTitulo

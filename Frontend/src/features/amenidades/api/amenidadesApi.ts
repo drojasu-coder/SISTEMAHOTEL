@@ -9,6 +9,7 @@ import type {
   ReservaAmenidadResponse,
   ReservasAmenidadResponse,
   CreateReservaAmenidadInput,
+  UpdateReservaAmenidadEstadoInput,
 } from "../types";
 
 export const amenidadesApi = {
@@ -76,6 +77,21 @@ export const reservasAmenidadApi = {
    */
   getById: async (id: number): Promise<ReservaAmenidad> => {
     const response = await api.get<ReservaAmenidadResponse>(`/reservas-amenidad/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Actualización del estado de una reserva de amenidad (cancelada o usada).
+   * PATCH /api/reservas-amenidad/:id/estado
+   */
+  updateEstado: async (
+    id: number,
+    data: UpdateReservaAmenidadEstadoInput
+  ): Promise<ReservaAmenidad> => {
+    const response = await api.patch<ReservaAmenidadResponse>(
+      `/reservas-amenidad/${id}/estado`,
+      data
+    );
     return response.data;
   },
 };

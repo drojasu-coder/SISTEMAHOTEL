@@ -137,3 +137,42 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - Se creó y ejecutó la suite `backend/tests/habitaciones/reservaHabitacion.adminAccess.test.ts` contra `hotel_test_db`.
   - Se comprobó empíricamente que los tres roles contemplados en `habitaciones.gestionar` (`admin`, `recepcionista`, `gerente_habitaciones`) tienen acceso completo a listar todas las reservas y consultar el detalle de cualquier reserva por ID.
   - Se comprobó que el rol `cliente` únicamente puede listar sus propias reservas y recibe `403 INSUFFICIENT_PERMISSIONS` al intentar consultar una reserva ajena por ID.
+
+---
+
+## Tarea: Catálogo de Amenidades de Demostración y Gestión Administrativa de Reservas
+
+- **Estado:** Completada e integrada en frontend y backend.
+- **Detalle de implementaciones:**
+  1. **Amenidades de demostración en `hotel_db:5432`:**
+     - Destino efectivo comprobado con `SELECT current_database(), inet_server_port();` confirmando `hotel_db` en puerto interno `5432`.
+     - Creación idempotente mediante capa de servicio de una amenidad por sede activa (4 sedes):
+       - ID 1: "Área de descanso — Demostración" (Sede 1: Hotel Hunapú Antigua, aforo 15 personas).
+       - ID 2: "Piscina y terraza — Demostración" (Sede 2: Hotel Hunahpú Atitlán, aforo 20 personas).
+       - ID 3: "Gimnasio y sauna — Demostración" (Sede 3: Hotel Hunahpú Xela, aforo 10 personas).
+       - ID 4: "Salón ejecutivo — Demostración" (Sede 4: Hotel Hunahpú Capital, aforo 25 personas).
+     - Verificado mediante petición HTTP `GET http://localhost:4000/api/amenidades`.
+  2. **Consulta y gestión administrativa de reservas de amenidades:**
+     - **Backend:** Se incluyó el atributo `telefono` en el modelo `Usuario` en `backend/src/services/amenidades/reservaAmenidad.service.ts` y se documentó en Swagger (`backend/src/docs/swagger.ts`). Tipos OpenAPI regenerados para frontend (`schema.ts`).
+     - **Frontend - Listado Administrativo (`/admin/reservas-amenidades`):**
+       - Componente `AdminReservasAmenidadesList`: vista responsiva con tabla para pantallas medianas/grandes y tarjetas para pantallas móviles. Identificador, cliente (nombre y correo), amenidad, sede, fecha, horario, mobiliario, estado con badge visual y acciones operativas.
+       - Filtros en tiempo real (`AdminReservasAmenidadesFilters`): búsqueda por ID/cliente/correo, selectores de sede, amenidad (vinculada a sede seleccionada), estado y fecha.
+       - Manejo de estados: cargando, error con reintento, catálogo vacío y sin resultados tras filtrar.
+     - **Frontend - Detalle Administrativo (`/admin/reservas-amenidades/:id`):**
+       - Componente `AdminDetalleReservaAmenidad`: acceso directo por URL, información completa del cliente (incluyendo teléfono de contacto), datos de la amenidad, sede y aforo, franja horaria y mobiliario.
+       - Pase de entrada y código de acceso real con `QRCodeSVG` y código textual.
+       - Manejo de ID inválido, reserva inexistente (404) y acceso denegado (403), con botón de retorno al listado.
+     - **Frontend - Acciones Administrativas:**
+       - Endpoint integrado: `PATCH /api/reservas-amenidad/:id/estado` con `{ estado: 'usada' | 'cancelada' }`.
+       - Confirmación accesible mediante diálogo modal antes de mutar el estado.
+       - Bloqueo de acciones para reservas en estados terminales (`usada` o `cancelada`) informando la no modificabilidad.
+       - Refresco automático de caché tras mutación (`queryClient.invalidateQueries`).
+     - **Rutas y Permisos:**
+       - Protegidas bajo permiso `servicios.administrar` en `AppRouter.tsx`.
+       - Accesos visibles agregados desde `AmenidadesPage` y `ServiciosPage`.
+       - Separación de query keys administrativas (`adminList`, `adminDetail`) respecto a las del cliente.
+- **Comandos ejecutados y resultados:**
+  - `npx vitest run src/features/amenidades`: 25/25 pruebas aprobadas (4/4 archivos de test).
+  - `npm --prefix backend run typecheck`: 0 errores.
+  - `npm --prefix Frontend run build`: compilación limpia en 9.37s.
+  - Comprobación HTTP en vivo: `http://localhost:4000/api/amenidades` y `http://localhost:5173`.

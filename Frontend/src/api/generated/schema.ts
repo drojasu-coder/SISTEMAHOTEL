@@ -12995,6 +12995,8 @@ export interface components {
                 nombre?: string;
                 /** @example juan@example.com */
                 email?: string;
+                /** @example 55551234 */
+                telefono?: string | null;
             } | null;
         };
         ReservaAmenidadResponse: {

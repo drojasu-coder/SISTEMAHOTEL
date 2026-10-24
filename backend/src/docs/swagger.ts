@@ -2128,6 +2128,7 @@ ReservaAmenidad: {
         id: { type: "integer", example: 3 },
         nombre: { type: "string", example: "Juan Pérez" },
         email: { type: "string", example: "juan@example.com" },
+        telefono: { type: "string", nullable: true, example: "55551234" },
       },
     },
   },

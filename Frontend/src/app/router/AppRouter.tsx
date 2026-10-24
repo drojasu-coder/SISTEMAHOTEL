@@ -14,6 +14,8 @@ import { TiposHabitacionPage } from '@/pages/TiposHabitacionPage';
 import { MesasPage } from '@/pages/MesasPage';
 import { ServiciosPage } from '@/pages/ServiciosPage';
 import { AmenidadesPage } from '@/pages/AmenidadesPage';
+import { AdminReservasAmenidadesPage } from '@/pages/AdminReservasAmenidadesPage';
+import { AdminDetalleReservaAmenidadPage } from '@/pages/AdminDetalleReservaAmenidadPage';
 import { ParqueosPage } from '@/pages/ParqueosPage';
 import { AdminReservasPage } from '@/pages/AdminReservasPage';
 import { AdminReservaDetallePage } from '@/pages/AdminReservaDetallePage';
@@ -108,6 +110,8 @@ export const AppRouter: React.FC = () => {
             {/* Amenidades */}
             <Route element={<RequireAuth permission="servicios.administrar" />}>
               <Route path="amenidades" element={<AmenidadesPage />} />
+              <Route path="reservas-amenidades" element={<AdminReservasAmenidadesPage />} />
+              <Route path="reservas-amenidades/:id" element={<AdminDetalleReservaAmenidadPage />} />
             </Route>
 
             {/* Espacios de parqueo */}

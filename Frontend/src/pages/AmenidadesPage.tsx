@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Sparkles, ArrowLeft } from "lucide-react";
+import { Plus, Sparkles, ArrowLeft, CalendarCheck } from "lucide-react";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
@@ -13,6 +13,7 @@ import { AmenidadesList } from "@/features/amenidades/components/AmenidadesList"
 import { AmenidadesFilters } from "@/features/amenidades/components/AmenidadesFilters";
 import { AmenidadFormModal } from "@/features/amenidades/components/AmenidadFormModal";
 import { textosAmenidades } from "@/features/amenidades/textos";
+import { AMENIDADES_ROUTES } from "@/features/amenidades/constants/routes";
 import type { Amenidad, AmenidadesFiltersState } from "@/features/amenidades/types";
 import { getApiErrorMessage } from "@/api/errors";
 
@@ -25,10 +26,12 @@ export const AmenidadesPage: React.FC = () => {
   const amenidadesQuery = useAmenidadesQuery();
   const sedesQuery = useSedesQuery();
 
-  const [filters, setFilters] = useState<AmenidadesFiltersState>({
-    search: "",
-    sucursalId: "all",
-  });
+  const [filters, setFilters] = useState<AmenidadesFiltersState>(
+    {
+      search: "",
+      sucursalId: "all",
+    }
+  );
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedAmenidad, setSelectedAmenidad] = useState<Amenidad | null>(null);
@@ -107,6 +110,13 @@ export const AmenidadesPage: React.FC = () => {
             <ArrowLeft className="size-4" aria-hidden="true" />
             <span>{es.servicios.titulo}</span>
           </Link>
+          <Link
+            to={AMENIDADES_ROUTES.ADMIN_RESERVAS}
+            className={buttonStyles({ variant: "secondary" })}
+          >
+            <CalendarCheck className="size-4" aria-hidden="true" />
+            <span>{es.amenidades.adminReservas.titulo}</span>
+          </Link>
           {canManageAmenidades && (
             <Button
               type="button"
@@ -180,9 +190,13 @@ export const AmenidadesPage: React.FC = () => {
             </p>
           </div>
           {canManageAmenidades && (
-            <Button type="button" variant="primary" onClick={handleOpenCreate}>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleOpenCreate}
+            >
               <Plus className="size-4" aria-hidden="true" />
-              {textosAmenidades.nuevaAmenidad}
+              <span>{textosAmenidades.crearPrimera}</span>
             </Button>
           )}
         </Card>
@@ -194,18 +208,17 @@ export const AmenidadesPage: React.FC = () => {
         amenidades.length > 0 &&
         filteredAmenidades.length === 0 && (
           <Card className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-            <p className="text-sm text-neutro-700">
-              {textosAmenidades.sinResultados}
+            <p className="text-sm font-medium text-neutro-700">
+              {textosAmenidades.sinResultadosTitulo}
+            </p>
+            <p className="text-xs text-neutro-500 max-w-sm">
+              {textosAmenidades.sinResultadosDesc}
             </p>
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               onClick={() =>
-                setFilters({
-                  search: "",
-                  sucursalId: "all",
-                })
+                setFilters({ search: "", sucursalId: "all" })
               }
             >
               {textosAmenidades.limpiarFiltros}
@@ -213,23 +226,23 @@ export const AmenidadesPage: React.FC = () => {
           </Card>
         )}
 
-      {/* Listado */}
+      {/* Listado con tarjetas */}
       {!isLoading && !isError && filteredAmenidades.length > 0 && (
         <AmenidadesList
           amenidades={filteredAmenidades}
           sedesMap={sedesMap}
-          canEdit={canManageAmenidades}
           onEdit={handleOpenEdit}
+          canEdit={canManageAmenidades}
         />
       )}
 
-      {/* Modal accesible */}
-      {canManageAmenidades && (
+      {/* Modal de creación / edición */}
+      {modalOpen && (
         <AmenidadFormModal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          amenidad={selectedAmenidad}
+          isOpen={modalOpen}
+          initialData={selectedAmenidad}
           sedes={sedes}
+          onClose={() => setModalOpen(false)}
           onSuccess={handleSuccess}
         />
       )}

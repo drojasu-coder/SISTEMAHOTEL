@@ -61,6 +61,7 @@ const reservaAmenidadInclude = [
       "id",
       "nombre",
       "email",
+      "telefono",
     ],
   },
 ];

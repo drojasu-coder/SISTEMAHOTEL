@@ -8,5 +8,9 @@ export const amenidadesQueryKeys = {
       [...amenidadesQueryKeys.reservas.all, "list", userId] as const,
     detail: (id: number, userId?: number) =>
       [...amenidadesQueryKeys.reservas.all, "detail", id, userId] as const,
+    adminList: (userId?: number) =>
+      [...amenidadesQueryKeys.reservas.all, "admin", "list", userId] as const,
+    adminDetail: (id: number, userId?: number) =>
+      [...amenidadesQueryKeys.reservas.all, "admin", "detail", id, userId] as const,
   },
 } as const;

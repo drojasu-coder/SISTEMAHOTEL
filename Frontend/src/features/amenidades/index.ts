@@ -8,4 +8,7 @@ export * from "./components/CatalogoAmenidadesCliente";
 export * from "./components/ReservaAmenidadFormModal";
 export * from "./components/MisReservasAmenidadesList";
 export * from "./components/DetalleReservaAmenidad";
+export * from "./components/AdminReservasAmenidadesFilters";
+export * from "./components/AdminReservasAmenidadesList";
+export * from "./components/AdminDetalleReservaAmenidad";
 export * from "./textos";
