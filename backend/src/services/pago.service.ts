@@ -889,7 +889,8 @@ const reconcileIdempotentPaymentIntent = async (
     !data.idempotency_key ||
     !payment ||
     !intent ||
-    intent.metadata?.pago_id === String(payment.id)
+    !intent.metadata?.pago_id ||
+    intent.metadata.pago_id === String(payment.id)
   ) {
     return;
   }

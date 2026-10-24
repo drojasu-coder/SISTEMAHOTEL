@@ -6,12 +6,12 @@ require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (
   testDatabaseUrl &&
-  (!/^postgres(?:ql)?:\/\/[^/]+@(?:127\.0\.0\.1|localhost):55432\/hotel_test_db(?:\?.*)?$/.test(
+  (!/^postgres(?:ql)?:\/\/[^/]+@(?:127\.0\.0\.1|localhost):(55432|55433)\/hotel_test_db(?:\?.*)?$/.test(
     testDatabaseUrl,
   ))
 ) {
   throw new Error(
-    "TEST_DATABASE_URL debe apuntar exclusivamente a localhost:55432/hotel_test_db",
+    "TEST_DATABASE_URL debe apuntar exclusivamente a localhost:55432 o 55433 /hotel_test_db",
   );
 }
 

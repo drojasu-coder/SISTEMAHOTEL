@@ -76,7 +76,7 @@ const validateDatabase = (values: Env) => {
     const url = parseDatabaseUrl(values.TEST_DATABASE_URL, "TEST_DATABASE_URL");
     if (
       !["127.0.0.1", "localhost"].includes(url.hostname) ||
-      url.port !== "55432" ||
+      !["55432", "55433"].includes(url.port) ||
       url.pathname !== "/hotel_test_db"
     ) {
       throw new Error(

@@ -54,6 +54,7 @@ process.env.STRIPE_WEBHOOK_SECRET =
  * rechaza cualquier otra URL en NODE_ENV=test.
  */
 process.env.TEST_DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
   "postgres://hotel_test_user:hotel_test_password@127.0.0.1:55432/hotel_test_db";
 
 /**
