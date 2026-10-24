@@ -32,6 +32,7 @@ const rolesGestionProveedores = [ROLES.ADMIN, ROLES.GERENTE_RESTAURANTE];
 router.get(
   "/",
   authMiddleware,
+  requireRole(...rolesGestionProveedores),
   proveedorProductoController.getAllProveedorProductos,
 );
 
@@ -62,6 +63,7 @@ router.get(
 router.get(
   "/:id",
   authMiddleware,
+  requireRole(...rolesGestionProveedores),
   validateParams(proveedorProductoIdSchema),
   proveedorProductoController.getProveedorProductoById,
 );

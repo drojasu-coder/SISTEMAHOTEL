@@ -1090,6 +1090,60 @@ it(
 it(
   "20. una reserva finalizada no bloquea nuevas reservas",
   async () => {
+    const getHotelDatePlusDays =
+      (days: number) => {
+        const timeZone =
+          process.env.APP_TIMEZONE ||
+          "America/Guatemala";
+
+        const parts =
+          new Intl.DateTimeFormat(
+            "en-US",
+            {
+              timeZone,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            }
+          ).formatToParts(
+            new Date()
+          );
+
+        const getPart =
+          (type: string) =>
+            Number(
+              parts.find(
+                (part) =>
+                  part.type === type
+              )?.value
+            );
+
+        return new Date(
+          Date.UTC(
+            getPart("year"),
+            getPart("month") - 1,
+            getPart("day") + days
+          )
+        )
+          .toISOString()
+          .slice(0, 10);
+      };
+
+    const currentLocalDate =
+      getHotelDatePlusDays(0);
+
+    const historicalCheckIn =
+      getHotelDatePlusDays(-3);
+
+    const historicalCheckOut =
+      getHotelDatePlusDays(-1);
+
+    const futureCheckIn =
+      getHotelDatePlusDays(2);
+
+    const futureCheckOut =
+      getHotelDatePlusDays(4);
+
     const hotel =
       await createHotelFixture();
 
@@ -1102,33 +1156,34 @@ it(
           ROLES.ADMIN,
       });
 
-    const first =
-      await request(app)
-        .post(
-          "/api/reservas-habitacion"
-        )
-        .set(
-          "Authorization",
-          `Bearer ${cliente.token}`
-        )
-        .send({
-          habitacion_id:
-            hotel.habitacion.id,
-          fecha_entrada:
-            "2027-09-10",
-          fecha_salida:
-            "2027-09-15",
-          numero_huespedes: 2,
-        });
+    const {
+      ReservaHabitacion,
+    } = require("../../src/models");
 
     expect(
-      first.status
-    ).toBe(201);
+      historicalCheckOut <=
+        currentLocalDate
+    ).toBe(true);
+
+    const first =
+      await ReservaHabitacion.create({
+        usuario_id:
+          cliente.usuario.id,
+        habitacion_id:
+          hotel.habitacion.id,
+        fecha_entrada:
+          historicalCheckIn,
+        fecha_salida:
+          historicalCheckOut,
+        numero_huespedes: 2,
+        estado: "pendiente",
+        total: 200,
+      });
 
     const update =
       await request(app)
         .patch(
-          `/api/reservas-habitacion/${first.body.data.id}`
+          `/api/reservas-habitacion/${first.id}`
         )
         .set(
           "Authorization",
@@ -1156,11 +1211,46 @@ it(
           habitacion_id:
             hotel.habitacion.id,
           fecha_entrada:
-            "2027-09-10",
+            futureCheckIn,
           fecha_salida:
-            "2027-09-15",
+            futureCheckOut,
           numero_huespedes: 2,
         });
+
+    console.log(
+      "[QA-RH-FUNC-CANDIDATE-025 HISTORICAL TEST]",
+      {
+        hotelTimeZone:
+          process.env.APP_TIMEZONE ||
+          "America/Guatemala",
+        currentLocalDate,
+        historicalInterval: {
+          checkIn:
+            historicalCheckIn,
+          checkOut:
+            historicalCheckOut,
+        },
+        checkoutPassed:
+          historicalCheckOut <=
+          currentLocalDate,
+        patch: {
+          status: update.status,
+          code:
+            update.body?.code ?? null,
+        },
+        futureInterval: {
+          checkIn:
+            futureCheckIn,
+          checkOut:
+            futureCheckOut,
+        },
+        futurePost: {
+          status: second.status,
+          code:
+            second.body?.code ?? null,
+        },
+      }
+    );
 
     expect(
       second.status

@@ -424,7 +424,7 @@ describe("QA-PAY-CONC-CANDIDATE-011 idempotencia de pagos", () => {
       const originalPayload = {
         carrito_id: carritoId,
         monto: "100.00",
-        metodo: "efectivo",
+        metodo: "tarjeta",
         tipo_pago: "total",
         moneda: "GTQ",
         idempotency_key: idempotencyKey,
@@ -490,14 +490,14 @@ describe("QA-PAY-CONC-CANDIDATE-011 idempotencia de pagos", () => {
       );
 
       expect(original.status).toBe(201);
-      expect(original.body.data.tipo_pago).toBe("total");
+      expect(original.body.data.estado).toBe("procesando");
       expect(replay.status).toBe(409);
       expect(replay.body.code).toBe("IDEMPOTENCY_CONFLICT");
       expect(payments).toHaveLength(1);
       expect(keyRows).toBe(1);
-      expect(payments[0].id).toBe(original.body.data.id);
+      expect(payments[0].id).toBe(original.body.data.pago_id);
       expect(payments[0].tipo_pago).toBe("total");
-      expect(stripeMock.createPaymentIntent).not.toHaveBeenCalled();
+      expect(stripeMock.createPaymentIntent).toHaveBeenCalledTimes(1);
       expect(stripeMock.retrievePaymentIntent).not.toHaveBeenCalled();
       assertForbiddenStripeOperations();
     },

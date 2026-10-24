@@ -1,16 +1,16 @@
 import { NextFunction, Request, Response } from "express";
 import * as facturaService from "../../services/habitaciones/factura.service";
 
-export const getAllFacturas = async (_req: Request, res: Response, next: NextFunction) => {
+export const getAllFacturas = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const facturas = await facturaService.getAllFacturas();
+    const facturas = await facturaService.getAllFacturas(req.user!);
     res.status(200).json({ success: true, statusCode: 200, message: "Facturas obtenidas correctamente", data: facturas });
   } catch (error) { next(error); }
 };
 
 export const getFacturaById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const factura = await facturaService.getFacturaById(Number(req.params.id));
+    const factura = await facturaService.getFacturaById(Number(req.params.id), req.user!);
     res.status(200).json({ success: true, statusCode: 200, message: "Factura obtenida correctamente", data: factura });
   } catch (error) { next(error); }
 };

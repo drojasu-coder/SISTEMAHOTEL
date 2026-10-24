@@ -24,6 +24,7 @@ const {
   CarritoItem,
   ReservaHabitacion,
   ReservaEvento,
+  ReservaActividad,
 } = db;
 
 export type PagoMetodo = PaymentMethod;
@@ -130,6 +131,213 @@ const historicalCartIdsForReference = async (
       ),
     ),
   ];
+};
+
+/**
+ * Exposición financiera activa de una ReservaHabitacion, sin importar si el
+ * pago nació directamente de la reserva o de cualquiera de los carritos que
+ * histórica o actualmente contienen la referencia.
+ *
+ * La fila de ReservaHabitacion es el lock canónico de quienes pueden aumentar
+ * esta exposición. Por eso esta lectura no toma locks Pago: createPago y
+ * approveTransferencia deben bloquear primero la reserva y calcular dentro de
+ * la misma transacción. Los pagos se seleccionan una sola vez mediante OR,
+ * incluso ante datos heredados donde ambas llaves de origen estuvieran llenas.
+ */
+export const reservationFinancialExposure = async (
+  reservationId: number,
+  transaction: any,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    "habitacion",
+    reservationId,
+    transaction,
+  );
+  const origins: Record<string | symbol, unknown>[] = [
+    { reserva_habitacion_id: reservationId },
+  ];
+  if (cartIds.length > 0) {
+    origins.push({ carrito_id: { [Op.in]: cartIds } });
+  }
+
+  const payments = await Pago.findAll({
+    where: {
+      [Op.or]: origins,
+      estado: {
+        [Op.in]: [
+          "aprobado",
+          "reembolsado_parcial",
+          "reembolsado",
+          "procesando",
+        ],
+      },
+    },
+    attributes: [
+      "id",
+      "monto",
+      "estado",
+      "carrito_id",
+      "reserva_habitacion_id",
+    ],
+    transaction,
+  });
+  const uniquePayments = [
+    ...new Map<number, any>(
+      (payments as any[]).map((payment: any) => [
+        Number(payment.id),
+        payment,
+      ]),
+    ).values(),
+  ];
+  const approvedPayments = uniquePayments.filter((payment: any) =>
+    ["aprobado", "reembolsado_parcial", "reembolsado"].includes(
+      String(payment.estado),
+    ),
+  );
+  const refunds = approvedPayments.length > 0
+    ? await db.Reembolso.findAll({
+        where: {
+          pago_id: {
+            [Op.in]: approvedPayments.map((payment: any) => payment.id),
+          },
+          estado: "aprobado",
+        },
+        attributes: ["pago_id", "monto"],
+        transaction,
+      })
+    : [];
+  const refundedByPayment = new Map<number, number>();
+  for (const refund of refunds as any[]) {
+    const paymentId = Number(refund.pago_id);
+    refundedByPayment.set(
+      paymentId,
+      round(
+        (refundedByPayment.get(paymentId) ?? 0) + Number(refund.monto),
+      ),
+    );
+  }
+
+  const toCents = (value: unknown) =>
+    Math.round(Number(value) * 100);
+  const allocateCartCents = async (
+    carritoId: number,
+    amountCents: number,
+  ) => {
+    if (amountCents <= 0) return 0;
+
+    const items = await CarritoItem.findAll({
+      where: { carrito_id: carritoId },
+      attributes: [
+        "id",
+        "tipo_item",
+        "referencia_id",
+        "precio",
+        "cantidad",
+      ],
+      order: [["id", "ASC"]],
+      transaction,
+    });
+    const weightedItems = (items as any[])
+      .map((item: any) => ({
+        id: Number(item.id),
+        isTarget:
+          item.tipo_item === "habitacion" &&
+          Number(item.referencia_id) === Number(reservationId),
+        weight: Math.max(
+          0,
+          toCents(Number(item.precio) * Number(item.cantidad)),
+        ),
+      }))
+      .filter((item: any) => item.weight > 0);
+    const totalWeight = weightedItems.reduce(
+      (sum: number, item: any) => sum + item.weight,
+      0,
+    );
+    if (totalWeight <= 0) return 0;
+
+    const totalWeightBigInt = BigInt(totalWeight);
+    const shares = weightedItems.map((item: any) => {
+      const numerator = BigInt(amountCents) * BigInt(item.weight);
+      return {
+        ...item,
+        cents: Number(numerator / totalWeightBigInt),
+        remainder: numerator % totalWeightBigInt,
+      };
+    });
+    let undistributed = amountCents - shares.reduce(
+      (sum: number, share: any) => sum + share.cents,
+      0,
+    );
+    shares.sort((left: any, right: any) => {
+      if (left.remainder === right.remainder) return left.id - right.id;
+      return left.remainder > right.remainder ? -1 : 1;
+    });
+    for (let index = 0; index < shares.length && undistributed > 0; index += 1) {
+      shares[index].cents += 1;
+      undistributed -= 1;
+    }
+
+    return shares
+      .filter((share: any) => share.isTarget)
+      .reduce((sum: number, share: any) => sum + share.cents, 0);
+  };
+
+  let approvedCents = 0;
+  let processingCents = 0;
+  const cartApprovedCents = new Map<number, number>();
+  const cartProcessingCents = new Map<number, number>();
+  for (const payment of uniquePayments as any[]) {
+    const directReservationId = payment.reserva_habitacion_id == null
+      ? null
+      : Number(payment.reserva_habitacion_id);
+    const isApproved = [
+      "aprobado",
+      "reembolsado_parcial",
+      "reembolsado",
+    ].includes(String(payment.estado));
+    const paymentCents = isApproved
+      ? Math.max(
+          0,
+          toCents(payment.monto) -
+            toCents(refundedByPayment.get(Number(payment.id)) ?? 0),
+        )
+      : payment.estado === "procesando"
+        ? toCents(payment.monto)
+        : 0;
+
+    // Ante datos heredados con ambas llaves, el origen directo tiene
+    // precedencia para que un mismo Pago nunca se atribuya dos veces.
+    if (directReservationId !== null) {
+      if (directReservationId === Number(reservationId)) {
+        if (isApproved) approvedCents += paymentCents;
+        if (payment.estado === "procesando") processingCents += paymentCents;
+      }
+      continue;
+    }
+
+    const carritoId = payment.carrito_id == null
+      ? null
+      : Number(payment.carrito_id);
+    if (carritoId === null) continue;
+    const targetMap = isApproved ? cartApprovedCents : cartProcessingCents;
+    targetMap.set(carritoId, (targetMap.get(carritoId) ?? 0) + paymentCents);
+  }
+
+  for (const [carritoId, amountCents] of cartApprovedCents) {
+    approvedCents += await allocateCartCents(carritoId, amountCents);
+  }
+  for (const [carritoId, amountCents] of cartProcessingCents) {
+    processingCents += await allocateCartCents(carritoId, amountCents);
+  }
+
+  const approved = round(approvedCents / 100);
+  const processing = round(processingCents / 100);
+
+  return {
+    approved,
+    processing,
+    total: round(approved + processing),
+  };
 };
 
 
@@ -286,44 +494,11 @@ export const isReservationFullyPaid = async (
   reservationTotal: number | string,
   transaction: any,
 ) => {
-  const directPaid = await approvedAmount(
-    { reserva_habitacion_id: reservationId },
+  const exposure = await reservationFinancialExposure(
+    reservationId,
     transaction,
   );
-  const roomItems = await CarritoItem.findAll({
-    where: { tipo_item: "habitacion", referencia_id: reservationId },
-    attributes: ["carrito_id"],
-    transaction,
-  });
-  const cartIds: number[] = [...new Set(
-    (roomItems as any[]).map((item: any) => Number(item.carrito_id)),
-  )];
-  const hasFullyPaidCart = await Promise.all(
-    cartIds.map(async (cartId) => {
-      const items = await CarritoItem.findAll({
-        where: { carrito_id: cartId },
-        attributes: ["tipo_item", "referencia_id", "precio", "cantidad"],
-        transaction,
-      });
-      if (
-        items.length !== 1 ||
-        (items[0] as any).tipo_item !== "habitacion" ||
-        Number((items[0] as any).referencia_id) !== reservationId
-      ) {
-        return false;
-      }
-      let cartTotal = 0;
-      for (const item of items as any[]) {
-        cartTotal += Number(item.precio) * Number(item.cantidad);
-      }
-      cartTotal = round(cartTotal);
-      if (cartTotal !== round(Number(reservationTotal))) return false;
-      const approvedRaw: any = await approvedCartAmount(cartId, transaction);
-      const approved = Number(approvedRaw);
-      return cartTotal > 0 && approved >= cartTotal;
-    }),
-  );
-  return directPaid >= round(Number(reservationTotal)) || hasFullyPaidCart.some(Boolean);
+  return exposure.approved >= round(Number(reservationTotal));
 };
 
 const confirmReservationIfFullyPaid = async (
@@ -383,6 +558,22 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
           );
         }
       }
+      if (item.tipo_item === "actividad") {
+        const reservation = await ReservaActividad.findByPk(item.referencia_id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (
+          !reservation ||
+          String(reservation.estado).toLowerCase() === "cancelada"
+        ) {
+          throw new AppError(
+            409,
+            "CART_REFERENCE_NOT_AVAILABLE",
+            "La reserva de actividad ya no se encuentra disponible",
+          );
+        }
+      }
       if (item.tipo_item !== "evento") return price * quantity;
       const event = await ReservaEvento.findByPk(item.referencia_id, { transaction });
       if (!event) throw new AppError(404, "EVENT_RESERVATION_NOT_FOUND", "La reserva de evento del carrito no existe");
@@ -425,7 +616,55 @@ const approvedAdvanceAmount = async (where: Record<string, unknown>, transaction
   return round(sum);
 };
 
-const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowPaid = false) => {
+const roomReservationIdsForCart = async (
+  carritoId: number,
+  transaction: any,
+) => {
+  const roomItems = await CarritoItem.findAll({
+    where: {
+      carrito_id: carritoId,
+      tipo_item: "habitacion",
+    },
+    attributes: ["referencia_id"],
+    order: [["referencia_id", "ASC"]],
+    transaction,
+  });
+
+  return [
+    ...new Set<number>(
+      (roomItems as any[]).map((item: any) => Number(item.referencia_id)),
+    ),
+  ].sort((left, right) => left - right);
+};
+
+const lockRoomReservations = async (
+  reservationIds: number[],
+  transaction: any,
+) => {
+  const reservations = [];
+  for (const reservationId of reservationIds) {
+    const reservation = await ReservaHabitacion.findByPk(reservationId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!reservation) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva seleccionada ya no se encuentra disponible",
+      );
+    }
+    reservations.push(reservation);
+  }
+  return reservations;
+};
+
+const validateOpenOrigin = async (
+  data: CreatePagoData,
+  transaction: any,
+  allowPaid = false,
+  serializeRoomExposure = false,
+) => {
   if (data.carrito_id !== undefined && data.carrito_id !== null) {
     const cart = await Carrito.findByPk(data.carrito_id, {
       transaction,
@@ -439,8 +678,21 @@ const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowP
         (cart.estado !== "activo" && !(allowPaid && cart.estado === "pagado"))) {
       throw new AppError(409, "CART_NOT_AVAILABLE", "El carrito ya no se encuentra disponible para pagos");
     }
+    const roomReservationIds = await roomReservationIdsForCart(
+      cart.id,
+      transaction,
+    );
+    const roomReservations = serializeRoomExposure
+      ? await lockRoomReservations(roomReservationIds, transaction)
+      : [];
     const totals = await cartTotals(cart.id, transaction, allowPaid);
-    return { key: { carrito_id: cart.id }, ...totals, origin: cart };
+    return {
+      key: { carrito_id: cart.id },
+      ...totals,
+      origin: cart,
+      roomReservationIds,
+      roomReservations,
+    };
   }
 
   const reservation = await ReservaHabitacion.findByPk(data.reserva_habitacion_id, {
@@ -463,6 +715,57 @@ const validateOpenOrigin = async (data: CreatePagoData, transaction: any, allowP
     requiredAdvance: 0,
     isOnlyRoom: true,
     origin: reservation,
+    roomReservationIds: [Number(reservation.id)],
+    roomReservations: [reservation],
+  };
+};
+
+const roomExposureBalance = async (
+  details: any,
+  transaction: any,
+) => {
+  if (!details.roomReservationIds?.length) {
+    return null;
+  }
+
+  const reservationsById = new Map<number, any>(
+    (details.roomReservations ?? []).map((reservation: any) => [
+      Number(reservation.id),
+      reservation,
+    ]),
+  );
+  let remaining = 0;
+  let directExposure: Awaited<
+    ReturnType<typeof reservationFinancialExposure>
+  > | null = null;
+
+  for (const reservationId of details.roomReservationIds as number[]) {
+    const reservation = reservationsById.get(Number(reservationId));
+    if (!reservation) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva seleccionada ya no se encuentra disponible",
+      );
+    }
+    const exposure = await reservationFinancialExposure(
+      Number(reservationId),
+      transaction,
+    );
+    remaining = round(
+      remaining + Math.max(0, Number(reservation.total) - exposure.total),
+    );
+    if (
+      details.origin?.constructor?.name === "ReservaHabitacion" &&
+      Number(details.origin.id) === Number(reservationId)
+    ) {
+      directExposure = exposure;
+    }
+  }
+
+  return {
+    remaining: round(remaining),
+    directExposure,
   };
 };
 
@@ -524,7 +827,6 @@ const findIdempotencyReplay = async (
   return existing;
 };
 
-
 const reconcileCanceledStripePayments = async (
   originKey: Record<string, unknown>,
   details: { origin: any; total: number },
@@ -575,11 +877,91 @@ const reconcileCanceledStripePayments = async (
     }
   }
 };
+const reconcileIdempotentPaymentIntent = async (
+  result: any,
+  data: CreatePagoData,
+  amount: number,
+  tipo: PagoTipo,
+) => {
+  const payment = result?.payment;
+  const intent = result?.intent;
+  if (
+    !data.idempotency_key ||
+    !payment ||
+    !intent ||
+    intent.metadata?.pago_id === String(payment.id)
+  ) {
+    return;
+  }
+
+  // The transaction has committed at this point. Re-read the payment so Stripe
+  // can never be redirected to a row that was rolled back during COMMIT.
+  const durablePayment = await Pago.findByPk(payment.id);
+  const expectedCartId = data.carrito_id != null
+    ? String(data.carrito_id)
+    : null;
+  const expectedReservationId = data.reserva_habitacion_id != null
+    ? String(data.reserva_habitacion_id)
+    : null;
+  const metadataCartId = intent.metadata?.carrito_id ?? null;
+  const metadataReservationId =
+    intent.metadata?.reserva_habitacion_id ?? null;
+
+  const sameEconomicOperation = Boolean(
+    durablePayment &&
+    durablePayment.idempotency_key === data.idempotency_key &&
+    durablePayment.metodo === "tarjeta" &&
+    durablePayment.pasarela === "stripe" &&
+    durablePayment.id_transaccion_externo === intent.id &&
+    Number(durablePayment.monto) === amount &&
+    durablePayment.moneda === PAYMENT_CURRENCY &&
+    durablePayment.tipo_pago === tipo &&
+    (durablePayment.carrito_id ?? null) === (data.carrito_id ?? null) &&
+    (durablePayment.reserva_habitacion_id ?? null) ===
+      (data.reserva_habitacion_id ?? null) &&
+    intent.amount === toStripeAmount(amount, PAYMENT_CURRENCY) &&
+    intent.currency?.toLowerCase() === PAYMENT_CURRENCY.toLowerCase() &&
+    metadataCartId === expectedCartId &&
+    metadataReservationId === expectedReservationId &&
+    intent.metadata?.tipo_pago === tipo
+  );
+
+  if (!sameEconomicOperation) {
+    throw new AppError(
+      409,
+      "STRIPE_PAYMENT_MISMATCH",
+      "El PaymentIntent no corresponde al pago esperado",
+    );
+  }
+
+  try {
+    await stripeService.updatePaymentIntentMetadata(intent.id, {
+      ...(intent.metadata ?? {}),
+      pago_id: String(durablePayment.id),
+    });
+  } catch (error: any) {
+    if (error instanceof AppError) throw error;
+    const reconciliationError = new AppError(
+      502,
+      "STRIPE_METADATA_RECONCILIATION_FAILED",
+      "El pago fue persistido, pero no fue posible reconciliar sus metadatos en Stripe",
+    );
+    (reconciliationError as AppError & { cause?: unknown }).cause = error;
+    throw reconciliationError;
+  }
+};
 
 export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
   validateOrigin(data);
   if (!PAYMENT_METHODS.includes(data.metodo)) {
     throw new AppError(422, "INVALID_PAYMENT_METHOD", "El método de pago no es válido");
+  }
+  if (data.metodo === "efectivo" && !isPaymentAdministrator(requester)) {
+    throw new AppError(
+      403,
+      "CASH_PAYMENT_FORBIDDEN",
+      "Solo el personal autorizado puede registrar pagos en efectivo",
+    );
   }
   const tipo = data.tipo_pago ?? "total";
   if (!PAYMENT_TYPES.includes(tipo)) {
@@ -594,7 +976,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
   }
   const amount = money(data.monto);
 
-  return sequelize.transaction(async (transaction: any) => {
+  const result = await sequelize.transaction(async (transaction: any) => {
     await assertPaymentOriginOwnership(data, requester, transaction);
     const earlyReplay = await findIdempotencyReplay(
       data,
@@ -604,7 +986,18 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     );
     if (earlyReplay) return earlyReplay;
 
-    const details = await validateOpenOrigin(data, transaction);
+    /*
+     * Orden canónico para compromisos de habitación:
+     * Carrito (si existe) -> ReservaHabitacion por id ascendente -> Pago.
+     * Un pago directo comienza en ReservaHabitacion. Nunca se toma Pago antes
+     * de Carrito, preservando el orden corregido por QA-PAY-CONC-018.
+     */
+    const details = await validateOpenOrigin(
+      data,
+      transaction,
+      false,
+      true,
+    );
     const serializedReplay = await findIdempotencyReplay(
       data,
       amount,
@@ -615,16 +1008,21 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
 
     await reconcileCanceledStripePayments(details.key, details, transaction);
 
-    const exposure = await committedOrProcessingExposure(details.key, transaction);
+    const roomBalance = await roomExposureBalance(details, transaction);
+    const exposure = roomBalance?.directExposure ??
+      await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
-    const remaining = round(details.total - exposure.total);
+    const originRemaining = round(details.total - exposure.total);
+    const remaining = roomBalance
+      ? round(Math.min(originRemaining, roomBalance.remaining))
+      : originRemaining;
     if (amount > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && amount < remaining) {
+    if (details.isOnlyRoom && amount < originRemaining) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (tipo === "anticipo") {
@@ -705,6 +1103,9 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     }
     return payment;
   });
+
+  await reconcileIdempotentPaymentIntent(result, data, amount, tipo);
+  return result;
 };
 
 export const processStripeWebhook = async (object: any, eventType: string) =>
@@ -712,7 +1113,56 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
     const isRefundEvent = eventType.includes("refund");
     const intentId = isRefundEvent ? (typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id) : object.id;
 
-    const payment = await Pago.findOne({ where: { id_transaccion_externo: intentId }, transaction, lock: transaction.LOCK.UPDATE });
+    let payment: any;
+    if (!isRefundEvent && eventType === "payment_intent.succeeded") {
+      const unlockedPayment = await Pago.findOne({
+        where: { id_transaccion_externo: intentId },
+        transaction,
+      });
+      if (!unlockedPayment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
+
+      if (unlockedPayment.carrito_id !== null && unlockedPayment.carrito_id !== undefined) {
+        const discoveredPayment = {
+          id: Number(unlockedPayment.id),
+          externalId: unlockedPayment.id_transaccion_externo,
+          carritoId: Number(unlockedPayment.carrito_id),
+          reservaHabitacionId: unlockedPayment.reserva_habitacion_id ?? null,
+        };
+
+        const cart = await Carrito.findByPk(discoveredPayment.carritoId, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (!cart) throw new AppError(404, "CART_NOT_FOUND", "El carrito solicitado no existe");
+
+        payment = await Pago.findOne({
+          where: { id_transaccion_externo: intentId },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (
+          !payment ||
+          Number(payment.id) !== discoveredPayment.id ||
+          payment.id_transaccion_externo !== discoveredPayment.externalId ||
+          Number(payment.carrito_id) !== discoveredPayment.carritoId ||
+          (payment.reserva_habitacion_id ?? null) !== discoveredPayment.reservaHabitacionId
+        ) {
+          throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
+        }
+      } else {
+        payment = await Pago.findOne({
+          where: { id_transaccion_externo: intentId },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+      }
+    } else {
+      payment = await Pago.findOne({
+        where: { id_transaccion_externo: intentId },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+    }
     if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
 
     if (isRefundEvent) {
@@ -732,7 +1182,10 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
           fecha_reembolso: refundState === "aprobado" ? new Date(refundObj.created * 1000) : null,
           id_reembolso_externo: refundObj.id,
         }, { transaction });
-      } else if (reembolso.estado !== refundState) {
+      } else if (
+        reembolso.estado !== refundState &&
+        !(reembolso.estado === "aprobado" && refundState !== "aprobado")
+      ) {
         await reembolso.update({
           estado: refundState,
           fecha_reembolso: refundState === "aprobado" ? new Date(refundObj.created * 1000) : null
@@ -817,7 +1270,14 @@ export const approveTransferencia = async (pagoId: number) =>
       monto: unlockedPayment.monto,
       metodo: unlockedPayment.metodo,
     } as CreatePagoData;
-    const origin = await validateOpenOrigin(originData, transaction, true);
+    // Conserva el mismo orden canónico que createPago: Carrito (si existe),
+    // ReservaHabitacion por id ascendente y finalmente Pago.
+    const origin = await validateOpenOrigin(
+      originData,
+      transaction,
+      true,
+      true,
+    );
     const payment = await Pago.findByPk(pagoId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "El pago no existe");
     if (payment.metodo !== "transferencia") {
@@ -833,15 +1293,22 @@ export const approveTransferencia = async (pagoId: number) =>
     }
     if (payment.estado !== "pendiente") throw new AppError(409, "PAYMENT_NOT_PENDING", "El pago no está pendiente");
     const details = origin;
-    const paid = await approvedAmount(details.key, transaction);
+    const roomBalance = await roomExposureBalance(details, transaction);
+    const exposure = roomBalance?.directExposure ??
+      await committedOrProcessingExposure(details.key, transaction);
+    const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
     const type = payment.tipo_pago as PagoTipo;
-    if (Number(payment.monto) > round(details.total - paid)) {
+    const originRemaining = round(details.total - exposure.total);
+    const remaining = roomBalance
+      ? round(Math.min(originRemaining, roomBalance.remaining))
+      : originRemaining;
+    if (Number(payment.monto) > remaining) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && Number(payment.monto) < round(details.total - paid)) {
+    if (details.isOnlyRoom && Number(payment.monto) < originRemaining) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (type === "anticipo") {
@@ -871,7 +1338,9 @@ export const getResumenPago = async (
     validateOrigin({ ...origin, monto: 1, metodo: "efectivo" });
     await assertPaymentOriginOwnership(origin, requester, transaction);
     const details = await validateOpenOrigin(origin as CreatePagoData, transaction, true);
-    const paid = await approvedAmount(details.key, transaction);
+    const paid = details.origin.constructor?.name === "ReservaHabitacion"
+      ? (await reservationFinancialExposure(details.origin.id, transaction)).approved
+      : await approvedAmount(details.key, transaction);
     return {
       total: details.total,
       anticipo_requerido: details.requiredAdvance,

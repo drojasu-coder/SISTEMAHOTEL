@@ -22,6 +22,7 @@ const {
 
   Carrito,
   CarritoItem,
+  Pago,
   Promocion,
 
   ReservaHabitacion,
@@ -232,6 +233,39 @@ const getCartForAccess =
     }
 
     return carrito;
+  };
+
+const assertCartCanBeMutated =
+  async (
+    carritoId: number,
+    transaction: any
+  ) => {
+    const processingPayment =
+      await Pago.findOne({
+        where: {
+          carrito_id:
+            carritoId,
+
+          estado:
+            "procesando",
+        },
+
+        attributes: [
+          "id",
+        ],
+
+        transaction,
+      });
+
+    if (
+      processingPayment
+    ) {
+      throw new AppError(
+        409,
+        "CART_HAS_PROCESSING_PAYMENT",
+        "El carrito no puede modificarse mientras tenga un pago en procesamiento"
+      );
+    }
   };
 
 // ======================================================
@@ -999,6 +1033,11 @@ export const create = async (
           );
         }
 
+        await assertCartCanBeMutated(
+          carritoId,
+          transaction
+        );
+
         /*
          * No permitimos agregar la misma
          * referencia dos veces.
@@ -1124,6 +1163,11 @@ export const remove = async (
           "Solo el propietario puede modificar su carrito"
         );
       }
+
+      await assertCartCanBeMutated(
+        carritoId,
+        transaction
+      );
 
       const item =
         await CarritoItem.findOne({

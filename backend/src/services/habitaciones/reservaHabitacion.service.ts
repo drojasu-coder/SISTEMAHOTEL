@@ -2,6 +2,8 @@ import { Op } from "sequelize";
 
 import { AppError } from "../../utils/AppError";
 
+import { reservationFinancialExposure } from "../pago.service";
+
 import { ROLES, Role } from "../../constants/roles";
 import { env } from "../../config/env";
 
@@ -94,6 +96,52 @@ interface UpdateReservaHabitacionData {
   estado?: EstadoReservaHabitacion;
 
 }
+
+
+
+const reservationExposureWithoutProcessing =
+
+  async (
+
+    id: number,
+
+    transaction: any,
+
+    message: string
+
+  ) => {
+
+    const exposure =
+
+      await reservationFinancialExposure(
+
+        id,
+
+        transaction
+
+      );
+
+
+
+    if (exposure.processing > 0) {
+
+      throw new AppError(
+
+        409,
+
+        "RESERVATION_HAS_PROCESSING_PAYMENT",
+
+        message
+
+      );
+
+    }
+
+
+
+    return exposure;
+
+  };
 
 
 
@@ -359,6 +407,44 @@ export const validateNotPast = (
 
 /**
 
+ * Una reserva solo puede finalizar cuando su
+
+ * fecha de salida ya llegó en la fecha local del hotel.
+
+ */
+
+const validateReservationHasFinished = (
+
+  fechaSalida: string
+
+) => {
+
+  if (
+
+    fechaSalida >
+
+    getTodayDate()
+
+  ) {
+
+    throw new AppError(
+
+      409,
+
+      "RESERVATION_NOT_FINISHED",
+
+      "La reserva todavía no ha finalizado"
+
+    );
+
+  }
+
+};
+
+
+
+/**
+
  * Valida la capacidad máxima definida por
 
  * el tipo de habitación.
@@ -507,7 +593,9 @@ const validateReferences =
 
     usuarioId: number,
 
-    habitacionId: number
+    habitacionId: number,
+
+    transaction?: any
 
   ) => {
 
@@ -515,7 +603,13 @@ const validateReferences =
 
       await Usuario.findByPk(
 
-        usuarioId
+        usuarioId,
+
+        {
+
+          transaction,
+
+        }
 
       );
 
@@ -556,6 +650,8 @@ const validateReferences =
             },
 
           ],
+
+          transaction,
 
         }
 
@@ -1263,13 +1359,31 @@ export const updateReservaHabitacion =
 
       UpdateReservaHabitacionData
 
+  ) => sequelize.transaction(async (
+
+    transaction: any
+
   ) => {
 
     const reservaHabitacion =
 
       await ReservaHabitacion.findByPk(
 
-        id
+        id,
+
+        {
+
+          transaction,
+
+          lock:
+
+            transaction
+
+              .LOCK
+
+              .UPDATE,
+
+        }
 
       );
 
@@ -1355,6 +1469,40 @@ export const updateReservaHabitacion =
 
 
 
+    const seEstaCancelando =
+
+      estadoActual !==
+
+        "cancelada" &&
+
+      estadoDestino ===
+
+        "cancelada";
+
+
+
+    if (
+
+      estadoActual !==
+
+        "finalizada" &&
+
+      estadoDestino ===
+
+        "finalizada"
+
+    ) {
+
+      validateReservationHasFinished(
+
+        fechaSalida
+
+      );
+
+    }
+
+
+
     /**
 
      * Comprobamos si cambió algún dato operativo
@@ -1382,6 +1530,38 @@ export const updateReservaHabitacion =
       data.numero_huespedes !==
 
         undefined;
+
+
+
+    const cambiaIdentidadEconomica =
+
+      data.usuario_id !== undefined ||
+
+      data.habitacion_id !== undefined ||
+
+      data.fecha_entrada !== undefined ||
+
+      data.fecha_salida !== undefined;
+
+
+
+    const cambiaTotal =
+
+      data.habitacion_id !== undefined ||
+
+      data.fecha_entrada !== undefined ||
+
+      data.fecha_salida !== undefined;
+
+
+
+    let proposedTotal =
+
+      String(
+
+        reservaHabitacion.total
+
+      );
 
 
 
@@ -1449,13 +1629,21 @@ export const updateReservaHabitacion =
 
 
 
-      const habitacion =
+      const {
 
-        await validateReferences(
+        habitacion,
+
+        tipoHabitacion,
+
+      } =
+
+        await validateLockedReferences(
 
           usuarioId,
 
-          habitacionId
+          habitacionId,
+
+          transaction
 
         );
 
@@ -1465,9 +1653,7 @@ export const updateReservaHabitacion =
 
         numeroHuespedes,
 
-        habitacion
-
-          .TipoHabitacion
+        tipoHabitacion
 
           .capacidad_maxima
 
@@ -1517,9 +1703,31 @@ export const updateReservaHabitacion =
 
           fechaSalida,
 
-          id
+          id,
+
+          transaction
 
         );
+
+      }
+
+
+
+      if (cambiaIdentidadEconomica) {
+
+        proposedTotal =
+
+          calculateTotal(
+
+            fechaEntrada,
+
+            fechaSalida,
+
+            tipoHabitacion
+
+              .tarifa_noche
+
+          );
 
       }
 
@@ -1527,59 +1735,27 @@ export const updateReservaHabitacion =
 
 
 
-    let total:
-
-      | string
-
-      | undefined;
-
-
-
-    /**
-
-     * Solo recalculamos total si cambia algo
-
-     * que afecta directamente al precio.
-
-     */
-
     if (
 
-      data.fecha_entrada !==
+      cambiaIdentidadEconomica ||
 
-        undefined ||
-
-      data.fecha_salida !==
-
-        undefined ||
-
-      data.habitacion_id !==
-
-        undefined
+      seEstaCancelando
 
     ) {
 
-      const habitacion =
+      const exposure =
 
-        await Habitacion.findByPk(
+        await reservationExposureWithoutProcessing(
 
-          habitacionId,
+          id,
 
-          {
+          transaction,
 
-            include: [
+          seEstaCancelando
 
-              {
+            ? "La reserva tiene un pago en procesamiento y no puede cancelarse"
 
-                model:
-
-                  TipoHabitacion,
-
-              },
-
-            ],
-
-          }
+            : "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
 
         );
 
@@ -1587,43 +1763,37 @@ export const updateReservaHabitacion =
 
       if (
 
-        !habitacion ||
+        cambiaIdentidadEconomica &&
 
-        !habitacion.TipoHabitacion
+        exposure.total >
+
+          Number(proposedTotal)
 
       ) {
 
         throw new AppError(
 
-          404,
+          409,
 
-          "HABITACION_NOT_FOUND",
+          "PAYMENT_EXCEEDS_NEW_TOTAL",
 
-          "La habitación no fue encontrada"
+          "Los pagos existentes exceden el nuevo total de la reserva"
 
         );
 
       }
 
-
-
-      total =
-
-        calculateTotal(
-
-          fechaEntrada,
-
-          fechaSalida,
-
-          habitacion
-
-            .TipoHabitacion
-
-            .tarifa_noche
-
-        );
-
     }
+
+
+
+    const total =
+
+      cambiaTotal
+
+        ? proposedTotal
+
+        : undefined;
 
 
 
@@ -1749,7 +1919,13 @@ export const updateReservaHabitacion =
 
     await reservaHabitacion.update(
 
-      updateData
+      updateData,
+
+      {
+
+        transaction,
+
+      }
 
     );
 
@@ -1757,7 +1933,7 @@ export const updateReservaHabitacion =
 
     return reservaHabitacion;
 
-  };
+  });
 
 
 
@@ -1775,13 +1951,31 @@ export const updateReservaHabitacion =
 
 export const deleteReservaHabitacion =
 
-  async (id: number) => {
+  async (id: number) => sequelize.transaction(async (
+
+    transaction: any
+
+  ) => {
 
     const reservaHabitacion =
 
       await ReservaHabitacion.findByPk(
 
-        id
+        id,
+
+        {
+
+          transaction,
+
+          lock:
+
+            transaction
+
+              .LOCK
+
+              .UPDATE,
+
+        }
 
       );
 
@@ -1803,11 +1997,29 @@ export const deleteReservaHabitacion =
 
 
 
+    await reservationExposureWithoutProcessing(
+
+        id,
+
+        transaction,
+
+        "La reserva tiene un pago en procesamiento y no puede cancelarse"
+
+      );
+
+
+
     await reservaHabitacion.update(
 
       {
 
         estado: "cancelada",
+
+      },
+
+      {
+
+        transaction,
 
       }
 
@@ -1817,4 +2029,4 @@ export const deleteReservaHabitacion =
 
     return reservaHabitacion;
 
-  };
+  });

@@ -2,12 +2,12 @@ import { NextFunction, Request, Response } from "express";
 import * as facturaItemService from "../../services/habitaciones/facturaItem.service";
 
 export const getAllFacturaItems = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const facturaItems = await facturaItemService.getAllFacturaItems();
+    const facturaItems = await facturaItemService.getAllFacturaItems(req.user!);
     res.status(200).json({
       success: true,
       statusCode: 200,
@@ -26,7 +26,8 @@ export const getFacturaItemById = async (
 ) => {
   try {
     const facturaItem = await facturaItemService.getFacturaItemById(
-      Number(req.params.id)
+      Number(req.params.id),
+      req.user!
     );
     res.status(200).json({
       success: true,

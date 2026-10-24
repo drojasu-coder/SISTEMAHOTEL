@@ -1,0 +1,83 @@
+name: Backend QA
+
+on:
+  push:
+    branches:
+      - qa/backend-automation
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  backend-qa:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+
+        env:
+          POSTGRES_USER: hotel_user
+          POSTGRES_PASSWORD: hotel_pass
+          POSTGRES_DB: hotel_db
+
+        ports:
+          - 5432:5432
+
+        options: >-
+          --health-cmd="pg_isready -U hotel_user -d hotel_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_ENV: test
+      JWT_SECRET: qa-ci-secret
+      STRIPE_SECRET_KEY: sk_test_qa_mock_only
+      STRIPE_WEBHOOK_SECRET: whsec_qa_mock_only
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create test database
+        env:
+          PGPASSWORD: hotel_pass
+        run: |
+          psql \
+            -h 127.0.0.1 \
+            -U hotel_user \
+            -d hotel_db \
+            -c "CREATE DATABASE hotel_test_db;"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run test migrations
+        working-directory: backend
+        run: npx sequelize-cli db:migrate --env test
+
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test
+
+      - name: TypeScript check
+        working-directory: backend
+        run: npm exec tsc -- --noEmit
+
+      - name: Git whitespace check
+        run: git diff --check

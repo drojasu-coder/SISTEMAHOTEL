@@ -234,40 +234,175 @@ findings:
       new_failures: none
 
   - id: QA-RA-FUNC-CANDIDATE-004
-    status: product_decision_required
+    status: closed
     severity: medium
     category: FUNC
-    current_behavior: >-
-      una ReservaActividad futura puede pasar confirmada->completada; solo
-      confirmada bloquea disponibilidad, así que completada libera inmediatamente
-      recurso e instructor.
-    tested_behavior: >-
-      existe una prueba que completa una reserva futura y espera que otra idéntica
-      pueda crearse.
-    documented_business_rule: NONE
-    classification: PRODUCT DECISION REQUIRED
+    invariant: >-
+      Una ReservaActividad solo puede pasar de confirmada a completada cuando su
+      fecha y hora_fin sean menores o iguales al momento actual. Si todavía no ha
+      finalizado, el endpoint administrativo debe rechazar la transición con HTTP
+      409 y código RESERVATION_NOT_FINISHED, conservar estado confirmada y mantener
+      bloqueada la disponibilidad del recurso y, cuando aplique, del instructor.
+    approved_product_rule:
+      completed_is_terminal: true
+      completed_to_confirmed_allowed: false
+      completed_to_canceled_allowed: false
+      temporal_transition: "confirmada->completada requiere fecha+hora_fin <= ahora"
+      future_transition_error: "HTTP 409 / RESERVATION_NOT_FINISHED"
+      preserves_historical_payments: true
+      creates_automatic_refund: false
+      allows_new_payments: false
+      red_scope: >-
+        Este RED temporal inicial solo ejercita el rechazo de completar una
+        reserva futura; la terminalidad y los efectos financieros aprobados no
+        se amplían todavía en esta reproducción.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/actividades/reservaActividad.lifecycle.test.ts
+      test_name: "QA-RA-FUNC-CANDIDATE-004: rechaza completar una reserva cuya actividad todavía no ha finalizado"
+      command: >-
+        npm --prefix backend test --
+        tests/actividades/reservaActividad.lifecycle.test.ts -t
+        "QA-RA-FUNC-CANDIDATE-004: rechaza completar una reserva cuya actividad todavía no ha finalizado"
+      dynamic_scenario: "fecha local del hotel + 2 días, 10:00-11:00"
+    expected:
+      completion_http_status: 409
+      completion_error_code: RESERVATION_NOT_FINISHED
+      persisted_state_after_attempt: confirmada
+      resource_availability_still_blocked: true
+      instructor_availability: N/A
+    actual_before_fix:
+      reservation_date: "2026-10-24"
+      completion_http_status: 200
+      completion_error_code: null
+      persisted_state_after_attempt: completada
+      overlapping_resource_probe_http_status: 201
+      resource_availability_still_blocked: false
+      instructor_availability: N/A
+    http_evidence: >-
+      La reserva fue creada por POST /api/reservas-actividad en estado confirmada
+      y un traslape previo recibió HTTP 409 RESOURCE_OVERLAP. PATCH
+      /api/reservas-actividad/{id}/estado con estado completada recibió HTTP 200;
+      después, un POST idéntico recibió HTTP 201.
+    database_evidence: >-
+      Una consulta directa de ReservaActividad confirmó estado confirmada antes
+      del PATCH y estado completada después del intento futuro aceptado.
+    endpoint: PATCH /api/reservas-actividad/{id}/estado
+    suspected_execution_path: >-
+      reservaActividad.routes -> reservaActividad.controller.updateStatus ->
+      reservaActividad.service.update; la actualización transaccional valida
+      fecha y horario solo al reactivar hacia confirmada y persiste directamente
+      la transición confirmada->completada sin comprobar fecha+hora_fin.
+    red_result: >-
+      1 failed con cinco aserciones de evidencia: HTTP 200 en lugar de 409, código
+      ausente, estado completada en lugar de confirmada y recurso liberado, que
+      permitió crear un traslape con HTTP 201.
+    scope: >-
+      Este RED inicial cubre exclusivamente el rechazo de completar una reserva
+      futura; no prueba pagos, otros efectos financieros ni terminalidad.
+    classification: BACKEND DEFECT
     confidence: HIGH
-    decision_required: >-
-      definir A) completada solo después de fecha+hora_fin o B) cierre
-      administrativo anticipado; y efectos sobre disponibilidad, reactivación,
-      carrito existente y pagos existentes.
 
   - id: QA-RA-FUNC-CANDIDATE-005
-    status: product_decision_required
+    status: closed
     severity: medium
     category: FUNC
-    current_behavior: >-
-      admin puede activo=false aunque haya ReservasActividad futuras
-      confirmadas; estas permanecen confirmadas, conservan instructor_id, no se
-      reasignan ni cancelan; nuevas reservas con instructor inactivo se rechazan;
-      reactivar una reserva con instructor inactivo también se rechaza.
-    documented_business_rule: NONE
-    classification: PRODUCT DECISION REQUIRED
+    invariant: >-
+      InstructorActividad no puede desactivarse mientras tenga al menos una
+      ReservaActividad futura activa asignada en estado confirmada. Antes debe
+      reasignarse o cancelarse explícitamente; la desactivación nunca cancela,
+      desasigna ni reasigna reservas automáticamente.
+    approved_product_rule:
+      future_active_reservations_block_deactivation: true
+      automatic_reservation_cancellation: false
+      historical_relations_preserved: true
+      inactive_instructor_assignable_to_new_reservations: false
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/actividades/instructorActividad.lifecycle.test.ts
+      test_name: "QA-RA-FUNC-CANDIDATE-005: rechaza desactivar un instructor con una reserva futura confirmada"
+      command: >-
+        npm --prefix backend test --
+        tests/actividades/instructorActividad.lifecycle.test.ts -t
+        "QA-RA-FUNC-CANDIDATE-005: rechaza desactivar un instructor con una reserva futura confirmada"
+      dynamic_scenario: "fecha local del hotel + 2 días, 10:00-11:00"
+    expected:
+      deactivation_http_status: 409
+      deactivation_error_code: INSTRUCTOR_HAS_FUTURE_RESERVATIONS
+      instructor_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_assignment_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+    actual_before_fix:
+      reservation_date: "2026-10-24"
+      deactivation_http_status: 200
+      deactivation_error_code: null
+      instructor_active_after_attempt: false
+      reservation_state_after_attempt: confirmada
+      reservation_instructor_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+      inactive_instructor_with_future_confirmed_reservation: true
+    http_evidence: >-
+      Una reserva con instructor activo fue creada por POST
+      /api/reservas-actividad con HTTP 201 en estado confirmada. PATCH
+      /api/instructores/{id} con activo=false recibió HTTP 200 sin código de
+      conflicto, en lugar de HTTP 409 INSTRUCTOR_HAS_FUTURE_RESERVATIONS.
+    database_evidence: >-
+      Consultas directas de PostgreSQL confirmaron antes del intento instructor
+      activo=true, reserva confirmada e instructor_id asignado. Después del PATCH,
+      el instructor quedó activo=false mientras la reserva futura continuó
+      confirmada con el mismo instructor_id; no hubo cancelación, desasignación ni
+      reasignación automática.
+    endpoint: PATCH /api/instructores/{id}
+    suspected_execution_path: >-
+      instructor.routes -> instructor.controller.update ->
+      instructor.service.update; el servicio obtiene el instructor y ejecuta
+      instructor.update(data) sin comprobar reservas futuras confirmadas.
+    red_result: >-
+      1 test failed con tres aserciones de evidencia: HTTP 200 en lugar de 409,
+      código INSTRUCTOR_HAS_FUTURE_RESERVATIONS ausente e instructor persistido
+      inactivo en lugar de activo. La reserva permaneció confirmada y asignada al
+      instructor ya inactivo.
+    scope: >-
+      Este RED cubre exclusivamente activo true->false con una reserva futura
+      confirmada. Se documenta, sin ampliar el RED, que canceladas, completadas
+      legítimas e históricas finalizadas no bloquean; un instructor inactivo no es
+      asignable/reactivable/reasignable y las relaciones históricas se preservan.
+    classification: BACKEND DEFECT
     confidence: HIGH
-    decision_required: >-
-      definir A) activo=false solo impide nuevas asignaciones y existentes siguen
-      válidas o B) significa que no puede prestar actividades y debe impedirse
-      desactivación con reservas futuras confirmadas.
+    root_cause: >-
+      instructor.service.update persistía activo=false sin una transacción, sin
+      bloquear la fila del instructor y sin consultar reservas confirmadas cuya
+      fecha y hora_fin todavía requirieran la prestación futura del instructor.
+    correction: >-
+      La actualización administrativa ahora bloquea Instructor con SELECT FOR
+      UPDATE dentro de una transacción y, exclusivamente en la transición
+      activo=true a activo=false, consulta reservas confirmadas asignadas cuya
+      fecha sea posterior a la fecha local del hotel o cuya fecha sea hoy y
+      hora_fin sea posterior a la hora local. Si existe alguna, revierte con HTTP
+      409 e INSTRUCTOR_HAS_FUTURE_RESERVATIONS sin modificar instructor ni
+      reserva. La zona horaria usa APP_TIMEZONE con America/Guatemala como valor
+      predeterminado, de forma coherente con QA-RA-FUNC-CANDIDATE-004.
+    final_verification:
+      database_guard: hotel_test_db
+      instructor_lifecycle: "1 passed"
+      reserva_actividad: "45 passed"
+      reserva_actividad_lifecycle_qa_004: "1 passed"
+      typecheck: green
+      deactivation_http_status: 409
+      deactivation_error_code: INSTRUCTOR_HAS_FUTURE_RESERVATIONS
+      instructor_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_assignment_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
 
   - id: QA-PAY-FIN-CANDIDATE-007
     status: closed
@@ -971,3 +1106,3121 @@ findings:
       unrelated_changes: none
       full_backend: "364 passed, 0 failed, 0 skipped"
       next_regression: none
+
+  - id: QA-CART-FIN-CANDIDATE-014
+    status: closed
+    severity: high
+    category: FIN
+    invariant: >-
+      Un PaymentIntent creado cuando un carrito contiene la ReservaActividad A
+      no puede aprobar y marcar como pagada la ReservaActividad B si el cliente
+      elimina A y agrega B antes de confirmar el intent. La composición autorizada
+      debe quedar inmutable o vinculada a un snapshot durable que el webhook valide.
+    reproduction:
+      test_file: backend/tests/pagos/pagoCartMutationBinding.test.ts
+      test_name: "QA-CART-FIN-CANDIDATE-014: no reasigna una autorización Stripe al reemplazar el item del carrito"
+      command: >-
+        npm --prefix backend test -- tests/pagos/pagoCartMutationBinding.test.ts -t
+        "QA-CART-FIN-CANDIDATE-014: no reasigna una autorización Stripe al reemplazar el item del carrito"
+      stripe_mode: full_local_mock
+      payment_intent: pi_cart_mutation_001
+      real_stripe_calls: false
+    expected:
+      authorization_reassigned: false
+      safe_outcomes: >-
+        rechazar la eliminación o el reemplazo mientras el pago está procesando,
+        o rechazar el succeeded si la composición ya no coincide con el snapshot
+        autorizado
+    actual:
+      reservations: "A=201/Q100.00; B=201/Q100.00"
+      add_a: "201; item A; total Q100.00"
+      create_payment: "201/procesando/Q100.00/pi_cart_mutation_001"
+      delete_a: "204; item A eliminado"
+      add_b: "201; item B agregado al mismo carrito; total Q100.00"
+      before_webhook: "carrito activo; solo item B; pago procesando; aprobado Q0.00"
+      webhook: "200 received=true"
+      final: "pago aprobado; carrito pagado; solo item B; aprobado Q100.00"
+      authorization_reassigned: true
+      red_result: "1 failed; expected false, received true"
+    http_evidence:
+      reserva_a: 201
+      reserva_b: 201
+      create_cart: 201
+      add_a: 201
+      create_payment: 201
+      delete_a: 204
+      add_b: 201
+      webhook_succeeded: 200
+      unexpected_500: false
+    database_evidence:
+      authorization_snapshot:
+        total: "100.00"
+        item_id: 1
+        tipo_item: actividad
+        referencia_id: 1
+      before_webhook:
+        carrito_estado: activo
+        item_a: absent
+        item_b: present
+        total: "100.00"
+        pago_estado: procesando
+        pago_monto: "100.00"
+        approved_amount: "0.00"
+      final:
+        carrito_estado: pagado
+        item_a: absent
+        item_b: present
+        total: "100.00"
+        pago_estado: aprobado
+        pago_monto: "100.00"
+        approved_amount: "100.00"
+        reembolsos: 0
+        reserva_a_estado: confirmada
+        reserva_b_estado: confirmada
+    binding_evidence:
+      intent_metadata:
+        pago_id: present
+        carrito_id: present
+        tipo_pago: total
+      metadata_item_binding: false
+      persisted_payment_item_binding: false
+      payment_bound_only_to_mutable_cart: true
+    demonstrated_execution:
+      A_delete_after_intent_permitted: true
+      B_same_cart_replacement_permitted: true
+      C_succeeded_authorization_reassigned: true
+    suspected_execution_path: >-
+      createPago persiste Pago y metadata de Stripe vinculados solo a carrito_id y
+      pago_id, sin snapshot ni identidad de ítems. carritoItemService.remove solo
+      exige que el carrito esté activo y no comprueba pagos procesando, por lo que
+      elimina A. create permite B porque B no tiene compromiso histórico propio.
+      processStripeWebhook valida intent, monto, moneda y pago_id, vuelve a calcular
+      el total con los ítems actuales y applyCartPaid marca pagado el carrito que ya
+      contiene B.
+    root_cause: >-
+      create y remove serializaban la mutación mediante el bloqueo UPDATE del carrito,
+      pero no consultaban la exposición financiera persistida después de adquirir ese
+      bloqueo. Por ello permitían cambiar los ítems aunque existiera un Pago del mismo
+      carrito en estado procesando.
+    correction: >-
+      Ambos caminos de mutación reutilizan una única guarda financiera dentro de la
+      transacción. Después de bloquear y autorizar el carrito, la guarda consulta Pago
+      por carrito_id y estado procesando y responde 409 CART_HAS_PROCESSING_PAYMENT
+      antes de crear o eliminar un CarritoItem. No se agregó snapshot ni dependencia
+      de Stripe.
+    severity_recommendation: high
+    regression_test:
+      test_file: backend/tests/pagos/pagoCartMutationBinding.test.ts
+      preserved_red: true
+    final_verification:
+      database: hotel_test_db
+      focused: "1 file, 1 passed"
+      payment_suites: "8 files, 18 passed"
+      cart_item: "1 file, 40 passed"
+      reserva_actividad: "1 file, 45 passed"
+      recurso_actividad: "1 file, 2 passed"
+      reserva_actividad_integrity: "1 file, 3 passed"
+      full_backend: "22 files, 365 passed, 0 failed, 0 skipped"
+      typecheck: "PASS"
+      db_guard: green
+      stripe_mode: full_local_mock
+      real_stripe_calls: false
+      add_protected: true
+      delete_protected: true
+      delete_a: "409 CART_HAS_PROCESSING_PAYMENT"
+      item_a_remains: true
+      add_b: not_run
+      item_b_persisted: false
+      cart_mutated: false
+      authorization_reassigned: false
+      fixes_007_013: "PASS"
+      fixes_007_013_modified: false
+      ledger_constraints: "7/7 present"
+      invalid_ledger_rows: none
+      deadlock_timeout_observed: false
+      production_code_modified: true
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+
+  - id: QA-RA-FIN-CANDIDATE-017
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Una ReservaActividad cancelada después del ADD todavía puede cobrarse
+    invariant: >-
+      Antes de aprobar dinero para un carrito, el backend debe volver a validar
+      que cada ReservaActividad incluida continúa disponible. Si una actividad
+      confirmada de Q100.00 se agrega al carrito y después un administrador la
+      cancela, el intento de pago debe rechazarse sin persistir Pago, aprobar
+      dinero ni marcar el carrito como pagado.
+    reproduction:
+      test_file: backend/tests/pagos/pagoActividadCanceledBeforePayment.test.ts
+      test_name: "QA-RA-FIN-CANDIDATE-017: rechaza pagar una actividad cancelada después de agregarla al carrito"
+      command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoActividadCanceledBeforePayment.test.ts -t
+        "QA-RA-FIN-CANDIDATE-017: rechaza pagar una actividad cancelada después
+        de agregarla al carrito"
+      database: hotel_test_db
+      payment_method: efectivo
+      real_stripe_charges: false
+    expected:
+      payment_http_status: 409
+      payment_error_code: CART_REFERENCE_NOT_AVAILABLE
+      payment_persisted: false
+      payment_state: null
+      cart_state: activo
+      reservation_state: cancelada
+      cart_item_persisted: true
+      approved_amount: "0.00"
+      net_approved: "0.00"
+      canceled_service_charged: false
+      financial_violation: false
+    actual:
+      reservation_create: "201/confirmada"
+      reservation_total: "HTTP Q100.00 / PostgreSQL Q100.00"
+      cart_add: "201/item actividad/precio Q100.00; listado 200/total Q100.00; total persistido Q100.00"
+      cart_item_persisted: true
+      reservation_cancel: "200/cancelada"
+      reservation_state_before_payment: cancelada
+      payment_attempt: "201/sin código de error"
+      payment_persisted: true
+      payment_state: aprobado
+      payment_amount: "100.00"
+      cart_state: pagado
+      reservation_state_after_payment: cancelada
+      approved_amount: "100.00"
+      approved_refunds: "0.00"
+      net_approved: "100.00"
+      canceled_service_charged: true
+      financial_violation: true
+      red_result: "1 file failed, 1 test failed; 7 assertions financieras fallaron"
+    endpoint: POST /api/pagos
+    http_evidence:
+      reservation_create: 201
+      create_cart: 201
+      add_activity: 201
+      list_cart_items: 200
+      administrative_cancel: 200
+      payment_attempt: 201
+      payment_error_code: null
+      unexpected_500: false
+    database_evidence:
+      before_payment:
+        reservation_state: cancelada
+        reservation_total: "100.00"
+        cart_state: activo
+        cart_item_present: true
+        cart_total: "100.00"
+      after_payment:
+        payment_rows: 1
+        payment_state: aprobado
+        payment_amount: "100.00"
+        cart_state: pagado
+        reservation_state: cancelada
+        cart_item_present: true
+        approved_amount: "100.00"
+        approved_refunds: "0.00"
+        net_approved: "100.00"
+    demonstrated_execution:
+      activity_confirmed_and_added_before_cancel: true
+      administrative_cancel_persisted_before_payment: true
+      canceled_activity_remained_in_cart: true
+      cash_payment_approved: true
+      cart_marked_paid: true
+      canceled_service_charged: true
+    suspected_execution_path: >-
+      createPago llama validateOpenOrigin, que bloquea y valida el estado del
+      Carrito pero cartTotals solo vuelve a validar referencias de habitación y
+      evento. Para un CarritoItem de tipo actividad retorna precio por cantidad
+      sin volver a consultar ReservaActividad ni su estado cancelada. Luego el
+      flujo de efectivo crea Pago aprobado y applyCartPaid recalcula el mismo
+      total mutable, por lo que marca el carrito pagado aunque la actividad sigue
+      cancelada y el ítem permanece persistido.
+    root_cause: >-
+      cartTotals confiaba en el precio persistido del CarritoItem de actividad y
+      no volvía a consultar ReservaActividad dentro de la transacción de pago,
+      por lo que una cancelación posterior al ADD no impedía aprobar dinero.
+    correction: >-
+      La capa de totales/pago vuelve a cargar y bloquear ReservaActividad antes
+      de crear o aprobar Pago. Si la referencia ya no existe o su estado es
+      cancelada, aborta la transacción con HTTP 409 y código
+      CART_REFERENCE_NOT_AVAILABLE, sin eliminar el ítem ni alterar la reserva.
+    severity_recommendation: high
+    verification:
+      focused: "1 file passed, 1 test passed"
+      focused_command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoActividadCanceledBeforePayment.test.ts
+      regression_008: "1 file passed, 1 test passed"
+      regression_008_command: >-
+        npm --prefix backend test -- tests/pagos/pagoActividad.reuse.test.ts
+      regression_013: "1 file passed, 1 test passed"
+      regression_013_command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoActividad.crossCartProcessing.test.ts
+      db_guard: green
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck: green
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      payment_method: efectivo
+      real_stripe_charges: false
+      production_files_modified:
+        - backend/src/services/pago.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      fixes_007_through_016_modified: false
+      verified_at: "2026-10-21"
+
+  - id: QA-PAY-FIN-CANDIDATE-016
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Eventos Stripe antiguos degradan un reembolso aprobado y reabren saldo
+    invariant: >-
+      Un Reembolso aprobado por un evento Stripe válido no puede degradarse a
+      pendiente o rechazado cuando después llega un evento antiguo o fuera de
+      orden del mismo refund. El estado financiero debe ser monotónico: para un
+      pago de Q100.00 con reembolso parcial aprobado de Q40.00 deben conservarse
+      pago reembolsado_parcial, neto Q60.00 y capacidad de segundo reembolso
+      Q60.00.
+    reproduction:
+      test_file: backend/tests/pagos/refundOutOfOrderReplay.test.ts
+      test_name: "QA-PAY-FIN-CANDIDATE-016: un refund aprobado no se degrada por eventos antiguos fuera de orden"
+      command: >-
+        npm --prefix backend test -- tests/pagos/refundOutOfOrderReplay.test.ts
+        -t "QA-PAY-FIN-CANDIDATE-016: un refund aprobado no se degrada por
+        eventos antiguos fuera de orden"
+      database: hotel_test_db
+      stripe_mode: full_local_mock
+      payment_intent: pi_refund_order_016
+      refund_id: re_016_001
+      real_stripe_calls: false
+    expected:
+      after_refund_updated_succeeded: >-
+        refund aprobado; pago reembolsado_parcial; reembolsos aprobados Q40.00;
+        neto Q60.00; capacidad de segundo reembolso Q60.00
+      after_old_refund_created_pending: >-
+        sin cambios: refund aprobado; pago reembolsado_parcial; neto Q60.00
+      after_old_refund_failed: >-
+        sin cambios: refund aprobado; pago reembolsado_parcial; neto Q60.00
+      after_second_refund_60: >-
+        ambos refunds aprobados Q40.00+Q60.00; pago reembolsado; neto Q0.00
+    actual:
+      after_refund_updated_succeeded: >-
+        refund aprobado; pago reembolsado_parcial; reembolsos aprobados Q40.00;
+        neto Q60.00; capacidad Q60.00
+      after_old_refund_created_pending: >-
+        refund pendiente; pago aprobado; reembolsos aprobados Q0.00; neto
+        Q100.00; capacidad Q100.00
+      after_old_refund_failed: >-
+        refund rechazado; pago aprobado; reembolsos aprobados Q0.00; neto
+        Q100.00; capacidad Q100.00
+      after_second_refund_60: >-
+        re_016_001 rechazado Q40.00 y re_016_002 aprobado Q60.00; pago
+        reembolsado_parcial; reembolsos aprobados Q60.00; neto Q40.00
+      red_result: "1 file failed, 1 test failed; 14 assertions financieras fallaron"
+    http_evidence:
+      reserva_actividad: 201
+      create_cart: 201
+      add_item: 201
+      create_payment: 201
+      payment_intent_succeeded: 200
+      create_partial_refund: 200
+      refund_updated_succeeded: 200
+      old_refund_created_pending: 200
+      old_refund_failed: 200
+      second_refund_60: 200
+      unexpected_500: false
+    database_evidence:
+      approved_checkpoint:
+        refund_state: aprobado
+        payment_state: reembolsado_parcial
+        approved_refunds: "40.00"
+        net: "60.00"
+        second_refund_capacity: "60.00"
+      after_old_pending:
+        refund_state: pendiente
+        payment_state: aprobado
+        approved_refunds: "0.00"
+        net: "100.00"
+        second_refund_capacity: "100.00"
+      after_old_failed:
+        refund_state: rechazado
+        payment_state: aprobado
+        approved_refunds: "0.00"
+        net: "100.00"
+        second_refund_capacity: "100.00"
+      final:
+        first_refund: "re_016_001/rechazado/40.00"
+        second_refund: "re_016_002/aprobado/60.00"
+        payment_state: reembolsado_parcial
+        approved_refunds: "60.00"
+        net: "40.00"
+    demonstrated_execution:
+      A_approved_refund_degraded_to_pending: true
+      B_same_refund_degraded_to_rejected: true
+      C_payment_and_net_regressed: true
+      D_second_refund_capacity_reopened: true
+    distinction_from_009: >-
+      QA-PAY-DATA-CANDIDATE-009 protege el estado de Pago ante replay de
+      payment_intent.succeeded y conserva intactas las filas Reembolso. Este
+      hallazgo usa refund.created/refund.failed del mismo refund después de
+      refund.updated succeeded; degrada la propia fila Reembolso y, al dejar de
+      contarla como aprobada, revive el Pago y altera neto y capacidad.
+    suspected_execution_path: >-
+      processStripeWebhook identifica cualquier eventType que contiene refund,
+      busca Reembolso solo por id_reembolso_externo y traduce el status recibido
+      a aprobado, rechazado o pendiente. Si difiere del estado persistido ejecuta
+      reembolso.update sin comprobar monotonicidad ni antigüedad del evento.
+      Luego recalcula exclusivamente Reembolsos en estado aprobado; al quedar el
+      refund antiguo pendiente o rechazado obtiene refunded=0 y cambia el Pago de
+      reembolsado_parcial a aprobado. createReembolso usa esa suma reducida para
+      calcular remaining y expone capacidad ya consumida externamente.
+    root_cause: >-
+      processStripeWebhook actualizaba un Reembolso siempre que el estado Stripe
+      traducido difiriera del persistido. No trataba aprobado como estado terminal,
+      por lo que un refund.created pendiente o refund.failed fuera de orden quitaba
+      el reembolso de la suma aprobada y hacía retroceder también el estado, neto y
+      capacidad financiera del Pago.
+    correction: >-
+      La actualización de un Reembolso existente ahora bloquea únicamente las
+      transiciones aprobado->pendiente y aprobado->rechazado. pendiente->aprobado
+      continúa permitido y no se alteraron las demás transiciones existentes. Al
+      conservarse la fila aprobada, el recálculo transaccional mantiene el total
+      reembolsado, el estado del Pago y el saldo neto correctos.
+    concurrency: >-
+      processStripeWebhook conserva el bloqueo FOR UPDATE de Pago antes de leer o
+      actualizar el Reembolso. Todos los eventos del mismo PaymentIntent y
+      createReembolso, que también bloquea primero el Pago, quedan serializados por
+      esa fila; no se agregó una comprobación check-then-write fuera de la
+      transacción ni se modificó el orden de locks.
+    regression_test:
+      test_file: backend/tests/pagos/refundOutOfOrderReplay.test.ts
+      test_modified_by_fixer: false
+    severity_recommendation: high
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      db_guard: green
+      existing_payment_regression: "9 files passed, 19 tests passed"
+      qa_pay_data_candidate_009: "2 tests passed"
+      fixes_007_through_015_modified: false
+      typecheck: green
+      stripe_mode: full_local_mock
+      real_stripe_calls: false
+      production_files_modified: false
+      migrations_modified: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      qa_pay_data_candidate_009: "1 file passed, 2 tests passed"
+      typecheck: green
+      stripe_mode: full_local_mock
+      real_stripe_calls: false
+      approved_checkpoint: "refund aprobado; pago reembolsado_parcial; aprobado Q40.00; neto Q60.00; capacidad Q60.00"
+      pending_replay_final_state: "refund aprobado; pago reembolsado_parcial; aprobado Q40.00; neto Q60.00; capacidad Q60.00"
+      failed_replay_final_state: "refund aprobado; pago reembolsado_parcial; aprobado Q40.00; neto Q60.00; capacidad Q60.00"
+      second_refund: "re_016_002 aprobado Q60.00"
+      final_payment_state: reembolsado
+      final_approved_refunds: "100.00"
+      final_net: "0.00"
+      financial_violation: false
+      full_backend: "24 files, 367 passed, 0 failed, 0 skipped"
+      regression: green
+      new_failures: none
+      files_modified_by_regression: none
+      regression_read_only_check: green
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+
+  - id: QA-PAY-TX-CANDIDATE-015
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Fallo de COMMIT + retry idempotente puede desacoplar Pago local y
+      PaymentIntent externo
+    invariant: >-
+      Si Stripe creó un PaymentIntent y luego falla el COMMIT local, un retry de
+      la misma operación con la misma idempotency_key debe conservar una
+      asociación reconciliable entre el Pago durable, el PaymentIntent y
+      metadata.pago_id. Nunca debe quedar un Pago B asociado a un intent
+      reutilizado cuya metadata.pago_id identifica al Pago A rollbackeado.
+    reproduction:
+      test_file: backend/tests/pagos/pagoCommitIdempotencyMismatch.test.ts
+      test_name: "QA-PAY-TX-CANDIDATE-015: conserva asociación reconciliable tras fallo de COMMIT y retry idempotente"
+      command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoCommitIdempotencyMismatch.test.ts -t
+        "QA-PAY-TX-CANDIDATE-015: conserva asociación reconciliable tras fallo de COMMIT y retry idempotente"
+      database: hotel_test_db
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+    expected:
+      retry_http_status: 201
+      retry_payment_intent: pi_commit_001
+      external_logical_creates: 1
+      intent_metadata_pago_id: "B.id"
+      local_external_pago_id_match: true
+      webhook_http_status: 200
+      final_payment_state: aprobado
+      final_cart_state: pagado
+      reconciliation_failure: false
+    actual:
+      first_http: "500 INTERNAL_SERVER_ERROR"
+      first_local_payment_id: 1
+      first_stripe_intent: pi_commit_001
+      first_intent_metadata_pago_id: "1"
+      commit_failure_injected: true
+      failure_after_stripe_success: true
+      failure_after_local_external_id_update: true
+      first_transaction_rollback: true
+      first_local_payment_durable: false
+      retry_same_idempotency_key: true
+      retry_http: 201
+      retry_local_payment_id: 2
+      retry_payment_intent: pi_commit_001
+      external_create_invocations: 2
+      external_logical_creates: 1
+      intent_metadata_after_retry_pago_id: "1"
+      local_external_pago_id_match: false
+      webhook: "409 STRIPE_PAYMENT_MISMATCH"
+      final_payment_state: procesando
+      final_cart_state: activo
+      external_intent_state: succeeded
+      reconciliation_failure: true
+      financial_violation: true
+      red_result: "1 failed; expected match/200/aprobado/pagado, received mismatch/409/procesando/activo"
+    http_evidence:
+      reserva_actividad: 201
+      create_cart: 201
+      add_activity: 201
+      first_payment: "500 INTERNAL_SERVER_ERROR"
+      retry_payment: 201
+      webhook_succeeded: "409 STRIPE_PAYMENT_MISMATCH"
+      unexpected_setup_or_injection_failure: false
+    database_evidence:
+      setup_total: "Q100.00"
+      after_first_attempt:
+        payment_rows: 0
+        pago_a_durable: false
+        carrito_estado: activo
+        cart_items: 1
+      after_retry:
+        payment_rows: 1
+        pago_b_id: 2
+        pago_b_estado: procesando
+        pago_b_monto: "100.00"
+        pago_b_external_id: pi_commit_001
+        pago_b_idempotency_key: qa-pay-tx-015-commit-key
+      after_webhook:
+        pago_b_estado: procesando
+        carrito_estado: activo
+    external_evidence:
+      payment_intent: pi_commit_001
+      amount_minor_units: 10000
+      currency: gtq
+      status_after_webhook_attempt: succeeded
+      immutable_metadata_pago_id: "1"
+      retry_requested_metadata_pago_id: "2"
+      logical_creates: 1
+    demonstrated_execution:
+      stripe_create_success_before_failure: true
+      local_external_id_update_success_before_failure: true
+      failure_in_commit_only: true
+      local_rollback_observed: true
+      stripe_intent_survived_rollback: true
+      retry_reused_same_intent: true
+      retry_preserved_original_metadata: true
+      webhook_rejected_due_to_old_pago_id: true
+    suspected_execution_path: >-
+      createPago crea Pago A, crea pi_commit_001 con metadata.pago_id=A y
+      persiste id_transaccion_externo dentro del callback transaccional. El fallo
+      ocurre después de que el callback retorna, en sequelize.transaction al
+      ejecutar COMMIT, fuera del bloque que compensa fallos de payment.update;
+      A se revierte pero el intent externo y su idempotency key sobreviven. El
+      retry no encuentra una fila local durable, crea B y vuelve a invocar
+      createPaymentIntent con la misma key; Stripe reutiliza pi_commit_001 sin
+      sustituir metadata A. B persiste con ese external ID. Finalmente
+      processStripeWebhook encuentra B por id_transaccion_externo y rechaza el
+      succeeded con STRIPE_PAYMENT_MISMATCH porque metadata.pago_id sigue siendo A,
+      dejando B procesando y el carrito activo aunque el intent está succeeded.
+    severity_recommendation: high
+    regressions_observed:
+      qa_pay_fin_candidate_010: none
+      qa_pay_conc_candidate_011: none
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      typecheck: pass
+      db_guard: green
+      production_files_modified: false
+      migrations_modified: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      typecheck: green
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+      first_transaction_rollback: true
+      first_local_payment_id: 1
+      first_local_payment_durable: false
+      retry_local_payment_id: 2
+      retry_payment_intent: pi_commit_001
+      external_logical_creates: 1
+      metadata_update_calls: ">=1"
+      final_metadata_pago_id: "2"
+      local_external_pago_id_match: true
+      webhook_http_status: 200
+      final_payment_state: aprobado
+      final_cart_state: pagado
+      reconciliation_failure: false
+      financial_violation: false
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+
+  - id: QA-PAY-CONC-CANDIDATE-018
+    status: closed
+    severity: medium
+    category: CONCURRENCY
+    title: >-
+      createPago y payment_intent.succeeded adquieren Carrito/Pago en orden
+      inverso y forman un deadlock PostgreSQL
+    invariant: >-
+      Crear el pago del saldo y procesar o repetir legítimamente un webhook
+      payment_intent.succeeded del mismo carrito deben serializarse sin inversión
+      de locks, errores PostgreSQL 40P01 ni respuestas HTTP 500. Ambas operaciones
+      válidas deben completarse y conservar una exposición financiera máxima de
+      Q100.00.
+    reproduction:
+      test_file: backend/tests/pagos/pagoWebhookLockOrder.concurrency.test.ts
+      test_name: "QA-PAY-CONC-CANDIDATE-018: createPago y replay webhook no deben formar deadlock por orden inverso"
+      command: >-
+        npm --prefix backend test --
+        tests/pagos/pagoWebhookLockOrder.concurrency.test.ts -t
+        "QA-PAY-CONC-CANDIDATE-018: createPago y replay webhook no deben formar
+        deadlock por orden inverso"
+      database: hotel_test_db
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+      concurrent_pairs: 1
+      deterministic_coordination: >-
+        vi.spyOn envuelve los métodos reales y usa Promises como barreras justo
+        después de que Pago.findOne FOR UPDATE del webhook adquiere Pago P0 y de
+        que Carrito.findByPk FOR UPDATE de createPago adquiere el carrito. No usa
+        advisory locks ni hooks de producción.
+    expected:
+      create_pago: "201; Pago P1 procesando Q60.00"
+      webhook_replay: "200 received=true"
+      postgres_error_code: null
+      http_500: false
+      deadlock: false
+      timeout: false
+      payment_rows: 2
+      payment_states: "P0 aprobado Q40.00; P1 procesando Q60.00"
+      cart_state: activo
+      approved_amount: "40.00"
+      processing_exposure: "60.00"
+      financial_corruption: false
+    actual:
+      create_pago: "201; Pago P1 procesando Q60.00"
+      webhook_replay: "500 INTERNAL_SERVER_ERROR"
+      postgres_error_code: 40P01
+      sequelize_error: "SequelizeDatabaseError: deadlock detected"
+      http_500: true
+      deadlock: true
+      timeout: false
+      red_result: "1 file failed, 1 test failed; 4 assertions de concurrencia fallaron"
+    lock_evidence:
+      create_pago_first_lock: "Carrito.findByPk FOR UPDATE"
+      create_pago_second_lock: "Pago.findAll FOR UPDATE en approvedAmount"
+      webhook_first_lock: "Pago.findOne FOR UPDATE por id_transaccion_externo"
+      webhook_second_lock: "Carrito.findByPk FOR UPDATE en validateOpenOrigin"
+      lock_order_inversion: true
+      deadlock_victim: webhook
+      failing_lock: Carrito.findByPk
+      original_code: 40P01
+      parent_code: 40P01
+    http_evidence:
+      create_pago_status: 201
+      create_pago_code: null
+      webhook_status: 500
+      webhook_code: INTERNAL_SERVER_ERROR
+      unexpected_500: true
+    database_evidence:
+      payment_rows: 2
+      p0: "id=1; aprobado; Q40.00; pi_pay_conc_018_1"
+      p1: "id=2; procesando; Q60.00; pi_pay_conc_018_2"
+      cart_state: activo
+      approved_amount: "40.00"
+      processing_exposure: "60.00"
+      total_financial_exposure: "100.00"
+      financial_corruption: false
+    suspected_execution_path: >-
+      createPago entra en su transacción, validateOpenOrigin bloquea primero el
+      Carrito y committedOrProcessingExposure llama approvedAmount, que intenta
+      bloquear P0 mediante Pago.findAll FOR UPDATE. En paralelo,
+      processStripeWebhook bloquea primero P0 mediante Pago.findOne FOR UPDATE y,
+      para target aprobado incluso cuando es un replay, llama validateOpenOrigin,
+      que intenta bloquear el mismo Carrito. PostgreSQL detecta el ciclo
+      Carrito->Pago / Pago->Carrito, aborta el webhook con 40P01 y el middleware
+      lo expone como HTTP 500 INTERNAL_SERVER_ERROR.
+    severity_recommendation: medium
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      db_guard: green
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck: pass
+      stripe_mode: full_local_mock
+      real_stripe_charges: false
+      fixes_007_through_017_modified: false
+      fixes_007_through_017_regression_observed: none
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-AUTH-SEC-CANDIDATE-033
+    status: closed
+    severity: high
+    category: AUTH
+    title: >-
+      Cliente autenticado puede consultar proveedores, productos de proveedores
+      y cuentas por pagar internas
+    invariant: >-
+      Un usuario con rol cliente debe recibir HTTP 403 en las lecturas de
+      proveedores, relaciones proveedor-producto y cuentas por pagar. Son datos
+      administrativos sin ownership; admin conserva acceso.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/auth/proveedorFinancialReads.auth.test.ts
+      test_name: "QA-AUTH-SEC-CANDIDATE-033: cliente no consulta proveedores, productos de proveedores ni cuentas por pagar"
+      command: >-
+        npm --prefix backend test --
+        tests/auth/proveedorFinancialReads.auth.test.ts
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_used: false
+      customer_payments_used: false
+      cart_used: false
+    scenario:
+      client: "id=1; rol=cliente; JWT obtenido mediante login real"
+      admin: "id=2; rol=admin; JWT obtenido mediante login real"
+      proveedor: >-
+        id=1; nombre=Proveedor QA 033; nit=QA033; contacto=Contacto Interno QA
+        033; telefono=55550333; email=qa033@example.test
+      proveedor_producto: >-
+        id=1; proveedor_id=1; nombre_producto=Insumo interno QA 033;
+        descripcion=Relación proveedor-producto QA 033
+      cuenta_por_pagar: >-
+        id=1; proveedor_id=1; monto=3300.33; estado=pendiente;
+        fecha_vencimiento=2026-11-30
+    expected:
+      client_list_proveedores: "HTTP 403"
+      client_get_proveedor: "HTTP 403"
+      client_list_proveedor_productos: "HTTP 403"
+      client_get_proveedor_producto: "HTTP 403"
+      client_list_cuentas_por_pagar: "HTTP 403"
+      client_get_cuenta_por_pagar: "HTTP 403"
+      internal_data_exposed: false
+      admin_access: allowed
+      database_modified_by_reads: false
+    actual:
+      client_list_proveedores: "HTTP 200; code null; contiene proveedor id=1 y todos sus datos de contacto"
+      client_get_proveedor: "HTTP 200; code null; devuelve proveedor id=1 y todos sus datos de contacto"
+      client_list_proveedor_productos: "HTTP 200; code null; contiene relación id=1"
+      client_get_proveedor_producto: "HTTP 200; code null; devuelve relación id=1"
+      client_list_cuentas_por_pagar: "HTTP 200; code null; contiene cuenta id=1, monto, estado y vencimiento"
+      client_get_cuenta_por_pagar: "HTTP 200; code null; devuelve cuenta id=1, monto, estado y vencimiento"
+      admin_control: "Proveedor por ID HTTP 200; cuenta por pagar por ID HTTP 200"
+      internal_data_exposed: true
+      database_modified_by_reads: false
+      authorization_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 12 aserciones soft: los seis GET del
+        cliente respondieron 200 en lugar de 403 y cada respuesta incluyó el
+        fixture administrativo interno correspondiente.
+    http_evidence:
+      client_list_proveedores_status: 200
+      client_list_proveedores_code: null
+      provider_data_returned: true
+      client_get_proveedor_status: 200
+      client_get_proveedor_code: null
+      internal_provider_body_returned: true
+      client_list_proveedor_productos_status: 200
+      client_list_proveedor_productos_code: null
+      provider_product_data_returned: true
+      client_get_proveedor_producto_status: 200
+      client_get_proveedor_producto_code: null
+      provider_product_body_returned: true
+      client_list_cuentas_por_pagar_status: 200
+      client_list_cuentas_por_pagar_code: null
+      account_payable_data_returned: true
+      client_get_cuenta_por_pagar_status: 200
+      client_get_cuenta_por_pagar_code: null
+      account_payable_body_returned: true
+      admin_get_proveedor_status: 200
+      admin_get_cuenta_por_pagar_status: 200
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      proveedores_count_before_and_after_reads: 1
+      proveedor_productos_count_before_and_after_reads: 1
+      cuentas_por_pagar_count_before_and_after_reads: 1
+      proveedor_snapshot_unchanged: true
+      proveedor_producto_snapshot_unchanged: true
+      cuenta_por_pagar_snapshot_unchanged: true
+      database_modified_by_reads: false
+    gerente_restaurante_policy_observed: >-
+      Las mutaciones POST/PATCH/DELETE de las tres familias declaran
+      requireRole(admin, gerente_restaurante); las lecturas GET omiten por
+      completo requireRole.
+    suspected_execution_path: >-
+      GET /api/proveedores y GET /api/proveedores/{id}, GET
+      /api/proveedor-productos y GET /api/proveedor-productos/{id}, y GET
+      /api/cuentas-por-pagar y GET /api/cuentas-por-pagar/{id} ejecutan solo
+      authMiddleware antes de validar parámetros/controlador. Los controllers
+      llaman servicios globales findAll/findByPk sin autorización por rol, por lo
+      que cualquier usuario autenticado recibe los registros internos.
+    root_cause: >-
+      Los seis GET estaban protegidos únicamente por authMiddleware y omitían
+      requireRole, aunque cada router ya definía rolesGestionProveedores con
+      admin y gerente_restaurante para las mutaciones. Por ello cualquier rol
+      autenticado alcanzaba los controllers y sus consultas globales.
+    correction: >-
+      Se agregó requireRole(...rolesGestionProveedores) inmediatamente después
+      de authMiddleware en los GET de lista y detalle de proveedores,
+      proveedor-productos y cuentas-por-pagar. El middleware reutilizado emite
+      el 403 estándar antes de validar parámetros o consultar datos y conserva
+      acceso global para admin y gerente_restaurante.
+    severity_recommendation: high
+    verification:
+      focused_command: >-
+        npm --prefix backend test --
+        tests/auth/proveedorFinancialReads.auth.test.ts
+      focused: "1 file passed, 1 test passed"
+      client_list_proveedores: "HTTP 403; sin datos internos"
+      client_get_proveedor: "HTTP 403; sin datos internos"
+      client_list_proveedor_productos: "HTTP 403; sin datos internos"
+      client_get_proveedor_producto: "HTTP 403; sin datos internos"
+      client_list_cuentas_por_pagar: "HTTP 403; sin datos internos"
+      client_get_cuenta_por_pagar: "HTTP 403; sin datos internos"
+      admin_control: "Proveedor por ID HTTP 200; cuenta por pagar por ID HTTP 200"
+      gerente_restaurante_control: >-
+        Preservado estáticamente por la constante compartida
+        rolesGestionProveedores=[ROLES.ADMIN, ROLES.GERENTE_RESTAURANTE]; no
+        existe test relacionado que ejecute este rol y el test oficial no se
+        modificó.
+      internal_data_exposed: false
+      database_modified_by_reads: false
+      authorization_violation: false
+      related_provider_tests: "No existen otros archivos de test del módulo"
+      related_proveedor_producto_tests: "No existen otros archivos de test del módulo"
+      related_cuenta_por_pagar_tests: "No existen otros archivos de test del módulo"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      qa_032_regression_observed: none
+      qa_032_test_executed: false
+      production_files_modified:
+        - backend/src/routes/proveedores/proveedor.routes.ts
+        - backend/src/routes/proveedores/proveedorProducto.routes.ts
+        - backend/src/routes/proveedores/cuentaPorPagar.routes.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-23"
+    final_verification: >-
+      GREEN: el archivo oficial pasó 1/1 con guardia hotel_test_db; los seis GET
+      del cliente devolvieron 403 sin exponer fixtures, los controles admin
+      devolvieron 200 y los snapshots/conteos PostgreSQL permanecieron iguales.
+      No había otros tests de proveedor, proveedorProducto ni cuentaPorPagar;
+      npx tsc --noEmit finalizó sin errores.
+
+  - id: QA-AUTH-SEC-CANDIDATE-032
+    status: closed
+    severity: high
+    category: AUTH
+    title: >-
+      Cliente autenticado consulta facturas e ítems fiscales pertenecientes a
+      otro usuario
+    invariant: >-
+      Un cliente autenticado solo puede consultar sus propios datos fiscales.
+      Una Factura del Cliente A y cualquier FacturaItem ligado no pueden aparecer
+      en listas ni consultas directas del Cliente B; un administrador autorizado
+      puede conservar lectura global.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/auth/facturaOwnership.test.ts
+      test_name: "QA-AUTH-SEC-CANDIDATE-032: cliente no consulta facturas ni ítems fiscales de otro usuario"
+      command: >-
+        npm --prefix backend test -- tests/auth/facturaOwnership.test.ts
+      database: hotel_test_db
+      stripe_used: false
+      payments_used: false
+      cart_used: false
+      clients_created_through_public_register: true
+      client_b_token_obtained_through_login: true
+    scenario:
+      client_a: "id=1; rol=cliente"
+      client_b: "id=2; rol=cliente"
+      factura_a: >-
+        id=1; usuario_id=1; nit=NIT-QA-A-032; nombre_fiscal=Cliente A Fiscal
+        QA 032; direccion_fiscal=Avenida Privada QA 032, Guatemala;
+        subtotal=125.00; iva=15.00; total=140.00; estado=pendiente
+      factura_item_a: >-
+        id=1; factura_id=1; descripcion=Servicio privado QA AUTH 032;
+        cantidad=2; precio_unitario=62.50; subtotal=125.00
+    expected:
+      client_b_list_facturas: "HTTP 403 o HTTP 200 filtrado sin factura A"
+      client_b_get_factura_a: "HTTP 403 o 404"
+      client_b_list_factura_items: "HTTP 403 o HTTP 200 filtrado sin ítem A"
+      client_b_get_factura_item_a: "HTTP 403 o 404"
+      fiscal_data_exposed: false
+      owner_access: allowed
+      admin_global_access: allowed
+      database_modified_by_reads: false
+    actual:
+      client_b_list_facturas: >-
+        HTTP 200; code null; la lista contiene Factura id=1 de usuario_id=1
+      client_b_get_factura_a: >-
+        HTTP 200; code null; devuelve Factura id=1, usuario_id=1 y los datos
+        fiscales exactos de Cliente A
+      client_b_list_factura_items: >-
+        HTTP 200; code null; la lista contiene FacturaItem id=1 ligado a
+        factura_id=1
+      client_b_get_factura_item_a: >-
+        HTTP 200; code null; devuelve FacturaItem id=1 ligado a factura_id=1
+      owner_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      admin_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      fiscal_data_exposed: true
+      database_modified_by_reads: false
+      authorization_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 7 aserciones soft: ambas listas
+        incluyeron recursos ajenos, ambas consultas directas respondieron 200 y
+        devolvieron los recursos del Cliente A, y se expusieron sus datos fiscales.
+    http_evidence:
+      client_b_list_facturas_status: 200
+      client_b_list_facturas_code: null
+      foreign_factura_present_in_list: true
+      client_b_get_factura_status: 200
+      client_b_get_factura_code: null
+      foreign_factura_body_returned: true
+      fiscal_data_exposed: true
+      client_b_list_factura_items_status: 200
+      client_b_list_factura_items_code: null
+      foreign_item_present_in_list: true
+      client_b_get_factura_item_status: 200
+      client_b_get_factura_item_code: null
+      foreign_item_body_returned: true
+      owner_factura_status: 200
+      owner_item_status: 200
+      admin_factura_status: 200
+      admin_item_status: 200
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      factura_count_before_and_after_reads: 1
+      factura_item_count_before_and_after_reads: 1
+      factura_snapshot_unchanged: true
+      factura_item_snapshot_unchanged: true
+      database_modified_by_reads: false
+      factura: >-
+        id=1; usuario_id=1; nit=NIT-QA-A-032; nombre_fiscal=Cliente A Fiscal
+        QA 032; direccion_fiscal=Avenida Privada QA 032, Guatemala;
+        subtotal=125.00; iva=15.00; porcentaje_iva=12.00; total=140.00;
+        estado=pendiente
+      factura_item: >-
+        id=1; factura_id=1; descripcion=Servicio privado QA AUTH 032;
+        cantidad=2; precio_unitario=62.50; subtotal=125.00
+    suspected_execution_path: >-
+      GET /api/facturas y GET /api/facturas/{id} aplican únicamente
+      authMiddleware y los controllers llaman getAllFacturas/findAll o
+      getFacturaById/findByPk sin recibir ni comparar req.user. GET
+      /api/factura-items y GET /api/factura-items/{id} siguen el mismo patrón:
+      autentican, pero getAllFacturaItems/findAll y getFacturaItemById/findByPk
+      no enlazan el ítem con Factura.usuario_id ni verifican propietario o rol.
+    root_cause: >-
+      Los endpoints GET autenticaban la solicitud, pero los controllers no
+      propagaban req.user a los services. Las consultas findAll/findByPk se
+      ejecutaban sin condiciones de propietario y FacturaItem no enlazaba su
+      factura para comprobar Factura.usuario_id.
+    correction: >-
+      Los controllers de lectura ahora pasan exclusivamente req.user validado por
+      authMiddleware. Para rol cliente, Factura aplica usuario_id en el WHERE de
+      PostgreSQL y las consultas de FacturaItem usan un INNER JOIN requerido con
+      Factura y WHERE Factura.usuario_id. Las consultas por id combinan id y
+      propiedad y responden 404 cuando el recurso no está dentro del scope. Los
+      demás roles autenticados conservan el acceso global previo y las mutaciones
+      siguen usando helpers internos sin cambios de autorización.
+    severity_recommendation: high
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed; 7 aserciones de autorización fallaron"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-23"
+    final_verification:
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_named: "1 file passed, 1 test passed"
+      focused_file: "1 file passed, 1 test passed"
+      client_b_list_facturas: "HTTP 200; lista vacía; factura ajena ausente"
+      client_b_get_factura_a: "HTTP 404 FACTURA_NOT_FOUND; body ajeno ausente"
+      client_b_list_factura_items: "HTTP 200; lista vacía; ítem ajeno ausente"
+      client_b_get_factura_item_a: >-
+        HTTP 404 FACTURA_ITEM_NOT_FOUND; body ajeno ausente
+      fiscal_data_exposed: false
+      owner_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      admin_control: "Factura HTTP 200; FacturaItem HTTP 200"
+      database_modified_by_reads: false
+      authorization_violation: false
+      related_factura_tests: "no existen otros archivos de test de Factura"
+      related_factura_item_tests: "no existen otros archivos de test de FacturaItem"
+      requested_typecheck_command: >-
+        npm --prefix backend exec tsc -- --noEmit devolvió ayuda de tsc y exit 1
+        por interpretación del wrapper npm local
+      fallback_typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: green
+      production_files_modified:
+        - backend/src/controllers/habitaciones/factura.controller.ts
+        - backend/src/controllers/habitaciones/facturaItem.controller.ts
+        - backend/src/services/habitaciones/factura.service.ts
+        - backend/src/services/habitaciones/facturaItem.service.ts
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+      verified_at: "2026-10-23"
+
+  - id: QA-RH-FIN-CANDIDATE-031
+    status: closed
+    severity: medium
+    category: FIN
+    title: >-
+      El resumen por ReservaHabitacion omite pagos aprobados originados en su
+      carrito
+    invariant: >-
+      GET /api/pagos/resumen?reserva_habitacion_id=:id debe representar la misma
+      realidad financiera que reservationFinancialExposure y PostgreSQL sin
+      importar si el pago de la reserva nació directamente o mediante carrito.
+      Para una reserva Q100 pagada por un único carrito, el resumen debe informar
+      aprobado neto Q100 y saldo Q0; tras un reembolso aprobado debe descontar el
+      reembolso semánticamente.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.paymentSummary.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-031: el resumen de ReservaHabitacion incluye el pago y reembolso de su carrito"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.paymentSummary.test.ts
+      result: "1 archivo falló; 1 test falló por la violación financiera esperada"
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      real_charges: false
+    expected:
+      endpoint: "GET /api/pagos/resumen?reserva_habitacion_id=1"
+      http_status: 200
+      semantic_summary: "total=100.00; net approved=100.00; remaining=0.00"
+      financial_source: reservationFinancialExposure
+      unexpected_500: false
+    actual:
+      setup: >-
+        Cliente id=1; ReservaHabitacion id=1 Q100.00; Carrito id=1 con un item
+        habitación Q100.00; Pago tarjeta id=1, origen carrito, Q100.00.
+      stripe: >-
+        PaymentIntent local pi_rh_summary_031_001 por 10000 unidades menores;
+        succeeded mediante webhook local; una creación, un webhook, cero red.
+      persisted_state: >-
+        Reserva confirmada Q100.00; carrito pagado con un item; Pago aprobado
+        Q100.00, carrito_id=1, reserva_habitacion_id=null; reembolsado aprobado
+        Q0.00; neto aprobado Q100.00; saldo real Q0.00.
+      aggregate: >-
+        reservationFinancialExposure devolvió approved=100, processing=0,
+        total=100.
+      summary: >-
+        HTTP 200; campos total=100, anticipo_requerido=0, aprobado=0, saldo=100.
+        Semánticamente devolvió net approved Q0 y remaining Q100.
+      initial_match: false
+      refund: >-
+        No ejecutado conforme al protocolo: la comparación inicial ya confirmó
+        la divergencia. createRefund tuvo cero llamadas.
+      unexpected_500: false
+    http_evidence:
+      create_reservation_status: 201
+      create_cart_status: 201
+      add_item_status: 201
+      create_payment_status: 201
+      payment_webhook_status: 200
+      reservation_summary_status: 200
+      reservation_summary_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      reservation: "id=1; total=100.00; estado=confirmada"
+      cart: "id=1; estado=pagado; item_count=1"
+      payment: >-
+        id=1; carrito_id=1; reserva_habitacion_id=null; monto=100.00;
+        estado=aprobado; approved_refunded=0.00
+      gross_approved: "100.00"
+      approved_refunded: "0.00"
+      net_approved: "100.00"
+      remaining: "0.00"
+      reservation_exposure: "approved=100; processing=0; total=100"
+    suspected_execution_path: >-
+      pago.controller.resumen entrega reserva_habitacion_id a getResumenPago;
+      validateOpenOrigin construye details.key exclusivamente como
+      {reserva_habitacion_id: 1}; getResumenPago llama approvedAmount(details.key),
+      que solo selecciona pagos directos y no los pagos de carritos históricos.
+      reservationFinancialExposure sí descubre el carrito por CarritoItem y
+      atribuye su aprobado neto, por lo que ambos caminos divergen.
+    root_cause: >-
+      getResumenPago calculaba aprobado con la llave directa de
+      ReservaHabitacion, aunque la exposición financiera canónica también
+      incluye y atribuye pagos de sus carritos históricos.
+    correction: >-
+      Para origen ReservaHabitacion, getResumenPago reutiliza
+      reservationFinancialExposure dentro de la misma transacción y toma solo
+      su campo approved; el resumen de carrito conserva approvedAmount.
+    severity_recommendation: medium
+    regressions:
+      qa_020: >-
+        GREEN: reservaHabitacion.aggregateExposure.test.ts verificó exposición
+        agregada directa y de carrito sin superar el total
+      qa_030: >-
+        GREEN: reservaHabitacion.multiRoomCartPayment.test.ts verificó la
+        atribución proporcional sin duplicación y el resumen de carrito
+    verification:
+      focused: >-
+        GREEN: 1 archivo, 1 test; incluyó naturalmente reembolso aprobado Q40,
+        aprobado neto Q60 y saldo Q40
+      related:
+        - "GREEN: reservaHabitacion.multiRoomCartPayment.test.ts (1 archivo, 1 test)"
+        - "GREEN: reservaHabitacion.aggregateExposure.test.ts (1 archivo, 1 test)"
+        - "GREEN: reservaHabitacion.approvedPaymentMutation.test.ts (1 archivo, 1 test)"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      production_files_modified: true
+      production_files: "backend/src/services/pago.service.ts"
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      registry_entries_modified: "solo QA-RH-FIN-CANDIDATE-031"
+      verified_at: "2026-10-23"
+
+  - id: QA-RH-FIN-CANDIDATE-030
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un pago total parcial de carrito multi-habitación se acepta y su monto se
+      atribuye íntegramente a cada ReservaHabitacion
+    invariant: >-
+      Un carrito con dos ReservaHabitacion de Q100.00 cada una y total Q200.00
+      no puede aceptar tipo_pago=total por Q100.00 ni crear Pago o PaymentIntent.
+      Un único pago compartido tampoco puede contarse íntegramente para cada
+      reserva de modo que la exposición atribuida exceda el dinero real o ambas
+      reservas sean tratadas como totalmente pagadas mientras el carrito conserva
+      saldo.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.multiRoomCartPayment.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-030: un carrito multi-habitación no duplica ni acepta exposición parcial como pago total"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.multiRoomCartPayment.test.ts
+      result: "1 archivo falló; 1 test falló con 3 aserciones soft"
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      real_charges: false
+      reservation_count: 2
+      cart_count: 1
+      cart_item_count: 2
+      payment_attempt_count: 1
+      persisted_payment_count: 1
+      payment_intent_count: 1
+      webhook_count: 1
+      direct_payment_count: 0
+      cash_payment_count: 0
+      second_cart_count: 0
+    expected:
+      partial_total_attempt: >-
+        HTTP 4xx controlado; cero Pago persistido y cero PaymentIntent creado
+      cart_state: activo
+      cart_total: "200.00"
+      cart_item_count: 2
+      reservation_totals: "A=100.00; B=100.00"
+      real_approved_plus_processing_maximum_at_attempt: "0.00"
+      attributed_exposure_maximum: >-
+        no mayor que el dinero real aprobado más procesando y sin declarar ambas
+        reservas totalmente pagadas cuando el carrito conserva Q100.00 de saldo
+      unexpected_500: false
+    actual:
+      setup: >-
+        Cliente id=1; dos habitaciones distintas id=1/2 con tarifa Q100.00;
+        ReservaHabitacion A=1 y B=2, ambas pendientes, una noche dinámica
+        2026-11-02/2026-11-03 y total Q100.00 cada una.
+      cart_before_payment: >-
+        Carrito id=1 activo; GET items HTTP 200; PostgreSQL item_count=2 y suma
+        persistida Q200.00; items de A/B intactos.
+      exposure_before: >-
+        reservationFinancialExposure A approved=0 processing=0 total=0; B
+        approved=0 processing=0 total=0; isReservationFullyPaid=false/false.
+      payment_attempt: >-
+        POST /api/pagos con carrito_id=1, monto Q100.00, metodo=tarjeta y
+        tipo_pago=total respondió HTTP 201, code null. Creó Pago id=1 en estado
+        procesando por Q100.00 y creó PaymentIntent local.
+      payment_intent: >-
+        id=pi_rh_multi_room_cart_030_001; amount=10000 minor units/Q100.00;
+        requires_payment_method antes del webhook; metadata pago_id=1,
+        carrito_id=1, tipo_pago=total.
+      persisted_before_webhook: >-
+        PostgreSQL contiene exactamente un Pago de carrito, tarjeta, total,
+        procesando Q100.00, reserva_habitacion_id null e intent asociado; dinero
+        real approved=Q0.00, processing=Q100.00.
+      webhook: >-
+        Mock cambió únicamente el intent a succeeded; POST webhook real respondió
+        HTTP 200, code null, {received:true}; constructEvent tuvo una llamada.
+      final_cart: >-
+        PostgreSQL carrito id=1 activo, item_count=2, total por items Q200.00.
+        GET resumen HTTP 200 informó total=200, aprobado=100 y saldo=100.
+      final_reservations: >-
+        A id=1 pendiente Q100.00 y B id=2 pendiente Q100.00; exactamente dos
+        ReservaHabitacion persistidas en el escenario.
+      final_payment: >-
+        Exactamente un Pago id=1, carrito_id=1, tarjeta, tipo total, aprobado,
+        Q100.00, sin reembolsos aprobados e intent
+        pi_rh_multi_room_cart_030_001.
+      final_money: >-
+        Dinero PostgreSQL real: approved net Q100.00, processing Q0.00,
+        approved+processing Q100.00.
+      final_exposures: >-
+        reservationFinancialExposure A approved=100 processing=0 total=100; B
+        approved=100 processing=0 total=100; suma atribuida Q200.00 frente a
+        Q100.00 real.
+      financial_decisions: >-
+        isReservationFullyPaid(A,Q100)=true e isReservationFullyPaid(B,Q100)=true
+        aunque el resumen persistido del carrito conserva saldo Q100.00.
+      subpayment_accepted_as_full: true
+      attribution_duplicated: true
+      attributed_sum_exceeds_real: true
+      incorrect_fully_paid_decision: true
+      financial_violation: true
+      unexpected_500: false
+      fallback_full_payment: not_run
+      red_result: >-
+        La prueba falló porque el subpago total Q100 fue aceptado con Pago/Intent,
+        la exposición A+B fue Q200 frente a Q100 real y ambas decisiones de pago
+        completo fueron true mientras el carrito aún debía Q100.
+    http_evidence:
+      reservation_create_statuses: "201,201"
+      cart_create_status: 201
+      add_item_statuses: "201,201"
+      list_items_status: 200
+      partial_payment_status: 201
+      partial_payment_code: null
+      webhook_status: 200
+      webhook_code: null
+      cart_summary_status: 200
+      cart_summary_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      cart: "id=1; estado=activo; items=2; total_items=200.00"
+      reservation_a: "id=1; habitacion_id=1; estado=pendiente; total=100.00"
+      reservation_b: "id=2; habitacion_id=2; estado=pendiente; total=100.00"
+      payment: >-
+        id=1; carrito_id=1; reserva_habitacion_id=null; monto=100.00;
+        metodo=tarjeta; tipo_pago=total; estado=aprobado; refunds=0.00
+      payment_count: 1
+      real_approved_net: "100.00"
+      real_processing: "0.00"
+      real_approved_plus_processing: "100.00"
+      exposure_a: "approved=100; processing=0; total=100"
+      exposure_b: "approved=100; processing=0; total=100"
+      attributed_exposure_sum: "200.00"
+      cart_approved: "100.00"
+      cart_balance: "100.00"
+      cart_items_intact: true
+    suspected_execution_path: >-
+      createPago -> validateOpenOrigin calcula total del carrito Q200 y bloquea
+      ambas reservas. roomExposureBalance itera A/B, obtiene exposición cero y
+      reduce remaining al mínimo individual Q100, por lo que la validación de
+      only-room compara monto Q100 contra remaining Q100 en vez del total Q200 y
+      permite Pago/Intent. Después del succeeded, reservationFinancialExposure
+      descubre carrito_id=1 por cada CarritoItem y selecciona para A y para B el
+      mismo Pago completo Q100. isReservationFullyPaid compara ese Q100 repetido
+      con cada total individual Q100 y devuelve true para ambas. applyCartPaid sí
+      observa approved del carrito Q100 menor que Q200 y conserva el carrito
+      activo, haciendo observable la decisión contradictoria.
+    root_cause:
+      payment_validation: >-
+        roomExposureBalance reducía el saldo al mínimo pendiente de una sola
+        ReservaHabitacion y la regla de pago completo comparaba Q100 contra ese
+        mínimo, no contra el saldo agregado Q200 del carrito.
+      attribution: >-
+        reservationFinancialExposure atribuía a cada reserva el monto completo
+        de todo Pago cuyo carrito histórico contuviera la referencia; no
+        distribuía el dinero compartido entre los CarritoItem.
+    correction:
+      production_file: backend/src/services/pago.service.ts
+      payment_validation: >-
+        El saldo pagable de habitaciones se agrega entre las reservas y la regla
+        de pago completo se compara con total del carrito menos aprobado neto
+        menos procesando, antes de Pago.create y Stripe.
+      attribution: >-
+        Los pagos de carrito se distribuyen proporcionalmente por el valor
+        persistido de cada CarritoItem, en centavos y con residuo determinista;
+        pagos directos conservan atribución íntegra y precedencia en datos
+        heredados con doble origen.
+      refunds: >-
+        Solo reembolsos aprobados reducen primero el monto aprobado de cada Pago;
+        luego se distribuye el aprobado neto, separado de procesando.
+      concurrency: >-
+        Se conserva Carrito -> ReservaHabitacion por id ascendente -> Pago; no se
+        agregaron checks fuera de la transacción ni se alteraron locks.
+    severity_recommendation: high
+    regressions:
+      qa_016: >-
+        no reejecutado por la lista de comandos autorizada; la monotonicidad del
+        webhook de refund no cambió y la atribución solo descuenta refunds aprobados
+      qa_020: >-
+        GREEN; la exposición agregada directa más carrito continúa sin superar
+        el total de ReservaHabitacion
+      qa_027: >-
+        rejected permanece cerrado; no DELETE, segundo pago ni segundo carrito
+      qa_028: "GREEN; reducción de obligación bajo aprobado sigue rechazada"
+      qa_029: >-
+        no reejecutado por alcance explícito; no se modificó PATCH, cancelación
+        ni la política de pagos procesando
+    verification:
+      focused: >-
+        GREEN: multiRoomCartPayment 1/1; aggregateExposure 1/1;
+        approvedPaymentMutation 1/1; pagoActividad.reuse 1/1;
+        pago.idempotency.concurrency 3/3
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      production_files_modified: true
+      production_files: [backend/src/services/pago.service.ts]
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      registry_entries_modified: "solo QA-RH-FIN-CANDIDATE-030"
+      verified_at: "2026-10-23"
+
+  - id: QA-RH-FIN-CANDIDATE-029
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      PATCH permite cancelar una ReservaHabitacion mientras su PaymentIntent
+      directo permanece procesando y cobrable
+    invariant: >-
+      Si reservationFinancialExposure.processing es mayor que cero, ninguna ruta
+      puede pasar ReservaHabitacion a cancelada. PATCH con payload exclusivamente
+      {estado: cancelada} debe responder HTTP 409
+      RESERVATION_HAS_PROCESSING_PAYMENT y conservar reserva pendiente, Pago
+      procesando e intent asociado no cancelado, sin ejecutar webhook.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.patchCancelProcessingPayment.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-029: PATCH no cancela una ReservaHabitacion con PaymentIntent procesando"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchCancelProcessingPayment.test.ts
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_origin: direct
+      payment_method: tarjeta
+      cart_used: false
+      cash_used: false
+      second_payment_used: false
+      refund_used: false
+      reservation_count: 1
+      local_payment_count: 1
+      payment_intent_count: 1
+    expected:
+      patch_status: 409
+      patch_code: RESERVATION_HAS_PROCESSING_PAYMENT
+      reservation_state: pendiente
+      reservation_total: "100.00"
+      payment_state: procesando
+      approved_amount: "0.00"
+      processing_amount: "100.00"
+      intent_canceled: false
+      webhook_executed: false
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      reservation_create: >-
+        HTTP 201; id=1; estado pendiente; fechas futuras dinámicas
+        2026-11-02/2026-11-03; total exacto Q100.00
+      payment_create: >-
+        HTTP 201; Pago id=1; tarjeta DIRECTO; procesando; Q100.00;
+        PaymentIntent pi_rh_patch_cancel_029_001
+      before_patch: >-
+        PostgreSQL: una ReservaHabitacion pendiente Q100.00 y un Pago procesando
+        Q100.00; reservationFinancialExposure approved=0, processing=100,
+        total=100; intent requires_payment_method; no succeeded previo
+      patch_payload: '{"estado":"cancelada"}'
+      patch_result: >-
+        HTTP 200; code null; ReservaHabitacion persistida como cancelada; Pago
+        permanece procesando Q100.00; exposición approved=0, processing=100,
+        total=100; intent no cancelado; cancelCalls=0
+      webhook_first: >-
+        Intent original cambiado únicamente en mock a succeeded; webhook real
+        payment_intent.succeeded respondió HTTP 409 RESERVATION_NOT_AVAILABLE.
+        PostgreSQL quedó con reserva cancelada, Pago procesando, approved=0,
+        processing=100 y sin reembolso aprobado.
+      webhook_exact_replay: >-
+        El mismo evento evt_rh_patch_cancel_029_001 se reenvió sin cambios y
+        volvió a responder HTTP 409 RESERVATION_NOT_AVAILABLE; el estado
+        PostgreSQL no cambió.
+      external_state: "PaymentIntent succeeded; neto externo Q100.00"
+      local_state: >-
+        Reserva cancelada; Pago procesando Q100.00; aprobado neto Q0.00;
+        processing Q100.00; reembolsos aprobados Q0.00
+      durable_divergence: "Q100.00 externo succeeded frente a Q0.00 local aprobado"
+      financial_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 4 aserciones soft: PATCH devolvió 200
+        en vez de 409, no entregó RESERVATION_HAS_PROCESSING_PAYMENT, persistió
+        cancelada y dejó la divergencia financiera durable tras webhook y replay.
+    http_evidence:
+      reservation_create_status: 201
+      payment_create_status: 201
+      patch_endpoint: PATCH /api/reservas-habitacion/1
+      patch_authorization: GERENTE_HABITACIONES
+      patch_status: 200
+      patch_code: null
+      first_webhook_status: 409
+      first_webhook_code: RESERVATION_NOT_AVAILABLE
+      replay_status: 409
+      replay_code: RESERVATION_NOT_AVAILABLE
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_patch:
+        reservation: "id=1; pendiente; total=100.00"
+        payment: >-
+          id=1; reserva_habitacion_id=1; tarjeta; procesando; monto=100.00;
+          external_id=pi_rh_patch_cancel_029_001
+        exposure_helper: "approved=0; processing=100; total=100"
+      after_patch:
+        reservation: "id=1; cancelada; total=100.00"
+        payment: "id=1; procesando; monto=100.00; reembolsos_aprobados=0.00"
+        exposure_helper: "approved=0; processing=100; total=100"
+      after_first_webhook:
+        reservation_state: cancelada
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        approved_refunds: "0.00"
+      after_exact_replay:
+        reservation_state: cancelada
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        approved_refunds: "0.00"
+      reservation_count: 1
+      local_payment_count: 1
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 1
+      intent_id: pi_rh_patch_cancel_029_001
+      amount_minor: 10000
+      currency: gtq
+      status_before_patch: requires_payment_method
+      status_after_patch: requires_payment_method
+      intent_canceled_after_patch: false
+      status_after_simulation: succeeded
+      create_calls: 1
+      cancel_calls: 0
+      retrieve_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      event_id: evt_rh_patch_cancel_029_001
+      same_event_delivered_twice: true
+    suspected_execution_path: >-
+      PATCH /api/reservas-habitacion/{id} entra a updateReservaHabitacion y toma
+      lock de la reserva. Sin embargo, cambiaIdentidadEconomica solo incluye
+      usuario_id, habitacion_id, fecha_entrada y fecha_salida; un PATCH que cambia
+      únicamente estado no llama reservationFinancialExposure. updateData persiste
+      estado=cancelada con HTTP 200. Al llegar payment_intent.succeeded,
+      processStripeWebhook intenta reconciliar el Pago pero validateOpenOrigin
+      detecta la reserva terminal, responde RESERVATION_NOT_AVAILABLE y revierte
+      la aprobación. El replay repite el rollback, dejando Stripe succeeded y el
+      Pago local procesando de forma durable.
+    root_cause: >-
+      La protección de updateReservaHabitacion contra exposición procesando está
+      condicionada a cambiaIdentidadEconomica y omite las transiciones de estado,
+      incluida pendiente -> cancelada. PATCH y DELETE aplican por ello políticas
+      financieras distintas sobre la misma transición terminal.
+    correction: >-
+      Se añadió reservationExposureWithoutProcessing, helper compartido por
+      PATCH y DELETE que usa reservationFinancialExposure y bloquea antes del
+      UPDATE toda cancelación efectiva con exposición processing mayor que cero.
+    severity_recommendation: high
+    regressions_observed:
+      qa_022: >-
+        No ejercido ni reabierto: QA-022 protege DELETE; esta reproducción usa
+        exclusivamente PATCH.
+      qa_021: >-
+        No ejercido ni reabierto: payload exclusivamente estado=cancelada, sin
+        mutar habitación, fechas, usuario ni total.
+      qa_028: >-
+        No ejercido ni reabierto: antes del PATCH approved=0 y processing=100;
+        QA-028 cubre approved mayor que cero con processing=0.
+    verification:
+      focused: "1 file failed, 1 test failed por la violación financiera reproducida"
+      db_guard: green
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-23"
+    final_verification:
+      database: hotel_test_db
+      db_guard: pass
+      focused: "PASS 1/1"
+      qa_022: PASS
+      qa_021: PASS
+      qa_028: PASS
+      lifecycle: PASS
+      typecheck: PASS
+      patch_status: 409
+      patch_code: RESERVATION_HAS_PROCESSING_PAYMENT
+      reservation_state: pendiente
+      payment_state: procesando
+      payment_amount: "100.00"
+      approved_amount: "0.00"
+      processing_amount: "100.00"
+      intent_canceled: false
+      webhook_executed: false
+      divergence: false
+      financial_violation: false
+      existing_tests_modified: false
+      migrations_modified: false
+      production_file: backend/src/services/habitaciones/reservaHabitacion.service.ts
+
+  - id: QA-RH-FIN-CANDIDATE-028
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      ReservaHabitacion permite reducir el total debajo de un pago directo ya
+      aprobado sin ajuste ni reembolso
+    invariant: >-
+      Para una ReservaHabitacion, approved net + processing nunca puede superar
+      el total vigente. Con processing=0 y approved net mayor que cero, un PATCH
+      no puede reducir el total debajo del aprobado sin ajuste o reembolso
+      explícito; debe responder HTTP 409 PAYMENT_EXCEEDS_NEW_TOTAL o un código
+      financiero semánticamente equivalente y conservar el snapshot original.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.approvedPaymentMutation.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-028: rechaza reducir el total debajo del pago aprobado"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.approvedPaymentMutation.test.ts
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_origin: direct
+      cart_used: false
+      refund_requested: false
+      payment_intent_count: 1
+      local_payment_count: 1
+      dates: "2026-11-01 a 2026-11-04; PATCH fecha_salida=2026-11-02"
+    expected:
+      patch_status: 409
+      patch_code: >-
+        PAYMENT_EXCEEDS_NEW_TOTAL o código financiero semánticamente equivalente
+      reservation_snapshot: unchanged
+      payment_snapshot: unchanged
+      approved_amount: "300.00"
+      processing_amount: "0.00"
+      current_obligation: "300.00"
+      approved_exceeds_obligation: false
+      refund_created: false
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      reservation_id: 1
+      initial_reservation: >-
+        habitacion_id=1; 2026-11-01/2026-11-04; confirmada; total Q300.00
+      payment_create: >-
+        HTTP 201; code null; Pago id=1 tarjeta DIRECTO procesando Q300.00;
+        PaymentIntent pi_rh_approved_mutation_028_001
+      webhook: >-
+        HTTP 200; code null; payment_intent.succeeded local simulado
+      before_patch: >-
+        Pago aprobado Q300.00; reservationFinancialExposure approved=300,
+        processing=0, total=300; reembolsos=0
+      patch: >-
+        HTTP 200; code null; fecha_salida 2026-11-04 -> 2026-11-02; total
+        Q300.00 -> Q100.00
+      after_patch: >-
+        habitacion_id=1; 2026-11-01/2026-11-02; confirmada; Pago aprobado
+        Q300.00; approved=300; processing=0; obligación vigente Q100.00;
+        reembolsos=0
+      approved_exceeds_obligation: true
+      refund_created: false
+      financial_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con 5 aserciones soft: PATCH 200 sin
+        código financiero, fechas/total mutados, snapshot no atómico y aprobado
+        Q300.00 mayor que obligación Q100.00.
+    http_evidence:
+      reservation_create_status: 201
+      reservation_create_code: null
+      payment_create_status: 201
+      payment_create_code: null
+      webhook_status: 200
+      webhook_code: null
+      patch_status: 200
+      patch_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_reservation: >-
+        id=1; habitacion_id=1; fecha_entrada=2026-11-01;
+        fecha_salida=2026-11-04; estado=confirmada; total=300.00
+      before_payment: >-
+        id=1; reserva_habitacion_id=1; carrito_id=null; tarjeta; stripe;
+        aprobado; monto=300.00; reembolsos_aprobados=0.00
+      before_exposure_helper: "approved=300; processing=0; total=300"
+      after_reservation: >-
+        id=1; habitacion_id=1; fecha_entrada=2026-11-01;
+        fecha_salida=2026-11-02; estado=confirmada; total=100.00
+      after_payment: >-
+        id=1; reserva_habitacion_id=1; carrito_id=null; tarjeta; stripe;
+        aprobado; monto=300.00; reembolsos_aprobados=0.00
+      after_exposure_helper: "approved=300; processing=0; total=300"
+      local_payment_count: 1
+      refund_count: 0
+      payment_intent_count: 1
+      current_obligation: "100.00"
+      approved_exceeds_obligation: true
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      intent_id: pi_rh_approved_mutation_028_001
+      intent_amount_minor: 30000
+      intent_status: succeeded
+      create_calls: 1
+      succeeded_webhook_calls: 1
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+    suspected_execution_path: >-
+      PATCH /api/reservas-habitacion/{id} entra a updateReservaHabitacion, bloquea
+      la ReservaHabitacion y consulta reservationFinancialExposure cuando cambia
+      fecha_salida. La protección financiera solo rechaza exposure.processing >
+      0; con approved=300 y processing=0 continúa, recalcula una noche por
+      Q100.00 y persiste el UPDATE sin comparar approved net contra el nuevo
+      total. El Pago aprobado permanece intacto y no se crea reembolso.
+    root_cause: >-
+      updateReservaHabitacion protegía la identidad económica únicamente cuando
+      reservationFinancialExposure.processing era mayor que cero. No comparaba
+      la exposición agregada total, incluido el aprobado neto post-reembolsos,
+      contra el total propuesto antes del UPDATE.
+    correction: >-
+      updateReservaHabitacion reutiliza la habitación destino ya bloqueada y sus
+      fechas efectivas para calcular el total propuesto con calculateTotal;
+      conserva primero el rechazo específico de pagos procesando y después exige
+      reservationFinancialExposure.total <= proposedTotal, rechazando con HTTP
+      409 PAYMENT_EXCEEDS_NEW_TOTAL antes de persistir cuando se viola.
+    severity_recommendation: high
+    regressions_observed:
+      qa_021: >-
+        none; escenario distinto: succeeded y aprobación ocurrieron antes del
+        PATCH, que recibió processing=0. No se reejecutó QA-021.
+      qa_027: >-
+        none observed; escenario directo sin carrito, QA-027 no fue ejercido ni
+        reabierto y conserva rejected/not reproduced.
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard_confirmed_in_all_integration_runs: true
+      focused:
+        file: backend/tests/habitaciones/reservaHabitacion.approvedPaymentMutation.test.ts
+        result: "PASS; 1 archivo, 1 test"
+        patch_status: 409
+        patch_code: PAYMENT_EXCEEDS_NEW_TOTAL
+        initial_total: "300.00"
+        proposed_total: "100.00"
+        final_total: "300.00"
+        payment_state: aprobado
+        approved_amount: "300.00"
+        processing_amount: "0.00"
+        final_obligation: "300.00"
+        approved_exceeds_final_obligation: false
+        refund_count: 0
+        financial_violation: false
+        reservation_snapshot: unchanged
+        payment_snapshot: unchanged
+      related:
+        qa_020: "PASS; reservaHabitacion.aggregateExposure.test.ts; 1/1"
+        qa_021: "PASS; reservaHabitacion.paymentMutationBinding.test.ts; 1/1"
+        qa_023: "PASS; reservaHabitacion.patchConcurrency.test.ts; 1/1"
+        qa_025: "PASS; reservaHabitacion.lifecycle.test.ts; 1/1"
+      typecheck:
+        command: "cd backend; npx tsc --noEmit"
+        result: pass
+      production_file_modified: backend/src/services/habitaciones/reservaHabitacion.service.ts
+      tests_modified: false
+      migrations_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-FIN-CANDIDATE-027
+    status: rejected
+    severity: high
+    category: FIN
+    title: >-
+      El carrito pagado impide eliminar el item y conserva la exposición
+      aprobada de ReservaHabitacion
+    invariant: >-
+      Un Pago aprobado mediante carrito debe conservar permanentemente el vínculo
+      económico histórico con ReservaHabitacion.id. Eliminar posteriormente el
+      CarritoItem no puede ocultar el aprobado neto, hacer parecer impaga la
+      reserva ni permitir un segundo compromiso financiero completo.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.cartApprovedHistory.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-027: conserva el historial aprobado de una ReservaHabitacion al eliminar su item"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cartApprovedHistory.test.ts
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      reservation_count: 1
+      cart_item_count_at_payment: 1
+    expected:
+      safe_outcome: >-
+        DELETE rechazado conservando el item y el vínculo, o eliminación que
+        conserve aprobado Q100.00 y rechace un segundo Pago/PaymentIntent.
+      maximum_legitimate_exposure: "100.00"
+      unexpected_500: false
+    actual:
+      ids: "reserva=1; carrito=1; item=1; pago_historico=1"
+      reservation_total: "100.00"
+      add_item: "HTTP 201; code null; item persistido por Q100.00"
+      historical_payment: >-
+        Pago id=1; origen carrito_id=1; tarjeta; aprobado; Q100.00;
+        PaymentIntent pi_rh_cart_history_027_1 succeeded local simulado
+      exposure_before_delete: >-
+        reservationFinancialExposure: aprobado Q100.00; procesando Q0.00; total
+        activo Q100.00
+      delete_item: "HTTP 409 CART_NOT_ACTIVE"
+      item_after_delete: present
+      historical_payment_after_delete: "persistido; tarjeta; aprobado; Q100.00"
+      exposure_after_delete: >-
+        reservationFinancialExposure: aprobado Q100.00; procesando Q0.00; total
+        activo Q100.00
+      historical_link_preserved: true
+      second_direct_payment: "HTTP 409 RESERVATION_ALREADY_PAID"
+      second_payment_persisted: false
+      payment_intent_count: 1
+      local_payment_count: 1
+      real_approved_net: "100.00"
+      final_processing: "0.00"
+      final_total_active: "100.00"
+      maximum_legitimate_exposure: "100.00"
+      financial_violation: false
+      unexpected_500: false
+      focused_result: "1 file passed; 1 test passed"
+    http_evidence:
+      add_status: 201
+      add_code: null
+      cart_payment_status: 201
+      cart_payment_code: null
+      webhook_status: 200
+      webhook_code: null
+      delete_status: 409
+      delete_code: CART_NOT_ACTIVE
+      second_direct_status: 409
+      second_direct_code: RESERVATION_ALREADY_PAID
+      unexpected_500: false
+    database_evidence:
+      item_before_delete: present
+      item_after_delete: present
+      historical_payment_persisted: true
+      historical_payment_state: aprobado
+      historical_payment_amount: "100.00"
+      approved_detected_before: "100.00"
+      processing_detected_before: "0.00"
+      approved_detected_after: "100.00"
+      processing_detected_after: "0.00"
+      second_payment_persisted: false
+      local_payment_count: 1
+      real_approved_net: "100.00"
+      final_processing: "0.00"
+      final_total_active: "100.00"
+    rejection_reason: >-
+      El webhook aprobado cubre el total Q100.00 y applyCartPaid cambia el carrito
+      a pagado. El DELETE exige un carrito activo y responde 409 CART_NOT_ACTIVE
+      antes de destruir el item, por lo que historicalCartIdsForReference todavía
+      encuentra carrito_id=1. reservationFinancialExposure conserva aprobado
+      Q100.00 y el intento directo posterior es rechazado antes de Pago.create y
+      antes de un segundo PaymentIntent. La pérdida histórica hipotetizada no se
+      produjo mediante la API real.
+    suspected_execution_path: >-
+      processStripeWebhook aprueba Pago y applyCartPaid marca Carrito pagado. El
+      DELETE entra por carritoItem.remove y getCartForAccess(requireActive=true)
+      rechaza CART_NOT_ACTIVE, conservando CarritoItem. createPago directo bloquea
+      ReservaHabitacion, reservationFinancialExposure vuelve a descubrir el
+      carrito por ese item y validateOpenOrigin rechaza RESERVATION_ALREADY_PAID.
+    severity_recommendation: high_if_reproduced
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file passed, 1 test passed"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_charges: false
+      qa_020_regression_observed: false
+      qa_014_regression_observed: false
+      qa_020_and_014_tests_reexecuted: false
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-FUNC-CANDIDATE-026
+    status: closed
+    severity: medium
+    category: FUNC
+    title: >-
+      Habitación permite entrar en mantenimiento mientras conserva una
+      ReservaHabitacion futura activa
+    approved_product_rule:
+      maintenance_with_future_active_reservations: forbidden
+      maintenance_conflict_error: "HTTP 409 / ROOM_HAS_FUTURE_RESERVATIONS"
+      automatic_cancellation: false
+      automatic_reassignment: false
+      cleaning_is_temporary: true
+      cleaning_blocks_future_reservations: false
+    invariant: >-
+      Una Habitación no puede cambiar a mantenimiento mientras tenga una
+      ReservaHabitacion futura activa. El endpoint administrativo debe responder
+      HTTP 409 ROOM_HAS_FUTURE_RESERVATIONS y conservar tanto el estado de la
+      habitación como la reserva y su asociación. Limpieza, por ser temporal, no
+      bloquea por sí sola la creación de una reserva futura válida.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/habitacion.lifecycle.test.ts
+      test_name: "QA-RH-FUNC-CANDIDATE-026: rechaza mantenimiento con una reserva futura activa y permite reservar limpieza"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/habitacion.lifecycle.test.ts
+      maintenance_endpoint: PATCH /api/habitaciones/{id}
+      reservation_endpoint: POST /api/reservas-habitacion
+      requester_role: admin
+      reservation_owner_role: cliente
+      dates: "fecha_entrada=hoy local +2; fecha_salida=hoy local +4"
+      timezone: "APP_TIMEZONE o America/Guatemala"
+      active_state: pendiente
+      active_state_basis: >-
+        Es el estado natural producido por POST y pertenece al conjunto vigente
+        pendiente/confirmada que bloquea disponibilidad.
+      payments_used: false
+      cart_used: false
+      stripe_used: false
+    expected:
+      maintenance_http_status: 409
+      maintenance_code: ROOM_HAS_FUTURE_RESERVATIONS
+      room_state_after_attempt: disponible
+      reservation_state_after_attempt: pendiente
+      reservation_room_after_attempt: unchanged
+      automatic_cancellation: false
+      automatic_reassignment: false
+      maintenance_room_with_future_active_reservation: false
+      cleaning_reservation_http_status: 201
+    actual:
+      hotel_local_today: "2026-10-22"
+      fecha_entrada: "2026-10-24"
+      fecha_salida: "2026-10-26"
+      future: true
+      initial_room_state: disponible
+      initial_reservation_state: pendiente
+      maintenance_http_status: 200
+      maintenance_code: null
+      room_state_after_attempt: mantenimiento
+      reservation_state_after_attempt: pendiente
+      reservation_room_after_attempt: 1
+      automatic_cancellation: false
+      automatic_reassignment: false
+      maintenance_room_with_future_active_reservation: true
+      cleaning_tested: true
+      cleaning_reservation_http_status: 201
+      cleaning_reservation_code: null
+      invariant_violated: true
+      red_result: >-
+        1 archivo falló, 1 test falló con 3 aserciones soft: HTTP 200 en lugar
+        de 409, código ausente y estado mantenimiento persistido en lugar de
+        conservar disponible.
+    http_evidence:
+      reservation_create: "HTTP 201; code null; estado pendiente"
+      maintenance_attempt: >-
+        HTTP 200 sin code; success=true y mensaje "Habitación actualizada
+        correctamente".
+      cleaning_reservation: "HTTP 201; code null; estado pendiente"
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_maintenance: >-
+        habitación id=1 estado=disponible; reserva id=1 habitacion_id=1,
+        2026-10-24/2026-10-26, estado=pendiente.
+      after_maintenance: >-
+        habitación id=1 estado=mantenimiento; reserva id=1 habitacion_id=1,
+        2026-10-24/2026-10-26, estado=pendiente.
+      reservation_unchanged: true
+      reservation_assignment_preserved: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+      cleaning_subcase: >-
+        habitación id=2 estado=limpieza aceptó por API la reserva id=2,
+        habitacion_id=2, 2026-10-24/2026-10-26, estado=pendiente.
+    suspected_execution_path: >-
+      habitacion.routes PATCH /:id -> habitacion.controller.updateHabitacion ->
+      habitacion.service.updateHabitacion. El servicio obtiene la Habitación,
+      valida únicamente referencias y unicidad cuando corresponden, y ejecuta
+      habitacion.update(data) sin consultar reservas_habitacion futuras en
+      estado pendiente o confirmada. Por ello persiste mantenimiento y deja la
+      reserva futura intacta y asociada.
+    root_cause: >-
+      updateHabitacion no tenía una regla de transición a mantenimiento ni una
+      transacción que serializara esa transición con la creación o el traslado
+      de reservas. Persistía estado=mantenimiento sin consultar reservas activas
+      cuya fecha_salida aún fuera posterior a la fecha local del hotel.
+    correction: >-
+      updateHabitacion ahora ejecuta el flujo completo dentro de una transacción,
+      bloquea la Habitación objetivo con SELECT FOR UPDATE y, únicamente en una
+      transición efectiva hacia mantenimiento, consulta reservas de esa misma
+      habitación en estado pendiente o confirmada con fecha_salida posterior a
+      la fecha local actual. Ante conflicto lanza AppError HTTP 409
+      ROOM_HAS_FUTURE_RESERVATIONS antes del UPDATE. No cancela, reasigna ni
+      modifica reservas; limpieza conserva su comportamiento.
+    concurrency: >-
+      La ruta de Habitación usa Habitación objetivo -> consulta de reservas sin
+      lock -> UPDATE de Habitación. POST de ReservaHabitacion usa Habitación ->
+      disponibilidad -> INSERT, por lo que ambos flujos se serializan sobre la
+      misma fila. PATCH de ReservaHabitacion conserva el orden corregido en
+      QA-RH-CONC-CANDIDATE-023: ReservaHabitacion origen -> Habitación destino ->
+      disponibilidad -> UPDATE. La nueva ruta no toma locks de reservas después
+      del lock de habitación, evitando invertir ese orden.
+    severity_recommendation: medium
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      red_focused: "1 file failed, 1 test failed por la violación esperada"
+      focused_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/habitacion.lifecycle.test.ts
+      focused_test: "1 file passed, 1 test passed"
+      maintenance_conflict: "HTTP 409 / ROOM_HAS_FUTURE_RESERVATIONS"
+      room_and_reservation_preserved: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+      cleaning_reservation: "HTTP 201; persisted pendiente in the same room"
+      maintenance_without_future_reservations: "NOT TESTED; no existing Habitación/update test was found"
+      module_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.test.ts
+      module_test: "1 file passed, 36 tests passed"
+      qa_025_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.lifecycle.test.ts
+      qa_025: "1 file passed, 1 test passed"
+      qa_023_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts
+      qa_023: "1 file passed, 1 test passed"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified:
+        - backend/src/services/habitaciones/habitacion.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-FUNC-CANDIDATE-025
+    status: closed
+    severity: medium
+    category: FUNC
+    title: >-
+      ReservaHabitacion permite finalizar anticipadamente una estancia futura y
+      libera indebidamente su disponibilidad
+    approved_product_rule:
+      future_reservation_can_be_finalized: false
+      completion_condition: "fecha_salida <= fecha local actual"
+      future_completion_error: "HTTP 409 / RESERVATION_NOT_FINISHED"
+      early_checkout_supported: false
+      room_remains_blocked_on_rejected_completion: true
+    invariant: >-
+      Una ReservaHabitacion confirmada cuya fecha_salida sea futura respecto de
+      la fecha local del hotel no puede pasar a finalizada; el rechazo debe ser
+      controlado, no debe mutar PostgreSQL y una nueva reserva traslapada debe
+      continuar siendo rechazada.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/reservaHabitacion.lifecycle.test.ts
+      test_name: "QA-RH-FUNC-CANDIDATE-025: rechaza finalizar una estancia cuya fecha_salida sigue futura"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.lifecycle.test.ts
+      endpoint: PATCH /api/reservas-habitacion/{id}
+      requester_role: admin
+      setup_state: confirmada
+      dates: "fecha_entrada=hoy local +2; fecha_salida=hoy local +4"
+      timezone: America/Guatemala
+      payments_used: false
+      cart_used: false
+      stripe_used: false
+    expected:
+      finalize_http_status: 409
+      finalize_code: RESERVATION_NOT_FINISHED
+      persisted_state_after_attempt: confirmada
+      overlapping_create_http_status: 409
+      overlapping_create_code: HABITACION_NO_DISPONIBLE
+      overlapping_persisted_rows: 1
+    actual:
+      hotel_local_today: "2026-10-22"
+      fecha_entrada: "2026-10-24"
+      fecha_salida: "2026-10-26"
+      initial_persisted_state: confirmada
+      finalize_http_status: 200
+      finalize_code: null
+      persisted_state_after_attempt: finalizada
+      overlapping_create_http_status: 201
+      overlapping_create_code: null
+      overlapping_persisted_rows: 2
+      invariant_violated: true
+      red_result: "1 archivo falló, 1 test falló con 6 aserciones soft"
+    http_evidence:
+      finalize_attempt: >-
+        HTTP 200 sin code; success=true y mensaje "Reserva de habitación
+        actualizada correctamente".
+      overlap_attempt: >-
+        HTTP 201 sin code; success=true y mensaje "Reserva de habitación creada
+        correctamente".
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      original_row_after_attempt: >-
+        id=1; habitacion_id=1; fecha_entrada=2026-10-24;
+        fecha_salida=2026-10-26; estado=finalizada
+      overlapping_row_created: >-
+        id=2; habitacion_id=1; fecha_entrada=2026-10-24;
+        fecha_salida=2026-10-26; estado=pendiente
+      overlapping_row_count: 2
+      state_preserved: false
+      availability_remained_blocked: false
+    suspected_execution_path: >-
+      reservaHabitacion.routes PATCH /:id ->
+      reservaHabitacion.controller.updateReservaHabitacion ->
+      reservaHabitacion.service.updateReservaHabitacion. El servicio bloquea la
+      fila por ID y calcula estadoActual/estadoDestino, pero no valida la fecha
+      local del hotel cuando estadoDestino es finalizada; incorpora estado al
+      updateData y persiste el UPDATE. Como finalizada no bloquea disponibilidad,
+      el POST traslapado posterior supera validateOverlap y crea otra fila.
+    severity_recommendation: high
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: "1 file failed, 1 test failed por la violación esperada"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-DATA-CANDIDATE-024
+    status: closed
+    severity: high
+    category: DATA
+    title: >-
+      ReservaHabitacion permite persistir rangos de fecha, totales, estados y
+      cantidades de huéspedes estructuralmente inválidos
+    invariant: >-
+      Toda fila de reservas_habitacion debe tener fecha_salida posterior a
+      fecha_entrada, total mayor o igual que cero, estado dentro del dominio
+      pendiente/confirmada/cancelada/finalizada/expirada y numero_huespedes mayor
+      o igual que uno, incluso ante escrituras internas o directas mediante el
+      modelo real que no pasan por validadores HTTP ni servicios.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/reservaHabitacion.integrity.test.ts
+      test_names:
+        - "QA-RH-DATA-CANDIDATE-024 A rechaza fecha_salida igual a fecha_entrada"
+        - "QA-RH-DATA-CANDIDATE-024 B rechaza total negativo"
+        - "QA-RH-DATA-CANDIDATE-024 C rechaza estado fuera del dominio"
+        - "QA-RH-DATA-CANDIDATE-024 D rechaza numero_huespedes cero"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.integrity.test.ts
+      write_path: ReservaHabitacion.create
+      endpoint: N/A
+      stripe_used: false
+      payments_or_carts_used: false
+    expected:
+      model_direct_write: rejected
+      persisted_rows_per_scenario: 0
+      date_range: fecha_salida_greater_than_fecha_entrada
+      total: greater_than_or_equal_to_zero
+      estado:
+        - pendiente
+        - confirmada
+        - cancelada
+        - finalizada
+        - expirada
+      numero_huespedes: greater_than_or_equal_to_one
+    actual:
+      date_range_equal: accepted_and_persisted
+      negative_total: accepted_and_persisted
+      invalid_state: accepted_and_persisted
+      zero_guests: accepted_and_persisted
+      model_rejections: 0
+      database_rejections: 0
+      postgres_error_codes: none
+      violated_constraint_names: none
+      red_result: "1 file failed, 4 tests failed por las violaciones esperadas"
+    constraint_precheck:
+      source: >-
+        pg_constraint filtrado por schema public, tabla reservas_habitacion y
+        contype='c', con pg_get_constraintdef y convalidated
+      check_constraint_count: 0
+      check_constraints: []
+      names_and_definitions: none
+    database_evidence:
+      source_of_truth: PostgreSQL
+      scenario_a:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-10;
+          numero_huespedes=1; estado=pendiente; total=100.00
+        postgres_error_code: null
+        constraint_name: null
+      scenario_b:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-11;
+          numero_huespedes=1; estado=pendiente; total=-1.00
+        postgres_error_code: null
+        constraint_name: null
+      scenario_c:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-11;
+          numero_huespedes=1; estado=inventada; total=100.00
+        postgres_error_code: null
+        constraint_name: null
+      scenario_d:
+        accepted: true
+        rejected: false
+        persisted_count_before_cleanup: 1
+        row: >-
+          fecha_entrada=2036-01-10; fecha_salida=2036-01-11;
+          numero_huespedes=0; estado=pendiente; total=100.00
+        postgres_error_code: null
+        constraint_name: null
+      cleanup:
+        selector: "usuario email qa-rh-data-024-%@hotel.test"
+        deleted_own_invalid_rows_per_scenario: 1
+        invalid_rows_left_after_each_scenario: 0
+        unrelated_rows_deleted: 0
+    http_evidence:
+      applicable: false
+      reason: >-
+        El candidato comprueba integridad persistida mediante el modelo real y
+        PostgreSQL; no pertenece a un endpoint y no se ejecutó HTTP.
+    domain_evidence:
+      estado: >-
+        reservaHabitacion.validator.ts y EstadoReservaHabitacion en
+        reservaHabitacion.service.ts declaran pendiente, confirmada, cancelada,
+        finalizada y expirada; el modelo y la migración histórica solo usan
+        STRING(20).
+      numero_huespedes: >-
+        reservaHabitacion.validator.ts exige entero positivo; el modelo y la
+        migración histórica solo usan INTEGER NOT NULL.
+    suspected_execution_path: >-
+      ReservaHabitacion.create ejecuta INSERT a través del modelo
+      src/models/reservahabitacion.js. El modelo solo declara tipos,
+      nulabilidad, longitud/default y no contiene validators para estos cuatro
+      invariantes. La migración histórica de reservas_habitacion tampoco agregó
+      CHECK constraints, por lo que PostgreSQL acepta y conserva cada valor.
+    root_cause: >-
+      La tabla reservas_habitacion tenía columnas NOT NULL, pero ninguna
+      restricción CHECK para la cronología, el total, el dominio de estado o el
+      mínimo de huéspedes; por ello una escritura que evitara servicio y
+      validadores podía persistir valores estructuralmente inválidos.
+    correction:
+      migration: backend/src/migrations/20261022000000-enforce-reserva-habitacion-integrity.js
+      constraints:
+        - reservas_habitacion_fecha_rango_valid_check
+        - reservas_habitacion_total_nonnegative_check
+        - reservas_habitacion_estado_valid_check
+        - reservas_habitacion_huespedes_positive_check
+      concurrency: >-
+        El up usa una transacción y ACCESS EXCLUSIVE LOCK antes del precheck y
+        de agregar los cuatro constraints, evitando una escritura concurrente
+        entre la validación de filas existentes y la activación de las reglas.
+      data_cleanup: none_required
+      invalid_rows_found_before_migration:
+        fecha_salida_no_posterior: 0
+        total_negativo: 0
+        estado_fuera_dominio: 0
+        numero_huespedes_menor_uno: 0
+    severity_recommendation: high
+    severity_rationale: >-
+      Se reproducen cuatro invariantes esenciales e independientes, incluyendo
+      cronología, monto financiero, estado de negocio y ocupación; cualquier
+      escritura interna o directa puede introducir filas imposibles.
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      isolated: "1 file passed; 1 test passed, 3 skipped"
+      focused: "1 file passed; 4 tests passed"
+      constraints:
+        count: 4
+        all_validated: true
+        up_down_up: pass
+        nullability_preserved: true
+        valid_data_snapshot_preserved: true
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      invalid_rows_left_after_cleanup: 0
+      production_files_modified: true
+      migrations_modified: true
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-FIN-CANDIDATE-022
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      DELETE cancela una ReservaHabitacion con PaymentIntent procesando sin
+      compensarlo y el succeeded posterior queda divergente e irreconciliable
+    invariant: >-
+      Una ReservaHabitacion no debe quedar cancelada mientras conserva un Pago
+      tarjeta procesando y un PaymentIntent cobrable sin compensación. Si el
+      intent original alcanza succeeded, el webhook y su replay deben producir
+      una reconciliación financiera durable; no puede persistir dinero externo
+      mayor al aprobado local ni un cobro neto incoherente sobre una reserva
+      cancelada.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.cancelProcessingPayment.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-022: cancela de forma segura una ReservaHabitacion con PaymentIntent procesando"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cancelProcessingPayment.test.ts -t
+        "QA-RH-FIN-CANDIDATE-022: cancela de forma segura una
+        ReservaHabitacion con PaymentIntent procesando"
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_method: tarjeta
+      reservation_count: 1
+      payment_count: 1
+      payment_intent_count: 1
+      cancellation_endpoint: DELETE /api/reservas-habitacion/{id}
+      webhook_endpoint: POST /api/pagos/stripe/webhook
+      webhook_deliveries: 2
+      same_webhook_replayed: true
+    expected:
+      safe_outcomes: >-
+        DELETE HTTP 409 conservando la reserva pendiente y su snapshot
+        financiero, o cancelación con compensación del PaymentIntent que impida
+        succeeded, divergencia durable y cobro neto sobre la reserva cancelada.
+      approved_before_webhook: "0.00"
+      processing_before_webhook: "100.00"
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      reservation_create: "HTTP 201; id=1; pendiente; total Q100.00"
+      payment_create: >-
+        HTTP 201; Pago id=1; tarjeta; procesando; Q100.00; PaymentIntent
+        pi_rh_cancel_022_001
+      before_cancellation: "aprobado Q0.00; procesando Q100.00"
+      cancellation: >-
+        HTTP 200; ReservaHabitacion quedó cancelada; Pago siguió procesando;
+        PaymentIntent no fue cancelado
+      first_webhook: >-
+        HTTP 409 RESERVATION_NOT_AVAILABLE; el succeeded externo Q100.00 no se
+        persistió localmente ni fue compensado
+      exact_webhook_replay: >-
+        HTTP 409 RESERVATION_NOT_AVAILABLE para el mismo evento
+        evt_rh_cancel_022_001; tampoco reconcilió
+      final: >-
+        ReservaHabitacion cancelada; Pago procesando Q100.00; aprobado local
+        neto Q0.00; refunds aprobados Q0.00; intent externo succeeded Q100.00
+      cancellation_allows_chargeable_window: true
+      succeeded_without_durable_reconciliation: true
+      canceled_reservation_receives_incoherent_charge: true
+      divergence_after_first_webhook: "100.00"
+      divergence_after_replay: "100.00"
+      financial_violation: true
+      red_result: >-
+        1 file failed, 1 test failed; expected financialViolation false,
+        received true
+    http_evidence:
+      create_reservation_status: 201
+      create_reservation_code: null
+      create_payment_status: 201
+      create_payment_code: null
+      delete_status: 200
+      delete_code: null
+      first_webhook_status: 409
+      first_webhook_code: RESERVATION_NOT_AVAILABLE
+      replay_webhook_status: 409
+      replay_webhook_code: RESERVATION_NOT_AVAILABLE
+      unexpected_500: false
+    database_evidence:
+      before_delete:
+        reservation_state: pendiente
+        reservation_total: "100.00"
+        payment_rows: 1
+        payment_id: 1
+        payment_method: tarjeta
+        payment_state: procesando
+        payment_amount: "100.00"
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        external_id: pi_rh_cancel_022_001
+      after_delete:
+        reservation_state: cancelada
+        payment_rows: 1
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+      after_first_webhook:
+        reservation_state: cancelada
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        approved_refunds: "0.00"
+      after_exact_replay:
+        reservation_state: cancelada
+        payment_rows: 1
+        payment_state: procesando
+        approved_amount: "0.00"
+        processing_amount: "100.00"
+        approved_refunds: "0.00"
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 1
+      intent_id: pi_rh_cancel_022_001
+      amount_minor: 10000
+      currency: gtq
+      status_before_delete: requires_payment_method
+      status_after_simulation: succeeded
+      cancel_calls: 0
+      retrieve_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      event_id: evt_rh_cancel_022_001
+      same_event_delivered_twice: true
+    financial_evidence:
+      external_succeeded_net: "100.00"
+      local_approved_net: "0.00"
+      approved_refunds: "0.00"
+      durable_divergence: "100.00"
+      reservation_state: cancelada
+      violation: true
+    suspected_execution_path: >-
+      deleteReservaHabitacion busca la ReservaHabitacion y actualiza estado a
+      cancelada sin transacción, sin consultar el Pago procesando y sin cancelar
+      el PaymentIntent. Cuando llega payment_intent.succeeded,
+      processStripeWebhook actualiza el Pago a aprobado dentro de su transacción
+      y después llama validateOpenOrigin; esta rechaza la reserva cancelada con
+      RESERVATION_NOT_AVAILABLE, revierte el UPDATE del Pago y responde 409. El
+      replay exacto repite el mismo rollback, por lo que Stripe permanece
+      succeeded mientras PostgreSQL conserva el Pago procesando sin refund ni
+      otra reconciliación durable.
+    root_cause: >-
+      deleteReservaHabitacion ejecutaba una lectura y un UPDATE independientes,
+      sin transacción ni lock canónico sobre ReservaHabitacion, y no comprobaba
+      la exposición procesando agregada antes de volver terminal la reserva. Así
+      podía cancelar mientras un pago directo o de un carrito histórico seguía
+      siendo cobrable.
+    correction: >-
+      DELETE ahora ejecuta el flujo en una transacción, toma SELECT ... FOR
+      UPDATE sobre ReservaHabitacion y reutiliza reservationFinancialExposure
+      antes de cambiar el estado. Si la suma procesando de pagos directos y de
+      todos los carritos que contienen la reserva es mayor que cero, responde
+      HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT y conserva el snapshot. No
+      cancela PaymentIntent, no crea reembolsos y no modifica Pago ni webhook.
+    concurrency: >-
+      El orden es ReservaHabitacion -> lecturas Pago/Reembolso. El lock de la
+      reserva se mantiene hasta confirmar o revertir la transacción, y serializa
+      la cancelación con createPago y las demás mutaciones que usan esa misma
+      fila canónica. No se añadió un orden inverso Pago -> ReservaHabitacion.
+    severity_recommendation: high
+    verification:
+      focused: "1 file failed, 1 test failed por la violación financiera reproducida"
+      db_guard: green
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      qa_019_regression_observed: >-
+        El escenario usó cliente y tarjeta; antes de cancelar había aprobado
+        Q0.00 y procesando Q100.00, sin efectivo. Su test quedó intacto y no se
+        ejecutó.
+      qa_020_regression_observed: >-
+        El escenario conservó exactamente un Pago y un PaymentIntent por
+        Q100.00. Su test quedó intacto y no se ejecutó.
+      qa_021_regression_observed: >-
+        El escenario no mutó habitación, fechas ni total. Su test quedó intacto
+        y no se ejecutó.
+      fixes_007_through_018_modified: false
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file passed, 1 test passed"
+      safe_rejection: "HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT"
+      reservation_snapshot: "pendiente; total Q100.00"
+      payment_snapshot: "tarjeta; procesando Q100.00; aprobado Q0.00"
+      payment_intent_cancelled: false
+      webhook: "NOT RUN: DELETE blocked"
+      financial_violation: false
+      payment_mutation_binding_regression: "1 file passed, 1 test passed"
+      aggregate_exposure_regression: "1 file passed, 1 test passed"
+      cash_payment_auth_regression: "1 file passed, 1 test passed"
+      existing_cancellation_regression: "2 passed, 34 skipped"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: green
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      test_modified_by_fixer: false
+      migrations_modified: false
+      production_file: backend/src/services/habitaciones/reservaHabitacion.service.ts
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-FIN-CANDIDATE-021
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Una ReservaHabitacion puede reducir su total con un PaymentIntent
+      procesando y el intent original aprueba y confirma la obligación mutada
+    invariant: >-
+      Una autorización Stripe para una ReservaHabitacion debe permanecer
+      vinculada al snapshot financiero que la originó. Si existe un Pago con
+      tarjeta procesando, un PATCH que cambia habitación, fechas o total debe
+      rechazarse conservando el snapshot; si la mutación se permite, el webhook
+      no puede aprobar el intent desalineado, confirmar la reserva ni dejar un
+      succeeded externo sin reconciliación local durable.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-021: vincula la autorización Stripe al total inmutable de ReservaHabitacion"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts -t
+        "QA-RH-FIN-CANDIDATE-021: vincula la autorización Stripe al total
+        inmutable de ReservaHabitacion"
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_method: tarjeta
+      reservation_count: 1
+      payment_count: 1
+      payment_intent_count: 1
+      mutation_count: 1
+      mutation_endpoint: PATCH /api/reservas-habitacion/{id}
+    expected:
+      safe_outcomes: >-
+        PATCH HTTP 409 conservando habitación, fechas y total; o, si el PATCH
+        cambia la obligación, el succeeded original no queda aprobado ni
+        confirma la reserva y existe una reconciliación local durable.
+      binding_violation: false
+      authorization_matches_current_obligation: true
+      unexpected_500: false
+    actual:
+      reservation_create: "HTTP 201; id=1; pendiente; 2035-07-10 a 2035-07-13; Q300.00"
+      payment_create: >-
+        HTTP 201; Pago id=1; tarjeta; procesando; Q300.00;
+        PaymentIntent pi_rh_mutation_021_001
+      before_mutation: "aprobado Q0.00; procesando Q300.00"
+      patch: >-
+        HTTP 200; fecha_salida 2035-07-13 -> 2035-07-11; total Q300.00 ->
+        Q100.00
+      webhook: "HTTP 200; received=true; payment_intent.succeeded del intent original"
+      final: >-
+        Pago aprobado Q300.00; ReservaHabitacion confirmada con obligación
+        actual Q100.00
+      authorized_amount: "300.00"
+      current_obligation: "100.00"
+      authorization_matches_current_obligation: false
+      violation_a: true
+      reconciliation_failure_b: false
+      binding_violation: true
+      red_result: "1 file failed, 1 test failed; expected bindingViolation false, received true"
+    http_evidence:
+      create_reservation_status: 201
+      create_reservation_code: null
+      create_payment_status: 201
+      create_payment_code: null
+      patch_status: 200
+      patch_code: null
+      webhook_status: 200
+      webhook_code: null
+      webhook_received: true
+      unexpected_500: false
+    database_evidence:
+      authorization_snapshot:
+        habitacion_id: 1
+        fecha_entrada: "2035-07-10"
+        fecha_salida: "2035-07-13"
+        estado: pendiente
+        total: "300.00"
+      before_mutation:
+        payment_rows: 1
+        payment_id: 1
+        payment_method: tarjeta
+        payment_state: procesando
+        payment_amount: "300.00"
+        approved_amount: "0.00"
+        processing_amount: "300.00"
+        external_id: pi_rh_mutation_021_001
+      after_patch:
+        habitacion_id: 1
+        fecha_entrada: "2035-07-10"
+        fecha_salida: "2035-07-11"
+        estado: pendiente
+        total: "100.00"
+      final:
+        payment_rows: 1
+        payment_state: aprobado
+        payment_amount: "300.00"
+        approved_amount: "300.00"
+        processing_amount: "0.00"
+        reservation_state: confirmada
+        reservation_total: "100.00"
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 1
+      intent_id: pi_rh_mutation_021_001
+      status_after_simulation: succeeded
+      amount_minor: 30000
+      authorized_amount: "300.00"
+      currency: gtq
+      metadata: "pago_id=1,reserva_habitacion_id=1,tipo_pago=total"
+      construct_event_calls: 1
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+    binding_evidence:
+      authorized_total: "300.00"
+      current_total: "100.00"
+      amount_match: false
+      patch_rejected_safely: false
+      payment_approved: true
+      reservation_confirmed: true
+      violation_a: true
+      reconciliation_failure_b: false
+      binding_violation: true
+    suspected_execution_path: >-
+      updateReservaHabitacion carga la reserva y permite recalcular total al
+      cambiar fecha_salida sin consultar pagos procesando ni bloquear el snapshot
+      financiero autorizado. processStripeWebhook vincula el evento al Pago y
+      valida amount contra Pago.monto Q300.00, pero no contra el total vigente de
+      ReservaHabitacion Q100.00; luego marca el Pago aprobado, calcula Q300.00
+      aprobado sobre la obligación mutada y confirma la reserva.
+    root_cause: >-
+      updateReservaHabitacion ejecutaba la lectura, las validaciones, el
+      recálculo y el UPDATE sin una transacción ni un lock canónico sobre
+      ReservaHabitacion. Tampoco consultaba la exposición procesando agregada de
+      pagos directos y pagos originados por carritos que contuvieran la reserva,
+      por lo que podía mutar el snapshot económico autorizado por Stripe.
+    correction: >-
+      El PATCH ahora ejecuta todo el flujo dentro de una transacción, toma
+      SELECT ... FOR UPDATE sobre ReservaHabitacion antes de evaluar pagos y,
+      para cambios de usuario, habitación o fechas, reutiliza
+      reservationFinancialExposure. Si processing es mayor que cero rechaza con
+      HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT antes de validar, recalcular o
+      persistir la mutación. No bloquea por exposición únicamente aprobada y no
+      modifica, cancela ni reconcilia Pago, PaymentIntent, webhook o reembolso.
+    concurrency: >-
+      ReservaHabitacion es el lock canónico y se adquiere antes de consultar la
+      exposición. Las lecturas posteriores de Pago/Reembolso no toman un lock
+      inverso, por lo que no se introdujo Pago -> ReservaHabitacion. createPago
+      que incremente exposición queda serializado por la misma fila; la regresión
+      pagoWebhookLockOrder.concurrency permaneció verde.
+    severity_recommendation: critical
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed por violación A reproducida"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      qa_019_regression_observed: >-
+        En este escenario tarjeta permaneció procesando y aprobado Q0.00 antes
+        del webhook; no se usó efectivo. Su test no se ejecutó ni modificó.
+      qa_020_regression_observed: >-
+        Existieron exactamente un Pago y un PaymentIntent, con exposición inicial
+        procesando Q300.00 igual al total inicial Q300.00. Su test no se ejecutó
+        ni modificó.
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file passed, 1 test passed"
+      safe_rejection: "HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT"
+      reservation_snapshot: >-
+        habitacion_id y fechas intactos; total Q300.00; pago Q300.00 permaneció
+        procesando
+      webhook: "NOT RUN: PATCH blocked"
+      authorization_matches_current_obligation: true
+      binding_violation: false
+      aggregate_exposure_regression: "1 file passed, 1 test passed"
+      cash_payment_auth_regression: "1 file passed, 1 test passed"
+      update_reservation_regression: "3 passed, 33 skipped"
+      webhook_lock_order_regression: "1 file passed, 1 test passed"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: green
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      test_modified_by_fixer: false
+      migrations_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-FIN-CANDIDATE-020
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Pago directo y pago por carrito crean dos exposiciones Stripe activas
+      por el total de la misma ReservaHabitacion
+    invariant: >-
+      El dinero aprobado neto de reembolsos más los pagos procesando, agregado
+      por ReservaHabitacion.id a través del origen directo y de todos los
+      carritos que contienen la referencia, nunca debe superar el total de la
+      reserva. Para una reserva de Q100.00, un pago directo procesando de
+      Q100.00 debe impedir un segundo compromiso activo desde carrito.
+    reproduction:
+      phase: RED
+      scenario: A_DIRECTO_MAS_CARRITO
+      test_file: backend/tests/habitaciones/reservaHabitacion.aggregateExposure.test.ts
+      test_name: "QA-RH-FIN-CANDIDATE-020: pago directo y carrito agregan exposición por ReservaHabitacion sin superar su total"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.aggregateExposure.test.ts -t
+        "QA-RH-FIN-CANDIDATE-020: pago directo y carrito agregan exposición por
+        ReservaHabitacion sin superar su total"
+      database: hotel_test_db
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      concurrency: false
+      rationale: >-
+        El escenario secuencial A reprodujo la violación; no fue necesario
+        investigar expiración cross-cart ni una carrera concurrente.
+    expected:
+      safe_outcome: >-
+        Rechazar el segundo compromiso financiero al agregar la referencia o al
+        intentar pagar el carrito, sin crear un segundo PaymentIntent activo.
+      approved_net_max: "100.00"
+      processing_max_when_approved_net_zero: "100.00"
+      total_active_exposure_max: "100.00"
+      active_payment_intent_exposure_max: "100.00"
+      unexpected_500: false
+    actual:
+      reservation_create: "HTTP 201; id=1; pendiente; total Q100.00"
+      direct_payment: >-
+        HTTP 201; code null; Pago id=1; tarjeta; procesando; Q100.00;
+        reserva_habitacion_id=1
+      create_cart: "HTTP 201; id=1; code null"
+      add_same_reservation: "HTTP 201; code null; la referencia fue aceptada"
+      cart_payment: >-
+        HTTP 201; code null; Pago id=2; tarjeta; procesando; Q100.00;
+        carrito_id=1
+      rejection: none
+      unexpected_500: false
+      approved_net: "0.00"
+      processing_exposure: "200.00"
+      total_active_exposure: "200.00"
+      reservation_total: "100.00"
+      exposure_violation: true
+      red_result: "1 file failed, 1 test failed; 2 assertions financieras fallaron"
+    http_evidence:
+      reservation_status: 201
+      reservation_code: null
+      direct_payment_status: 201
+      direct_payment_code: null
+      cart_status: 201
+      cart_code: null
+      add_status: 201
+      add_code: null
+      cart_payment_status: 201
+      cart_payment_code: null
+      unexpected_500: false
+    database_evidence:
+      reservation: "id=1; estado=pendiente; total=Q100.00"
+      payment_rows: 2
+      direct_payment: >-
+        id=1; reserva_habitacion_id=1; carrito_id=null; tarjeta; procesando;
+        Q100.00; id_transaccion_externo=pi_rh_aggregate_020_1
+      cart_payment: >-
+        id=2; reserva_habitacion_id=null; carrito_id=1; tarjeta; procesando;
+        Q100.00; id_transaccion_externo=pi_rh_aggregate_020_2
+      approved_refunds: "0.00"
+      approved_net: "0.00"
+      processing_exposure: "200.00"
+      total_active_exposure: "200.00"
+      maximum_legitimate_exposure: "100.00"
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 2
+      first: >-
+        pi_rh_aggregate_020_1; requires_payment_method; 10000 minor units;
+        Q100.00; metadata reserva_habitacion_id=1,pago_id=1
+      second: >-
+        pi_rh_aggregate_020_2; requires_payment_method; 10000 minor units;
+        Q100.00; metadata carrito_id=1,pago_id=2
+      active_intent_exposure: "200.00"
+    suspected_execution_path: >-
+      createPago valida el pago directo y committedOrProcessingExposure consulta
+      únicamente la llave reserva_habitacion_id, por lo que crea P1 y PI1 por
+      Q100.00. carritoItem.resolveHabitacion solo consulta
+      isReservationFullyPaid, que agrega dinero aprobado pero no el pago directo
+      procesando, y permite persistir la misma referencia en el carrito. El
+      segundo createPago calcula committedOrProcessingExposure únicamente con
+      carrito_id=1, sin agregar la exposición directa ni la de otros carritos
+      asociados a ReservaHabitacion.id, y crea P2 y PI2 por otros Q100.00.
+    root_cause: >-
+      El saldo se calculaba por la llave inmediata del origen de Pago. Un pago
+      directo solo consultaba reserva_habitacion_id y un pago por carrito solo
+      consultaba carrito_id, por lo que ambos compromisos podían reservar el
+      total completo sin compartir un agregado ni un lock canónico de la
+      ReservaHabitacion.
+    correction: >-
+      reservationFinancialExposure agrega una sola vez cada Pago directo o de
+      cualquier carrito histórico/activo que contenga la ReservaHabitacion,
+      suma procesando y calcula aprobado neto restando únicamente Reembolsos
+      aprobados con piso cero por Pago. createPago y approveTransferencia
+      bloquean la ReservaHabitacion y validan ese saldo agregado dentro de la
+      misma transacción antes de persistir un compromiso. El segundo pago del
+      escenario se rechaza con 409 PAYMENT_EXCEEDS_BALANCE antes de crear Pago o
+      invocar Stripe.
+    concurrency: >-
+      El orden para carritos es Carrito -> ReservaHabitacion por id ascendente
+      -> Pago/Reembolso; el origen directo comienza por ReservaHabitacion. Los
+      incrementos de exposición quedan serializados por la fila canónica de la
+      reserva. No se introdujo Pago -> Carrito y la regresión determinista
+      QA-PAY-CONC-CANDIDATE-018 permaneció verde.
+    severity_recommendation: critical
+    verification:
+      focused: "1 file failed, 1 test failed por la violación esperada"
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      typecheck: pass
+      qa_019_test_modified: false
+      qa_019_runtime_reexecuted: false
+      qa_019_regression_observed: none
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      safe_rejection: "HTTP 409 PAYMENT_EXCEEDS_BALANCE en el segundo pago"
+      payment_rows: 1
+      payment_intent_count: 1
+      real_stripe_calls: 0
+      approved_net: "0.00"
+      processing_exposure: "100.00"
+      total_active_exposure: "100.00"
+      active_intent_exposure: "100.00"
+      maximum_legitimate_exposure: "100.00"
+      financial_violation: false
+      qa_pay_fin_candidate_007: "1 file passed, 1 test passed"
+      qa_pay_conc_candidate_018: "1 file passed, 1 test passed"
+      qa_rh_auth_candidate_019: "1 file passed, 1 test passed"
+      direct_room_existing_test: "1 passed, 39 skipped"
+      typecheck: green
+      stripe_mode: FULL_LOCAL_MOCK
+      test_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_production_changes: none
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-AUTH-CANDIDATE-019
+    status: closed
+    severity: critical
+    category: AUTH
+    title: >-
+      Un cliente puede autoaprobar un pago directo en efectivo de su propia
+      ReservaHabitacion
+    invariant: >-
+      Un cliente autenticado no puede declarar unilateralmente que el hotel
+      recibió efectivo. Al intentar pagar directamente su propia
+      ReservaHabitacion, el backend debe responder HTTP 403 o persistir el pago
+      pendiente de aprobación administrativa; el monto aprobado y neto aprobado
+      deben permanecer en Q0.00 y la reserva no debe confirmarse financieramente.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.cashPaymentAuth.test.ts
+      test_name: "QA-RH-AUTH-CANDIDATE-019: cliente no puede autoaprobar un pago directo en efectivo"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cashPaymentAuth.test.ts -t
+        "QA-RH-AUTH-CANDIDATE-019: cliente no puede autoaprobar un pago directo
+        en efectivo"
+      database: hotel_test_db
+      authenticated_role: cliente
+      reservation_ownership: OWN
+      payment_method: efectivo
+      stripe_used: false
+      real_charges: false
+    expected:
+      safe_outcome: >-
+        HTTP 403, o Pago pendiente de aprobación administrativa sin dinero
+        aprobado
+      approved_after: "0.00"
+      net_approved_after: "0.00"
+      reservation_state_after: pendiente
+      client_self_approved_cash_payment: false
+      authorization_violation: false
+    actual:
+      reservation_create: "HTTP 201"
+      reservation_owner: "cliente autenticado (OWN)"
+      reservation_initial_state: pendiente
+      reservation_total: "100.00"
+      approved_before: "0.00"
+      net_approved_before: "0.00"
+      payment_attempt: "HTTP 201 / code null"
+      payment_persisted: true
+      payment_method: efectivo
+      payment_state: aprobado
+      payment_amount: "100.00"
+      payment_date: "2026-10-22T08:07:11.142Z"
+      payment_date_present: true
+      reservation_state_after: confirmada
+      approved_after: "100.00"
+      net_approved_after: "100.00"
+      admin_approval_involved: false
+      client_self_approved_cash_payment: true
+      authorization_violation: true
+      red_result: "1 file failed, 1 test failed; 6 assertions de autorización y estado financiero fallaron"
+    endpoint: POST /api/pagos
+    http_evidence:
+      reservation_create_status: 201
+      payment_attempt_status: 201
+      payment_attempt_code: null
+      unexpected_500: false
+    database_evidence:
+      before_payment:
+        reservation_usuario_id_matches_authenticated_client: true
+        reservation_state: pendiente
+        reservation_total: "100.00"
+        approved_amount: "0.00"
+        net_approved: "0.00"
+      after_payment:
+        payment_rows: 1
+        payment_method: efectivo
+        payment_state: aprobado
+        payment_amount: "100.00"
+        payment_date: "2026-10-22T08:07:11.142Z"
+        payment_date_present: true
+        reservation_state: confirmada
+        approved_amount: "100.00"
+        net_approved: "100.00"
+    suspected_execution_path: >-
+      pago.routes permite POST /api/pagos a cualquier usuario autenticado y
+      pago.controller.create delega en createPago. Después de validar ownership
+      de la reserva propia, createPago trata metodo=efectivo como aprobado,
+      persiste estado aprobado y fecha_pago inmediatamente y ejecuta
+      confirmReservationIfFullyPaid, sin exigir rol administrativo ni una
+      aprobación posterior para acreditar la recepción física del efectivo.
+    severity_recommendation: critical
+    root_cause: >-
+      createPago distinguía el estado financiero únicamente por metodo y
+      aprobaba efectivo de forma inmediata, pero no autorizaba ese método con el
+      rol actual que authMiddleware carga desde PostgreSQL.
+    correction: >-
+      createPago rechaza con HTTP 403 CASH_PAYMENT_FORBIDDEN todo intento de
+      efectivo cuyo requester no pertenezca a PAYMENT_ADMINISTRATIVE_ROLES,
+      antes de abrir la transacción y antes de Pago.create. Los roles admin,
+      recepcionista y gerente_habitaciones conservan el flujo aprobado existente;
+      tarjeta y transferencia no fueron modificados.
+    corrected_state:
+      payment_attempt: "HTTP 403 / CASH_PAYMENT_FORBIDDEN"
+      payment_rows: 0
+      approved_amount: "0.00"
+      net_approved: "0.00"
+      reservation_state: pendiente
+      client_self_approved_cash_payment: false
+      authorization_violation: false
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      official_file_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cashPaymentAuth.test.ts
+      official_file: "1 file passed, 1 test passed"
+      related_admin_cash_tests: "No existen pruebas previas que cubran POST /api/pagos en efectivo autenticado como admin"
+      typecheck: pass
+      typecheck_command: "cd backend && npx tsc --noEmit"
+      production_files_modified:
+        - backend/src/services/pago.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"
+
+  - id: QA-RH-CONC-CANDIDATE-023
+    status: closed
+    severity: high
+    category: CONCURRENCY
+    title: >-
+      Dos PATCH concurrentes mueven dos reservas activas a la misma habitación
+      y al mismo intervalo
+    invariant: >-
+      Para una habitación y un intervalo, PostgreSQL debe terminar con como
+      máximo una ReservaHabitacion activa en estado pendiente o confirmada que
+      se solape con ese intervalo, incluso cuando dos reservas válidas distintas
+      se modifican simultáneamente mediante el endpoint PATCH.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts
+      test_name: "QA-RH-CONC-CANDIDATE-023: dos PATCH no pueden mover dos reservas activas a la misma habitación e intervalo"
+      command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts -t
+        "QA-RH-CONC-CANDIDATE-023: dos PATCH no pueden mover dos reservas
+        activas a la misma habitación e intervalo"
+      database: hotel_test_db
+      synchronization: "un único par no coordinado mediante Promise.all"
+      pairs: 1
+      concurrent_requests: 2
+      endpoint: PATCH /api/reservas-habitacion/{id}
+      requester_role: admin
+      reservation_owner: "mismo cliente para A y B"
+      payments_used: false
+      cart_used: false
+      stripe_used: false
+    scenario:
+      target_room_id: 3
+      target_interval: "2036-04-10 <= estancia < 2036-04-13"
+      reservation_a_initial: >-
+        id=1; habitación origen 1; pendiente; 2036-04-10 a 2036-04-13;
+        válida y fuera de la habitación destino
+      reservation_b_initial: >-
+        id=2; habitación origen 2; pendiente; 2036-04-10 a 2036-04-13;
+        válida y fuera de la habitación destino
+      initial_conflict: false
+      mutation: >-
+        Dos PATCH HTTP reales simultáneos intentaron mover A y B a habitación 3
+        y al intervalo 2036-04-10/2036-04-13.
+    expected:
+      active_overlap_count_max: 1
+      safe_http_outcome: >-
+        Como máximo un PATCH puede ser aplicado; el contendiente debe recibir
+        un conflicto controlado sin error 500.
+      unexpected_500: false
+    actual:
+      response_distribution: "2x HTTP 200 sin código de error"
+      reservation_a_final: >-
+        id=1; habitacion_id=3; pendiente; 2036-04-10 a 2036-04-13
+      reservation_b_final: >-
+        id=2; habitacion_id=3; pendiente; 2036-04-10 a 2036-04-13
+      active_overlap_count: 2
+      invariant_violated: true
+      red_result: >-
+        1 archivo falló, 1 test falló; expected ACTIVE_OVERLAP_COUNT <= 1,
+        received 2.
+    http_evidence:
+      request_a_status: 200
+      request_a_code: null
+      request_b_status: 200
+      request_b_code: null
+      unexpected_500: false
+      postgres_40P01_exposed: false
+      constraint_error_exposed: false
+      sequelize_error_exposed: false
+      deadlock_observed: false
+      timeout_observed: false
+    database_evidence:
+      query_scope: >-
+        Todas las filas de reservas_habitacion con habitacion_id=3, estado IN
+        (pendiente, confirmada), fecha_entrada < 2036-04-13 y fecha_salida >
+        2036-04-10, consultadas después de completar el par.
+      active_overlap_count: 2
+      overlapping_rows:
+        - "id=1; habitacion_id=3; pendiente; 2036-04-10/2036-04-13"
+        - "id=2; habitacion_id=3; pendiente; 2036-04-10/2036-04-13"
+      source_of_truth: PostgreSQL
+    lock_inspection:
+      source_reservation_rows: >-
+        Cada PATCH toma SELECT FOR UPDATE sobre su propia ReservaHabitacion de
+        origen; son filas distintas y esos locks no serializan el par.
+      destination_room_row: "no se observó lock en la ruta de actualización"
+      conflicting_reservation_rows: >-
+        La consulta de disponibilidad no toma lock sobre filas conflictivas.
+      shared_serialization_lock: "ninguno observado"
+      evidentiary_weight: >-
+        Inspección auxiliar; la confirmación se basa exclusivamente en el estado
+        final reproducido en PostgreSQL.
+    suspected_execution_path: >-
+      reservaHabitacion.routes -> reservaHabitacion.controller.updateReservaHabitacion
+      -> reservaHabitacion.service.updateReservaHabitacion. Cada transacción
+      bloquea únicamente su reserva fuente, calcula el destino, ejecuta
+      validateReferences y validateOverlap para la habitación destino sin tomar
+      un lock canónico compartido sobre esa habitación. Ambas transacciones
+      pueden observar cero solapes antes de ejecutar sus UPDATE independientes y
+      confirmar dos filas activas solapadas.
+    root_cause: >-
+      El PATCH ya era transaccional y bloqueaba con SELECT FOR UPDATE la
+      ReservaHabitacion origen, pero dos PATCH sobre reservas origen distintas no
+      compartían ese lock. La ruta de actualización usaba validateReferences,
+      que leía la habitación destino sin bloquearla, de modo que ambas
+      transacciones podían comprobar disponibilidad antes de que cualquiera
+      persistiera su UPDATE.
+    correction: >-
+      updateReservaHabitacion reutiliza validateLockedReferences después de
+      bloquear la ReservaHabitacion origen. Así toma SELECT FOR UPDATE sobre la
+      Habitacion destino antes de validateOverlap, tanto al cambiar de habitación
+      como al cambiar fechas en la misma habitación, y conserva la comprobación y
+      el UPDATE dentro de la misma transacción. La exposición financiera se
+      consulta después de habitación y disponibilidad solo para mutaciones
+      económicas; no se modificaron pagos, Stripe, migraciones ni schema.
+    concurrency: >-
+      El lock compartido canónico es la fila de Habitacion destino. El primer
+      PATCH que lo obtiene comprueba disponibilidad y persiste; el contendiente
+      espera y, al adquirirlo, observa la reserva ya confirmada por PostgreSQL y
+      recibe HTTP 409 HABITACION_NO_DISPONIBLE. El orden queda
+      ReservaHabitacion origen -> Habitacion destino -> disponibilidad ->
+      Pago/Reembolso cuando corresponda, sin retries, delays, mutex de Node ni
+      advisory locks.
+    severity_recommendation: high
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      red_focused: "1 file failed, 1 test failed por ACTIVE_OVERLAP_COUNT=2"
+      patch_concurrency_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.patchConcurrency.test.ts
+      patch_concurrency: "1 file passed, 1 test passed"
+      winner: >-
+        No determinista entre A y B; un PATCH persiste y el contendiente queda
+        rechazado por el overlap serializado.
+      safe_http_outcome: >-
+        1x HTTP 200 y 1x HTTP 409 HABITACION_NO_DISPONIBLE; sin 500, timeout ni
+        40P01.
+      final_active_overlap_count_max: 1
+      payment_mutation_binding_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts
+      payment_mutation_binding: "1 file passed, 1 test passed"
+      cancel_processing_payment_command: >-
+        npm --prefix backend test --
+        tests/habitaciones/reservaHabitacion.cancelProcessingPayment.test.ts
+      cancel_processing_payment: "1 file passed, 1 test passed"
+      minimal_update_availability_command: >-
+        npm --prefix backend test -- tests/habitaciones/reservaHabitacion.test.ts
+        -t "13\\. rechaza un traslape exacto|27\\. admin puede modificar una
+        reserva"
+      minimal_update_availability: "1 file passed, 2 tests passed, 34 skipped"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      synchronization: "Promise.all sin spies ni barreras"
+      pairs_executed: 1
+      requests_executed: 2
+      production_files_modified:
+        - backend/src/services/habitaciones/reservaHabitacion.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-22"

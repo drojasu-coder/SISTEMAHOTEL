@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import { recalcularTotales } from "./factura.service";
+import { ROLES, Role } from "../../constants/roles";
 
 const db = require("../../models");
 const { Factura, FacturaItem } = db;
@@ -12,6 +13,11 @@ interface CreateFacturaItemData {
 }
 
 type UpdateFacturaItemData = Partial<CreateFacturaItemData>;
+
+interface RequestingUser {
+  id: number;
+  rol: Role;
+}
 
 const facturaNotFound = () =>
   new AppError(404, "FACTURA_NOT_FOUND", "La factura no fue encontrada");
@@ -38,10 +44,41 @@ const getFacturaItemByIdOrFail = async (id: number) => {
   return facturaItem;
 };
 
-export const getAllFacturaItems = async () =>
-  FacturaItem.findAll({ order: [["id", "ASC"]] });
+const facturaOwnershipJoin = (requestingUser: RequestingUser) =>
+  requestingUser.rol === ROLES.CLIENTE
+    ? [
+        {
+          model: Factura,
+          attributes: [],
+          required: true,
+          where: { usuario_id: requestingUser.id },
+        },
+      ]
+    : undefined;
 
-export const getFacturaItemById = (id: number) => getFacturaItemByIdOrFail(id);
+export const getAllFacturaItems = async (requestingUser: RequestingUser) =>
+  FacturaItem.findAll({
+    include: facturaOwnershipJoin(requestingUser),
+    order: [["id", "ASC"]],
+  });
+
+export const getFacturaItemById = async (
+  id: number,
+  requestingUser: RequestingUser
+) => {
+  const facturaItem = await FacturaItem.findOne({
+    where: { id },
+    include: facturaOwnershipJoin(requestingUser),
+  });
+  if (!facturaItem) {
+    throw new AppError(
+      404,
+      "FACTURA_ITEM_NOT_FOUND",
+      "El item de factura no fue encontrado"
+    );
+  }
+  return facturaItem;
+};
 
 export const createFacturaItem = async (data: CreateFacturaItemData) => {
   await validateFactura(data.factura_id);
