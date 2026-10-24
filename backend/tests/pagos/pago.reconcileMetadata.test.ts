@@ -352,4 +352,410 @@ describe("Reconciliación de metadatos de Stripe y prevención de cobros incompa
     await oldPayment.reload();
     expect(oldPayment.estado).toBe("cancelado");
   });
+
+  it("8. intento anterior ya aprobado en Stripe: no lo cancela, lo aprueba y bloquea cobro duplicado con 409", async () => {
+    sequence += 1;
+    const clientEmail = `qa-cross-cart-approved-${sequence}-${Date.now()}@hotel.test`;
+    const user = await createAuthenticatedUser({
+      rol: ROLES.CLIENTE,
+      email: clientEmail,
+    });
+
+    const branch = await Sucursal.create({
+      nombre: `Sede Approved ${sequence}`,
+      direccion: "Calle 1",
+      ciudad: "Guatemala",
+    });
+    const tipo = await TipoHabitacion.create({
+      nombre: `Tipo Approved ${sequence}`,
+      tarifa_noche: 450,
+      capacidad_maxima: 2,
+    });
+    const room = await Habitacion.create({
+      sucursal_id: branch.id,
+      tipo_habitacion_id: tipo.id,
+      numero: `A-${sequence}`,
+      estado: "disponible",
+    });
+    const roomReservation = await ReservaHabitacion.create({
+      usuario_id: user.usuario.id,
+      habitacion_id: room.id,
+      fecha_entrada: "2027-09-01",
+      fecha_salida: "2027-09-04",
+      numero_huespedes: 1,
+      total: "450.00",
+      estado: "pendiente",
+    });
+
+    const expiredCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "expirado",
+      expira_en: new Date(Date.now() - 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: expiredCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+    const oldPayment = await Pago.create({
+      carrito_id: expiredCart.id,
+      monto: 450,
+      metodo: "tarjeta",
+      tipo_pago: "total",
+      moneda: "GTQ",
+      estado: "procesando",
+      pasarela: "stripe",
+      id_transaccion_externo: "pi_test_already_succeeded",
+    });
+
+    const newCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "activo",
+      expira_en: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: newCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+
+    // En Stripe el intento anterior ya figura como succeeded
+    vi.spyOn(stripeService, "retrievePaymentIntent").mockResolvedValueOnce({
+      id: "pi_test_already_succeeded",
+      status: "succeeded",
+    } as any);
+
+    const cancelSpy = vi.spyOn(stripeService, "cancelPaymentIntent");
+
+    const postResponse = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${user.token}`)
+      .send({
+        carrito_id: newCart.id,
+        monto: 450,
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `key-cross-cart-approved-${sequence}`,
+      });
+
+    // El cobro en el nuevo carrito debe ser rechazado por saldo agotado
+    expect(postResponse.status).toBe(409);
+    expect(postResponse.body.code).toBe("PAYMENT_EXCEEDS_BALANCE");
+
+    // No debe intentar cancelar un intento ya aprobado
+    expect(cancelSpy).not.toHaveBeenCalled();
+
+    // El intento no fue cancelado ni marcado falsamente como cancelado
+    await oldPayment.reload();
+    expect(oldPayment.estado).not.toBe("cancelado");
+  });
+
+  it("9. intento anterior en processing: no es cancelable y bloquea cobro concurrente con 409", async () => {
+    sequence += 1;
+    const clientEmail = `qa-cross-cart-processing-${sequence}-${Date.now()}@hotel.test`;
+    const user = await createAuthenticatedUser({
+      rol: ROLES.CLIENTE,
+      email: clientEmail,
+    });
+
+    const branch = await Sucursal.create({
+      nombre: `Sede Processing ${sequence}`,
+      direccion: "Calle 1",
+      ciudad: "Guatemala",
+    });
+    const tipo = await TipoHabitacion.create({
+      nombre: `Tipo Processing ${sequence}`,
+      tarifa_noche: 450,
+      capacidad_maxima: 2,
+    });
+    const room = await Habitacion.create({
+      sucursal_id: branch.id,
+      tipo_habitacion_id: tipo.id,
+      numero: `P-${sequence}`,
+      estado: "disponible",
+    });
+    const roomReservation = await ReservaHabitacion.create({
+      usuario_id: user.usuario.id,
+      habitacion_id: room.id,
+      fecha_entrada: "2027-09-01",
+      fecha_salida: "2027-09-04",
+      numero_huespedes: 1,
+      total: "450.00",
+      estado: "pendiente",
+    });
+
+    const expiredCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "expirado",
+      expira_en: new Date(Date.now() - 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: expiredCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+    const oldPayment = await Pago.create({
+      carrito_id: expiredCart.id,
+      monto: 450,
+      metodo: "tarjeta",
+      tipo_pago: "total",
+      moneda: "GTQ",
+      estado: "rechazado",
+      pasarela: "stripe",
+      id_transaccion_externo: "pi_test_processing_stripe",
+    });
+
+    const newCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "activo",
+      expira_en: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: newCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+
+    // En Stripe el intento está en processing (in-flight)
+    vi.spyOn(stripeService, "retrievePaymentIntent").mockResolvedValueOnce({
+      id: "pi_test_processing_stripe",
+      status: "processing",
+    } as any);
+
+    const cancelSpy = vi.spyOn(stripeService, "cancelPaymentIntent");
+
+    const postResponse = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${user.token}`)
+      .send({
+        carrito_id: newCart.id,
+        monto: 450,
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `key-cross-cart-proc-${sequence}`,
+      });
+
+    expect(postResponse.status).toBe(409);
+    expect(postResponse.body.code).toBe("PAYMENT_EXCEEDS_BALANCE");
+    expect(cancelSpy).not.toHaveBeenCalled();
+
+    // El pago previo NO fue marcado como cancelado
+    await oldPayment.reload();
+    expect(oldPayment.estado).not.toBe("cancelado");
+  });
+
+  it("10. fallo o incertidumbre al cancelar en Stripe: no marca cancelado y previene cobro incompatible", async () => {
+    sequence += 1;
+    const clientEmail = `qa-cross-cart-fail-${sequence}-${Date.now()}@hotel.test`;
+    const user = await createAuthenticatedUser({
+      rol: ROLES.CLIENTE,
+      email: clientEmail,
+    });
+
+    const branch = await Sucursal.create({
+      nombre: `Sede Fail ${sequence}`,
+      direccion: "Calle 1",
+      ciudad: "Guatemala",
+    });
+    const tipo = await TipoHabitacion.create({
+      nombre: `Tipo Fail ${sequence}`,
+      tarifa_noche: 450,
+      capacidad_maxima: 2,
+    });
+    const room = await Habitacion.create({
+      sucursal_id: branch.id,
+      tipo_habitacion_id: tipo.id,
+      numero: `F-${sequence}`,
+      estado: "disponible",
+    });
+    const roomReservation = await ReservaHabitacion.create({
+      usuario_id: user.usuario.id,
+      habitacion_id: room.id,
+      fecha_entrada: "2027-09-01",
+      fecha_salida: "2027-09-04",
+      numero_huespedes: 1,
+      total: "450.00",
+      estado: "pendiente",
+    });
+
+    const expiredCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "expirado",
+      expira_en: new Date(Date.now() - 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: expiredCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+    const oldPayment = await Pago.create({
+      carrito_id: expiredCart.id,
+      monto: 450,
+      metodo: "tarjeta",
+      tipo_pago: "total",
+      moneda: "GTQ",
+      estado: "rechazado",
+      pasarela: "stripe",
+      id_transaccion_externo: "pi_test_cancel_fails",
+    });
+
+    const newCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "activo",
+      expira_en: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: newCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+
+    vi.spyOn(stripeService, "retrievePaymentIntent").mockResolvedValueOnce({
+      id: "pi_test_cancel_fails",
+      status: "requires_payment_method",
+    } as any);
+
+    // Simula fallo de red hacia Stripe al intentar cancelar
+    vi.spyOn(stripeService, "cancelPaymentIntent").mockRejectedValueOnce(
+      new Error("Stripe network timeout"),
+    );
+
+    const postResponse = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${user.token}`)
+      .send({
+        carrito_id: newCart.id,
+        monto: 450,
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `key-cross-cart-fail-${sequence}`,
+      });
+
+    // Al no poder confirmar la cancelación, se protege el saldo y se rechaza el cobro adicional
+    expect(postResponse.status).toBe(409);
+    expect(postResponse.body.code).toBe("PAYMENT_EXCEEDS_BALANCE");
+
+    // El pago previo NO debe quedar como cancelado ante fallo o incertidumbre
+    await oldPayment.reload();
+    expect(oldPayment.estado).not.toBe("cancelado");
+  });
+
+  it("11. reconcilia a cancelado si Stripe ya lo canceló tras una transacción local previa", async () => {
+    sequence += 1;
+    const clientEmail = `qa-cross-cart-reconcile-${sequence}-${Date.now()}@hotel.test`;
+    const user = await createAuthenticatedUser({
+      rol: ROLES.CLIENTE,
+      email: clientEmail,
+    });
+
+    const branch = await Sucursal.create({
+      nombre: `Sede Reconcile ${sequence}`,
+      direccion: "Calle 1",
+      ciudad: "Guatemala",
+    });
+    const tipo = await TipoHabitacion.create({
+      nombre: `Tipo Reconcile ${sequence}`,
+      tarifa_noche: 450,
+      capacidad_maxima: 2,
+    });
+    const room = await Habitacion.create({
+      sucursal_id: branch.id,
+      tipo_habitacion_id: tipo.id,
+      numero: `R-${sequence}`,
+      estado: "disponible",
+    });
+    const roomReservation = await ReservaHabitacion.create({
+      usuario_id: user.usuario.id,
+      habitacion_id: room.id,
+      fecha_entrada: "2027-09-01",
+      fecha_salida: "2027-09-04",
+      numero_huespedes: 1,
+      total: "450.00",
+      estado: "pendiente",
+    });
+
+    const expiredCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "expirado",
+      expira_en: new Date(Date.now() - 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: expiredCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+    const oldPayment = await Pago.create({
+      carrito_id: expiredCart.id,
+      monto: 450,
+      metodo: "tarjeta",
+      tipo_pago: "total",
+      moneda: "GTQ",
+      estado: "rechazado",
+      pasarela: "stripe",
+      id_transaccion_externo: "pi_test_already_canceled_stripe",
+    });
+
+    const newCart = await Carrito.create({
+      usuario_id: user.usuario.id,
+      estado: "activo",
+      expira_en: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    await CarritoItem.create({
+      carrito_id: newCart.id,
+      tipo_item: "habitacion",
+      referencia_id: roomReservation.id,
+      precio: "450.00",
+      cantidad: 1,
+    });
+
+    // En Stripe el intento ya figura como canceled
+    vi.spyOn(stripeService, "retrievePaymentIntent").mockResolvedValueOnce({
+      id: "pi_test_already_canceled_stripe",
+      status: "canceled",
+    } as any);
+
+    vi.spyOn(stripeService, "createPaymentIntent").mockImplementation(async (amount, currency, metadata) => ({
+      id: "pi_test_new_cart_intent_reconciled",
+      client_secret: "pi_secret_new_cart_reconciled",
+      status: "requires_payment_method",
+      amount: Math.round(Number(amount) * 100),
+      currency: String(currency).toLowerCase(),
+      metadata: { ...metadata },
+    } as any));
+
+    const postResponse = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${user.token}`)
+      .send({
+        carrito_id: newCart.id,
+        monto: 450,
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `key-cross-cart-rec-${sequence}`,
+      });
+
+    expect(postResponse.status).toBe(201);
+    expect(postResponse.body.data.payment_intent_id).toBe("pi_test_new_cart_intent_reconciled");
+
+    await oldPayment.reload();
+    expect(oldPayment.estado).toBe("cancelado");
+  });
 });

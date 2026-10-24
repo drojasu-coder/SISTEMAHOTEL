@@ -854,6 +854,7 @@ const reconcileCanceledStripePayments = async (
       estado: { [Op.in]: ["procesando", "rechazado"] },
       id_transaccion_externo: { [Op.ne]: null },
     },
+    order: [["id", "ASC"]],
     transaction,
     lock: transaction.LOCK.UPDATE,
   });
@@ -886,12 +887,28 @@ const reconcileCanceledStripePayments = async (
         if (p.carrito_id && originKey.carrito_id && Number(p.carrito_id) !== Number(originKey.carrito_id)) {
           const oldCart = await Carrito.findByPk(p.carrito_id, { transaction });
           if (oldCart && ["expirado", "cancelado"].includes(String(oldCart.estado).toLowerCase())) {
-            try {
-              await stripeService.cancelPaymentIntent(p.id_transaccion_externo);
-            } catch {
-              // Ignorar fallo al cancelar en Stripe si ya estuviera cancelado
+            // Un intento en estado "processing" no es cancelable en Stripe y debe retener capacidad financiera
+            if (intent.status === "processing") {
+              if (p.estado === "rechazado") {
+                await p.update({ estado: "procesando" }, { transaction });
+              }
+              continue;
             }
-            await p.update({ estado: "cancelado" }, { transaction });
+
+            try {
+              const canceled = await stripeService.cancelPaymentIntent(p.id_transaccion_externo);
+              if (canceled?.status === "canceled") {
+                await p.update({ estado: "cancelado" }, { transaction });
+                continue;
+              }
+            } catch {
+              // Fallo de red, error de Stripe o resultado incierto:
+              // NO se registra como cancelado. Se promueve a procesando para reservar capacidad.
+            }
+
+            if (p.estado === "rechazado") {
+              await p.update({ estado: "procesando" }, { transaction });
+            }
             continue;
           }
         }
