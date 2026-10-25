@@ -18,6 +18,7 @@ const {
   ReservaHabitacion,
   ReservaEvento,
   ReservaActividad,
+  CitaBienestar,
 } = db;
 
 export type PagoMetodo = "tarjeta" | "efectivo" | "transferencia";
@@ -703,6 +704,21 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
             409,
             "CART_REFERENCE_NOT_AVAILABLE",
             "La reserva de actividad ya no se encuentra disponible",
+          );
+        }
+      }
+      if (item.tipo_item === "bienestar") {
+        const appointment = await CitaBienestar.findByPk(item.referencia_id, {
+          transaction,
+        });
+        if (
+          !appointment ||
+          String(appointment.estado).toLowerCase() !== "confirmada"
+        ) {
+          throw new AppError(
+            409,
+            "CART_REFERENCE_NOT_AVAILABLE",
+            "La cita de bienestar ya no se encuentra disponible",
           );
         }
       }

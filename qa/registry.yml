@@ -5729,6 +5729,186 @@ findings:
     verified_at: "2026-10-25"
     next_step: qa-focused.ps1 + qa-regression.ps1
 
+  - id: QA-SPA-FIN-CANDIDATE-046
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un CarritoItem histórico permite aprobar en efectivo y pagar el carrito
+      después de cancelar su CitaBienestar
+    invariant: >-
+      Después de que CitaBienestar.estado sea cancelada, cualquier intento de
+      crear un nuevo compromiso financiero desde un CarritoItem que conserve esa
+      referencia debe responder HTTP 409 CART_REFERENCE_NOT_AVAILABLE o un error
+      de negocio equivalente, sin persistir Pago y sin marcar el carrito pagado.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.cancelledCartPayment.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-046: rechaza pagar una cita de bienestar cancelada después de agregarla al carrito"
+      endpoint_cancel: PATCH /api/citas-spa/1/estado
+      endpoint_payment: POST /api/pagos
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.cancelledCartPayment.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-046: rechaza pagar una cita de bienestar cancelada después de agregarla al carrito"
+      execution: sequential
+      carts: 1
+      payment_method: efectivo
+      real_stripe_calls: 0
+    actor_roles:
+      client:
+        id: 1
+        role: cliente
+      cancellation_actor:
+        id: 2
+        role: admin
+      payment_actor:
+        id: 2
+        role: admin
+      cash_authorized: true
+      qa_019_preserved: >-
+        El pago en efectivo no fue autodeclarado por el cliente; lo registró un
+        admin incluido en PAYMENT_ADMINISTRATIVE_ROLES.
+    fixture:
+      therapist_id: 1
+      therapist_active: true
+      service_id: 1
+      service_price: "350.00"
+      service_duration_minutes: 60
+      cita_id: 1
+      cart_id: 1
+      cart_item_id: 1
+    expected:
+      payment_http: 409
+      payment_code: CART_REFERENCE_NOT_AVAILABLE
+      payment_rows: 0
+      approved_amount: "0.00"
+      net_approved: "0.00"
+      cart_state: activo
+      cita_state: cancelada
+      item_may_persist: true
+    actual:
+      cita_before:
+        id: 1
+        usuario_id: 1
+        terapeuta_id: 1
+        servicio_bienestar_id: 1
+        fecha: "2035-10-25"
+        hora_inicio: "10:00:00"
+        hora_fin: "11:00:00"
+        estado: confirmada
+      cart_before:
+        id: 1
+        usuario_id: 1
+        estado: activo
+      item_snapshot:
+        id: 1
+        carrito_id: 1
+        tipo_item: bienestar
+        referencia_id: 1
+        descripcion: "Masaje QA SPA FIN 046 - 2035-10-25 10:00:00"
+        precio: "350.00"
+        cantidad: 1
+      payments_before: 0
+      cancel_attempt:
+        http: 200
+        code: null
+        response_state: cancelada
+      cita_after_cancel: cancelada
+      cart_after_cancel: activo
+      item_after_cancel: present
+      payments_after_cancel: 0
+      payment_attempt:
+        http: 201
+        code: null
+        method: efectivo
+      payment_row:
+        id: 1
+        carrito_id: 1
+        monto: "350.00"
+        metodo: efectivo
+        tipo_pago: total
+        moneda: GTQ
+        estado: aprobado
+        pasarela: null
+        id_transaccion_externo: null
+      cita_after_payment: cancelada
+      cart_after_payment: pagado
+      item_after_payment: present
+      refund_rows: 0
+      approved_amount: "350.00"
+      approved_refunds: "0.00"
+      net_approved: "350.00"
+      canceled_reference_paid: true
+      durable_financial_commitment: true
+      financial_violation: true
+    http_evidence: >-
+      PATCH /api/citas-spa/1/estado respondió HTTP 200 y cancelada. El posterior
+      POST /api/pagos, autenticado como admin y con efectivo Q350.00, respondió
+      HTTP 201 sin código de error y devolvió Pago 1 en estado aprobado.
+    database_evidence: >-
+      Antes de pagar, PostgreSQL conservaba CitaBienestar 1 cancelada, Carrito 1
+      activo, CarritoItem 1 tipo bienestar presente a Q350.00 y cero pagos.
+      Después del intento persistió Pago 1 aprobado por Q350.00, sin reembolsos,
+      con aprobado neto Q350.00; el carrito quedó pagado mientras la cita siguió
+      cancelada y el item permaneció presente.
+    violation: >-
+      Una referencia cancelada originó un compromiso financiero durable y
+      aprobado por Q350.00, y además convirtió el carrito a pagado.
+    suspected_execution_path: >-
+      POST /api/pagos atraviesa pago.controller.create y pago.service.createPago.
+      validateOpenOrigin bloquea el carrito y llama cartTotals, pero cartTotals
+      revalida estados de habitación, actividad y evento; para tipo bienestar
+      usa directamente el snapshot precio/cantidad sin cargar ni validar
+      CitaBienestar. createPago crea entonces Pago aprobado para efectivo y
+      applyCartPaid vuelve a sumar el snapshot, por lo que marca el carrito
+      pagado aunque la cita referenciada está cancelada.
+    red_result: >-
+      CONFIRMED en la primera ejecución enfocada: 1 archivo falló, 1 test falló
+      y 8 aserciones seguras demostraron HTTP 201, ausencia del código esperado,
+      Pago durable, carrito pagado, Q350.00 aprobados netos y violación financiera.
+    root_cause: >-
+      cartTotals revalidaba referencias de habitación, actividad y evento, pero
+      para tipo_item bienestar sumaba únicamente el snapshot precio/cantidad sin
+      volver a cargar CitaBienestar ni comprobar que siguiera confirmada.
+    fix: >-
+      La validación financiera común de cartTotals ahora carga cada
+      CitaBienestar referenciada dentro de la transacción de Pago y rechaza con
+      HTTP 409 CART_REFERENCE_NOT_AVAILABLE si no existe o su estado no es
+      confirmada.
+    validation_layer: pago.service.cartTotals via validateOpenOrigin
+    reference_revalidation: >-
+      CitaBienestar debe existir y estado debe ser exactamente confirmada antes
+      de crear Pago, crear PaymentIntent o aprobar posteriormente el compromiso.
+    payment_methods_protected:
+      - efectivo
+      - tarjeta
+      - transferencia
+      - aprobacion_tardia_transferencia
+      - aprobacion_webhook_tarjeta
+    transaction_scope: >-
+      La lectura se ejecuta en la transacción financiera existente y conserva el
+      orden Carrito FOR UPDATE -> referencias canónicas de habitación/evento ->
+      revalidación CitaBienestar -> Pago; no se añadió un lock arbitrario.
+    canceled_reference_behavior: HTTP 409 CART_REFERENCE_NOT_AVAILABLE
+    cart_item_preserved: true
+    payment_created: false
+    approved_amount: "0.00"
+    cart_state_after: activo
+    financial_violation: false
+    044_regression: pass
+    045_regression: pass
+    payment_regressions:
+      result: pass
+      files: 16
+      tests: 18
+      transfer_test_coverage: >-
+        No existe un archivo dedicado a transferencia en backend/tests; la ruta
+        de aprobación fue inspeccionada y comparte validateOpenOrigin.
+    severity_recommendation: high
+    verified_at: "2026-10-25"
+
   - id: QA-TR-FUNC-CANDIDATE-042
     status: closed
     severity: high
