@@ -12,6 +12,7 @@ import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { RESTAURANTE_ROUTES } from '@/features/restaurante';
 import { ACTIVIDADES_ROUTES } from '@/features/actividades';
 import { BIENESTAR_ROUTES } from '@/features/bienestar';
+import { EVENTOS_ROUTES } from '@/features/eventos';
 
 const actionClass =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
@@ -102,6 +103,17 @@ export const Navbar: React.FC = () => {
                 }
               >
                 Bienestar
+              </NavLink>
+              <NavLink
+                to={EVENTOS_ROUTES.CATALOGO}
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                    isActive ? 'text-bronce-700' : 'text-neutro-700',
+                  )
+                }
+              >
+                Eventos
               </NavLink>
               {status === 'authenticated' && user?.rol === 'cliente' && (
                 <>

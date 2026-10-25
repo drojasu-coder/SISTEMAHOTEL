@@ -56,6 +56,15 @@ import { AdminServiciosSpaPage } from '@/pages/AdminServiciosSpaPage';
 import { AdminTerapeutasPage } from '@/pages/AdminTerapeutasPage';
 import { AdminCitasSpaPage } from '@/pages/AdminCitasSpaPage';
 import { AdminDetalleCitaSpaPage } from '@/pages/AdminDetalleCitaSpaPage';
+import { EVENTOS_ROUTES } from '@/features/eventos';
+import { CatalogoEventosPage } from '@/pages/CatalogoEventosPage';
+import { SalonDetallePage } from '@/pages/SalonDetallePage';
+import { MisReservasEventosPage } from '@/pages/MisReservasEventosPage';
+import { DetalleReservaEventoPage } from '@/pages/DetalleReservaEventoPage';
+import { AdminSalonesPage } from '@/pages/AdminSalonesPage';
+import { AdminServiciosEventoPage } from '@/pages/AdminServiciosEventoPage';
+import { AdminReservasEventosPage } from '@/pages/AdminReservasEventosPage';
+import { AdminDetalleReservaEventoPage } from '@/pages/AdminDetalleReservaEventoPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -63,19 +72,17 @@ export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Sitio público y cuenta */}
+        {/* Rutas públicas y de cliente */}
         <Route element={<GuestLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registro" element={<RegisterPage />} />
-          <Route path="/cuenta" element={<AccountPage />} />
           <Route path="/403" element={<ForbiddenPage />} />
 
-          {/* Rutas de Carrito */}
-          <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
-
-          {/* Rutas de Checkout y Pagos */}
+          {/* Rutas de cliente que requieren sesión */}
           <Route element={<RequireAuth />}>
+            <Route path="/cuenta" element={<AccountPage />} />
+            <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
             <Route path={PAGOS_ROUTES.CHECKOUT} element={<CheckoutPage />} />
             <Route path="/pagos/:id/resultado" element={<PagoResultadoPage />} />
           </Route>
@@ -106,6 +113,14 @@ export const AppRouter: React.FC = () => {
           <Route element={<RequireAuth />}>
             <Route path={BIENESTAR_ROUTES.MIS_RESERVAS} element={<MisReservasBienestarPage />} />
             <Route path="/mis-reservas/bienestar/:id" element={<DetalleCitaBienestarPage />} />
+          </Route>
+
+          {/* Flujo de eventos del cliente */}
+          <Route path={EVENTOS_ROUTES.CATALOGO} element={<CatalogoEventosPage />} />
+          <Route path="/eventos/salones/:id" element={<SalonDetallePage />} />
+          <Route element={<RequireAuth />}>
+            <Route path={EVENTOS_ROUTES.MIS_RESERVAS} element={<MisReservasEventosPage />} />
+            <Route path="/mis-reservas/eventos/:id" element={<DetalleReservaEventoPage />} />
           </Route>
 
           {/* Flujo de reservas de habitación del cliente */}
@@ -177,6 +192,14 @@ export const AppRouter: React.FC = () => {
               <Route path="terapeutas" element={<AdminTerapeutasPage />} />
               <Route path="citas-spa" element={<AdminCitasSpaPage />} />
               <Route path="citas-spa/:id" element={<AdminDetalleCitaSpaPage />} />
+            </Route>
+
+            {/* Eventos y Salones (Exclusivo Admin) */}
+            <Route element={<RequireAuth permission="servicios.administrar" />}>
+              <Route path="salones" element={<AdminSalonesPage />} />
+              <Route path="servicios-evento" element={<AdminServiciosEventoPage />} />
+              <Route path="reservas-evento" element={<AdminReservasEventosPage />} />
+              <Route path="reservas-evento/:id" element={<AdminDetalleReservaEventoPage />} />
             </Route>
 
             {/* Espacios de parqueo */}

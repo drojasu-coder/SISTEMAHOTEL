@@ -1,6 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Car, CalendarCheck, ChevronRight, Dumbbell, Users } from 'lucide-react';
+import {
+  Sparkles,
+  Car,
+  CalendarCheck,
+  ChevronRight,
+  Dumbbell,
+  Users,
+  Building2,
+  Heart,
+} from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { buttonStyles } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -8,7 +17,7 @@ import { hasPermission } from '@/features/auth/permissions';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ACTIVIDADES_ROUTES } from '@/features/actividades';
 import { BIENESTAR_ROUTES } from '@/features/bienestar';
-import { Heart } from 'lucide-react';
+import { EVENTOS_ROUTES } from '@/features/eventos';
 import { es } from '@/i18n/es';
 
 /**
@@ -19,7 +28,13 @@ import { es } from '@/i18n/es';
  * 3. Recursos de Actividades (/admin/recursos-actividad)
  * 4. Instructores Deportivos (/admin/instructores)
  * 5. Reservas de Actividades (/admin/reservas-actividades)
- * 6. Parqueos y Estacionamiento (/admin/parqueos - visible para quienes tienen habitaciones.gestionar)
+ * 6. Servicios de Bienestar y Spa (/admin/servicios-spa)
+ * 7. Terapeutas (/admin/terapeutas)
+ * 8. Citas de Spa (/admin/citas-spa)
+ * 9. Salones para Eventos (/admin/salones)
+ * 10. Servicios de Eventos (/admin/servicios-evento)
+ * 11. Reservas de Eventos (/admin/reservas-evento)
+ * 12. Parqueos y Estacionamiento (/admin/parqueos - visible para quienes tienen habitaciones.gestionar)
  */
 export const ServiciosPage: React.FC = () => {
   const { user } = useAuth();
@@ -32,7 +47,7 @@ export const ServiciosPage: React.FC = () => {
       {/* Encabezado */}
       <div className="flex flex-col gap-1.5">
         <p className="eyebrow">{es.modulos.servicios}</p>
-        <h1 className="text-[2rem] leading-[2.375rem] md:text-[2.5rem] md:leading-[3rem] text-neutro-900">
+        <h1 className="text-[2rem] leading-[2.375rem] md:text-[2.5rem] md:leading-[3rem] text-neutro-900 font-serif font-semibold">
           {es.servicios.titulo}
         </h1>
         <p className="text-sm text-neutro-600 max-w-2xl">
@@ -253,6 +268,87 @@ export const ServiciosPage: React.FC = () => {
               className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
             >
               <span>Ver reservas de actividades</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Salones de Eventos */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <Building2 className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Salones para eventos
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Administración de espacios, capacidades máximas y tarifas base de alquiler.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={EVENTOS_ROUTES.ADMIN_SALONES}
+              className={buttonStyles({ variant: 'primary', className: 'w-full justify-between' })}
+            >
+              <span>Gestionar salones</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Servicios Adicionales de Eventos */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <Sparkles className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Servicios adicionales de eventos
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Configuración del catálogo de banquetes, tecnología, iluminación y mobiliario.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={EVENTOS_ROUTES.ADMIN_SERVICIOS_EVENTO}
+              className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
+            >
+              <span>Gestionar catálogo</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Reservas y Cotizaciones de Eventos */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <CalendarCheck className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Reservas y cotizaciones de eventos
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Supervisión de solicitudes de eventos en salones, asistentes y actualización de estado operativo.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={EVENTOS_ROUTES.ADMIN_RESERVAS}
+              className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
+            >
+              <span>Ver reservas de eventos</span>
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>
           </div>

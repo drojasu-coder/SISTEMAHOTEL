@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { RESERVAS_ROUTES } from '@/features/reservas';
 import { ACTIVIDADES_ROUTES } from '@/features/actividades/constants/routes';
 import { BIENESTAR_ROUTES } from '@/features/bienestar/constants/routes';
+import { EVENTOS_ROUTES } from '@/features/eventos/constants/routes';
 import type { CarritoItem } from '../types';
 import {
   descripcionItem,
@@ -36,6 +37,7 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
   const habitacion = esItemHabitacion(item);
   const esActividad = item.tipo_item === 'actividad';
   const esBienestar = item.tipo_item === 'bienestar';
+  const esEvento = item.tipo_item === 'evento';
   const descripcion = descripcionItem(item);
   const precio = formatearGTQ(item.precio);
   const cantidad = formatearCantidad(item.cantidad);
@@ -85,6 +87,16 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
         {esBienestar && (
           <Link
             to={BIENESTAR_ROUTES.DETALLE(item.referencia_id)}
+            className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
+          >
+            {textosCarrito.verReserva(item.referencia_id)}
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </Link>
+        )}
+
+        {esEvento && (
+          <Link
+            to={EVENTOS_ROUTES.MI_RESERVA_DETALLE(item.referencia_id)}
             className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
           >
             {textosCarrito.verReserva(item.referencia_id)}

@@ -121,11 +121,10 @@ describe('Carrito (CarritoPage)', () => {
       name: textosCarrito.verReserva(12),
     });
     expect(enlaceReserva).toHaveAttribute('href', '/mis-reservas/12');
-    expect(
-      screen.queryByRole('link', {
-        name: textosCarrito.verReserva(6),
-      }),
-    ).not.toBeInTheDocument();
+    const enlaceEvento = screen.getByRole('link', {
+      name: textosCarrito.verReserva(6),
+    });
+    expect(enlaceEvento).toHaveAttribute('href', '/mis-reservas/eventos/6');
 
     expect(llamadas(calls, 'GET', CARRITO_ACTUAL)).toHaveLength(1);
     expect(llamadas(calls, 'GET', itemsUrl(10))).toHaveLength(1);

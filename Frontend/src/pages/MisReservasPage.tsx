@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { BedDouble, Plus, Sparkles } from 'lucide-react';
+import { BedDouble, Plus, Sparkles, Building2 } from 'lucide-react';
 import { getApiErrorMessage } from '@/api/errors';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -9,6 +9,7 @@ import { RESERVAS_ROUTES } from '@/features/reservas';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ACTIVIDADES_ROUTES } from '@/features/actividades';
 import { BIENESTAR_ROUTES } from '@/features/bienestar';
+import { EVENTOS_ROUTES } from '@/features/eventos';
 import { Heart } from 'lucide-react';
 import { Compass } from 'lucide-react';
 import { RESTAURANTE_ROUTES } from '@/features/restaurante';
@@ -43,11 +44,11 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
 
   return (
     <section className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      {/* Pestañas de navegación entre habitaciones y amenidades */}
-      <div className="flex border-b border-neutro-200">
+      {/* Pestañas de navegación entre habitaciones, restaurante, amenidades, actividades, bienestar y eventos */}
+      <div className="flex border-b border-neutro-200 overflow-x-auto">
         <Link
           to={RESERVAS_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-bronce-600 px-4 py-3 text-sm font-semibold text-bronce-700"
+          className="flex items-center gap-2 border-b-2 border-bronce-600 px-4 py-3 text-sm font-semibold text-bronce-700 whitespace-nowrap"
           aria-current="page"
         >
           <BedDouble className="size-4" aria-hidden="true" />
@@ -55,31 +56,38 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
         </Link>
         <Link
           to={RESTAURANTE_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <UtensilsCrossed className="size-4" aria-hidden="true" />
           <span>Reservas de Mesa</span>
         </Link>
         <Link
           to={AMENIDADES_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Sparkles className="size-4" aria-hidden="true" />
           <span>Pases de Amenidades</span>
         </Link>
         <Link
           to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Compass className="size-4" aria-hidden="true" />
           <span>Actividades Recreativas</span>
         </Link>
         <Link
           to={BIENESTAR_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Heart className="size-4" aria-hidden="true" />
           <span>Bienestar y Spa</span>
+        </Link>
+        <Link
+          to={EVENTOS_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
+        >
+          <Building2 className="size-4" aria-hidden="true" />
+          <span>Eventos y Salones</span>
         </Link>
       </div>
 
@@ -150,7 +158,7 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
               className={buttonStyles({ variant: 'primary' })}
             >
               <Plus className="size-4" aria-hidden="true" />
-              {textosMisReservas.reservar}
+              <span>{textosMisReservas.reservar}</span>
             </Link>
           </Card>
         )}

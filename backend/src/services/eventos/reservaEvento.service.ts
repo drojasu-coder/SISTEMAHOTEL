@@ -320,12 +320,14 @@ export const getAll = async (
 export const getById = async (
   id: number,
   requesterId: number,
-  requesterRole: Role
+  requesterRole: Role,
+  transaction?: any
 ) => {
   const reserva =
     await ReservaEvento.findByPk(
       id,
       {
+        transaction,
         include: [
           {
             model: Salon,
@@ -673,4 +675,64 @@ export const cancel = async (
       return reserva;
     }
   );
+};
+
+export const updateStatus = async (
+  id: number,
+  data: { estado: string },
+  requesterId: number,
+  requesterRole: Role
+) => {
+  return sequelize.transaction(async (transaction: any) => {
+    const reserva = await ReservaEvento.findByPk(id, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!reserva) {
+      throw new AppError(
+        404,
+        "EVENT_RESERVATION_NOT_FOUND",
+        "La reserva de evento solicitada no existe"
+      );
+    }
+
+    if (requesterRole !== ROLES.ADMIN) {
+      throw new AppError(
+        403,
+        "INSUFFICIENT_PERMISSIONS",
+        "Solo los administradores pueden cambiar el estado de la reserva"
+      );
+    }
+
+    const { estado } = data;
+    const currentState = reserva.estado;
+
+    if (currentState === estado) {
+      return getById(id, requesterId, requesterRole, transaction);
+    }
+
+    if (currentState === "cancelada" || currentState === "expirada") {
+      throw new AppError(
+        409,
+        "EVENT_RESERVATION_FINAL_STATE",
+        `Una reserva en estado '${currentState}' no puede cambiar de estado`
+      );
+    }
+
+    if (estado === "confirmada") {
+      await getSalonForReservation(reserva.salon_id, transaction);
+      await validateAvailability(
+        reserva.salon_id,
+        reserva.fecha,
+        reserva.hora_inicio,
+        reserva.hora_fin,
+        transaction,
+        id
+      );
+    }
+
+    await reserva.update({ estado }, { transaction });
+    return getById(id, requesterId, requesterRole, transaction);
+  });
 };

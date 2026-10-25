@@ -17,7 +17,10 @@ import { idParamSchema }
 import {
   createReservaEventoSchema,
   updateReservaEventoSchema,
+  updateReservaEventoEstadoSchema,
 } from "../../validators/eventos/reservaEvento.validator";
+import { requireRole } from "../../middlewares/role.middleware";
+import { ROLES } from "../../constants/roles";
 
 const router = Router();
 
@@ -383,6 +386,80 @@ router.patch(
   "/:id/cancelar",
   validateParams(idParamSchema),
   reservaEventoController.cancel
+);
+
+/**
+ * @openapi
+ * /api/reservas-evento/{id}/estado:
+ *   patch:
+ *     tags:
+ *       - Reservas de Evento
+ *     summary: Actualizar estado de una reserva de evento (Administrador)
+ *     description: >
+ *       Permite al administrador cambiar el estado de la reserva (confirmada, cancelada, finalizada).
+ *       Si se transiciona a confirmada, se valida que el salón se encuentre disponible en el horario especificado.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: ID de la reserva de evento
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - estado
+ *             properties:
+ *               estado:
+ *                 type: string
+ *                 enum:
+ *                   - confirmada
+ *                   - cancelada
+ *                   - finalizada
+ *                 example: confirmada
+ *     responses:
+ *       200:
+ *         description: Estado de la reserva de evento actualizado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 statusCode:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Estado de la reserva de evento actualizado correctamente
+ *                 data:
+ *                   $ref: "#/components/schemas/ReservaEvento"
+ *       400:
+ *         description: Datos o ID inválidos
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: Requiere rol administrador
+ *       404:
+ *         description: Reserva no encontrada
+ *       409:
+ *         description: Conflicto de estado o salón no disponible
+ */
+router.patch(
+  "/:id/estado",
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(updateReservaEventoEstadoSchema),
+  reservaEventoController.updateStatus
 );
 
 export default router;

@@ -57,10 +57,11 @@ export function usePagoResultado(pagoId: number) {
         void queryClient.invalidateQueries({
           queryKey: pagosQueryKeys.intentoActivo(pago.carrito_id, user.id),
         });
-        // Invalidar reservas de habitación, actividad y bienestar al aprobar el carrito
+        // Invalidar reservas de habitación, actividad, bienestar y eventos al aprobar el carrito
         void queryClient.invalidateQueries({ queryKey: ['reservas-habitacion'] });
         void queryClient.invalidateQueries({ queryKey: ['reservas-actividad'] });
         void queryClient.invalidateQueries({ queryKey: ['citas-bienestar'] });
+        void queryClient.invalidateQueries({ queryKey: ['reservas-evento'] });
       } else if (pago.reserva_habitacion_id !== null) {
         // Si no proviene de carrito sino de reserva directa, invalidar reservas
         void queryClient.invalidateQueries({ queryKey: ['reservas-habitacion'] });

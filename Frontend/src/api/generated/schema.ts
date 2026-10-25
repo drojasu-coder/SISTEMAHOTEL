@@ -9657,6 +9657,101 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/reservas-evento/{id}/estado": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Actualizar estado de una reserva de evento (Administrador)
+         * @description Permite al administrador cambiar el estado de la reserva (confirmada, cancelada, finalizada). Si se transiciona a confirmada, se valida que el salón se encuentre disponible en el horario especificado.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description ID de la reserva de evento */
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @example confirmada
+                         * @enum {string}
+                         */
+                        estado: "confirmada" | "cancelada" | "finalizada";
+                    };
+                };
+            };
+            responses: {
+                /** @description Estado de la reserva de evento actualizado correctamente */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @example true */
+                            success?: boolean;
+                            /** @example 200 */
+                            statusCode?: number;
+                            /** @example Estado de la reserva de evento actualizado correctamente */
+                            message?: string;
+                            data?: components["schemas"]["ReservaEvento"];
+                        };
+                    };
+                };
+                /** @description Datos o ID inválidos */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Requiere rol administrador */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Reserva no encontrada */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Conflicto de estado o salón no disponible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/carritos/{carritoId}/items": {
         parameters: {
             query?: never;

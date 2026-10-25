@@ -336,3 +336,113 @@ Este documento registra de forma continua el avance técnico, archivos modificad
        - `npm run typecheck:all` (backend): 0 errores.
        - `npm run typecheck` (frontend): 0 errores.
        - `npm run build` (frontend): compilación de producción exitosa en `Frontend/dist/`.
+
+---
+
+## Tarea: Módulo de Eventos y Salones
+
+- **Estado:** Completada e integrada en frontend y backend.
+- **Alcance real identificado:**
+  - En HOTEL HUNAHPÚ, "eventos" representa la **cotización y reserva de salones o espacios físicos** (`Salon`) para la celebración de eventos privados (corporativos/ejecutivos, bodas, cumpleaños o convivios/sociales), con la posibilidad de adjuntar **servicios adicionales para eventos** (`ServicioEvento` / `ReservaEventoServicio`, como catering, mantelería, equipo audiovisual, etc.).
+  - No representa venta de boletos, conferencias públicas ni talleres.
+  - Relaciones del modelo: `Salon` pertenece a `Sucursal`. `ReservaEvento` vincula a `Usuario` y `Salon`, y tiene múltiples `ReservaEventoServicio` que vinculan a `ServicioEvento`.
+  - Estados operativos de la reserva: `cotizacion` (estado inicial al solicitar), `confirmada` (aprobada por administración), `cancelada` y `finalizada`.
+  - Reglas financieras: el servidor calcula autoritativamente `total` (tarifa base del salón + suma de subtotales de servicios adicionales) y `anticipo` (50% del total).
+- **Detalle de implementaciones:**
+  1. **Backend y Contratos:**
+     - Endpoint administrativo de cambio de estado operativo:
+       - Ruta: `PATCH /api/reservas-evento/:id/estado` con middleware `requireRole(ROLES.ADMIN)`.
+       - Validador: `updateReservaEventoEstadoSchema` admitiendo únicamente `["confirmada", "cancelada", "finalizada"]`.
+       - Servicio: `reservaEvento.service.ts` ejecuta la mutación bajo transacción con bloqueo pesimista de fila (`LOCK.UPDATE`), validación estricta de no-modificación sobre reservas finalizadas o canceladas, comprobación de disponibilidad del salón ante confirmación, y soporte para que `getById` lea dentro de la misma transacción en curso.
+     - Documentación OpenAPI y sincronización:
+       - Esquemas y rutas documentadas en `backend/src/docs/swagger.ts`.
+       - Cobertura de contrato en `backend/tests/unit/openapi.test.ts` (12/12 pruebas pasando, 103 paths y 194 operaciones en OpenAPI).
+       - Regenerados tipos de Frontend mediante `npm --prefix Frontend run api:generate` sincronizando `schema.ts`.
+  2. **Catálogo y Detalle para Clientes:**
+     - **Catálogo de Salones (`/eventos`):**
+       - Listado de salones públicos con nombre, sede, capacidad máxima, tarifa base por día y descripción.
+       - Filtro dinámico por nombre/término y selector de sede hotelera.
+       - Botón directo de "Cotizar evento" para abrir el modal de reserva y enlace a detalle.
+     - **Detalle de Salón (`/eventos/salones/:id`):**
+       - Vista profunda accesible directamente por URL y con soporte de recarga.
+       - Muestra sede, aforo máximo, tarifas y botón para iniciar cotización.
+     - **Modal de Cotización (`ReservaEventoModal`):**
+       - Formulario accesible con React Hook Form y Zod: tipo de evento, fecha, hora de inicio, hora de fin y número de invitados (limitado al aforo del salón).
+       - Aviso claro de que la cotización previa no aparta el recurso hasta el registro formal.
+       - Redirección automática a la vista de Mis Reservas del evento creado.
+  3. **Mis Reservas de Eventos (Cliente):**
+     - **Listado (`/mis-reservas/eventos`):**
+       - Pestaña "Eventos y Salones" integrada en la navegación de `MisReservasPage`.
+       - Consultas privadas deshabilitadas durante restauración de sesión, aisladas por `userId`.
+       - Filtros por estado operativo (`cotizacion`, `confirmada`, `cancelada`, `finalizada`).
+       - Badges de estado, fecha, horario, número de invitados, importe total y anticipo requerido.
+       - Enlace directo al detalle de cada evento.
+     - **Detalle de Reserva de Evento (`/mis-reservas/eventos/:id`):**
+       - Verificación de propiedad en frontend y backend (rechazo con 403 a usuarios ajenos).
+       - Desglose financiero completo (tarifa del salón + servicios adicionales).
+       - Gestión de servicios adicionales durante el estado de cotización: listado de servicios vinculados, modal para agregar servicios (`AgregarServicioEventoModal`) y opción para retirar servicios, recalculando automáticamente el total y anticipo en el servidor.
+       - Cancelación de cotización por el cliente mediante `PATCH /api/reservas-evento/:id/cancelar`.
+       - Botón integrado `BotonAnadirAlCarrito` para cotizaciones o reservas activas.
+  4. **Administración (`servicios.administrar`):**
+     - **Gestión de Salones (`/admin/salones`):**
+       - Listado administrativo, creación y edición de salones (`SalonFormModal`).
+       - Configuración de sede, nombre, aforo máximo, tarifa base y descripción.
+     - **Gestión de Servicios de Evento (`/admin/servicios-evento`):**
+       - Listado administrativo, creación y edición de servicios adicionales (`ServicioEventoFormModal`).
+     - **Gestión de Reservas de Eventos (`/admin/reservas-evento`):**
+       - Listado general de eventos con filtros por cliente, estado y fecha.
+       - Visualización de datos completos del cliente (`Usuario.nombre`, `Usuario.email`).
+       - Modal de cambio de estado operativo (`AdminReservaEventoEstadoModal`) con selección de nuevo estado (`confirmada`, `cancelada`, `finalizada`) y tratamiento de conflictos.
+     - **Detalle Administrativo de Evento (`/admin/reservas-evento/:id`):**
+       - Inspección a fondo del evento, desglose de costos y servicios solicitados.
+     - Enlaces directos habilitados en `ServiciosPage.tsx` bajo la tarjeta de Eventos.
+  5. **Integración con Carrito y Pasarela de Pagos:**
+     - **Entidad referenciada:** `tipo_item: "evento"` referencia el identificador de la reserva/cotización de evento (`referencia_id: reserva.id`), no el ID del salón ni el del servicio.
+     - **Adición al carrito (`resolveEvento` en `carritoItem.service.ts`):**
+       - Validación de existencia y propiedad de la reserva del cliente autenticado.
+       - Bloqueo de duplicados y de eventos ya pagados mediante `hasCartReferenceActiveFinancialCommitment`.
+       - Asociación del importe financiero autoritativo (soporta anticipo requerido o total).
+     - **Navegación e invalidación:**
+       - `CarritoItemCard.tsx`: Enlace formal a `/mis-reservas/eventos/${item.referencia_id}` para ítems de tipo `evento`.
+       - `usePagoResultado.ts`: Invalidación automática de la clave de consulta `['reservas-evento']` tras procesar el resultado del pago.
+     - **Checkout y Webhook:**
+       - Reutilización de Stripe Elements y PaymentIntent (`POST /api/pagos`).
+       - Webhook `POST /api/pagos/stripe/webhook` procesa `payment_intent.succeeded` con validación de firma de prueba.
+       - Transición a pago aprobado y carrito pagado, manteniendo desacoplado el estado operativo del financiero.
+       - Idempotencia comprobada ante eventos repetidos.
+       - Rechazo con `409 CART_REFERENCE_NOT_AVAILABLE` al intentar incorporar un evento ya pagado a un nuevo carrito.
+  6. **Pruebas y Verificación:**
+     - **Entorno aislado (hotel_test_db en puerto 55433):**
+       - Suite de integración HTTP: `backend/tests/integration/postgres.eventos.http.test.ts` (**18/18 pruebas pasando, 100%**).
+       - Cobertura:
+         1. Catálogo público de salones (`GET /api/salones`).
+         2. Detalle de salón por ID (`GET /api/salones/:id`).
+         3. Permisos administrativos en salones (403 cliente / 201 admin).
+         4. Actualización de salón por admin (`PATCH /api/salones/:id`).
+         5. Catálogo público de servicios de evento (`GET /api/servicios-evento`).
+         6. Permisos administrativos en servicios de evento (403 cliente / 201 admin).
+         7. Validación de capacidad máxima (422).
+         8. Validación de rango de horas (422 cuando fin <= inicio).
+         9. Rechazo de fechas pasadas (422).
+         10. Creación de cotización formal y cálculo automático de total y anticipo (50%).
+         11. Adición de servicios adicionales y recálculo automático de total y anticipo.
+         12. Listado de servicios vinculados a la reserva.
+         13. Eliminación de servicio adicional y recálculo del total.
+         14. Aislamiento por usuario autenticado en listado de reservas (`GET /api/reservas-evento`).
+         15. Protección de propiedad en detalle (403 para cliente ajeno).
+         16. Transición administrativa de estado (`PATCH /api/reservas-evento/:id/estado`, 403 cliente / 200 admin).
+         17. Detección de traslapes y rechazo de reserva concurrente sobre el mismo salón y horario (409 `EVENT_ROOM_NOT_AVAILABLE`).
+         18. Recorrido completo de carrito a pago con Stripe PaymentIntent, procesamiento de webhook `payment_intent.succeeded`, persistencia de pago aprobado, carrito pagado, idempotencia y rechazo ante reutilización de referencia pagada.
+     - **Suites de pruebas backend de eventos:**
+       - `backend/tests/eventos/reservaEvento.test.ts` (**40/40 pruebas pasando, 100%**).
+       - `backend/tests/eventos/reservaEventoServicio.test.ts` (**39/39 pruebas pasando, 100%**).
+       - `backend/tests/unit/openapi.test.ts` (**12/12 pruebas unitarias pasando, 100%**).
+     - **Pruebas frontend (Vitest / React Testing Library):**
+       - `CatalogoSalonesCliente.test.tsx` (**3/3 pruebas pasando**).
+       - `MisReservasEventos.test.tsx` (**2/2 pruebas pasando**).
+       - `AdminEventos.test.tsx` (**2/2 pruebas pasando**).
+       - `CarritoPage.test.tsx`, `BotonAnadirAlCarrito.test.tsx`, `CheckoutPage.test.tsx`, `PagoResultadoPage.test.tsx`, etc. (**74/74 pruebas pasando**).
+     - **Comprobación de tipos y empaquetado:**
+       - `npm --prefix backend run typecheck:all`: 0 errores.
+       - `npm --prefix Frontend run typecheck`: 0 errores.
+       - `npm --prefix Frontend run build`: compilación de producción exitosa en `Frontend/dist/`.

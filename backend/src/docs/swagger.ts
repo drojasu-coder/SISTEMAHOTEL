@@ -100,6 +100,10 @@ const options: swaggerJsdoc.Options = {
     name: "Ítems de Carrito",
     description: "Gestión de ítems agregados al carrito",
   },
+  {
+    name: "Multimedia",
+    description: "Gestión y entrega de medios y recursos gráficos desde AWS S3",
+  },
 ],
 
     components: {
@@ -3273,6 +3277,55 @@ UpdateBoletoParqueEstadoRequest: {
                   },
                 },
               },
+            },
+          },
+        },
+
+        BrandingMedia: {
+          type: "object",
+          required: [
+            "logoHorizontalColor",
+            "logoHorizontalBlanco",
+            "isotipoColor",
+            "expiresAt",
+          ],
+          properties: {
+            logoHorizontalColor: {
+              type: "string",
+              format: "uri",
+              example:
+                "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-logo-horizontal-color.svg",
+            },
+            logoHorizontalBlanco: {
+              type: "string",
+              format: "uri",
+              example:
+                "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-logo-horizontal-blanco.svg",
+            },
+            isotipoColor: {
+              type: "string",
+              format: "uri",
+              example:
+                "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-isotipo-color.svg",
+            },
+            expiresAt: {
+              type: "string",
+              format: "date-time",
+              example: "2026-10-25T12:00:00.000Z",
+            },
+          },
+        },
+
+        BrandingResponse: {
+          type: "object",
+          required: ["status", "data"],
+          properties: {
+            status: {
+              type: "string",
+              example: "success",
+            },
+            data: {
+              $ref: "#/components/schemas/BrandingMedia",
             },
           },
         },

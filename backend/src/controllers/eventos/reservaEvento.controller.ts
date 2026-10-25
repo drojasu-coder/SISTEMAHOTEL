@@ -104,3 +104,23 @@ export const cancel = async (
     data: reserva,
   });
 };
+
+
+export const updateStatus = async (
+  req: Request,
+  res: Response
+) => {
+  const reserva = await reservaEventoService.updateStatus(
+    Number(req.params.id),
+    req.body,
+    req.user!.id,
+    req.user!.rol
+  );
+
+  res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: "Estado de la reserva de evento actualizado correctamente",
+    data: reserva,
+  });
+};

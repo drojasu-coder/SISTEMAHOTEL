@@ -83,8 +83,8 @@ describe("generated OpenAPI contract", () => {
       0,
     );
 
-    expect(Object.keys(paths)).toHaveLength(102);
-    expect(operations).toBe(193);
+    expect(Object.keys(paths)).toHaveLength(103);
+    expect(operations).toBe(194);
   });
   it("contains complete reservas and disponibilidad schemas and contract responses (BE-011, BE-012)", () => {
     const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
@@ -507,5 +507,37 @@ describe("generated OpenAPI contract", () => {
     expect(paths["/api/citas-spa/mis-reservas"].get).toBeDefined();
     expect(paths["/api/citas-spa/mis-reservas/{id}"]).toBeDefined();
     expect(paths["/api/citas-spa/mis-reservas/{id}"].get).toBeDefined();
+  });
+
+  it("contains complete reservas-evento, salones and servicios-evento OpenAPI contracts", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    expect(schemas.Salon).toBeDefined();
+    expect(schemas.ServicioEvento).toBeDefined();
+    expect(schemas.ReservaEvento).toBeDefined();
+    expect(schemas.ReservaEventoServicio).toBeDefined();
+
+    expect(paths["/api/salones"]).toBeDefined();
+    expect(paths["/api/salones"].get).toBeDefined();
+    expect(paths["/api/salones"].post).toBeDefined();
+
+    expect(paths["/api/servicios-evento"]).toBeDefined();
+    expect(paths["/api/servicios-evento"].get).toBeDefined();
+    expect(paths["/api/servicios-evento"].post).toBeDefined();
+
+    expect(paths["/api/reservas-evento"]).toBeDefined();
+    expect(paths["/api/reservas-evento"].get).toBeDefined();
+    expect(paths["/api/reservas-evento"].post).toBeDefined();
+
+    expect(paths["/api/reservas-evento/{id}"]).toBeDefined();
+    expect(paths["/api/reservas-evento/{id}"].get).toBeDefined();
+    expect(paths["/api/reservas-evento/{id}"].patch).toBeDefined();
+
+    expect(paths["/api/reservas-evento/{id}/cancelar"]).toBeDefined();
+    expect(paths["/api/reservas-evento/{id}/cancelar"].patch).toBeDefined();
+
+    expect(paths["/api/reservas-evento/{id}/estado"]).toBeDefined();
+    expect(paths["/api/reservas-evento/{id}/estado"].patch).toBeDefined();
   });
 });

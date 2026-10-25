@@ -124,3 +124,18 @@ export const updateReservaEventoSchema = z
         "Debe enviar al menos un campo para actualizar",
     }
   );
+
+export const updateReservaEventoEstadoSchema = z
+  .object({
+    estado: z.enum(
+      [
+        "confirmada",
+        "cancelada",
+        "finalizada",
+      ],
+      {
+        error: "El estado de la reserva no es válido",
+      }
+    ),
+  })
+  .strict();
