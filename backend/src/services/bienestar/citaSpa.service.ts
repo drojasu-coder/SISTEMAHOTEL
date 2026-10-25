@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { cartReferenceProcessingExposure } from "../pago.service";
 
 const db = require("../../models");
 const { Op } = require("sequelize");
@@ -334,12 +335,56 @@ export const updateStatus = async (
   id: number,
   data: any
 ) => {
-  const cita =
-    await getById(id);
+  return db.sequelize.transaction(
+    async (
+      transaction: any
+    ) => {
+      const cita =
+        await CitaBienestar.findByPk(
+          id,
+          {
+            transaction,
+            lock:
+              transaction.LOCK.UPDATE,
+          }
+        );
 
-  await cita.update(
-    data
+      if (!cita) {
+        throw new AppError(
+          404,
+          "APPOINTMENT_NOT_FOUND",
+          "La cita de bienestar no existe"
+        );
+      }
+
+      if (
+        data.estado === "cancelada" &&
+        cita.estado !== "cancelada"
+      ) {
+        const processingExposure =
+          await cartReferenceProcessingExposure(
+            "bienestar",
+            cita.id,
+            transaction
+          );
+
+        if (processingExposure > 0) {
+          throw new AppError(
+            409,
+            "RESERVATION_HAS_PROCESSING_PAYMENT",
+            "La cita tiene un pago en procesamiento y no puede cancelarse"
+          );
+        }
+      }
+
+      await cita.update(
+        data,
+        {
+          transaction,
+        }
+      );
+
+      return cita;
+    }
   );
-
-  return cita;
 };

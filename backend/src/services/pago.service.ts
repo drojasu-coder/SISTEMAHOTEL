@@ -206,6 +206,41 @@ const historicalCartIdsForReference = async (
 };
 
 /**
+ * Exposición procesando de una referencia en todos los carritos que histórica
+ * o actualmente la contienen. Los estados terminales del carrito no eliminan
+ * un Pago que todavía puede completarse externamente.
+ */
+export const cartReferenceProcessingExposure = async (
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    tipoItem,
+    referenciaId,
+    transaction,
+  );
+
+  if (cartIds.length === 0) return 0;
+
+  const processingPayments = await Pago.findAll({
+    where: {
+      carrito_id: { [Op.in]: cartIds },
+      estado: "procesando",
+    },
+    attributes: ["monto"],
+    transaction,
+  });
+
+  return round(
+    processingPayments.reduce(
+      (sum: number, payment: any) => sum + Number(payment.monto),
+      0,
+    ),
+  );
+};
+
+/**
  * Exposición financiera activa de una ReservaHabitacion, sin importar si el
  * pago nació directamente de la reserva o de cualquiera de los carritos que
  * histórica o actualmente contienen la referencia.
@@ -670,6 +705,37 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
     attributes: ["precio", "cantidad", "tipo_item", "referencia_id"],
     transaction,
   });
+  const uniqueWellnessAppointmentIds = new Set<number>();
+  for (const item of items as any[]) {
+    if (item.tipo_item !== "bienestar") continue;
+    const appointmentId = Number(item.referencia_id);
+    if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La cita de bienestar ya no se encuentra disponible",
+      );
+    }
+    uniqueWellnessAppointmentIds.add(appointmentId);
+  }
+  const wellnessAppointmentIds = [
+    ...uniqueWellnessAppointmentIds,
+  ].sort((left, right) => left - right);
+  const lockedWellnessAppointments = new Map<number, any>();
+  for (const appointmentId of wellnessAppointmentIds) {
+    const appointment = await CitaBienestar.findByPk(appointmentId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!appointment) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La cita de bienestar ya no se encuentra disponible",
+      );
+    }
+    lockedWellnessAppointments.set(appointmentId, appointment);
+  }
   let requiredAdvance = 0;
   const total = round((await Promise.all(items.map(async (item: any) => {
       const price = Number(item.precio);
@@ -708,9 +774,9 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
         }
       }
       if (item.tipo_item === "bienestar") {
-        const appointment = await CitaBienestar.findByPk(item.referencia_id, {
-          transaction,
-        });
+        const appointment = lockedWellnessAppointments.get(
+          Number(item.referencia_id),
+        );
         if (
           !appointment ||
           String(appointment.estado).toLowerCase() !== "confirmada"
@@ -1216,7 +1282,8 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     /*
      * Orden canónico para compromisos de referencias:
      * Carrito (si existe) -> ReservaHabitacion por id ascendente ->
-     * ReservaEvento por id ascendente -> Pago.
+     * ReservaEvento por id ascendente -> CitaBienestar por id ascendente ->
+     * Pago.
      * Un pago directo comienza en ReservaHabitacion. Nunca se toma Pago antes
      * de Carrito, preservando el orden corregido por QA-PAY-CONC-018.
      */
@@ -1512,7 +1579,8 @@ export const approveTransferencia = async (pagoId: number) =>
       metodo: unlockedPayment.metodo,
     } as CreatePagoData;
     // Conserva el mismo orden canónico que createPago: Carrito (si existe),
-    // ReservaHabitacion y ReservaEvento por tipo/id ascendente, y luego Pago.
+    // ReservaHabitacion, ReservaEvento y CitaBienestar por tipo/id ascendente,
+    // y luego Pago.
     const origin = await validateOpenOrigin(
       originData,
       transaction,

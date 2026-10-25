@@ -5729,6 +5729,246 @@ findings:
     verified_at: "2026-10-25"
     next_step: qa-focused.ps1 + qa-regression.ps1
 
+  - id: QA-SPA-FIN-CANDIDATE-047
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Cancelar una CitaBienestar con pago Stripe procesando deja un cobro
+      succeeded externo que el webhook no puede reconciliar localmente
+    invariant: >-
+      CitaBienestar no debe cancelarse mientras exista un Pago tarjeta en estado
+      procesando con un PaymentIntent activo, salvo que la cancelación compense
+      el compromiso de forma durable. Nunca deben coexistir PaymentIntent
+      succeeded, Pago local procesando y cita cancelada porque el webhook no
+      puede reconciliar el ledger.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.cancelProcessingPayment.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-047: no cancela una CitaBienestar con PaymentIntent procesando activo"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.cancelProcessingPayment.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-047: no cancela una CitaBienestar con PaymentIntent procesando activo"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_method: tarjeta
+      webhook_before_cancel: false
+      exact_replay_count: 1
+    ids:
+      client_id: 1
+      admin_id: 2
+      therapist_id: 1
+      service_id: 1
+      cita_id: 1
+      cart_id: 1
+      cart_item_id: 1
+      payment_id: 1
+      payment_intent_id: pi_spa_cancel_047_001
+      webhook_event_id: evt_spa_cancel_047_001
+    fixture:
+      therapist_active: true
+      service_price: "350.00"
+      service_duration_minutes: 60
+      cita_date: "2026-11-24"
+      cita_state_before: confirmada
+      cart_state_before: activo
+      cart_item_type: bienestar
+      cart_item_price: "350.00"
+    payment_create:
+      http: 201
+      code: null
+      state: procesando
+      amount: "350.00"
+      payment_intent_state: requires_payment_method
+      approved_before: "0.00"
+      processing_before: "350.00"
+    cancel_attempt:
+      endpoint: PATCH /api/citas-spa/1/estado
+      payload: "estado=cancelada"
+      http: 200
+      code: null
+      cita_state_after: cancelada
+      cart_state_after: activo
+      payment_state_after: procesando
+      payment_intent_state_after: requires_payment_method
+      processing_after: "350.00"
+      intent_canceled_by_backend: false
+      refund_created: false
+      uncanceled_processing_window: true
+    webhook:
+      executed: true
+      event_type: payment_intent.succeeded
+      external_intent_state: succeeded
+      first_delivery:
+        http: 409
+        code: CART_REFERENCE_NOT_AVAILABLE
+        cita_state: cancelada
+        cart_state: activo
+        payment_state: procesando
+        approved: "0.00"
+        processing: "350.00"
+        approved_refunds: "0.00"
+        divergence: "350.00"
+      replay:
+        executed: true
+        exact_same_event: true
+        http: 409
+        code: CART_REFERENCE_NOT_AVAILABLE
+        cita_state: cancelada
+        cart_state: activo
+        payment_state: procesando
+        approved: "0.00"
+        processing: "350.00"
+        approved_refunds: "0.00"
+        divergence: "350.00"
+    stripe_evidence:
+      create_calls: 1
+      cancel_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      final_status: succeeded
+      external_net: "350.00"
+    database_evidence:
+      source_of_truth: PostgreSQL
+      final_cita_state: cancelada
+      final_cart_state: activo
+      final_cart_item_count: 1
+      final_payment_count: 1
+      final_payment_state: procesando
+      final_payment_amount: "350.00"
+      final_refund_count: 0
+      final_approved_net: "0.00"
+      final_processing: "350.00"
+    divergence:
+      external_succeeded_net: "350.00"
+      local_approved_net: "0.00"
+      local_processing: "350.00"
+      amount: "350.00"
+      present_after_first_webhook: true
+      present_after_exact_replay: true
+    violation: >-
+      El administrador canceló la cita con HTTP 200 mientras Pago 1 seguía
+      procesando y el PaymentIntent permanecía activo. Tras simular succeeded,
+      el webhook legítimo y su replay exacto respondieron 409
+      CART_REFERENCE_NOT_AVAILABLE; PostgreSQL conservó la cita cancelada, el
+      Pago procesando, aprobado neto Q0.00 y cero reembolsos, mientras el mock
+      externo conservó Q350.00 succeeded.
+    http_evidence: >-
+      POST /api/pagos respondió HTTP 201 y creó Pago 1 procesando asociado a
+      pi_spa_cancel_047_001. PATCH /api/citas-spa/1/estado respondió HTTP 200 sin
+      código. El primer POST /api/pagos/stripe/webhook y el replay del mismo
+      evento respondieron HTTP 409 CART_REFERENCE_NOT_AVAILABLE. No hubo HTTP
+      500.
+    suspected_execution_path: >-
+      citaSpa.routes -> citaSpa.controller.updateStatus ->
+      citaSpa.service.updateStatus carga la cita y persiste estado=cancelada sin
+      consultar ni compensar pagos procesando del carrito histórico. Después,
+      pago.controller.stripeWebhook -> pago.service.processStripeWebhook cambia
+      el Pago a aprobado dentro de una transacción, pero validateOpenOrigin llama
+      cartTotals; la revalidación de bienestar detecta la cita cancelada y arroja
+      CART_REFERENCE_NOT_AVAILABLE, revirtiendo también la aprobación local. El
+      replay recorre el mismo camino y deja la divergencia durable.
+    red_result: >-
+      CONFIRMED: 1 archivo falló y 1 test falló con tres aserciones de conducta
+      segura; safeOutcome=false, externalLocalDivergence=true y
+      financialViolation=true.
+    root_cause: >-
+      citaSpa.service.updateStatus leía y actualizaba CitaBienestar fuera de una
+      transacción y no consultaba los Pagos procesando asociados mediante los
+      carritos históricos de la cita. Por ello permitía persistir cancelada
+      mientras un PaymentIntent todavía podía completarse externamente.
+    fix: >-
+      updateStatus ahora ejecuta una transacción administrada, obtiene la
+      CitaBienestar objetivo con SELECT FOR UPDATE y, únicamente al transicionar
+      hacia cancelada, consulta la exposición procesando de todos sus carritos
+      históricos. Si el monto es mayor que cero revierte con HTTP 409
+      RESERVATION_HAS_PROCESSING_PAYMENT. La revalidación financiera de carrito
+      también bloquea las CitaBienestar referenciadas antes de validar su estado
+      y antes de crear o aprobar Pago; los demás cambios de estado conservan el
+      comportamiento anterior.
+    validation_layer: citaSpa.service.updateStatus
+    financial_exposure_helper: cartReferenceProcessingExposure
+    historical_carts_included: true
+    transaction_scope: >-
+      BEGIN -> CitaBienestar SELECT FOR UPDATE -> lectura de CarritoItem
+      histórico -> lectura de Pago estado=procesando -> rechazo y ROLLBACK, o
+      CitaBienestar UPDATE y COMMIT.
+    locking_strategy: >-
+      Cancelación bloquea primero la CitaBienestar objetivo y después ejecuta
+      lecturas sin lock de CarritoItem/Pago. createPago y approveTransferencia
+      bloquean primero Carrito y, en cartTotals, bloquean secuencialmente las
+      CitaBienestar únicas por ID ascendente antes de validar estado y continuar
+      hacia Pago/PaymentIntent. El helper de exposición sigue siendo read-only y
+      no bloquea Carrito.
+    payment_serialization: >-
+      La fila CitaBienestar es el recurso compartido entre cancelación y
+      creación/aprobación financiera. Si cancelación obtiene el lock primero,
+      persiste cancelada y el pago reanudado falla con
+      CART_REFERENCE_NOT_AVAILABLE. Si el pago obtiene el lock primero, conserva
+      la cita confirmada hasta persistir su compromiso y la cancelación reanudada
+      detecta exposición procesando y falla con
+      RESERVATION_HAS_PROCESSING_PAYMENT. Carritos mixtos deduplican IDs de
+      bienestar y los bloquean secuencialmente en orden numérico ascendente.
+    deadlock_analysis: >-
+      No se identificó ciclo concreto: creación/aprobación por transferencia
+      sigue Carrito -> referencias existentes -> CitaBienestar ascendente ->
+      Pago; cancelación sigue CitaBienestar -> lecturas MVCC sin lock de
+      CarritoItem/Pago y nunca intenta Carrito FOR UPDATE. Dos pagos sobre citas
+      comunes toman todas las filas CitaBienestar en el mismo orden ascendente.
+      El webhook Stripe conserva su orden existente Carrito -> Pago ->
+      CitaBienestar, pero cancelación no intenta bloquear Pago ni Carrito, por lo
+      que tampoco forma un ciclo con esta ruta; no se modificó el webhook.
+    processing_rule: >-
+      Solo la suma positiva de Pagos con estado procesando en cualquier carrito
+      histórico bloquea la transición hacia cancelada. aprobado,
+      reembolsado_parcial y reembolsado no se incorporan a esta regla; fallido,
+      rechazado y cancelado tampoco bloquean. No se cambió la política de dinero
+      aprobado.
+    cancel_http: 409
+    cancel_code: RESERVATION_HAS_PROCESSING_PAYMENT
+    cita_state_after: confirmada
+    payment_state_after: procesando
+    payment_amount_after: "350.00"
+    payment_intent_state_after: requires_payment_method
+    processing_after: "350.00"
+    intent_canceled: false
+    refund_created: false
+    uncanceled_processing_window: false
+    webhook_executed: false
+    external_local_divergence: false
+    financial_violation: false
+    regressions:
+      official_047_focused: "PASS; 1 file passed, 1 test passed"
+      official_047_file: "PASS; 1 file passed, 1 test passed"
+      official_044: "PASS; 1 file passed, 1 test passed"
+      official_045: "PASS; 1 file passed, 1 test passed"
+      official_046: "PASS; 1 file passed, 1 test passed"
+      bienestar_aggregate: "PASS; 4 files passed, 4 tests passed"
+      related_financial: >-
+        PASS; 4 files passed, 6 tests passed:
+        reservaHabitacion.cancelProcessingPayment.test.ts,
+        reservaEvento.cancelProcessingPayment.test.ts,
+        pago.idempotency.concurrency.test.ts y
+        pagoCartMutationBinding.test.ts.
+      typecheck: pass
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json --noEmit
+      db_guard_occurrences: 8
+      db_guard_breakdown: "1 RED confirmado + 7 ejecuciones GREEN"
+    severity_recommendation: high
+    production_files_modified_before_fix: false
+    production_files_modified:
+      - backend/src/services/bienestar/citaSpa.service.ts
+      - backend/src/services/pago.service.ts
+    migrations_modified: false
+    existing_tests_modified: false
+    regressions_044_045_046_observed: pass
+    candidate_048_investigated: false
+    verified_at: "2026-10-25"
+
   - id: QA-SPA-FIN-CANDIDATE-046
     status: closed
     severity: high
