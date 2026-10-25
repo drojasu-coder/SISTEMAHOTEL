@@ -184,7 +184,7 @@ Este documento registra de forma continua el avance técnico, archivos modificad
 - **Estado:** Completada, verificada e integrada en frontend y backend.
 - **Detalle de implementaciones y verificaciones:**
   1. **Gestión Administrativa de Recursos de Actividad e Instructores:**
-     - **Endpoints y permisos:** Endpoints backend existentes (`/api/recursos-actividad`, `/api/instructores`) protegidos bajo permiso `servicios.administrar` (roles `admin`, `gerente_servicios`, `coordinador_actividades`).
+     - **Endpoints y permisos:** Endpoints backend existentes (`/api/recursos-actividad`, `/api/instructores`) protegidos bajo permiso `servicios.administrar` (rol exclusivo `admin`).
      - **Catálogo de Recursos de Actividad (`/admin/recursos-actividad`):**
        - Componente `RecursosActividadList`: tarjetas con visualización de sede, tipo de actividad, identificador y tarifas en GTQ (`precio_hora`, `precio_equipo`, `precio_instructor_hora`).
        - Filtros en tiempo real (`RecursosActividadFilters`): búsqueda textual (nombre o tipo), selector de sede hotelera y selector de tipo de actividad.
