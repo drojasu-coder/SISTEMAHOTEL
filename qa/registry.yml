@@ -5610,6 +5610,125 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-TR-CONC-CANDIDATE-041
+    status: corrected
+    result: CORRECTED
+    severity: high
+    category: CONC
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    title: >-
+      CREATE concurrente puede confirmar traslados solapados con el mismo
+      chofer
+    invariant: >-
+      Un chofer o vehículo no puede quedar asignado a más de una
+      ReservaTransporte confirmada/activa dentro de la misma ventana temporal
+      solapada.
+    reproduction:
+      test_file: backend/tests/transporte/reservaTransporte.concurrency.test.ts
+      test_name: "QA-TR-CONC-CANDIDATE-041: CREATE concurrente no confirma traslados solapados con el mismo chofer o vehículo"
+      endpoint: POST /api/reservas-transporte
+      concurrent_requests: 20
+      persistence_source: PostgreSQL
+    expected:
+      driver_overlap_count_max: 1
+      vehicle_overlap_count_max: 1
+      unexpected_500: false
+    evidence_history:
+      local:
+        result: NOT REPRODUCED
+        evidence: >-
+          La verificación local histórica registrada terminó con 1 archivo y 1
+          test aprobados; DRIVER_OVERLAP_COUNT=1 y VEHICLE_OVERLAP_COUNT=1.
+        verified_at: "2026-10-25"
+      ci:
+        result: CONFIRMED
+        workflow: Backend QA
+        branch: qa/backend-automation
+        tested_commit_message: "fix(transport): protect capacity for future reservations"
+        global_test_files: "1 failed, 52 passed, 53 test files"
+        global_tests: "1 failed, 398 passed, 399 tests"
+        assertion_location: "tests/transporte/reservaTransporte.concurrency.test.ts:386"
+        assertion: "expect(driverOverlaps.length).toBeLessThanOrEqual(1)"
+        expected_driver_overlap_count_max: 1
+        actual_driver_overlap_count: 2
+        vehicle_overlap_result: not_available
+    http_evidence: >-
+      El caso ejecuta 20 POST simultáneos contra /api/reservas-transporte. La
+      distribución exacta de respuestas no está disponible en la evidencia CI;
+      el fallo reportado ocurrió en la aserción PostgreSQL de solape del chofer,
+      después de las comprobaciones del caso que limitan cada respuesta a HTTP
+      201/409 y rechazan cualquier HTTP 500 inesperado.
+    database_evidence: >-
+      La consulta directa posterior sobre reservas_transporte encontró 2 filas
+      confirmadas dentro de la misma ventana temporal para el chofer disputado;
+      el máximo permitido era 1. El resultado equivalente para el vehículo no
+      está disponible y no se infiere.
+    suspected_execution_path: >-
+      Hipótesis causal: la disponibilidad se consulta antes de adquirir los
+      bloqueos; Vehiculo y Chofer se bloquean después mediante FOR UPDATE/SKIP
+      LOCKED; no se revalidan los solapes tras adquirir esos locks y no existe
+      una constraint temporal PostgreSQL que impida confirmar el segundo
+      solape. Esta hipótesis no constituye un fix ejecutado.
+    previous_local_result: NOT REPRODUCED
+    ci_result_before_fix: CONFIRMED
+    root_cause: >-
+      La lista de recursos bloqueados se calculaba antes de adquirir los locks
+      de Vehiculo y Chofer. Si otra transacción confirmaba y liberaba los locks
+      entre esa lectura y la selección, la transacción rezagada podía adquirir
+      esos mismos recursos usando filtros obsoletos y confirmar sin volver a
+      comprobar las reservas solapadas ya persistidas.
+    fix: >-
+      assignResources conserva la selección automática con FOR UPDATE/SKIP
+      LOCKED y, tras adquirir ambos recursos, vuelve a consultar dentro de la
+      misma transacción las reservas confirmadas solapadas. Si el vehículo o el
+      chofer seleccionados ya están bloqueados temporalmente, no devuelve una
+      asignación.
+    revalidation_strategy: >-
+      Segunda ejecución de getBlockedResourceIds después de los locks, usando
+      estado=confirmada, fecha_hora > target-block, fecha_hora < target+block y
+      excludeReservationId para excluir la propia reserva en PATCH y /asignar.
+      La decisión final comprueba los IDs concretos de Vehiculo y Chofer
+      seleccionados contra esa lectura posterior a los locks.
+    transaction_scope: >-
+      CREATE mantiene selección, locks, revalidación e INSERT en una sola
+      transacción. PATCH y /asignar mantienen el lock de ReservaTransporte, la
+      selección, los locks, la revalidación y el UPDATE en sus respectivas
+      transacciones existentes.
+    lock_order: >-
+      CREATE: Vehiculo -> Chofer. PATCH y /asignar: ReservaTransporte ->
+      Vehiculo -> Chofer. Los flujos 042 y 043 conservan Chofer -> consulta no
+      bloqueante de ReservaTransporte y Vehiculo -> consulta no bloqueante de
+      ReservaTransporte, respectivamente; la revalidación añadida no adquiere
+      locks de ReservaTransporte y no introduce un orden inverso.
+    skip_locked_strategy: >-
+      Se conserva SKIP LOCKED en Vehiculo y Chofer para que una asignación
+      automática no espere recursos disputados. La revalidación posterior
+      evita que un recurso liberado tras una lectura inicial obsoleta produzca
+      una segunda confirmación; el perdedor puede quedar pendiente o recibir el
+      conflicto controlado ya definido por el flujo.
+    create_behavior: >-
+      Confirma únicamente si ambos recursos continúan libres después de sus
+      locks y de la revalidación; de lo contrario crea la reserva pendiente.
+    patch_behavior: >-
+      Bloquea la reserva pendiente, excluye su propio ID al evaluar solapes y
+      solo la confirma si la revalidación posterior a los locks conserva ambos
+      recursos disponibles; si no, permanece pendiente.
+    assign_behavior: >-
+      Bloquea la reserva pendiente, excluye su propio ID y solo confirma tras
+      revalidar ambos recursos; si no están disponibles devuelve el conflicto
+      controlado TRANSPORT_RESOURCES_UNAVAILABLE y revierte la transacción.
+    repeat_runs: "10/10 PASS"
+    driver_overlap_max_observed: 1
+    vehicle_overlap_max_observed: 1
+    deadlock_observed: false
+    timeout_observed: false
+    unexpected_500: false
+    042_regression: PASS
+    043_regression: PASS
+    verified_at: "2026-10-25"
+    next_step: qa-focused.ps1 + qa-regression.ps1
+
   - id: QA-TR-FUNC-CANDIDATE-042
     status: closed
     severity: high
