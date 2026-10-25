@@ -5,7 +5,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       CitaBienestar.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
       CitaBienestar.belongsTo(models.ServicioBienestar, { foreignKey: "servicio_bienestar_id" });
-      CitaBienestar.belongsTo(models.Terapeuta, { foreignKey: "terapeuta_id" });
+      CitaBienestar.belongsTo(models.Terapeuta, { foreignKey: "terapeuta_id", as: "Terapeuta" });
     }
   }
   CitaBienestar.init(

@@ -21,6 +21,8 @@ import { RESERVAS_ROUTES } from '@/features/reservas';
 import { RESTAURANTE_ROUTES } from '@/features/restaurante';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ACTIVIDADES_ROUTES } from '../constants/routes';
+import { BIENESTAR_ROUTES } from '@/features/bienestar';
+import { Heart } from 'lucide-react';
 import { textosActividades, formatearGTQ } from '../textos';
 import { BotonAnadirAlCarrito } from '@/features/carrito/components/BotonAnadirAlCarrito';
 
@@ -61,6 +63,13 @@ export const MisReservasActividadesList: React.FC = () => {
         >
           <Compass className="size-4" aria-hidden="true" />
           <span>{textosActividades.pestanaActividades}</span>
+        </Link>
+        <Link
+          to={BIENESTAR_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
+        >
+          <Heart className="size-4" aria-hidden="true" />
+          <span>Bienestar y Spa</span>
         </Link>
       </div>
 

@@ -617,7 +617,7 @@ const resolveBienestar =
  * que ya posee pagos asociados.
  */
 if (
-  await hasCartReferenceApprovedPayment(
+  await hasCartReferenceActiveFinancialCommitment(
     "bienestar",
     cita.id,
     transaction

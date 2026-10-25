@@ -225,3 +225,85 @@ Este documento registra de forma continua el avance técnico, archivos modificad
        - Verificación de tipos backend (`npm run typecheck:all`): 0 errores.
        - Verificación de tipos frontend (`tsc --noEmit`): 0 errores.
        - Compilación de producción (`npm run build`): bundle generado correctamente en `Frontend/dist/`.
+
+---
+
+## Implementación e Integración Completa del Módulo de Bienestar y Spa (HOTEL HUNAHPÚ)
+
+- **Estado:** Completada, verificada e integrada en frontend y backend.
+- **Detalle de implementaciones y verificaciones:**
+  1. **Contrato Real de Bienestar e Integración con Backend:**
+     - **Servicios de Bienestar (`ServicioBienestar`):** Catálogo con `nombre`, `duracion_minutos` y `precio` en GTQ.
+     - **Terapeutas (`Terapeuta`):** Registro de profesionales con estado operativo `activo` (booleano).
+     - **Citas de Bienestar (`CitaBienestar`):** Citas con `usuario_id`, `servicio_bienestar_id`, `terapeuta_id`, `fecha`, `hora_inicio`, `hora_fin` y estado operativo (`confirmada`, `cancelada`, `completada`).
+     - **Reglas de negocio y disponibilidad:**
+       - El terapeuta debe existir y encontrarse activo (`422 THERAPIST_INACTIVE`).
+       - La duración se calcula autoritativamente en el servidor a partir de `duracion_minutos` del servicio, determinando `hora_fin`.
+       - Control de solapamientos y tiempo de descanso: el sistema exige un buffer obligatorio de 15 minutos entre sesiones del mismo profesional (`409 THERAPIST_BUSY_OR_BUFFER`).
+       - Reactivación administrativa a `confirmada` revalida la disponibilidad y el buffer del profesional asignado.
+     - **Nuevos endpoints cliente implementados:**
+       - `GET /api/citas-spa/mis-reservas`: Lista exclusivamente las citas del cliente autenticado.
+       - `GET /api/citas-spa/mis-reservas/:id`: Consulta individual con verificación estricta de propiedad (403 `FORBIDDEN` para otros clientes).
+     - **OpenAPI y tipos de frontend:**
+       - Especificación OpenAPI documentada con tags, parámetros, respuestas y esquemas canónicos (`CitaBienestar`, `CreateCitaBienestarRequest`, `UpdateCitaBienestarEstadoRequest`).
+       - Regeneración de tipos TypeScript en `Frontend/src/api/generated/schema.ts` (102 paths procesados, 193 operaciones).
+  2. **Catálogo y Creación de Reservas de Spa (Cliente):**
+     - **Catálogo de Bienestar (`/bienestar`):**
+       - Componente `CatalogoBienestarList`: cuadrícula de tratamientos con duración en minutos, tarifas en quetzales (`formatearGTQ`) y barra de búsqueda en tiempo real.
+       - Estados de carga con esqueleto visual, error con reintento y estado vacío.
+     - **Modal de Reserva (`ReservaCitaModal`):**
+       - Identidad del cliente tomada de la sesión autenticada; no se permite inyectar `usuario_id`, `total` ni `estado`.
+       - Selector de terapeutas filtrado únicamente por profesionales activos (`activo: true`).
+       - Validación de fecha mínima (hoy) y formato 24h para hora de inicio (`reservaCitaSchema` con Zod).
+       - Desactivación de envíos duplicados durante el procesamiento.
+       - Manejo amigable de conflictos de disponibilidad y buffer de 15 minutos (`THERAPIST_BUSY_OR_BUFFER`), terapeutas inactivos (`THERAPIST_INACTIVE`) y fallos de red inciertos.
+       - Pantalla de confirmación con identificador devuelto por el servidor, horario calculado, terapeuta asignado y tarifa oficial.
+  3. **Mis Citas de Bienestar (`/mis-reservas/bienestar`):**
+     - **Listado de citas del cliente (`MisCitasSpaList`):**
+       - Integrado en la barra de pestañas compartida (Habitaciones, Mesas, Amenidades, Actividades, Bienestar).
+       - Claves de consulta TanStack Query aisladas por usuario (`["citas-bienestar", "mine", userId]`).
+       - Visualización de identificador de cita, nombre del tratamiento, profesional asignado, fecha, intervalo horario y tarifa.
+       - Acceso directo al botón de adición al carrito (`BotonAnadirAlCarrito`) y enlace al detalle.
+     - **Detalle de cita (`DetalleCitaBienestarPage` y `CitaBienestarDetalleCard`):**
+       - Accesible por URL directa (`/mis-reservas/bienestar/:id`) y tras recarga de página.
+       - Manejo de identificador inválido, error 403 (cita perteneciente a otro cliente), error 404 y reintento.
+       - Enlace de retorno visible a Mis citas de spa.
+  4. **Administración de Citas, Tratamientos y Terapeutas:**
+     - **Permisos y roles:** Todo el panel administrativo de bienestar está restringido exclusivamente a administradores (`servicios.administrar` / `ROLES.ADMIN`).
+     - **Gestión de Citas (`/admin/citas-spa` y `/admin/citas-spa/:id`):**
+       - Componente `AdminCitasSpaList`: filtros por estado operativo (`confirmada`, `completada`, `cancelada`), terapeuta y búsqueda por huésped, servicio o correo.
+       - Componente `AdminDetalleCitaCard`: vista completa de la cita, huésped, terapeuta y horario.
+       - Modal de cambio de estado operativo (`AdminCitaEstadoModal`) con confirmación, advertencia ante reactivación y manejo de traslapes en el backend.
+     - **Gestión de Tratamientos (`/admin/servicios-spa`):**
+       - Listado, creación y edición de servicios de spa con duración y precio (`ServicioSpaFormModal`).
+     - **Gestión de Terapeutas (`/admin/terapeutas`):**
+       - Listado, creación y edición de terapeutas (`TerapeutaFormModal`) con conmutador de estado activo/inactivo.
+     - **Navegación administrativa:** Accesos directos integrados en la página central de servicios (`ServiciosPage.tsx`).
+  5. **Integración con Carrito y Pasarela de Pagos:**
+     - **Adición al carrito (`resolveBienestar`):**
+       - Validación de existencia y propiedad de la cita en `carritoItem.service.ts`.
+       - Prevención de doble cobro y adición concurrente mediante `hasCartReferenceActiveFinancialCommitment`.
+       - Tarifa autoritativa del servicio asociada automáticamente al ítem de carrito.
+     - **Visualización en carrito (`CarritoItemCard`):**
+       - Soporte para `tipo_item === "bienestar"`, etiqueta "Bienestar" y enlace directo a `/mis-reservas/bienestar/:id`.
+     - **Validación durante checkout (`cartTotals` en `pago.service.ts`):**
+       - Validación de disponibilidad de la cita de bienestar antes de registrar pagos, rechazando citas canceladas (`CART_REFERENCE_NOT_AVAILABLE`).
+     - **Cobro y actualización:**
+       - Pago de carritos con ítems de bienestar aprobado satisfactoriamente.
+       - Transición del carrito a estado `pagado`.
+       - Invalidación de caché en `usePagoResultado.ts` para refrescar las consultas de bienestar (`["citas-bienestar"]`).
+       - Separación estricta entre el estado operativo de la cita (`confirmada`) y el estado financiero (`pagado` en carrito y pago).
+  6. **Pruebas y Verificación:**
+     - **Entorno aislado (hotel_test_db en puerto 55433):**
+       - Suite de integración HTTP: `backend/tests/integration/postgres.bienestar.http.test.ts` (13/13 pruebas pasando, 100%).
+       - Cobertura: endpoints públicos, protección 403 para clientes en rutas admin, restricción de reservas exclusivamente a clientes, cálculo de hora_fin, validación de buffer de 15 minutos, aislamiento entre clientes en mis-reservas, protección de propiedad 403, transiciones de estado administrativo, adición al carrito, cálculo de total, registro y aprobación de pago, y bloqueo de adición duplicada de citas pagadas.
+     - **Pruebas unitarias de contrato OpenAPI:**
+       - `backend/tests/unit/openapi.test.ts` (11/11 pruebas pasando, 100%).
+     - **Pruebas frontend (Vitest / React Testing Library):**
+       - `CatalogoBienestarCliente.test.tsx` (4 pruebas pasando).
+       - `MisCitasSpaList.test.tsx` (2 pruebas pasando).
+       - `AdminCitasSpaList.test.tsx` (1 prueba pasando).
+     - **Comprobación de tipos y empaquetado:**
+       - `npm run typecheck:all` (backend): 0 errores.
+       - `npm run typecheck` (frontend): 0 errores.
+       - `npm run build` (frontend): compilación de producción exitosa en `Frontend/dist/`.

@@ -25,6 +25,7 @@ const {
   ReservaHabitacion,
   ReservaEvento,
   ReservaActividad,
+  CitaBienestar,
 } = db;
 
 export type PagoMetodo = PaymentMethod;
@@ -571,6 +572,22 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
             409,
             "CART_REFERENCE_NOT_AVAILABLE",
             "La reserva de actividad ya no se encuentra disponible",
+          );
+        }
+      }
+      if (item.tipo_item === "bienestar") {
+        const cita = await CitaBienestar.findByPk(item.referencia_id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (
+          !cita ||
+          String(cita.estado).toLowerCase() === "cancelada"
+        ) {
+          throw new AppError(
+            409,
+            "CART_REFERENCE_NOT_AVAILABLE",
+            "La cita de bienestar ya no se encuentra disponible",
           );
         }
       }

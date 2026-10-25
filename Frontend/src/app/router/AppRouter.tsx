@@ -48,6 +48,14 @@ import { AdminReservasActividadesPage } from '@/pages/AdminReservasActividadesPa
 import { AdminDetalleReservaActividadPage } from '@/pages/AdminDetalleReservaActividadPage';
 import { AdminRecursosActividadPage } from '@/pages/AdminRecursosActividadPage';
 import { AdminInstructoresPage } from '@/pages/AdminInstructoresPage';
+import { BIENESTAR_ROUTES } from '@/features/bienestar';
+import { CatalogoBienestarPage } from '@/pages/CatalogoBienestarPage';
+import { MisReservasBienestarPage } from '@/pages/MisReservasBienestarPage';
+import { DetalleCitaBienestarPage } from '@/pages/DetalleCitaBienestarPage';
+import { AdminServiciosSpaPage } from '@/pages/AdminServiciosSpaPage';
+import { AdminTerapeutasPage } from '@/pages/AdminTerapeutasPage';
+import { AdminCitasSpaPage } from '@/pages/AdminCitasSpaPage';
+import { AdminDetalleCitaSpaPage } from '@/pages/AdminDetalleCitaSpaPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -91,6 +99,13 @@ export const AppRouter: React.FC = () => {
           <Route element={<RequireAuth />}>
             <Route path={ACTIVIDADES_ROUTES.MIS_RESERVAS} element={<MisReservasActividadesPage />} />
             <Route path="/mis-reservas/actividades/:id" element={<DetalleReservaActividadPage />} />
+          </Route>
+
+          {/* Flujo de bienestar y spa del cliente */}
+          <Route path={BIENESTAR_ROUTES.CATALOGO} element={<CatalogoBienestarPage />} />
+          <Route element={<RequireAuth />}>
+            <Route path={BIENESTAR_ROUTES.MIS_RESERVAS} element={<MisReservasBienestarPage />} />
+            <Route path="/mis-reservas/bienestar/:id" element={<DetalleCitaBienestarPage />} />
           </Route>
 
           {/* Flujo de reservas de habitación del cliente */}
@@ -154,6 +169,14 @@ export const AppRouter: React.FC = () => {
               <Route path="instructores" element={<AdminInstructoresPage />} />
               <Route path="reservas-actividades" element={<AdminReservasActividadesPage />} />
               <Route path="reservas-actividades/:id" element={<AdminDetalleReservaActividadPage />} />
+            </Route>
+
+            {/* Bienestar y Spa (Exclusivo Admin) */}
+            <Route element={<RequireAuth permission="servicios.administrar" />}>
+              <Route path="servicios-spa" element={<AdminServiciosSpaPage />} />
+              <Route path="terapeutas" element={<AdminTerapeutasPage />} />
+              <Route path="citas-spa" element={<AdminCitasSpaPage />} />
+              <Route path="citas-spa/:id" element={<AdminDetalleCitaSpaPage />} />
             </Route>
 
             {/* Espacios de parqueo */}

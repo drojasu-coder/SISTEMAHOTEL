@@ -83,8 +83,8 @@ describe("generated OpenAPI contract", () => {
       0,
     );
 
-    expect(Object.keys(paths)).toHaveLength(95);
-    expect(operations).toBe(186);
+    expect(Object.keys(paths)).toHaveLength(102);
+    expect(operations).toBe(193);
   });
   it("contains complete reservas and disponibilidad schemas and contract responses (BE-011, BE-012)", () => {
     const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
@@ -469,5 +469,43 @@ describe("generated OpenAPI contract", () => {
     expect(parqueoResource.delete.responses["403"]).toBeDefined();
     expect(parqueoResource.delete.responses["404"]).toBeDefined();
     expect(parqueoResource.delete.responses["409"]).toBeDefined();
+  });
+  it("contains complete multimedia branding schemas and public endpoint contract", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    expect(schemas.BrandingMedia).toBeDefined();
+    expect(schemas.BrandingResponse).toBeDefined();
+
+    expect(schemas.BrandingMedia.required).toEqual([
+      "logoHorizontalColor",
+      "logoHorizontalBlanco",
+      "isotipoColor",
+      "expiresAt",
+    ]);
+
+    const brandingEndpoint = paths["/api/media/branding"];
+    expect(brandingEndpoint).toBeDefined();
+    expect(brandingEndpoint.get).toBeDefined();
+    expect(brandingEndpoint.get.security).toEqual([]);
+    expect(brandingEndpoint.get.responses["200"].content["application/json"].schema["$ref"]).toBe(
+      "#/components/schemas/BrandingResponse"
+    );
+  });
+  it("contains complete citas-spa and mis-reservas OpenAPI contracts", () => {
+    const paths = swaggerSpec.paths as Record<string, Record<string, any>>;
+    const schemas = (swaggerSpec.components?.schemas || {}) as Record<string, any>;
+
+    expect(schemas.CitaBienestar).toBeDefined();
+    expect(schemas.CreateCitaBienestarRequest).toBeDefined();
+    expect(schemas.UpdateCitaBienestarEstadoRequest).toBeDefined();
+
+    expect(paths["/api/citas-spa"]).toBeDefined();
+    expect(paths["/api/citas-spa"].post).toBeDefined();
+    expect(paths["/api/citas-spa"].get).toBeDefined();
+    expect(paths["/api/citas-spa/mis-reservas"]).toBeDefined();
+    expect(paths["/api/citas-spa/mis-reservas"].get).toBeDefined();
+    expect(paths["/api/citas-spa/mis-reservas/{id}"]).toBeDefined();
+    expect(paths["/api/citas-spa/mis-reservas/{id}"].get).toBeDefined();
   });
 });

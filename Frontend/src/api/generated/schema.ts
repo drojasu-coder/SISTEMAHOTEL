@@ -5361,6 +5361,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/media/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Obtener URLs prefirmadas de la identidad visual
+         * @description Retorna URLs temporales prefirmadas de lectura directa desde AWS S3 para los logos oficiales de HOTEL HUNAHPÚ. Endpoint público de acceso general.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description URLs prefirmadas de branding obtenidas correctamente */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BrandingResponse"];
+                    };
+                };
+                /** @description Error interno del servidor al comunicarse con el almacenamiento */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tipos-habitacion": {
         parameters: {
             query?: never;
@@ -10673,7 +10721,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Listar todas las citas de bienestar */
+        /** Listar todas las citas de bienestar (administración) */
         get: {
             parameters: {
                 query?: never;
@@ -10787,6 +10835,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/citas-spa/mis-reservas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtener las citas de bienestar del cliente autenticado */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Citas del cliente obtenidas correctamente */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @example success */
+                            status?: string;
+                            data?: components["schemas"]["CitaBienestar"][];
+                        };
+                    };
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Solo clientes pueden acceder a sus reservas */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/citas-spa/mis-reservas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtener una cita de bienestar del cliente autenticado por ID */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Cita del cliente encontrada */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description ID inválido */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No tiene permisos para acceder a esta cita */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Cita no encontrada */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/citas-spa/{id}": {
         parameters: {
             query?: never;
@@ -10794,7 +10960,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Obtener una cita de bienestar por ID */
+        /** Obtener una cita de bienestar por ID (administración) */
         get: {
             parameters: {
                 query?: never;
@@ -13826,6 +13992,33 @@ export interface components {
                 /** @example Debe ser un número válido */
                 message?: string;
             }[];
+        };
+        BrandingMedia: {
+            /**
+             * Format: uri
+             * @example https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-logo-horizontal-color.svg
+             */
+            logoHorizontalColor: string;
+            /**
+             * Format: uri
+             * @example https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-logo-horizontal-blanco.svg
+             */
+            logoHorizontalBlanco: string;
+            /**
+             * Format: uri
+             * @example https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-isotipo-color.svg
+             */
+            isotipoColor: string;
+            /**
+             * Format: date-time
+             * @example 2026-10-25T12:00:00.000Z
+             */
+            expiresAt: string;
+        };
+        BrandingResponse: {
+            /** @example success */
+            status: string;
+            data: components["schemas"]["BrandingMedia"];
         };
     };
     responses: never;

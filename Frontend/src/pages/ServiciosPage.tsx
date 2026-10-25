@@ -7,6 +7,8 @@ import { useAuth } from '@/features/auth/AuthContext';
 import { hasPermission } from '@/features/auth/permissions';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ACTIVIDADES_ROUTES } from '@/features/actividades';
+import { BIENESTAR_ROUTES } from '@/features/bienestar';
+import { Heart } from 'lucide-react';
 import { es } from '@/i18n/es';
 
 /**
@@ -143,6 +145,87 @@ export const ServiciosPage: React.FC = () => {
               className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
             >
               <span>Gestionar instructores</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Servicios de Spa */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <Heart className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Servicios de bienestar y spa
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Administración de tratamientos, masajes y terapias con sus duraciones y tarifas en GTQ.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={BIENESTAR_ROUTES.ADMIN_SERVICIOS}
+              className={buttonStyles({ variant: 'primary', className: 'w-full justify-between' })}
+            >
+              <span>Gestionar tratamientos</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Terapeutas */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <Users className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Terapeutas de spa
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Control del equipo de profesionales y terapeutas activos para asignación de citas.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={BIENESTAR_ROUTES.ADMIN_TERAPEUTAS}
+              className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
+            >
+              <span>Gestionar terapeutas</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Citas de Spa */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <CalendarCheck className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Citas de bienestar y spa
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Supervisión general de citas programadas, terapeutas asignados y actualización de estados.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={BIENESTAR_ROUTES.ADMIN_CITAS}
+              className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
+            >
+              <span>Ver citas de spa</span>
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>
           </div>

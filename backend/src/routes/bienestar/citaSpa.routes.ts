@@ -50,14 +50,71 @@ router.use(authMiddleware);
  */
 router.post(
   "/",
-  requireRole(
-    ROLES.CLIENTE
-  ),
-  validateBody(
-    createCitaSpaSchema
-  ),
+  requireRole(ROLES.CLIENTE),
+  validateBody(createCitaSpaSchema),
   controller.create
 );
+
+/**
+ * @openapi
+ * /api/citas-spa/mis-reservas:
+ *   get:
+ *     tags:
+ *       - Citas de Bienestar
+ *     summary: Obtener las citas de bienestar del cliente autenticado
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Citas del cliente obtenidas correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/CitaBienestar'
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: Solo clientes pueden acceder a sus reservas
+ */
+router.get("/mis-reservas", requireRole(ROLES.CLIENTE), controller.getMyReservations);
+
+/**
+ * @openapi
+ * /api/citas-spa/mis-reservas/{id}:
+ *   get:
+ *     tags:
+ *       - Citas de Bienestar
+ *     summary: Obtener una cita de bienestar del cliente autenticado por ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Cita del cliente encontrada
+ *       400:
+ *         description: ID inválido
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: No tiene permisos para acceder a esta cita
+ *       404:
+ *         description: Cita no encontrada
+ */
+router.get("/mis-reservas/:id", requireRole(ROLES.CLIENTE), validateParams(idParamSchema), controller.getMyReservationById);
 
 /**
  * @openapi
@@ -65,7 +122,7 @@ router.post(
  *   get:
  *     tags:
  *       - Citas de Bienestar
- *     summary: Listar todas las citas de bienestar
+ *     summary: Listar todas las citas de bienestar (administración)
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -89,13 +146,14 @@ router.post(
  *         description: Solo administradores
  */
 router.get("/", requireRole(ROLES.ADMIN), controller.getAll);
+
 /**
  * @openapi
  * /api/citas-spa/{id}:
  *   get:
  *     tags:
  *       - Citas de Bienestar
- *     summary: Obtener una cita de bienestar por ID
+ *     summary: Obtener una cita de bienestar por ID (administración)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -118,6 +176,7 @@ router.get("/", requireRole(ROLES.ADMIN), controller.getAll);
  *         description: Cita no encontrada
  */
 router.get("/:id", requireRole(ROLES.ADMIN), validateParams(idParamSchema), controller.getById);
+
 /**
  * @openapi
  * /api/citas-spa/{id}/estado:

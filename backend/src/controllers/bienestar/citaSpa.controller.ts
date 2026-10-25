@@ -15,6 +15,22 @@ export const getById = async (req: Request, res: Response, next: NextFunction) =
   } catch (error) { next(error); }
 };
 
+export const getMyReservations = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user?.id;
+    const data = await service.getByUserId(userId);
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
+};
+
+export const getMyReservationById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user?.id;
+    const data = await service.getByIdForUser(Number(req.params.id), userId);
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
+};
+
 export const create = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as any).user?.id;
