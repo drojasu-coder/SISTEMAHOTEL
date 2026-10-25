@@ -7,11 +7,13 @@ import { useAuth } from '@/features/auth/AuthContext';
 import { CARRITO_ROUTES } from '../constants/routes';
 import { useAddReservaToCarrito } from '../hooks/useAddReservaToCarrito';
 import { textosCarrito } from '../textos';
+import type { TipoItemCarrito } from '../types';
 
 export interface BotonAnadirAlCarritoProps {
   reservaId: number;
   /** Estado actual de la reserva en el frontend */
   reservaEstado: string;
+  tipo_item?: TipoItemCarrito;
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
@@ -46,6 +48,7 @@ const ESTADOS_TERMINALES = new Set([
 export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
   reservaId,
   reservaEstado,
+  tipo_item = 'habitacion',
   variant = 'primary',
   size = 'md',
   className,
@@ -54,6 +57,7 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
   const { user } = useAuth();
   const { anadirAlCarrito, isLoading, feedback, limpiarFeedback } =
     useAddReservaToCarrito({
+      tipo_item,
       onSuccess: () => onSuccess?.(),
     });
 

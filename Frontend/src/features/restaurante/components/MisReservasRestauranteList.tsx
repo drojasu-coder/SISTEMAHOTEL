@@ -8,6 +8,8 @@ import { textosRestaurante } from "../textos";
 import { RESTAURANTE_ROUTES } from "../constants/routes";
 import { RESERVAS_ROUTES } from "@/features/reservas/constants/routes";
 import { AMENIDADES_ROUTES } from "@/features/amenidades/constants/routes";
+import { ACTIVIDADES_ROUTES } from "@/features/actividades/constants/routes";
+import { Compass } from "lucide-react";
 import {
   BedDouble,
   UtensilsCrossed,
@@ -54,6 +56,13 @@ export const MisReservasRestauranteList: React.FC = () => {
         >
           <Sparkles className="size-4" aria-hidden="true" />
           <span>{t.pestanaAmenidades}</span>
+        </Link>
+        <Link
+          to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+        >
+          <Compass className="size-4" aria-hidden="true" />
+          <span>Actividades Recreativas</span>
         </Link>
       </div>
 

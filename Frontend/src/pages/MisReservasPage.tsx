@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
+import { ACTIVIDADES_ROUTES } from '@/features/actividades';
+import { Compass } from 'lucide-react';
 import { RESTAURANTE_ROUTES } from '@/features/restaurante';
 import { UtensilsCrossed } from 'lucide-react';
 import { ClienteReservasGate } from '@/features/mis-reservas/components/ClienteReservasGate';
@@ -62,6 +64,13 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
         >
           <Sparkles className="size-4" aria-hidden="true" />
           <span>Pases de Amenidades</span>
+        </Link>
+        <Link
+          to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+        >
+          <Compass className="size-4" aria-hidden="true" />
+          <span>Actividades Recreativas</span>
         </Link>
       </div>
 

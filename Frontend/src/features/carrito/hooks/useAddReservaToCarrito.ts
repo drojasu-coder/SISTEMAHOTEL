@@ -5,9 +5,10 @@ import { useAuth } from '@/features/auth/AuthContext';
 import { carritoApi } from '../api/carritoApi';
 import { carritoQueryKeys } from '../constants/queryKeys';
 import { textosCarrito } from '../textos';
-import type { CarritoItem } from '../types';
+import type { CarritoItem, TipoItemCarrito } from '../types';
 
 export interface UseAddReservaToCarritoOptions {
+  tipo_item?: TipoItemCarrito;
   onSuccess?: (item: CarritoItem) => void;
   onError?: (error: unknown) => void;
 }
@@ -44,9 +45,9 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
       // 1. Obtener o crear carrito activo para el cliente autenticado
       const carrito = await carritoApi.getOrCreateActiveCart();
 
-      // 2. Añadir la referencia de la habitación existente
+      // 2. Añadir la referencia de la reserva existente
       const item = await carritoApi.addItem(carrito.id, {
-        tipo_item: 'habitacion',
+        tipo_item: options?.tipo_item ?? 'habitacion',
         referencia_id: reservaId,
       });
 

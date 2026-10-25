@@ -41,6 +41,7 @@ export const es = {
     reservar: 'Reservar',
     misReservas: 'Mis reservas',
     restaurante: 'Restaurante',
+    actividades: 'Actividades',
     carrito: 'Carrito',
   },
   roles: {

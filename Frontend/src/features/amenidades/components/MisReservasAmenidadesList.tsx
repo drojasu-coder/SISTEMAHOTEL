@@ -9,6 +9,8 @@ import { RESERVAS_ROUTES } from '@/features/reservas';
 import { useMisReservasAmenidadQuery } from '../hooks/useReservasAmenidad';
 import { AMENIDADES_ROUTES } from '../constants/routes';
 import { RESTAURANTE_ROUTES } from '@/features/restaurante';
+import { ACTIVIDADES_ROUTES } from '@/features/actividades';
+import { Compass } from 'lucide-react';
 import { UtensilsCrossed } from 'lucide-react';
 import { textosAmenidades } from '../textos';
 import type { ReservaAmenidadEstado } from '../types';
@@ -59,6 +61,13 @@ export const MisReservasAmenidadesList: React.FC = () => {
         >
           <Sparkles className="size-4" aria-hidden="true" />
           <span>{t.pestanaAmenidades}</span>
+        </Link>
+        <Link
+          to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+        >
+          <Compass className="size-4" aria-hidden="true" />
+          <span>Actividades Recreativas</span>
         </Link>
       </div>
 
