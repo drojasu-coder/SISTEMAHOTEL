@@ -36,6 +36,84 @@ export interface CreatePagoData {
 const round = (value: number) =>
   Math.round((value + Number.EPSILON) * 100) / 100;
 
+const toCents = (value: unknown) => Math.round(Number(value) * 100);
+
+/**
+ * Distribuye un monto de carrito entre todos sus items usando exclusivamente
+ * sus snapshots persistidos. El calculo se mantiene en centavos y entrega como
+ * maximo un centavo residual por item. Eventos usan el orden de CarritoItem.id;
+ * habitaciones conservan su estrategia historica de mayor residuo proporcional.
+ */
+const allocateCartAmountToReferenceCents = async (
+  carritoId: number,
+  amountCents: number,
+  tipoItem: string,
+  referenciaId: number,
+  transaction: any,
+  residualByItemId = false,
+) => {
+  if (amountCents <= 0) return 0;
+
+  const items = await CarritoItem.findAll({
+    where: { carrito_id: carritoId },
+    attributes: [
+      "id",
+      "tipo_item",
+      "referencia_id",
+      "precio",
+      "cantidad",
+    ],
+    order: [["id", "ASC"]],
+    transaction,
+  });
+  const weightedItems = (items as any[])
+    .map((item: any) => ({
+      id: Number(item.id),
+      isTarget:
+        String(item.tipo_item) === tipoItem &&
+        Number(item.referencia_id) === Number(referenciaId),
+      weight: Math.max(
+        0,
+        toCents(Number(item.precio) * Number(item.cantidad)),
+      ),
+    }))
+    .filter((item: any) => item.weight > 0)
+    .sort((left: any, right: any) => left.id - right.id);
+  const totalWeight = weightedItems.reduce(
+    (sum: number, item: any) => sum + item.weight,
+    0,
+  );
+  if (totalWeight <= 0) return 0;
+
+  const totalWeightBigInt = BigInt(totalWeight);
+  const shares = weightedItems.map((item: any) => {
+    const numerator = BigInt(amountCents) * BigInt(item.weight);
+    return {
+      ...item,
+      cents: Number(numerator / totalWeightBigInt),
+      remainder: numerator % totalWeightBigInt,
+    };
+  });
+  let undistributed = amountCents - shares.reduce(
+    (sum: number, share: any) => sum + share.cents,
+    0,
+  );
+  if (!residualByItemId) {
+    shares.sort((left: any, right: any) => {
+      if (left.remainder === right.remainder) return left.id - right.id;
+      return left.remainder > right.remainder ? -1 : 1;
+    });
+  }
+  for (let index = 0; index < shares.length && undistributed > 0; index += 1) {
+    shares[index].cents += 1;
+    undistributed -= 1;
+  }
+
+  return shares
+    .filter((share: any) => share.isTarget)
+    .reduce((sum: number, share: any) => sum + share.cents, 0);
+};
+
 const money = (value: unknown, field = "monto") => {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0 || !/^\d+(\.\d{1,2})?$/.test(String(value))) {
@@ -210,70 +288,16 @@ export const reservationFinancialExposure = async (
     );
   }
 
-  const toCents = (value: unknown) =>
-    Math.round(Number(value) * 100);
   const allocateCartCents = async (
     carritoId: number,
     amountCents: number,
-  ) => {
-    if (amountCents <= 0) return 0;
-
-    const items = await CarritoItem.findAll({
-      where: { carrito_id: carritoId },
-      attributes: [
-        "id",
-        "tipo_item",
-        "referencia_id",
-        "precio",
-        "cantidad",
-      ],
-      order: [["id", "ASC"]],
-      transaction,
-    });
-    const weightedItems = (items as any[])
-      .map((item: any) => ({
-        id: Number(item.id),
-        isTarget:
-          item.tipo_item === "habitacion" &&
-          Number(item.referencia_id) === Number(reservationId),
-        weight: Math.max(
-          0,
-          toCents(Number(item.precio) * Number(item.cantidad)),
-        ),
-      }))
-      .filter((item: any) => item.weight > 0);
-    const totalWeight = weightedItems.reduce(
-      (sum: number, item: any) => sum + item.weight,
-      0,
-    );
-    if (totalWeight <= 0) return 0;
-
-    const totalWeightBigInt = BigInt(totalWeight);
-    const shares = weightedItems.map((item: any) => {
-      const numerator = BigInt(amountCents) * BigInt(item.weight);
-      return {
-        ...item,
-        cents: Number(numerator / totalWeightBigInt),
-        remainder: numerator % totalWeightBigInt,
-      };
-    });
-    let undistributed = amountCents - shares.reduce(
-      (sum: number, share: any) => sum + share.cents,
-      0,
-    );
-    shares.sort((left: any, right: any) => {
-      if (left.remainder === right.remainder) return left.id - right.id;
-      return left.remainder > right.remainder ? -1 : 1;
-    });
-    for (let index = 0; index < shares.length && undistributed > 0; index += 1) {
-      shares[index].cents += 1;
-      undistributed -= 1;
-    }
-
-    return shares
-      .filter((share: any) => share.isTarget)
-      .reduce((sum: number, share: any) => sum + share.cents, 0);
-  };
+  ) => allocateCartAmountToReferenceCents(
+    carritoId,
+    amountCents,
+    "habitacion",
+    reservationId,
+    transaction,
+  );
 
   let approvedCents = 0;
   let processingCents = 0;
@@ -410,18 +434,32 @@ export const eventFinancialExposure = async (
   let approvedCents = 0;
   let processingCents = 0;
   for (const payment of uniquePayments as any[]) {
-    const paymentCents = Math.round(Number(payment.monto) * 100);
+    const paymentCents = toCents(payment.monto);
+    const carritoId = Number(payment.carrito_id);
     if (payment.estado === "procesando") {
-      processingCents += paymentCents;
+      processingCents += await allocateCartAmountToReferenceCents(
+        carritoId,
+        paymentCents,
+        "evento",
+        reservationId,
+        transaction,
+        true,
+      );
       continue;
     }
 
-    approvedCents += Math.max(
+    const approvedNetCents = Math.max(
       0,
       paymentCents -
-        Math.round(
-          Number(refundedByPayment.get(Number(payment.id)) ?? 0) * 100,
-        ),
+        toCents(refundedByPayment.get(Number(payment.id)) ?? 0),
+    );
+    approvedCents += await allocateCartAmountToReferenceCents(
+      carritoId,
+      approvedNetCents,
+      "evento",
+      reservationId,
+      transaction,
+      true,
     );
   }
 
@@ -931,7 +969,7 @@ const eventExposureBalance = async (
       reservation,
     ]),
   );
-  let remaining = Number.POSITIVE_INFINITY;
+  let remainingCents = 0;
 
   for (const reservationId of details.eventReservationIds as number[]) {
     const reservation = reservationsById.get(Number(reservationId));
@@ -946,13 +984,13 @@ const eventExposureBalance = async (
       Number(reservationId),
       transaction,
     );
-    remaining = Math.min(
-      remaining,
-      Math.max(0, Number(reservation.total) - exposure.total),
+    remainingCents += Math.max(
+      0,
+      toCents(reservation.total) - toCents(exposure.total),
     );
   }
 
-  return { remaining: round(remaining) };
+  return { remaining: round(remainingCents / 100) };
 };
 
 const applyCartPaid = async (origin: any, total: number, paid: number, transaction: any) => {
