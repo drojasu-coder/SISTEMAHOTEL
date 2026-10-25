@@ -120,6 +120,86 @@ const minutesToTime = (
   )}:00`;
 };
 
+const THERAPIST_BUFFER_MINUTES = 15;
+
+const assertTherapistAvailability = async ({
+  therapistId,
+  date,
+  startTime,
+  endTime,
+  transaction,
+  excludeAppointmentId,
+}: {
+  therapistId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  transaction: any;
+  excludeAppointmentId?: number;
+}) => {
+  const startMinutes =
+    timeToMinutes(startTime);
+  const endMinutes =
+    timeToMinutes(endTime);
+  const bufferedStart =
+    minutesToTime(
+      Math.max(
+        startMinutes -
+          THERAPIST_BUFFER_MINUTES,
+        0
+      )
+    );
+  const bufferedEnd =
+    minutesToTime(
+      endMinutes +
+        THERAPIST_BUFFER_MINUTES
+    );
+
+  const overlap =
+    await CitaBienestar.findOne({
+      where: {
+        terapeuta_id:
+          therapistId,
+        fecha:
+          date,
+        estado:
+          "confirmada",
+        ...(excludeAppointmentId !==
+        undefined
+          ? {
+              id: {
+                [Op.ne]:
+                  excludeAppointmentId,
+              },
+            }
+          : {}),
+        [Op.and]: [
+          {
+            hora_inicio: {
+              [Op.lt]:
+                bufferedEnd,
+            },
+          },
+          {
+            hora_fin: {
+              [Op.gt]:
+                bufferedStart,
+            },
+          },
+        ],
+      },
+      transaction,
+    });
+
+  if (overlap) {
+    throw new AppError(
+      409,
+      "THERAPIST_BUSY_OR_BUFFER",
+      "El terapeuta no está disponible en este horario. Se requiere un tiempo de descanso de 15 minutos entre citas."
+    );
+  }
+};
+
 // ======================================================
 // CREAR CITA
 // ======================================================
@@ -200,97 +280,26 @@ export const create = async (
       servicio.duracion_minutos
     );
 
-  /*
-   * Regla de negocio:
-   * el terapeuta necesita 15 minutos
-   * de descanso entre citas.
-   */
-  const BUFFER_MINUTOS = 15;
-
-  // Ampliamos el inicio hacia atrás
-  // para proteger el descanso posterior
-  // de una cita anterior.
-  const inicioConBufferMinutos =
-    Math.max(
-      inicioMinutos -
-        BUFFER_MINUTOS,
-      0
-    );
-
-  // Ampliamos el final hacia adelante
-  // para proteger el descanso posterior
-  // de la nueva cita.
-  const finConBufferMinutos =
-    finServicioMinutos +
-    BUFFER_MINUTOS;
-
-  const inicioConBuffer =
-    minutesToTime(
-      inicioConBufferMinutos
-    );
-
   const horaFinCalculada =
     minutesToTime(
       finServicioMinutos
-    );
-
-  const horaFinConBuffer =
-    minutesToTime(
-      finConBufferMinutos
     );
 
   // ----------------------------------------------------
   // 5. Validar traslape + buffer
   // ----------------------------------------------------
 
-  const traslape =
-    await CitaBienestar.findOne({
-      where: {
-        terapeuta_id:
-          data.terapeuta_id,
-
-        fecha:
-          data.fecha,
-
-        estado:
-          "confirmada",
-
-        /*
-         * Hay conflicto cuando:
-         *
-         * inicio existente <
-         * final nueva cita + buffer
-         *
-         * Y
-         *
-         * final existente >
-         * inicio nueva cita - buffer
-         */
-        [Op.and]: [
-          {
-            hora_inicio: {
-              [Op.lt]:
-                horaFinConBuffer,
-            },
-          },
-          {
-            hora_fin: {
-              [Op.gt]:
-                inicioConBuffer,
-            },
-          },
-        ],
-      },
-      transaction,
-    });
-
-  if (traslape) {
-    throw new AppError(
-      409,
-      "THERAPIST_BUSY_OR_BUFFER",
-      "El terapeuta no está disponible en este horario. Se requiere un tiempo de descanso de 15 minutos entre citas."
-    );
-  }
+  await assertTherapistAvailability({
+    therapistId:
+      data.terapeuta_id,
+    date:
+      data.fecha,
+    startTime:
+      data.hora_inicio,
+    endTime:
+      horaFinCalculada,
+    transaction,
+  });
 
   // ----------------------------------------------------
   // 6. Crear la cita
@@ -375,6 +384,51 @@ export const updateStatus = async (
             "La cita tiene un pago en procesamiento y no puede cancelarse"
           );
         }
+      }
+
+      if (
+        data.estado === "confirmada" &&
+        cita.estado !== "confirmada"
+      ) {
+        const terapeuta =
+          await Terapeuta.findByPk(
+            cita.terapeuta_id,
+            {
+              transaction,
+              lock:
+                transaction.LOCK.UPDATE,
+            }
+          );
+
+        if (!terapeuta) {
+          throw new AppError(
+            404,
+            "THERAPIST_NOT_FOUND",
+            "El terapeuta no existe"
+          );
+        }
+
+        if (!terapeuta.activo) {
+          throw new AppError(
+            422,
+            "THERAPIST_INACTIVE",
+            "El terapeuta seleccionado se encuentra inactivo"
+          );
+        }
+
+        await assertTherapistAvailability({
+          therapistId:
+            cita.terapeuta_id,
+          date:
+            cita.fecha,
+          startTime:
+            cita.hora_inicio,
+          endTime:
+            cita.hora_fin,
+          transaction,
+          excludeAppointmentId:
+            cita.id,
+        });
       }
 
       await cita.update(

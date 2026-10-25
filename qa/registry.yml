@@ -5729,6 +5729,183 @@ findings:
     verified_at: "2026-10-25"
     next_step: qa-focused.ps1 + qa-regression.ps1
 
+  - id: QA-SPA-FUNC-CANDIDATE-048
+    status: closed
+    severity: high
+    category: FUNC
+    invariant: >-
+      Para el mismo terapeuta puede existir como máximo una CitaBienestar en
+      estado confirmada dentro de una ventana incompatible según el buffer
+      productivo de 15 minutos, tanto al crear una cita como al reactivar una
+      cita cancelada mediante PATCH de estado.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.reactivationOverlap.test.ts
+      test_name: "QA-SPA-FUNC-CANDIDATE-048: rechaza reactivar una cita cancelada si el terapeuta ya tiene una cita confirmada incompatible"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.reactivationOverlap.test.ts
+      create_endpoint: POST /api/citas-spa
+      status_endpoint: PATCH /api/citas-spa/{id}/estado
+      client_id: 1
+      admin_id: 2
+      therapist_id: 1
+      service_id: 1
+      service_duration_minutes: 60
+      target_date: "2026-11-24"
+      target_start: "10:00:00"
+      target_end: "11:00:00"
+      buffer_minutes: 15
+      appointment_a_id: 1
+      appointment_b_id: 2
+    expected:
+      reactivation_http_status: 409
+      reactivation_code: THERAPIST_BUSY_OR_BUFFER
+      appointment_a_final_state: cancelada
+      appointment_b_final_state: confirmada
+      confirmed_overlap_count_max: 1
+      unexpected_500: false
+    actual:
+      appointment_a_create_http: 201
+      appointment_a_state_before_cancel: confirmada
+      appointment_a_cancel_http: 200
+      appointment_a_state_after_cancel: cancelada
+      appointment_b_create_http: 201
+      appointment_b_state_before_reactivation: confirmada
+      reactivation_http_status: 200
+      reactivation_code: NONE
+      appointment_a_final_state: confirmada
+      appointment_b_final_state: confirmada
+      confirmed_overlap_count: 2
+      confirmed_ids:
+        - 1
+        - 2
+      unexpected_500: false
+      double_booking: true
+    http_evidence: >-
+      La cita A fue creada confirmada con HTTP 201 y cancelada por el admin con
+      HTTP 200. La cita B se creó confirmada con HTTP 201 en el mismo terapeuta,
+      servicio, fecha y hora. El PATCH de A de cancelada a confirmada respondió
+      HTTP 200 sin código de error en vez de rechazar la reactivación con 409.
+    database_evidence: >-
+      La consulta directa a PostgreSQL sobre citas_bienestar para
+      terapeuta_id=1, fecha=2026-11-24, estado=confirmada, hora_inicio <
+      11:15:00 y hora_fin > 09:45:00 encontró dos filas: IDs 1 y 2, ambas con
+      inicio 10:00:00, fin 11:00:00, servicio_bienestar_id=1 y estado
+      confirmada. El máximo permitido era 1.
+    lock_observation:
+      cita_for_update_in_update_status: true
+      therapist_for_update_in_update_status: false
+      overlap_check_in_update_status: false
+    suspected_execution_path: >-
+      PATCH /api/citas-spa/{id}/estado atraviesa autenticación, autorización
+      admin, validación, citaSpa.controller.updateStatus y
+      citaSpa.service.updateStatus. El servicio abre una transacción y bloquea
+      únicamente la fila de CitaBienestar objetivo con SELECT FOR UPDATE, pero
+      al pasar de cancelada a confirmada no bloquea la fila Terapeuta ni repite
+      la consulta de solape y buffer usada por create; actualiza estado
+      directamente, permitiendo que A y B queden confirmadas en la misma
+      ventana.
+    red_result: >-
+      CONFIRMED: el test enfocado falló con PATCH HTTP 200, A y B confirmadas y
+      dos filas incompatibles persistidas; no hubo respuestas HTTP 500.
+    confirmed_at: "2026-10-25"
+    root_cause: >-
+      updateStatus serializaba la CitaBienestar objetivo para proteger la
+      cancelación financiera de 047, pero cualquier transición desde un estado
+      distinto hacia confirmada actualizaba directamente la fila. No bloqueaba
+      el Terapeuta, no validaba que existiera y estuviera activo ni reutilizaba
+      el predicado de solape con buffer empleado por create, por lo que una cita
+      cancelada podía reactivarse sobre otra cita confirmada incompatible.
+    fix: >-
+      Se extrajo una única validación de disponibilidad que conserva el rango y
+      las comparaciones estrictas de CREATE. CREATE y reactivación usan ahora el
+      mismo predicado. Al reactivar, updateStatus mantiene el lock de la cita,
+      obtiene el Terapeuta asociado con SELECT FOR UPDATE, aplica los mismos
+      errores de existencia/actividad de CREATE, consulta solo citas confirmadas
+      con buffer de 15 minutos excluyendo el ID objetivo y actualiza el estado
+      únicamente cuando la ventana sigue disponible.
+    validation_layer: citaSpa.service.updateStatus
+    shared_overlap_helper: assertTherapistAvailability
+    reactivation_rule: >-
+      Solo cuando estado solicitado es confirmada y el estado persistido actual
+      no es confirmada se serializa el Terapeuta y se revalida su ventana
+      almacenada fecha/hora_inicio/hora_fin. Un conflicto responde HTTP 409
+      THERAPIST_BUSY_OR_BUFFER y la transacción conserva la cita en su estado
+      previo; no se cambian campos temporales ni recursos y no se cancela ni
+      reasigna la cita competidora.
+    therapist_serialization: >-
+      La reactivación obtiene Terapeuta con SELECT FOR UPDATE dentro de la misma
+      transacción que bloqueó la CitaBienestar objetivo, consulta solapes y
+      actualiza el estado. CREATE conserva Terapeuta SELECT FOR UPDATE antes de
+      consultar solapes e insertar, por lo que ambos flujos compiten sobre la
+      misma fila canónica del terapeuta.
+    therapist_missing_http: 404
+    therapist_missing_code: THERAPIST_NOT_FOUND
+    therapist_inactive_http: 422
+    therapist_inactive_code: THERAPIST_INACTIVE
+    buffer_minutes: 15
+    overlap_state: confirmada
+    overlap_predicate: >-
+      existing.hora_inicio < effective_end + 15 minutos AND
+      existing.hora_fin > max(effective_start - 15 minutos, 00:00:00).
+    strict_boundaries_preserved: true
+    stored_effective_range_used_for_reactivation: true
+    self_exclusion: true
+    self_exclusion_operator: id != cita.id
+    transaction_scope: >-
+      BEGIN -> CitaBienestar objetivo SELECT FOR UPDATE -> Terapeuta asociado
+      SELECT FOR UPDATE -> validación activo -> lectura de solape confirmada con
+      exclusión propia -> rechazo y ROLLBACK, o CitaBienestar UPDATE y COMMIT.
+    lock_order: >-
+      CREATE sigue Terapeuta -> lectura de solape -> INSERT de nueva cita;
+      cancelación sigue CitaBienestar -> lecturas MVCC de exposición financiera
+      -> UPDATE o 409; reactivación sigue CitaBienestar -> Terapeuta -> lectura
+      de solape excluyendo la cita -> UPDATE o 409. Pago conserva Carrito ->
+      CitaBienestar y no toma Terapeuta.
+    deadlock_analysis: >-
+      No se identificó ciclo concreto. CREATE nunca bloquea una CitaBienestar
+      existente después de Terapeuta; el ciclo de vida de Terapeuta consulta
+      citas sin bloquearlas; pago no toma Terapeuta. Reactivación no consulta ni
+      bloquea Carrito/Pago y cancelación no toma Terapeuta. Dos reactivaciones
+      pueden bloquear citas distintas, pero se serializan en Terapeuta y ninguna
+      intenta después obtener el lock de la cita objetivo de la otra.
+    deadlock_cycle_found: false
+    green_result:
+      reactivation_http_status: 409
+      reactivation_code: THERAPIST_BUSY_OR_BUFFER
+      appointment_a_final_state: cancelada
+      appointment_b_final_state: confirmada
+      confirmed_overlap_count: 1
+      confirmed_overlap_count_max: 1
+      double_booking: false
+      unexpected_500: false
+    regressions:
+      official_048_focused: "PASS; 1 file passed, 1 test passed"
+      official_044: "PASS; 1 file passed, 1 test passed"
+      official_045: "PASS; 1 file passed, 1 test passed; máximo permitido 1"
+      official_045_distribution: "no emitida por el reporter predeterminado"
+      official_046: "PASS; 1 file passed, 1 test passed"
+      official_047: "PASS; 1 file passed, 1 test passed; cancelación segura"
+      bienestar_aggregate: "PASS; 5 files passed, 5 tests passed"
+      typecheck: pass
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --noEmit --project
+        backend/tsconfig.json
+      db_guard_occurrences: 6
+      db_guard_breakdown: >-
+        6 ejecuciones GREEN mostraron database=hotel_test_db y entorno seguro:
+        048, 044, 045, 046, 047 y agregado de los cinco archivos.
+    production_files_modified:
+      - backend/src/services/bienestar/citaSpa.service.ts
+    migrations_modified: false
+    existing_tests_modified: false
+    pago_service_modified: false
+    verified_at: "2026-10-25"
+    next_step: manual diff review
+
   - id: QA-SPA-FIN-CANDIDATE-047
     status: closed
     severity: high
