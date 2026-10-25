@@ -5727,3 +5727,122 @@ findings:
       test_file_modified: false
       migrations_modified: false
       verified_at: "2026-10-25"
+
+  - id: QA-TR-DATA-CANDIDATE-043
+    status: closed
+    severity: high
+    category: DATA
+    title: >-
+      Un vehículo puede reducir su capacidad por debajo del número de pasajeros
+      de una ReservaTransporte futura confirmada que ya tiene asignada
+    invariant: >-
+      Toda ReservaTransporte confirmada debe conservar un vehículo cuya capacidad
+      sea suficiente para ReservaTransporte.numero_pasajeros; Vehiculo.capacidad
+      >= ReservaTransporte.numero_pasajeros debe cumplirse siempre, incluso tras
+      modificaciones administrativas.
+    approved_product_rule:
+      future_confirmed_reservations_block_capacity_reduction: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/transporte/vehiculo.lifecycle.test.ts
+      test_name: "QA-TR-DATA-CANDIDATE-043: rechaza reducir la capacidad por debajo de pasajeros de reserva futura confirmada"
+      command: >-
+        npm --prefix backend test -- tests/transporte/vehiculo.lifecycle.test.ts
+      dynamic_scenario: "fecha y hora local + 7 días, vehículo con capacidad 4 y reserva confirmada con 4 pasajeros"
+    expected:
+      patch_http_status: 409
+      patch_error_code: VEHICLE_CAPACITY_CONFLICT
+      vehicle_capacity_after_attempt: 4
+      reservation_state_after_attempt: confirmada
+      reservation_passengers_after_attempt: 4
+      reservation_vehicle_preserved: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+      passengers_exceed_capacity: false
+    actual_before_fix:
+      current_datetime: "2026-10-25T06:31:34.645Z"
+      reservation_start: "2026-11-01T06:31:00.000Z"
+      is_future: true
+      patch_http_status: 200
+      patch_error_code: null
+      vehicle_capacity_after_attempt: 1
+      reservation_state_after_attempt: confirmada
+      reservation_passengers_after_attempt: 4
+      reservation_vehicle_after: 1
+      automatic_cancellation: false
+      automatic_reassignment: false
+      passengers_exceed_vehicle_capacity: true
+      business_rule_violation: true
+    http_evidence: >-
+      Una reserva futura para 4 pasajeros con vehículo de capacidad 4 fue creada por
+      POST /api/reservas-transporte con HTTP 201 en estado confirmada y vehiculo_id=1.
+      PATCH /api/vehiculos/1 con capacidad=1 recibió HTTP 200 sin código de error,
+      en lugar de HTTP 409.
+    database_evidence: >-
+      Consultas directas de PostgreSQL confirmaron antes del PATCH vehículo con
+      capacidad=4 y reserva confirmada con numero_pasajeros=4. Después del PATCH,
+      el vehículo quedó con capacidad=1 mientras la reserva futura continuó
+      confirmada con vehiculo_id=1 y numero_pasajeros=4; no hubo cancelación ni
+      reasignación automática, quedando 4 pasajeros asignados a un vehículo de capacidad 1.
+    endpoint: PATCH /api/vehiculos/{id}
+    suspected_execution_path: >-
+      vehiculo.routes -> vehiculo.controller.update ->
+      vehiculo.service.update; el servicio obtiene el vehículo con findByPk y ejecuta
+      vehiculo.update(data) sin transacción, sin bloqueo de fila y sin consultar
+      el número de pasajeros de las reservas de transporte futuras confirmadas asignadas al vehículo.
+    red_result: >-
+      1 test failed con tres aserciones de evidencia fallidas: HTTP 200 en lugar
+      de 409, código VEHICLE_CAPACITY_CONFLICT ausente y vehículo persistido con
+      capacidad=1 en lugar de 4. La reserva permaneció confirmada con 4 pasajeros
+      asignada al vehículo con capacidad reducida a 1.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    root_cause: >-
+      vehiculo.service.update actualizaba directamente las propiedades del vehículo
+      mediante vehiculo.update(data) sin transacción, sin bloqueo FOR UPDATE y
+      sin validar si una reducción de capacidad dejaba sin capacidad suficiente
+      a reservas de transporte futuras confirmadas ya asignadas al vehículo.
+    fix: >-
+      update encapsula la mutación dentro de sequelize.transaction adquiriendo
+      bloqueo de fila SELECT FOR UPDATE sobre Vehiculo. Si data.capacidad es un
+      número menor que la capacidad actual del vehículo (proposedCapacity < currentCapacity),
+      consulta dentro de la misma transacción sobre ReservaTransporte si existe alguna
+      reserva con vehiculo_id, estado=confirmada, fecha_hora > NOW() y
+      numero_pasajeros > data.capacidad. Si se encuentra, revierte y arroja
+      AppError(409, "VEHICLE_CAPACITY_CONFLICT"). Si no existe conflicto o no se
+      reduce la capacidad, permite vehiculo.update(data, { transaction }) y hace commit.
+    validation_layer: service
+    proposed_capacity_strategy: >-
+      Evalúa únicamente reducciones efectivas de capacidad (typeof data.capacidad === 'number'
+      && data.capacidad < vehiculo.capacidad); no bloquea modificaciones que no alteran
+      capacidad ni aumentos de capacidad.
+    future_reservation_definition: fecha_hora > NOW() (Op.gt new Date()) en reservas_transporte
+    blocking_state: estado = confirmada
+    transaction_scope: >-
+      sequelize.transaction alrededor de SELECT FOR UPDATE de Vehiculo, consulta
+      de ReservaTransporte conflictiva y vehiculo.update
+    locking_strategy: SELECT ... FOR UPDATE sobre la fila del Vehiculo en actualización
+    automatic_cancellation: false
+    automatic_reassignment: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      patch_http_status: 409
+      patch_error_code: VEHICLE_CAPACITY_CONFLICT
+      vehicle_capacity_after_attempt: 4
+      reservation_state_after_attempt: confirmada
+      reservation_passengers_after_attempt: 4
+      reservation_vehicle_preserved: true
+      passengers_exceed_capacity: false
+      business_rule_violation: false
+      041_regression: "1 file passed, 1 test passed; DRIVER_OVERLAP_COUNT=1, VEHICLE_OVERLAP_COUNT=1"
+      042_regression: "1 file passed, 1 test passed; 409 DRIVER_HAS_FUTURE_RESERVATIONS"
+      related_transport_tests: "3 files passed, 3 tests passed"
+      typecheck: pass
+      test_file_modified: false
+      migrations_modified: false
+      verified_at: "2026-10-25"
