@@ -5611,8 +5611,8 @@ findings:
       verified_at: "2026-10-22"
 
   - id: QA-TR-CONC-CANDIDATE-041
-    status: corrected
-    result: CORRECTED
+    status: closed
+    result: CLOSED
     severity: high
     category: CONC
     classification: BACKEND DEFECT
