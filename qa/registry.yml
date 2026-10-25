@@ -1790,6 +1790,256 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-AUTH-SEC-CANDIDATE-034
+    status: closed
+    severity: medium
+    category: SECURITY
+    title: >-
+      Login y registro públicos carecen de límite de solicitudes por IP
+    approved_product_rule:
+      login: { max_requests: 10, window_minutes: 15 }
+      register: { max_requests: 5, window_minutes: 30 }
+      scope: { key: IP }
+      response: { http: 429, code: TOO_MANY_REQUESTS }
+      storage_current_architecture: in_memory
+      future_distributed_architecture: Redis_or_gateway_WAF
+    invariant: >-
+      Desde una misma IP, POST /api/auth/login admite como máximo 10 solicitudes
+      en 15 minutos y la solicitud 11 responde HTTP 429 TOO_MANY_REQUESTS. POST
+      /api/auth/register admite como máximo 5 solicitudes en 30 minutos y la
+      solicitud 6 responde HTTP 429 TOO_MANY_REQUESTS sin crear un usuario.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/auth/authRateLimit.test.ts
+      test_name: "QA-AUTH-SEC-CANDIDATE-034: limita login y register por IP"
+      command: >-
+        npm --prefix backend test -- tests/auth/authRateLimit.test.ts
+      request_mode: sequential_and_rapid
+      request_ip: NOT_OBSERVABLE
+      x_forwarded_for_used: false
+      real_waits_used: false
+      stripe_used: false
+      payments_used: false
+      cart_used: false
+    expected:
+      login_first_10: "10x HTTP 401 INVALID_CREDENTIALS"
+      login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+      register_first_5: "5x HTTP 201"
+      register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+      persisted_register_users: 5
+      unexpected_500: false
+    actual:
+      login_first_10: "10x HTTP 401 INVALID_CREDENTIALS"
+      login_request_11: "HTTP 401 INVALID_CREDENTIALS"
+      login_request_11_reached_auth_flow: true
+      bcrypt_compare_calls: NOT_OBSERVABLE
+      register_first_5: "5x HTTP 201"
+      register_request_6: "HTTP 201; code null"
+      register_request_6_reached_register_flow: true
+      persisted_register_users: 6
+      users_created_before_cleanup: 7
+      users_created_detail: "1 fixture de login y 6 usuarios por register"
+      unexpected_500: false
+      rate_limit_currently_present: false
+      login_limit_violation: true
+      register_limit_violation: true
+      red_result: >-
+        1 archivo falló, 1 test falló con 5 aserciones soft: login 11 no devolvió
+        429/código esperado, register 6 no devolvió 429/código esperado y el sexto
+        usuario quedó persistido en PostgreSQL.
+    http_evidence:
+      login_requests_executed: 11
+      login_first_10_distribution: "401=10"
+      login_request_11_status: 401
+      login_request_11_code: INVALID_CREDENTIALS
+      register_requests_executed: 6
+      register_first_5_distribution: "201=5"
+      register_request_6_status: 201
+      register_request_6_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      login_fixture_email: qa034-login@example.test
+      register_emails_persisted:
+        - qa034-register-01@example.test
+        - qa034-register-02@example.test
+        - qa034-register-03@example.test
+        - qa034-register-04@example.test
+        - qa034-register-05@example.test
+        - qa034-register-06@example.test
+      test_users_before_cleanup: 7
+      test_users_after_cleanup: 0
+      cleanup: pass
+    suspected_execution_path: >-
+      app monta authRoutes directamente en /api/auth. POST /login ejecuta
+      validateBody y authController.login, que alcanza auth.service.login y
+      bcrypt.compare en cada credencial incorrecta. POST /register ejecuta
+      validateBody y authController.register, que alcanza auth.service.register,
+      genera el hash y crea cada Usuario. Las rutas no interponen middleware de
+      rate limiting ni mantienen contadores por req.ip, por lo que todas las
+      solicitudes llegan al flujo de autenticación o registro.
+    root_cause: >-
+      Las rutas públicas POST /api/auth/login y POST /api/auth/register no tenían
+      un middleware previo a la validación y al controlador que contabilizara y
+      limitara solicitudes por req.ip; por ello cada intento alcanzaba los flujos
+      costosos de autenticación o creación de usuario.
+    correction: >-
+      Se agregó un factory de rate limiting con ventanas fijas y almacenamiento
+      en memoria por instancia, clave req.ip, reloj inyectable y limpieza
+      oportunista de entradas expiradas. auth.routes crea instancias privadas e
+      independientes: login 10 solicitudes/15 minutos y register 5
+      solicitudes/30 minutos. Ambos limiters se ejecutan antes de validateBody y
+      responden mediante AppError con HTTP 429 y código TOO_MANY_REQUESTS.
+    initial_global_regression:
+      result: fail
+      failed_files: 4
+      failed_tests: 112
+      reason: in_memory_rate_limit_state_leaked_between_tests
+      domain_regressions: false
+      source: user_confirmed
+    isolation_fix:
+      strategy: reset buckets between tests
+      reset_api: resetAuthRateLimitersForTests
+      reset_execution_point: backend/tests/setup/database.ts beforeEach
+      resets_login_bucket: true
+      resets_register_bucket: true
+      buckets_remain_independent: true
+      production_policy_changed: false
+    second_regression_run:
+      result: fail
+      passed: 389
+      failed: 1
+      reason: >-
+        un test individual de concurrencia crea suficientes usuarios autenticados
+        desde la misma IP sintética de Supertest para consumir el límite de login
+      source: user_confirmed
+    fixture_isolation_fix:
+      strategy: >-
+        resetear los buckets de autenticación inmediatamente antes del POST login
+        usado exclusivamente para autenticar fixtures de dominio
+      reset_api: resetAuthRateLimitersForTests
+      reset_execution_point: backend/tests/helpers/auth.ts createAuthenticatedUser
+      amenidad_test_auth_call_count: 20
+      same_test_exceeds_login_limit: true
+      dedicated_auth_rate_limit_test_uses_fixture_helper: false
+      production_policy_changed: false
+      final_verification:
+        database: hotel_test_db
+        db_guard_output:
+          - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+          - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+        auth_rate_limit:
+          result: "1 file passed; 1 test passed"
+          login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+          register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+        amenidad:
+          result: "1 file passed; 38 tests passed"
+          concurrency_test_36: pass
+        carrito_item: "1 file passed; 40 tests passed"
+        reserva_habitacion: "1 file passed; 36 tests passed"
+        reserva_parqueo: "1 file passed; 32 tests passed"
+        qa_032_regression: "1 file passed; 1 test passed"
+        qa_033_regression: "1 file passed; 1 test passed"
+        typecheck: pass
+        qa_034_test_modified: false
+        amenidad_test_modified: false
+        production_files_modified: []
+        test_infrastructure_files_modified:
+          - backend/tests/helpers/auth.ts
+        migrations_modified: false
+        verified_at: "2026-10-24"
+    severity_recommendation: medium
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed por las dos violaciones esperadas"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      qa_032_executed: false
+      qa_032_regression_observed: none
+      qa_033_executed: false
+      qa_033_regression_observed: none
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-23"
+    final_verification:
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused:
+        command: >-
+          npm --prefix backend test -- tests/auth/authRateLimit.test.ts
+        result: "1 file passed; 1 test passed"
+        login_first_10: "10x HTTP 401 INVALID_CREDENTIALS"
+        login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+        login_request_11_reached_auth_flow: false
+        register_first_5: "5x HTTP 201"
+        register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+        register_request_6_reached_register_flow: false
+        persisted_register_users: 5
+        users_created_before_cleanup: 6
+        users_after_cleanup: 0
+        cleanup: pass
+      qa_032:
+        command: >-
+          npm --prefix backend test -- tests/auth/facturaOwnership.test.ts
+        result: "1 file passed; 1 test passed"
+      qa_033:
+        command: >-
+          npm --prefix backend test --
+          tests/auth/proveedorFinancialReads.auth.test.ts
+        result: "1 file passed; 1 test passed"
+      related_auth:
+        command: "npm --prefix backend test -- tests/auth/auth.test.ts"
+        result: "1 file passed; 8 tests passed"
+      isolation_regression:
+        auth_rate_limit:
+          command: >-
+            npm --prefix backend test -- tests/auth/authRateLimit.test.ts
+          result: "1 file passed; 1 test passed"
+          login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+          register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+        carrito_item:
+          command: >-
+            npm --prefix backend test -- tests/carrito/carritoItem.test.ts
+          result: "1 file passed; 40 tests passed"
+        reserva_habitacion:
+          command: >-
+            npm --prefix backend test -- tests/habitaciones/reservaHabitacion.test.ts
+          result: "1 file passed; 36 tests passed"
+        reserva_parqueo:
+          command: >-
+            npm --prefix backend test -- tests/habitaciones/reservaParqueo.test.ts
+          result: "1 file passed; 32 tests passed"
+        qa_032:
+          command: >-
+            npm --prefix backend test -- tests/auth/facturaOwnership.test.ts
+          result: "1 file passed; 1 test passed"
+        qa_033:
+          command: >-
+            npm --prefix backend test --
+            tests/auth/proveedorFinancialReads.auth.test.ts
+          result: "1 file passed; 1 test passed"
+        db_guard_output:
+          - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+          - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck:
+        command: "cd backend; npx tsc --noEmit"
+        result: pass
+      production_files_modified:
+        - backend/src/middlewares/rateLimit.middleware.ts
+        - backend/src/routes/auth.routes.ts
+      test_file_modified: false
+      test_setup_files_modified:
+        - backend/tests/setup/database.ts
+      migrations_modified: false
+      verified_at: "2026-10-23"
+
   - id: QA-AUTH-SEC-CANDIDATE-033
     status: closed
     severity: high

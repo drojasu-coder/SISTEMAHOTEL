@@ -7,6 +7,7 @@ import {
   closeDatabase,
   resetDatabase,
 } from "../helpers/db";
+import { resetAuthRateLimitersForTests } from "../../src/routes/auth.routes";
 
 /**
  * Cada prueba comienza desde una BD
@@ -14,6 +15,7 @@ import {
  */
 beforeEach(
   async () => {
+    resetAuthRateLimitersForTests();
     await resetDatabase();
   }
 );
