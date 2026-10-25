@@ -11,6 +11,10 @@ import {
   Role,
 } from "../../constants/roles";
 
+import {
+  assertEventReservationCanBeMutated,
+} from "../pago.service";
+
 const db = require("../../models");
 
 const {
@@ -506,6 +510,12 @@ export const update = async (
         );
       }
 
+      await assertEventReservationCanBeMutated(
+        id,
+        transaction,
+        "La reserva de evento tiene un pago en procesamiento o confirmable y no puede modificarse"
+      );
+
       const candidate = {
         salon_id:
           data.salon_id ??
@@ -662,6 +672,12 @@ export const cancel = async (
         );
       }
 
+      await assertEventReservationCanBeMutated(
+        id,
+        transaction,
+        "La reserva de evento tiene un pago en procesamiento o confirmable y no puede cancelarse"
+      );
+
       await reserva.update(
         {
           estado:
@@ -717,6 +733,14 @@ export const updateStatus = async (
         409,
         "EVENT_RESERVATION_FINAL_STATE",
         `Una reserva en estado '${currentState}' no puede cambiar de estado`
+      );
+    }
+
+    if (estado === "cancelada") {
+      await assertEventReservationCanBeMutated(
+        id,
+        transaction,
+        "La reserva de evento tiene un pago en procesamiento o confirmable y no puede cancelarse"
       );
     }
 

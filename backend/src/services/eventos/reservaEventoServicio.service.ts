@@ -9,6 +9,10 @@ import {
   Role,
 } from "../../constants/roles";
 
+import {
+  assertEventReservationCanBeMutated,
+} from "../pago.service";
+
 const db = require("../../models");
 
 const {
@@ -263,6 +267,12 @@ export const create = async (
         reserva
       );
 
+      await assertEventReservationCanBeMutated(
+        reservaId,
+        transaction,
+        "La reserva de evento tiene un pago en procesamiento o confirmable y no pueden agregarse servicios"
+      );
+
       const servicio =
         await ServicioEvento.findByPk(
           data.servicio_evento_id,
@@ -366,6 +376,12 @@ export const update = async (
         reserva
       );
 
+      await assertEventReservationCanBeMutated(
+        reservaId,
+        transaction,
+        "La reserva de evento tiene un pago en procesamiento o confirmable y no pueden modificarse sus servicios"
+      );
+
       const item =
         await ReservaEventoServicio.findOne({
           where: {
@@ -451,6 +467,12 @@ export const remove = async (
 
       validateEditableReservation(
         reserva
+      );
+
+      await assertEventReservationCanBeMutated(
+        reservaId,
+        transaction,
+        "La reserva de evento tiene un pago en procesamiento o confirmable y no pueden eliminarse sus servicios"
       );
 
       const item =

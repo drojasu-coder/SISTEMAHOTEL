@@ -38,8 +38,27 @@ const stripeMock = vi.hoisted(() => {
     webhook,
     createPaymentIntent,
     constructEvent,
-    retrievePaymentIntent: vi.fn(),
-    cancelPaymentIntent: vi.fn(),
+    retrievePaymentIntent: vi.fn(async (id: string) => {
+      const it = intents.get(id);
+      if (!it) {
+        return {
+          id,
+          status: "requires_payment_method",
+          client_secret: `${id}_secret_qa_local`,
+          amount: 500000,
+          currency: "gtq",
+        };
+      }
+      return { ...it };
+    }),
+    cancelPaymentIntent: vi.fn(async (id: string) => {
+      const it = intents.get(id);
+      if (it) {
+        it.status = "canceled";
+        return { ...it };
+      }
+      return { id, status: "canceled" };
+    }),
     createRefund: vi.fn(),
   };
 });
@@ -782,5 +801,322 @@ describe("HTTP Eventos in isolated PostgreSQL (port 55433)", () => {
     await database.Carrito.destroy({ where: { id: cart1Id }, force: true });
     await database.Carrito.destroy({ where: { id: cart2Id }, force: true });
     await database.ReservaEvento.destroy({ where: { id: reservaId }, force: true });
+  });
+
+  it("Impide modificar servicios o cancelar una cotización cuando existe un intento de pago confirmable (409)", async () => {
+    // 1. Crear cotización con salón 2
+    const resRes = await request(app)
+      .post("/api/reservas-evento")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        salon_id: salon2Id,
+        tipo_evento: "ejecutivo",
+        fecha: "2026-11-20",
+        hora_inicio: "08:00",
+        hora_fin: "12:00",
+        numero_invitados: 25,
+      });
+    expect(resRes.status).toBe(201);
+    const rId = resRes.body.data.id;
+
+    // 2. Agregar servicio inicial
+    const srvAdd = await request(app)
+      .post(`/api/reservas-evento/${rId}/servicios`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_evento_id: servicioEvento1Id,
+        cantidad: 1,
+      });
+    expect(srvAdd.status).toBe(201);
+    const itemServicioId = srvAdd.body.data.item.id;
+
+    // 3. Agregar al carrito y generar pago en proceso
+    const cartRes = await request(app)
+      .post("/api/carritos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({});
+    expect(cartRes.status).toBe(201);
+    const cId = cartRes.body.data.id;
+
+    await request(app)
+      .post(`/api/carritos/${cId}/items`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        tipo_item: "evento",
+        referencia_id: rId,
+      });
+
+    const payRes = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        carrito_id: cId,
+        monto: String(srvAdd.body.data.reserva.total),
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `idemp-eventos-modblock-${Date.now()}`,
+      });
+    expect(payRes.status).toBe(201);
+    expect(payRes.body.data.estado).toBe("procesando");
+    const pagoId = Number(payRes.body.data.pago_id);
+
+    // 4. Intentar agregar otro servicio -> Debe bloquear con 409
+    const addSrvBlocked = await request(app)
+      .post(`/api/reservas-evento/${rId}/servicios`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_evento_id: servicioEvento2Id,
+        cantidad: 2,
+      });
+    expect(addSrvBlocked.status).toBe(409);
+    expect(addSrvBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 5. Intentar modificar cantidad del servicio existente -> Debe bloquear con 409
+    const updateSrvBlocked = await request(app)
+      .patch(`/api/reservas-evento/${rId}/servicios/${itemServicioId}`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({ cantidad: 5 });
+    expect(updateSrvBlocked.status).toBe(409);
+    expect(updateSrvBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 6. Intentar retirar el servicio -> Debe bloquear con 409
+    const deleteSrvBlocked = await request(app)
+      .delete(`/api/reservas-evento/${rId}/servicios/${itemServicioId}`)
+      .set("Authorization", `Bearer ${client1Token}`);
+    expect(deleteSrvBlocked.status).toBe(409);
+    expect(deleteSrvBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 7. Intentar modificar la cotización (horario/invitados) -> Debe bloquear con 409
+    const updateResBlocked = await request(app)
+      .patch(`/api/reservas-evento/${rId}`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({ numero_invitados: 30 });
+    expect(updateResBlocked.status).toBe(409);
+    expect(updateResBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 8. Intentar cancelar por cliente -> Debe bloquear con 409
+    const cancelResBlocked = await request(app)
+      .patch(`/api/reservas-evento/${rId}/cancelar`)
+      .set("Authorization", `Bearer ${client1Token}`);
+    expect(cancelResBlocked.status).toBe(409);
+    expect(cancelResBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 9. Intentar cancelar por admin -> Debe bloquear con 409
+    const adminCancelBlocked = await request(app)
+      .patch(`/api/reservas-evento/${rId}/estado`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ estado: "cancelada" });
+    expect(adminCancelBlocked.status).toBe(409);
+    expect(adminCancelBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // Limpieza
+    await database.Pago.destroy({ where: { id: pagoId }, force: true });
+    await database.CarritoItem.destroy({ where: { carrito_id: cId }, force: true });
+    await database.Carrito.destroy({ where: { id: cId }, force: true });
+    await database.ReservaEventoServicio.destroy({ where: { reserva_evento_id: rId }, force: true });
+    await database.ReservaEvento.destroy({ where: { id: rId }, force: true });
+  });
+
+  it("Protege cotizaciones con intentos rechazados localmente pero aún recuperables en Stripe (409)", async () => {
+    // 1. Crear cotización y agregar servicio
+    const resRes = await request(app)
+      .post("/api/reservas-evento")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        salon_id: salon2Id,
+        tipo_evento: "convivio",
+        fecha: "2026-11-22",
+        hora_inicio: "09:00",
+        hora_fin: "13:00",
+        numero_invitados: 20,
+      });
+    expect(resRes.status).toBe(201);
+    const rId = resRes.body.data.id;
+
+    const srvAdd = await request(app)
+      .post(`/api/reservas-evento/${rId}/servicios`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_evento_id: servicioEvento1Id,
+        cantidad: 1,
+      });
+    expect(srvAdd.status).toBe(201);
+    const itemServicioId = srvAdd.body.data.item.id;
+
+    // 2. Carrito y pago
+    const cartRes = await request(app)
+      .post("/api/carritos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({});
+    const cId = cartRes.body.data.id;
+
+    await request(app)
+      .post(`/api/carritos/${cId}/items`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        tipo_item: "evento",
+        referencia_id: rId,
+      });
+
+    const payRes = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        carrito_id: cId,
+        monto: String(srvAdd.body.data.reserva.total),
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `idemp-eventos-declined-${Date.now()}`,
+      });
+    expect(payRes.status).toBe(201);
+    const pagoId = Number(payRes.body.data.pago_id);
+
+    // 3. Simular fallo de tarjeta (rechazado localmente pero requires_payment_method en Stripe)
+    await database.Pago.update(
+      { estado: "rechazado", codigo_error_externo: "card_declined" },
+      { where: { id: pagoId } }
+    );
+
+    // 4. Intento de eliminar servicio debe fallar con 409
+    const deleteBlocked = await request(app)
+      .delete(`/api/reservas-evento/${rId}/servicios/${itemServicioId}`)
+      .set("Authorization", `Bearer ${client1Token}`);
+    expect(deleteBlocked.status).toBe(409);
+    expect(deleteBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 5. Intento de cancelar cotización debe fallar con 409
+    const cancelBlocked = await request(app)
+      .patch(`/api/reservas-evento/${rId}/cancelar`)
+      .set("Authorization", `Bearer ${client1Token}`);
+    expect(cancelBlocked.status).toBe(409);
+    expect(cancelBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+
+    // 6. Ahora expirar el carrito viejo: la reconciliación debe cancelar el intento en Stripe
+    await database.Carrito.update(
+      { estado: "expirado" },
+      { where: { id: cId } }
+    );
+
+    // Ahora la eliminación debe permitirse limpiamente
+    const deleteAllowed = await request(app)
+      .delete(`/api/reservas-evento/${rId}/servicios/${itemServicioId}`)
+      .set("Authorization", `Bearer ${client1Token}`);
+    expect(deleteAllowed.status).toBe(204);
+
+    // Limpieza
+    await database.Pago.destroy({ where: { id: pagoId }, force: true });
+    await database.CarritoItem.destroy({ where: { carrito_id: cId }, force: true });
+    await database.Carrito.destroy({ where: { id: cId }, force: true });
+    await database.ReservaEvento.destroy({ where: { id: rId }, force: true });
+  });
+
+  it("Serializa la carrera entre mutación y preparación del pago, y confirma válidamente con webhook", async () => {
+    // 1. Crear cotización base
+    const resRes = await request(app)
+      .post("/api/reservas-evento")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        salon_id: salon2Id,
+        tipo_evento: "boda",
+        fecha: "2026-11-28",
+        hora_inicio: "15:00",
+        hora_fin: "22:00",
+        numero_invitados: 50,
+      });
+    expect(resRes.status).toBe(201);
+    const rId = resRes.body.data.id;
+    const initialTotal = Number(resRes.body.data.total);
+
+    // 2. Carrito
+    const cartRes = await request(app)
+      .post("/api/carritos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({});
+    const cId = cartRes.body.data.id;
+
+    await request(app)
+      .post(`/api/carritos/${cId}/items`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        tipo_item: "evento",
+        referencia_id: rId,
+      });
+
+    // 3. Ejecutar concurrentemente: Añadir servicio vs Preparar Pago (createPago)
+    const [modResult, payResult] = await Promise.all([
+      request(app)
+        .post(`/api/reservas-evento/${rId}/servicios`)
+        .set("Authorization", `Bearer ${client1Token}`)
+        .send({
+          servicio_evento_id: servicioEvento1Id,
+          cantidad: 2,
+        }),
+      request(app)
+        .post("/api/pagos")
+        .set("Authorization", `Bearer ${client1Token}`)
+        .send({
+          carrito_id: cId,
+          monto: String(initialTotal),
+          metodo: "tarjeta",
+          tipo_pago: "total",
+          moneda: "GTQ",
+          idempotency_key: `idemp-eventos-race-${Date.now()}`,
+        }),
+    ]);
+
+    // La serialización por lock garantiza que uno se completó antes que el otro:
+    // Si la mutación fue primero: el pago de la tarifa anterior es rechazado con 409 PAYMENT_EXCEEDS_BALANCE (o monto difiere).
+    // Si el pago fue primero: la mutación fue rechazada con 409 EVENT_RESERVATION_HAS_ACTIVE_PAYMENT.
+    const oneBlockedWith409 =
+      (modResult.status === 409 && payResult.status === 201) ||
+      (modResult.status === 201 && payResult.status === 409);
+
+    expect(oneBlockedWith409).toBe(true);
+
+    // 4. Confirmación posterior del intento válido mediante webhook
+    if (payResult.status === 201) {
+      const pagoId = Number(payResult.body.data.pago_id);
+      const intentId = payResult.body.data.client_secret.split("_secret_")[0];
+
+      stripeMock.webhook.event = {
+        id: `evt_eventos_race_${Date.now()}`,
+        type: "payment_intent.succeeded",
+        data: {
+          object: {
+            id: intentId,
+            amount: Math.round(initialTotal * 100),
+            currency: "gtq",
+            metadata: {
+              pago_id: String(pagoId),
+            },
+          },
+        },
+      };
+
+      const hookRes = await request(app)
+        .post("/api/pagos/stripe/webhook")
+        .set("stripe-signature", "sig_qa_valid")
+        .send(stripeMock.webhook.event);
+
+      expect(hookRes.status).toBe(200);
+
+      // Verificación en BD
+      const pagoEnDb = await database.Pago.findByPk(pagoId);
+      expect(pagoEnDb.estado).toBe("aprobado");
+      expect(Number(pagoEnDb.monto)).toBe(initialTotal);
+
+      const cartEnDb = await database.Carrito.findByPk(cId);
+      expect(cartEnDb.estado).toBe("pagado");
+
+      await database.Pago.destroy({ where: { id: pagoId }, force: true });
+    }
+
+    // Limpieza
+    await database.CarritoItem.destroy({ where: { carrito_id: cId }, force: true });
+    await database.Carrito.destroy({ where: { id: cId }, force: true });
+    await database.ReservaEventoServicio.destroy({ where: { reserva_evento_id: rId }, force: true });
+    await database.ReservaEvento.destroy({ where: { id: rId }, force: true });
   });
 });

@@ -461,18 +461,23 @@ Este documento registra de forma continua el avance técnico, archivos modificad
 - **Verificación del Flujo Comercial y Reglas de Negocio:**
   - **Estados para adición al carrito:** Una reserva de evento solo puede ser agregada al carrito si se encuentra en estado no terminal (`cotizacion` o `confirmada`). Si la reserva ya posee pagos aprobados o en proceso (`procesando`), se rechaza con `409 CART_REFERENCE_NOT_AVAILABLE`.
   - **Cotización y pago:** En el backend, `payableEventStates` admite el pago tanto en estado `cotizacion` como `confirmada`. No se exige aprobación administrativa previa para pagar el anticipo/total fijado por las tarifas autoritativas de salón y servicios. La aprobación administrativa posterior revalida la disponibilidad del salón.
-  - **Anticipo, Saldo y Pago Total:**
-    - *Backend:* El servidor calcula automáticamente `total = tarifa_base + servicios` y `anticipo = round(total * 0.50)` (50%). La capa de pagos valida `ADVANCE_BELOW_REQUIRED` y `ADVANCE_REQUIRED_FIRST` según el tipo de pago.
-    - *Interfaz (Frontend):* En `CheckoutPage.tsx`, el flujo actual de cliente inicia el intento con `tipo_pago: "total"` sobre el saldo pendiente del carrito. `ResumenCheckout.tsx` muestra de forma informativa el total, anticipo requerido y saldo, sin ofrecer un selector interactivo para fraccionar el pago con tarjeta en la pasarela actual.
-  - **Mutaciones concurrentes y protección contra importes desactualizados:**
-    - Agregar o retirar servicios mientras está en `cotizacion` recalcula `total` y `anticipo` en BD.
-    - Si se cancela la reserva o cambia su importe mientras está en carrito o con un PaymentIntent pendiente:
-      - Si se cancela: la creación del pago o el checkout la rechaza con `409 EVENT_RESERVATION_NOT_AVAILABLE`.
-      - Si cambia el monto: el frontend bloquea con aviso de importe modificado (`montoDifiere`) y el backend rechaza en webhook o creación con `409 STRIPE_PAYMENT_MISMATCH`.
-      - Se reforzó `resolveEvento` en `backend/src/services/carrito/carritoItem.service.ts` con `hasCartReferenceActiveFinancialCommitment` para impedir agregar a otro carrito una reserva con pagos en estado `procesando`.
+  - **Anticipo, Saldo y Pago Total (Aclaración de Interfaz):**
+    - *Backend:* El servidor calcula automáticamente `total = tarifa_base + servicios` y `anticipo = round(total * 0.50)` (50%). La capa de pagos valida `ADVANCE_BELOW_REQUIRED` y `ADVANCE_REQUIRED_FIRST` si se envían pagos fraccionados.
+    - *Interfaz (Frontend):* En `CheckoutPage.tsx`, el checkout actual ofrece **únicamente pago total** (`tipo_pago: "total"`) sobre el saldo pendiente del carrito. Las opciones de anticipo y saldo separados **no están disponibles en la interfaz**; `ResumenCheckout.tsx` muestra esos montos exclusivamente con fines informativos.
+  - **Blindaje Financiero Previo al Cobro (Protección Integral ante Mutaciones y Cancelaciones):**
+    - Se identificó y cerró la ventana donde una cotización podía modificarse o cancelarse tras la creación de un PaymentIntent en Stripe:
+      - Se implementó `assertEventReservationCanBeMutated` en `backend/src/services/pago.service.ts` y se incorporó en `update`, `cancel` y `updateStatus` (cancelación) de `reservaEvento.service.ts`, así como en `create`, `update` y `remove` de `reservaEventoServicio.service.ts`.
+      - Se bloquea con `409 EVENT_RESERVATION_HAS_ACTIVE_PAYMENT` cualquier intento de cliente o administrador de agregar, modificar cantidades, retirar servicios adicionales, alterar fechas/horarios/capacidad o cancelar la reserva mientras exista un pago local en `procesando` o `aprobado`.
+      - Se contemplan expresamente pagos en estado `rechazado` localmente cuyo PaymentIntent en Stripe permanezca en `requires_payment_method`, `requires_confirmation`, `requires_action` o `processing` (recuperables en caliente en la misma sesión de checkout).
+      - Se preserva el flujo seguro de reconciliación: si el carrito expiró o fue cancelado, el PaymentIntent huérfano se cancela limpiamente en Stripe (`cancelPaymentIntent`), liberando la reserva para ser modificada o cancelada sin bloqueos perpetuos.
+      - Se eliminó la carrera entre `createPago` y la modificación/cancelación de la cotización mediante la incorporación de `lockEventReservations` en `validateOpenOrigin` (`pago.service.ts`), adquiriendo bloqueo pesimista de fila (`LOCK.UPDATE`) sobre las `ReservaEvento` del carrito en orden canónico determinista (`id ASC`).
 - **Evidencias y Pruebas Ejecutadas:**
   - **Entorno aislado PostgreSQL (puerto 55433):**
-    - `backend/tests/integration/postgres.eventos.http.test.ts` (**19/19 pruebas aprobadas, 100%**), incluyendo la nueva prueba de bloqueo ante estado `procesando`.
+    - `backend/tests/integration/postgres.eventos.http.test.ts` (**22/22 pruebas aprobadas, 100%**), incluyendo:
+      1. Bloqueo de agregar a otro carrito una reserva con pago procesando (409).
+      2. Bloqueo de modificar servicios, datos o cancelar ante intento confirmable (409).
+      3. Bloqueo de mutaciones ante intentos rechazados localmente pero recuperables en Stripe (409), con desbloqueo limpio al expirar el carrito y cancelarse en pasarela.
+      4. Serialización estricta por row lock de la carrera concurrente entre preparación de pago y mutación de cotización, con confirmación final de pago exitoso por webhook.
   - **Suites Unitarias de Eventos (Backend):**
     - `backend/tests/eventos/reservaEvento.test.ts`: **40/40 pruebas aprobadas**.
     - `backend/tests/eventos/reservaEventoServicio.test.ts`: **39/39 pruebas aprobadas**.

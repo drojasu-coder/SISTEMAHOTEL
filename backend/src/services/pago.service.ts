@@ -490,6 +490,214 @@ export const hasCartReferenceActiveFinancialCommitment = async (
   return false;
 };
 
+export const assertEventReservationCanBeMutated = async (
+  reservaId: number,
+  transaction: any,
+  actionMessage?: string,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    "evento",
+    reservaId,
+    transaction,
+  );
+
+  if (cartIds.length === 0) {
+    return;
+  }
+
+  const payments = await Pago.findAll({
+    where: {
+      carrito_id: { [Op.in]: cartIds },
+      estado: {
+        [Op.in]: [
+          "aprobado",
+          "reembolsado_parcial",
+          "reembolsado",
+          "procesando",
+          "pendiente",
+          "rechazado",
+        ],
+      },
+    },
+    order: [["id", "ASC"]],
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  for (const payment of payments as any[]) {
+    const isApproved = [
+      "aprobado",
+      "reembolsado_parcial",
+      "reembolsado",
+    ].includes(String(payment.estado));
+
+    if (isApproved) {
+      const netApproved = Number(
+        await approvedCartAmount(payment.carrito_id, transaction),
+      );
+      if (netApproved > 0) {
+        throw new AppError(
+          409,
+          "EVENT_RESERVATION_HAS_ACTIVE_PAYMENT",
+          actionMessage ??
+            "La reserva de evento ya posee pagos asociados y no puede modificarse",
+        );
+      }
+      continue;
+    }
+
+    if (payment.estado === "procesando" || payment.estado === "pendiente") {
+      if (payment.metodo === "tarjeta" && payment.id_transaccion_externo) {
+        try {
+          const intent = await stripeService.retrievePaymentIntent(
+            payment.id_transaccion_externo,
+          );
+          if (intent.status === "canceled") {
+            await payment.update({ estado: "cancelado" }, { transaction });
+            continue;
+          }
+          if (intent.status === "succeeded") {
+            await payment.update(
+              {
+                estado: "aprobado",
+                fecha_pago: new Date(),
+                codigo_error_externo: null,
+                mensaje_error: null,
+              },
+              { transaction },
+            );
+            throw new AppError(
+              409,
+              "EVENT_RESERVATION_HAS_ACTIVE_PAYMENT",
+              actionMessage ??
+                "La reserva de evento ya posee pagos asociados y no puede modificarse",
+            );
+          }
+          const cart = await Carrito.findByPk(payment.carrito_id, {
+            transaction,
+          });
+          if (
+            cart &&
+            ["expirado", "cancelado"].includes(
+              String(cart.estado).toLowerCase(),
+            ) &&
+            intent.status !== "processing"
+          ) {
+            try {
+              const canceled = await stripeService.cancelPaymentIntent(
+                payment.id_transaccion_externo,
+              );
+              if (canceled?.status === "canceled") {
+                await payment.update(
+                  { estado: "cancelado" },
+                  { transaction },
+                );
+                continue;
+              }
+            } catch {
+              // si no se pudo cancelar en Stripe, se mantiene activo
+            }
+          }
+        } catch (err: any) {
+          if (err instanceof AppError) throw err;
+        }
+      }
+
+      throw new AppError(
+        409,
+        "EVENT_RESERVATION_HAS_ACTIVE_PAYMENT",
+        actionMessage ??
+          "La reserva de evento tiene un pago en procesamiento y no puede modificarse",
+      );
+    }
+
+    if (payment.estado === "rechazado") {
+      if (payment.metodo === "tarjeta" && payment.id_transaccion_externo) {
+        try {
+          const intent = await stripeService.retrievePaymentIntent(
+            payment.id_transaccion_externo,
+          );
+          if (intent.status === "canceled") {
+            await payment.update({ estado: "cancelado" }, { transaction });
+            continue;
+          }
+          if (intent.status === "succeeded") {
+            await payment.update(
+              {
+                estado: "aprobado",
+                fecha_pago: new Date(),
+                codigo_error_externo: null,
+                mensaje_error: null,
+              },
+              { transaction },
+            );
+            throw new AppError(
+              409,
+              "EVENT_RESERVATION_HAS_ACTIVE_PAYMENT",
+              actionMessage ??
+                "La reserva de evento ya posee pagos asociados y no puede modificarse",
+            );
+          }
+          if (
+            [
+              "requires_payment_method",
+              "requires_confirmation",
+              "requires_action",
+              "processing",
+            ].includes(intent.status)
+          ) {
+            const cart = await Carrito.findByPk(payment.carrito_id, {
+              transaction,
+            });
+            if (
+              cart &&
+              ["expirado", "cancelado"].includes(
+                String(cart.estado).toLowerCase(),
+              ) &&
+              intent.status !== "processing"
+            ) {
+              try {
+                const canceled = await stripeService.cancelPaymentIntent(
+                  payment.id_transaccion_externo,
+                );
+                if (canceled?.status === "canceled") {
+                  await payment.update(
+                    { estado: "cancelado" },
+                    { transaction },
+                  );
+                  continue;
+                }
+              } catch {
+                // Si la cancelación falló, retiene capacidad
+              }
+            }
+
+            throw new AppError(
+              409,
+              "EVENT_RESERVATION_HAS_ACTIVE_PAYMENT",
+              actionMessage ??
+                "La reserva de evento tiene un intento de pago confirmable en pasarela y no puede modificarse",
+            );
+          }
+        } catch (err: any) {
+          if (err instanceof AppError) throw err;
+          const cart = await Carrito.findByPk(payment.carrito_id, {
+            transaction,
+          });
+          if (cart && cart.estado === "activo") {
+            throw new AppError(
+              409,
+              "EVENT_RESERVATION_HAS_ACTIVE_PAYMENT",
+              actionMessage ??
+                "La reserva de evento tiene un intento de pago pendiente en pasarela",
+            );
+          }
+        }
+      }
+    }
+  }
+};
+
 export const isReservationFullyPaid = async (
   reservationId: number,
   reservationTotal: number | string,
@@ -676,6 +884,49 @@ const lockRoomReservations = async (
   return reservations;
 };
 
+const eventReservationIdsForCart = async (
+  carritoId: number,
+  transaction: any,
+) => {
+  const eventItems = await CarritoItem.findAll({
+    where: {
+      carrito_id: carritoId,
+      tipo_item: "evento",
+    },
+    attributes: ["referencia_id"],
+    order: [["referencia_id", "ASC"]],
+    transaction,
+  });
+
+  return [
+    ...new Set<number>(
+      (eventItems as any[]).map((item: any) => Number(item.referencia_id)),
+    ),
+  ].sort((left, right) => left - right);
+};
+
+const lockEventReservations = async (
+  reservationIds: number[],
+  transaction: any,
+) => {
+  const reservations = [];
+  for (const reservationId of reservationIds) {
+    const reservation = await ReservaEvento.findByPk(reservationId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!reservation) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La reserva de evento seleccionada ya no se encuentra disponible",
+      );
+    }
+    reservations.push(reservation);
+  }
+  return reservations;
+};
+
 const validateOpenOrigin = async (
   data: CreatePagoData,
   transaction: any,
@@ -702,6 +953,13 @@ const validateOpenOrigin = async (
     const roomReservations = serializeRoomExposure
       ? await lockRoomReservations(roomReservationIds, transaction)
       : [];
+    const eventReservationIds = await eventReservationIdsForCart(
+      cart.id,
+      transaction,
+    );
+    const eventReservations = serializeRoomExposure
+      ? await lockEventReservations(eventReservationIds, transaction)
+      : [];
     const totals = await cartTotals(cart.id, transaction, allowPaid);
     return {
       key: { carrito_id: cart.id },
@@ -709,6 +967,8 @@ const validateOpenOrigin = async (
       origin: cart,
       roomReservationIds,
       roomReservations,
+      eventReservationIds,
+      eventReservations,
     };
   }
 
@@ -855,7 +1115,7 @@ const findIdempotencyReplay = async (
 
 const reconcileCanceledStripePayments = async (
   originKey: Record<string, unknown>,
-  details: { origin: any; total: number; roomReservationIds?: number[] },
+  details: { origin: any; total: number; roomReservationIds?: number[]; eventReservationIds?: number[] },
   transaction: any
 ) => {
   const origins: Record<string | symbol, unknown>[] = [{ ...originKey }];
@@ -864,6 +1124,18 @@ const reconcileCanceledStripePayments = async (
       origins.push({ reserva_habitacion_id: resId });
       const historicalCarts = await historicalCartIdsForReference(
         "habitacion",
+        resId,
+        transaction,
+      );
+      if (historicalCarts.length > 0) {
+        origins.push({ carrito_id: { [Op.in]: historicalCarts } });
+      }
+    }
+  }
+  if (details.eventReservationIds && details.eventReservationIds.length > 0) {
+    for (const resId of details.eventReservationIds) {
+      const historicalCarts = await historicalCartIdsForReference(
+        "evento",
         resId,
         transaction,
       );
