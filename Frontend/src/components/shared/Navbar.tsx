@@ -9,6 +9,7 @@ import { es } from '@/i18n/es';
 import { RESERVAS_ROUTES } from '@/features/reservas';
 import { CARRITO_ROUTES } from '@/features/carrito';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
+import { RESTAURANTE_ROUTES } from '@/features/restaurante';
 
 const actionClass =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
@@ -30,7 +31,7 @@ export const Navbar: React.FC = () => {
           <Brand />
         </Link>
 
-        <nav aria-label={es.navegacion.principal} className="hidden items-center gap-6 md:flex">
+        <nav className="flex items-center gap-6" aria-label={es.navegacion.principal}>
           <NavLink
             to="/"
             end
@@ -55,6 +56,17 @@ export const Navbar: React.FC = () => {
                 }
               >
                 {es.navegacion.reservar}
+              </NavLink>
+              <NavLink
+                to={RESTAURANTE_ROUTES.CATALOGO}
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
+                    isActive ? 'text-bronce-700' : 'text-neutro-700',
+                  )
+                }
+              >
+                {es.navegacion.restaurante}
               </NavLink>
               <NavLink
                 to={AMENIDADES_ROUTES.CATALOGO}

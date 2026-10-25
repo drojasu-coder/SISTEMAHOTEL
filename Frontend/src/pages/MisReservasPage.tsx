@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
+import { RESTAURANTE_ROUTES } from '@/features/restaurante';
+import { UtensilsCrossed } from 'lucide-react';
 import { ClienteReservasGate } from '@/features/mis-reservas/components/ClienteReservasGate';
 import { ReservaCard } from '@/features/mis-reservas/components/ReservaCard';
 import { reservaNecesitaCatalogoSedes } from '@/features/mis-reservas/formato';
@@ -46,6 +48,13 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
         >
           <BedDouble className="size-4" aria-hidden="true" />
           <span>Reservas de Habitación</span>
+        </Link>
+        <Link
+          to={RESTAURANTE_ROUTES.MIS_RESERVAS}
+          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors"
+        >
+          <UtensilsCrossed className="size-4" aria-hidden="true" />
+          <span>Reservas de Mesa</span>
         </Link>
         <Link
           to={AMENIDADES_ROUTES.MIS_RESERVAS}

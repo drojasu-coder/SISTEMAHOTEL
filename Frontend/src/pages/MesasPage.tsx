@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, UtensilsCrossed } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, UtensilsCrossed, CalendarCheck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { Card } from '@/components/ui/Card';
@@ -14,6 +15,7 @@ import { MesasList } from '@/features/mesas/components/MesasList';
 import type { Mesa } from '@/features/mesas/types';
 import { getApiErrorMessage } from '@/api/errors';
 import { textosMesas } from '@/features/mesas/texts';
+import { RESTAURANTE_ROUTES } from '@/features/restaurante';
 
 export const MesasPage: React.FC = () => {
   const { user } = useAuth();
@@ -86,17 +88,28 @@ export const MesasPage: React.FC = () => {
           <p className="text-sm text-neutro-600 max-w-2xl">{textosMesas.descripcion}</p>
         </div>
 
-        {canManageMesas && (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleOpenCreate}
-            className="self-start sm:self-center"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            <span>{textosMesas.nuevaMesa}</span>
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          {user?.rol === 'admin' && (
+            <Link
+              to={RESTAURANTE_ROUTES.ADMIN_RESERVAS}
+              className="inline-flex items-center gap-1.5 rounded-md border border-neutro-300 bg-blanco px-4 py-2 text-sm font-medium text-neutro-700 shadow-sm hover:bg-neutro-50 transition-colors"
+            >
+              <CalendarCheck className="size-4" aria-hidden="true" />
+              <span>Ver reservas de restaurante</span>
+            </Link>
+          )}
+
+          {canManageMesas && (
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleOpenCreate}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              <span>{textosMesas.nuevaMesa}</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Mensaje de confirmación tras guardar */}

@@ -34,6 +34,12 @@ import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { CatalogoAmenidadesPage } from '@/pages/CatalogoAmenidadesPage';
 import { MisReservasAmenidadesPage } from '@/pages/MisReservasAmenidadesPage';
 import { DetalleReservaAmenidadPage } from '@/pages/DetalleReservaAmenidadPage';
+import { RESTAURANTE_ROUTES } from '@/features/restaurante';
+import { CatalogoRestaurantePage } from '@/pages/CatalogoRestaurantePage';
+import { MisReservasRestaurantePage } from '@/pages/MisReservasRestaurantePage';
+import { DetalleReservaRestaurantePage } from '@/pages/DetalleReservaRestaurantePage';
+import { AdminReservasRestaurantePage } from '@/pages/AdminReservasRestaurantePage';
+import { AdminDetalleReservaRestaurantePage } from '@/pages/AdminDetalleReservaRestaurantePage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -56,6 +62,13 @@ export const AppRouter: React.FC = () => {
           <Route element={<RequireAuth />}>
             <Route path={PAGOS_ROUTES.CHECKOUT} element={<CheckoutPage />} />
             <Route path="/pagos/:id/resultado" element={<PagoResultadoPage />} />
+          </Route>
+
+          {/* Flujo de restaurante del cliente */}
+          <Route path={RESTAURANTE_ROUTES.CATALOGO} element={<CatalogoRestaurantePage />} />
+          <Route element={<RequireAuth />}>
+            <Route path={RESTAURANTE_ROUTES.MIS_RESERVAS} element={<MisReservasRestaurantePage />} />
+            <Route path="/mis-reservas/restaurante/:id" element={<DetalleReservaRestaurantePage />} />
           </Route>
 
           {/* Flujo de amenidades del cliente */}
@@ -105,6 +118,12 @@ export const AppRouter: React.FC = () => {
             {/* Tipos de habitación */}
             <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
               <Route path="tipos-habitacion" element={<TiposHabitacionPage />} />
+            </Route>
+
+            {/* Reservas de Restaurante (Exclusivo Admin) */}
+            <Route element={<RequireAuth permission="configuracion.administrar" />}>
+              <Route path="reservas-restaurante" element={<AdminReservasRestaurantePage />} />
+              <Route path="reservas-restaurante/:id" element={<AdminDetalleReservaRestaurantePage />} />
             </Route>
 
             {/* Amenidades */}
