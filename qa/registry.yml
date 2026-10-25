@@ -2275,6 +2275,248 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-24"
 
+  - id: QA-EVT-FIN-CANDIDATE-038
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      La cancelación de ReservaEvento deja un PaymentIntent procesando cobrable
+      y el webhook succeeded no puede reconciliarlo
+    invariant: >-
+      Una ReservaEvento con un Pago procesando no debe pasar a cancelada mientras
+      el PaymentIntent asociado permanezca activo, salvo compensación financiera
+      segura y verificable. Si el intent llega a succeeded, el backend debe
+      reconciliar de forma coherente el pago y la reserva o compensar el cobro.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.cancelProcessingPayment.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-038: no cancela un evento con PaymentIntent procesando activo"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.cancelProcessingPayment.test.ts
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/carritos
+        - POST /api/carritos/{carritoId}/items
+        - POST /api/pagos
+        - PATCH /api/reservas-evento/{reservaId}/cancelar
+        - POST /api/pagos/stripe/webhook
+        - POST /api/pagos/stripe/webhook (replay exacto único)
+      cancellation_payload: NO_BODY
+      route_selection: >-
+        PATCH general /api/reservas-evento/{id} no admite estado en
+        updateReservaEventoSchema; se usó exclusivamente la ruta real específica
+        PATCH /api/reservas-evento/{id}/cancelar, que no recibe body.
+      stripe_mode: FULL_LOCAL_MOCK
+      network_calls: 0
+      real_stripe_charges: 0
+    scenario:
+      ids: >-
+        Cliente=1; Salon=1; ReservaEvento=1; Carrito=1; CarritoItem=1;
+        Pago=1; PaymentIntent=pi_evt_cancel_038_001;
+        webhook=evt_evt_cancel_038_001.
+      salon: "tarifa_base Q5000.00; capacidad 100"
+      reservation_before: >-
+        cotizacion; total Q5000.00; anticipo Q1500.00; sin servicios.
+      cart: "un solo carrito con un solo ítem evento por Q5000.00"
+      payment: "tarjeta; total; Q5000.00; procesando; GTQ"
+      payment_intent_before: >-
+        requires_payment_method; 500000 centavos; metadata pago_id=1,
+        carrito_id=1, tipo_pago=total.
+      exposure_before: >-
+        PostgreSQL y eventFinancialExposure: approved=Q0.00,
+        processing=Q5000.00, total=Q5000.00.
+    expected:
+      preferred_cancellation: >-
+        HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT; ReservaEvento permanece en
+        cotizacion, Pago procesando e intent activo sin cancel/refund externo.
+      alternative_safe_outcome: >-
+        Compensación atómica verificable que desactive el intent y elimine la
+        exposición procesando antes de persistir cancelada.
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      cancellation: >-
+        HTTP 200; code null; ReservaEvento quedó cancelada y el Pago continuó
+        procesando Q5000.00; PaymentIntent continuó requires_payment_method.
+      cancellation_compensation: >-
+        Ninguna: cancel calls=0, refund calls=0, Pago sin cambio y exposición
+        processing=Q5000.00.
+      active_window: true
+      first_webhook: >-
+        Tras simular succeeded externo por Q5000.00, HTTP 409
+        EVENT_RESERVATION_NOT_AVAILABLE; Pago siguió procesando y la divergencia
+        Stripe/local quedó en Q5000.00.
+      exact_replay: >-
+        El mismo event id/type/object se entregó exactamente una vez adicional;
+        HTTP 409 EVENT_RESERVATION_NOT_AVAILABLE y divergencia Q5000.00 intacta.
+      final_intent: "succeeded; neto externo Q5000.00; refundedAmount=0"
+      final_local: >-
+        ReservaEvento cancelada; Pago procesando Q5000.00; approved Q0.00;
+        processing Q5000.00; reembolsos aprobados Q0.00.
+      violation_a: true
+      violation_b: true
+      violation_c: false
+      invariant_violated: true
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló, 2 aserciones soft fallaron"
+    http_evidence:
+      reservation_create: "HTTP 201; cotizacion; total Q5000.00"
+      cart_create: "HTTP 201"
+      add_event: "HTTP 201; precio Q5000.00"
+      payment_create: >-
+        HTTP 201; Pago=1 procesando Q5000.00;
+        PaymentIntent=pi_evt_cancel_038_001.
+      cancel: >-
+        HTTP 200; code null; mensaje Reserva de evento cancelada correctamente.
+      webhook_first: "HTTP 409 EVENT_RESERVATION_NOT_AVAILABLE"
+      webhook_exact_replay: "HTTP 409 EVENT_RESERVATION_NOT_AVAILABLE"
+      webhook_construct_calls: 2
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_cancel: >-
+        ReservaEvento=1 cotizacion Q5000.00; Pago=1 procesando Q5000.00;
+        approved=Q0.00; processing=Q5000.00; refunds=Q0.00.
+      immediately_after_cancel: >-
+        ReservaEvento=1 cancelada Q5000.00; Pago=1 procesando Q5000.00;
+        approved=Q0.00; processing=Q5000.00; refunds=Q0.00.
+      after_first_webhook: >-
+        Sin reconciliación: ReservaEvento cancelada; Pago procesando;
+        approved=Q0.00; processing=Q5000.00; divergencia=Q5000.00.
+      after_exact_replay: >-
+        Estado idéntico: ReservaEvento cancelada; Pago procesando;
+        approved=Q0.00; processing=Q5000.00; divergencia=Q5000.00.
+      event_financial_exposure_final: >-
+        approved=0; processing=5000; total=5000.
+    stripe_mock_evidence:
+      create_payment_intent_calls: 1
+      intent_before_cancel: requires_payment_method
+      intent_after_cancel: requires_payment_method
+      intent_after_external_transition: succeeded
+      amount_minor: 500000
+      retrieve_calls: 0
+      update_metadata_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      exact_webhook_replays: 1
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      PATCH /api/reservas-evento/{id}/cancelar ->
+      reservaEvento.controller.cancel -> reservaEvento.service.cancel bloquea
+      ReservaEvento FOR UPDATE, valida únicamente ownership y estados
+      cancelada/expirada, y persiste estado=cancelada sin consultar
+      eventFinancialExposure, Pago o Stripe. Luego el webhook succeeded encuentra
+      el Pago por id_transaccion_externo y lo actualiza tentativamente a aprobado,
+      pero validateOpenOrigin -> cartTotals observa la ReservaEvento cancelada y
+      lanza EVENT_RESERVATION_NOT_AVAILABLE; la transacción revierte el cambio de
+      Pago. El replay exacto recorre la misma ruta y vuelve a dejar la divergencia.
+    root_cause: >-
+      reservaEvento.service.cancel validaba ownership y los estados terminales
+      bajo el lock de ReservaEvento, pero persistía estado=cancelada sin consultar
+      la exposición financiera agregada del evento. Por ello ignoraba los pagos
+      procesando conservados en carritos históricos y dejaba activo el
+      PaymentIntent después de cerrar localmente la reserva.
+    fix: >-
+      Después de bloquear y validar la ReservaEvento, cancel reutiliza
+      eventFinancialExposure dentro de la misma transacción y, si
+      exposure.processing > 0, lanza AppError 409
+      RESERVATION_HAS_PROCESSING_PAYMENT antes del UPDATE. No cancela el intent,
+      no crea reembolsos y no cambia la política vigente para dinero aprobado.
+    cancel_validation_layer: >-
+      reservaEvento.service.cancel, después de localizar ReservaEvento FOR UPDATE
+      y validar existencia, ownership y estados cancelada/expirada, y antes de
+      reserva.update({ estado: cancelada }).
+    financial_exposure_helper: >-
+      Se reutiliza exclusivamente eventFinancialExposure de pago.service con
+      reserva.id y la transacción de cancel; no se duplicó la agregación de
+      Pago/Reembolso ni se consultó Stripe.
+    processing_rule: >-
+      exposure.processing > 0 rechaza la cancelación con HTTP 409 y código
+      RESERVATION_HAS_PROCESSING_PAYMENT. Con processing=0 se conserva exactamente
+      el flujo anterior, incluido el tratamiento vigente de dinero aprobado.
+    transaction_scope: >-
+      El lock de ReservaEvento, la lectura de exposición, la validación financiera
+      y el eventual UPDATE pertenecen a la única transacción de cancel; el
+      AppError revierte sin mutar estado ni exposición.
+    lock_order: >-
+      ReservaEvento SELECT FOR UPDATE -> eventFinancialExposure sobre carritos
+      históricos, Pago y Reembolso -> eventual ReservaEvento UPDATE. No se
+      agregaron locks ni se alteró el orden canónico de createPago; el lock de
+      ReservaEvento serializa la creación concurrente de compromisos del evento.
+    stripe_calls_during_cancel:
+      create_payment_intent: 0
+      retrieve: 0
+      update_metadata: 0
+      cancel: 0
+      refund: 0
+      construct_event: 0
+    webhook_execution_after_fix: >-
+      NOT RUN: la cancelación quedó bloqueada antes de crear la ventana activa;
+      no hubo primer delivery ni replay, y constructEvent tuvo 0 llamadas.
+    final_evidence:
+      cancel_flow: >-
+        PATCH /api/reservas-evento/{id}/cancelar sin body -> HTTP 409;
+        code RESERVATION_HAS_PROCESSING_PAYMENT.
+      reservation_before: "cotizacion; total Q5000.00; anticipo Q1500.00"
+      reservation_after: "cotizacion; total Q5000.00; anticipo Q1500.00"
+      payment_before: "procesando; Q5000.00"
+      payment_after: "procesando; Q5000.00"
+      exposure_before: "approved=Q0.00; processing=Q5000.00; total=Q5000.00"
+      exposure_after: "approved=Q0.00; processing=Q5000.00; total=Q5000.00"
+      intent_before: "requires_payment_method; 500000 centavos"
+      intent_after: "requires_payment_method; 500000 centavos"
+      approved_refunds_before: "Q0.00"
+      approved_refunds_after: "Q0.00"
+      active_processing_window: false
+      webhook_executed: false
+      webhook_replayed: false
+      stripe_local_divergence: "Q0.00"
+      financial_violation: false
+      unexpected_500: false
+    severity_recommendation: high
+    regressions_observed:
+      qa_035: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts, 1 archivo, 1 test;
+        permanece CLOSED y su entrada no fue modificada.
+      qa_036: >-
+        GREEN; reservaEvento.patchServiceTotal.test.ts, 1 archivo, 1 test;
+        permanece CLOSED y su entrada no fue modificada.
+      qa_037: >-
+        GREEN; reservaEvento.paymentMutationBinding.test.ts, 1 archivo, 1 test;
+        permanece CLOSED y su entrada no fue modificada.
+    verification:
+      focused_test: >-
+        GREEN; reservaEvento.cancelProcessingPayment.test.ts, 1 archivo, 1 test.
+      qa_035_test: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts, 1 archivo, 1 test.
+      qa_036_test: >-
+        GREEN; reservaEvento.patchServiceTotal.test.ts, 1 archivo, 1 test.
+      qa_037_test: >-
+        GREEN; reservaEvento.paymentMutationBinding.test.ts, 1 archivo, 1 test.
+      reservation_module_test: >-
+        GREEN; reservaEvento.test.ts, 1 archivo, 40 tests.
+      reservation_service_module_test: >-
+        GREEN; reservaEventoServicio.test.ts, 1 archivo, 39 tests.
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck: pass
+      production_files_modified:
+        - backend/src/services/eventos/reservaEvento.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-24"
+
   - id: QA-AUTH-SEC-CANDIDATE-034
     status: closed
     severity: medium

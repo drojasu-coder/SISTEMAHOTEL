@@ -675,6 +675,20 @@ export const cancel = async (
         );
       }
 
+      const exposure =
+        await eventFinancialExposure(
+          reserva.id,
+          transaction
+        );
+
+      if (exposure.processing > 0) {
+        throw new AppError(
+          409,
+          "RESERVATION_HAS_PROCESSING_PAYMENT",
+          "La reserva tiene un pago en procesamiento y no puede cancelarse"
+        );
+      }
+
       await reserva.update(
         {
           estado:
