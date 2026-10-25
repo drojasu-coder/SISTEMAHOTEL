@@ -13,6 +13,7 @@ import {
   isReservationFullyPaid,
   hasCartReferenceApprovedPayment,
   hasCartReferenceActiveFinancialCommitment,
+  eventFinancialExposure,
 } from "../pago.service";
 
 const db = require("../../models");
@@ -397,12 +398,13 @@ const resolveEvento =
  * carrito original y se produciría riesgo
  * de doble cobro.
  */
+const exposure = await eventFinancialExposure(
+  reserva.id,
+  transaction
+);
 if (
-  await hasCartReferenceApprovedPayment(
-    "evento",
-    reserva.id,
-    transaction
-  )
+  exposure.approved > 0 ||
+  exposure.total >= normalizePrice(reserva.total)
 ) {
   throw new AppError(
     409,

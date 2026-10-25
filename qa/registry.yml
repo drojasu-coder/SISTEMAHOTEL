@@ -1790,6 +1790,158 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-EVT-FIN-CANDIDATE-035
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Un evento con un PaymentIntent procesando puede recrearse y pagarse otra
+      vez después de expirar el carrito original
+    invariant: >-
+      Una ReservaEvento con Q5,000.00 de exposición financiera procesando en
+      Stripe mediante C1 no puede agregarse a C2 ni originar un segundo intento
+      de pago cuando C1 expira; la exposición activa agregada para la misma
+      referencia nunca debe superar su total de Q5,000.00.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.crossCartProcessing.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-035: no permite un segundo intento de pago del mismo evento tras expirar C1"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.crossCartProcessing.test.ts
+      database: hotel_test_db
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/carritos
+        - POST /api/carritos/{c1}/items
+        - POST /api/pagos
+        - POST /api/carritos
+        - POST /api/carritos/{c2}/items
+        - POST /api/pagos
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+    scenario:
+      event_total: "5000.00"
+      event_advance: "1500.00"
+      c1_payment: "tarjeta; total; Q5000.00; procesando; pi_evt_fin_035_1"
+      expiration: >-
+        Solo expira_en de C1 se llevó al pasado; crear C2 ejecutó la expiración
+        normal y dejó C1 en estado expirado preservando su ítem y pago.
+      c2_second_attempt: "tarjeta; total; Q5000.00"
+    expected:
+      add_to_c2: "HTTP 409 CART_REFERENCE_NOT_AVAILABLE"
+      c2_item_count: 0
+      c2_payment_count: 0
+      second_payment: NOT RUN
+      stripe_create_payment_intent_calls: 1
+      maximum_active_exposure: "5000.00"
+    actual:
+      add_to_c2: "HTTP 201; mismo evento persistido en C2"
+      second_payment: "HTTP 201; procesando; Q5000.00; pi_evt_fin_035_2"
+      stripe_create_payment_intent_calls: 2
+      approved_amount: "0.00"
+      processing_amount: "10000.00"
+      total_active_exposure: "10000.00"
+      excess_exposure: "5000.00"
+      invariant_violated: true
+      red_result: "1 archivo falló, 1 test falló, 7 aserciones soft fallaron"
+    http_evidence:
+      reservation_create: "HTTP 201; total Q5000.00; anticipo Q1500.00"
+      c1_create: "HTTP 201"
+      c1_add_event: "HTTP 201; precio Q5000.00"
+      c1_payment: "HTTP 201; procesando; pago_id=1; pi_evt_fin_035_1"
+      c2_create: "HTTP 201"
+      c2_add_event: "HTTP 201; item_id=2; precio Q5000.00"
+      c2_payment: "HTTP 201; procesando; pago_id=2; pi_evt_fin_035_2"
+      unexpected_500: false
+    database_evidence:
+      reservation: >-
+        ReservaEvento id=1; cotizacion; total=5000.00; anticipo=1500.00.
+      cart_c1: >-
+        Carrito id=1; expirado; conserva CarritoItem evento referencia_id=1 por
+        Q5000.00 y Pago id=1 procesando por Q5000.00 asociado a
+        pi_evt_fin_035_1.
+      cart_c2: >-
+        Carrito id=2; activo; contiene una segunda CarritoItem evento
+        referencia_id=1 por Q5000.00 y Pago id=2 procesando por Q5000.00
+        asociado a pi_evt_fin_035_2.
+      calculation: >-
+        aprobado neto Q0.00 + procesando C1 Q5000.00 + procesando C2 Q5000.00
+        = exposición activa Q10000.00; excedente sobre el total Q5000.00.
+      source_of_truth: PostgreSQL
+    stripe_mock_evidence:
+      create_payment_intent_calls: 2
+      intent_1: "pi_evt_fin_035_1; 500000 centavos; carrito_id=1; pago_id=1"
+      intent_2: "pi_evt_fin_035_2; 500000 centavos; carrito_id=2; pago_id=2"
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      POST /api/carritos/{id}/items -> carritoItem.service.create ->
+      resolveReference -> resolveEvento. resolveEvento consulta únicamente
+      hasCartReferenceApprovedPayment, que no incluye pagos procesando; por eso
+      permite insertar el evento en C2. POST /api/pagos -> pago.service.createPago
+      calcula committedOrProcessingExposure solo sobre C2, no sobre todos los
+      carritos históricos que contienen esa ReservaEvento, y crea un segundo
+      Pago/PaymentIntent por el total completo.
+    severity_recommendation: critical
+    root_cause: >-
+      La resolución de ReservaEvento solo reconocía dinero aprobado histórico y
+      omitía Pago en estado procesando. createPago, a su vez, limitaba el saldo
+      por la llave carrito_id actual, sin agregar la exposición de todos los
+      carritos históricos que contienen la misma ReservaEvento.
+    fix: >-
+      Se agregó exposición financiera agregada por ReservaEvento y se reutiliza
+      al resolver el ADD y al validar createPago. Antes de Pago.create y Stripe,
+      createPago bloquea las ReservaEvento del carrito y rechaza cualquier monto
+      que exceda su saldo agregado.
+    aggregate_event_exposure: >-
+      aprobado neto de reembolsos aprobados + todos los pagos procesando de los
+      carritos que contienen CarritoItem(tipo_item=evento,
+      referencia_id=ReservaEvento.id), deduplicando Pago.id
+    historical_carts_included: true
+    processing_included: true
+    approved_refunds_included: true
+    locking_strategy: >-
+      SELECT FOR UPDATE en orden Carrito -> ReservaHabitacion por id ascendente
+      -> ReservaEvento por id ascendente -> Pago; no se bloquean los carritos
+      históricos y la serialización financiera ocurre por ReservaEvento.
+    second_commitment_result: >-
+      ADD a C2 rechazado con HTTP 409 CART_REFERENCE_NOT_AVAILABLE; no se ejecutó
+      el segundo pago y no se crearon P2 ni PI2.
+    stripe_create_calls: 1
+    final_exposure: >-
+      approved=0.00; processing=5000.00; total=5000.00; event_total=5000.00
+    correction:
+      production_files:
+        - backend/src/services/pago.service.ts
+        - backend/src/services/carrito/carritoItem.service.ts
+      test_modified_by_fixer: false
+      migrations_modified: false
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: "GREEN; 1 file passed, 1 test passed"
+      related_tests: >-
+        GREEN; reservaEvento/reservaEventoServicio 79/79;
+        carrito/carritoItem 57/57; QA-014 1/1; QA-020 1/1; QA-030 1/1
+      typecheck: pass
+      typecheck_primary_command: "npm --prefix backend exec tsc -- --noEmit"
+      typecheck_primary_result: >-
+        npm 12 no localizó tsconfig; mostró ayuda de tsc y terminó con código 1
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck_explicit_result: pass
+      production_files_modified: true
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-24"
+
   - id: QA-AUTH-SEC-CANDIDATE-034
     status: closed
     severity: medium
