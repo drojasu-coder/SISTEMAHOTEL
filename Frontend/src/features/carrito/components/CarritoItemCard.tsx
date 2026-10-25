@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { RESERVAS_ROUTES } from '@/features/reservas';
+import { ACTIVIDADES_ROUTES } from '@/features/actividades/constants/routes';
 import type { CarritoItem } from '../types';
 import {
   descripcionItem,
@@ -32,6 +33,7 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
   retiroBloqueado,
 }) => {
   const habitacion = esItemHabitacion(item);
+  const esActividad = item.tipo_item === 'actividad';
   const descripcion = descripcionItem(item);
   const precio = formatearGTQ(item.precio);
   const cantidad = formatearCantidad(item.cantidad);
@@ -61,6 +63,16 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
         {habitacion && (
           <Link
             to={RESERVAS_ROUTES.DETALLE(item.referencia_id)}
+            className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
+          >
+            {textosCarrito.verReserva(item.referencia_id)}
+            <ChevronRight className="size-4" aria-hidden="true" />
+          </Link>
+        )}
+
+        {esActividad && (
+          <Link
+            to={ACTIVIDADES_ROUTES.DETALLE(item.referencia_id)}
             className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
           >
             {textosCarrito.verReserva(item.referencia_id)}
@@ -100,11 +112,12 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={retiroBloqueado}
-          aria-label={textosCarrito.retirarArticulo(item.id)}
           onClick={() => onRetirar(item)}
+          disabled={retiroBloqueado}
+          className="inline-flex items-center gap-1.5 text-xs text-neutro-600 hover:text-rojo-700"
+          aria-label={textosCarrito.retirarArticulo(item.id)}
         >
-          <Trash2 className="size-4" aria-hidden="true" />
+          <Trash2 className="size-3.5" aria-hidden="true" />
           <span>{textosCarrito.retirar}</span>
         </Button>
       </div>

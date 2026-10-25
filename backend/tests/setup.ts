@@ -17,4 +17,5 @@ process.env.WEBHOOK_BODY_LIMIT = "512kb";
 process.env.RATE_LIMIT_WINDOW_MS = "60000";
 process.env.AUTH_RATE_LIMIT_MAX = "10";
 process.env.TEST_DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
   "postgres://hotel_test_user:hotel_test_password@127.0.0.1:55432/hotel_test_db";

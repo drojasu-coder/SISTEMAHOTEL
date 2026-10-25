@@ -1,45 +1,47 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, X, User } from 'lucide-react';
+import { Calendar, Clock, User, CheckCircle } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
+import { ApiError } from '@/api/client/http';
+import { getApiErrorMessage } from '@/api/errors';
 import { useAuth } from '@/features/auth/AuthContext';
+import { BotonAnadirAlCarrito } from '@/features/carrito/components/BotonAnadirAlCarrito';
+import type { RecursoActividad, ReservaActividad } from '../types';
 import { useInstructoresQuery } from '../hooks/useActividades';
 import { useCreateReservaActividadMutation } from '../hooks/useReservasActividad';
 import { ACTIVIDADES_ROUTES } from '../constants/routes';
-import { textosActividades, formatearGTQ } from '../textos';
-import { BotonAnadirAlCarrito } from '@/features/carrito/components/BotonAnadirAlCarrito';
-import type { RecursoActividad, ReservaActividad } from '../types';
+import { formatearGTQ, textosActividades } from '../textos';
 
 interface ReservaActividadModalProps {
-  recurso: RecursoActividad | null;
   isOpen: boolean;
   onClose: () => void;
+  recurso: RecursoActividad | null;
 }
 
-const timeToMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number);
-  return hours * 60 + (minutes || 0);
-};
+function timeToMinutes(timeStr: string): number {
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
 
 export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
-  recurso,
   isOpen,
   onClose,
+  recurso,
 }) => {
   const navigate = useNavigate();
-  const { status, user } = useAuth();
-  const isCliente = status === 'authenticated' && user?.rol === 'cliente';
+  const { user } = useAuth();
+  const isCliente = user?.rol === 'cliente';
 
   const hoy = new Date().toISOString().split('T')[0];
-
-  const [fecha, setFecha] = useState(hoy);
-  const [horaInicio, setHoraInicio] = useState('10:00');
-  const [horaFin, setHoraFin] = useState('11:00');
+  const [fecha, setFecha] = useState<string>(hoy);
+  const [horaInicio, setHoraInicio] = useState<string>('10:00');
+  const [horaFin, setHoraFin] = useState<string>('11:00');
   const [instructorId, setInstructorId] = useState<string>('');
-  const [conEquipo, setConEquipo] = useState(false);
+  const [conEquipo, setConEquipo] = useState<boolean>(false);
+
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
-  const [falloIncierto, setFalloIncierto] = useState(false);
+  const [falloIncierto, setFalloIncierto] = useState<boolean>(false);
   const [reservaCreada, setReservaCreada] = useState<ReservaActividad | null>(null);
 
   const { data: instructores = [] } = useInstructoresQuery();
@@ -78,83 +80,114 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
       return;
     }
 
-    if (!horaInicio || !horaFin) {
-      setErrorLocal('Debe indicar la hora de inicio y de fin.');
-      return;
-    }
+    const minInicio = timeToMinutes(horaInicio);
+    const minFin = timeToMinutes(horaFin);
+    const duracionMin = minFin - minInicio;
 
-    const inicioMin = timeToMinutes(horaInicio);
-    const finMin = timeToMinutes(horaFin);
-
-    if (inicioMin >= finMin) {
+    if (minInicio >= minFin) {
       setErrorLocal(textosActividades.errorRangoInvalido);
       return;
     }
 
-    const duracionMin = finMin - inicioMin;
     if (duracionMin < 30 || duracionMin > 120) {
       setErrorLocal(textosActividades.errorDuracionInvalida);
       return;
     }
 
+    const instIdNum = instructorId ? parseInt(instructorId, 10) : undefined;
+
     try {
       const created = await createMutation.mutateAsync({
         recurso_id: recurso.id!,
         fecha,
-        hora_inicio: horaInicio.length === 5 ? `${horaInicio}:00` : horaInicio,
-        hora_fin: horaFin.length === 5 ? `${horaFin}:00` : horaFin,
-        instructor_id: instructorId ? Number(instructorId) : null,
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+        instructor_id: instIdNum || null,
         con_equipo: conEquipo,
       });
-      setReservaCreada(created);
-    } catch (err: any) {
-      const apiCode = err?.code || err?.response?.data?.code;
-      const apiMsg = err?.message || err?.response?.data?.message;
 
-      if (apiCode === 'RESOURCE_OVERLAP') {
+      setReservaCreada(created);
+    } catch (err: unknown) {
+      const msg = getApiErrorMessage(err);
+      const code = err instanceof ApiError ? err.code : '';
+      const msgLower = msg.toLowerCase();
+
+      if (
+        code === 'RESOURCE_OVERLAP' ||
+        msgLower.includes('ocupad') ||
+        msgLower.includes('traslape') ||
+        msg.includes('RESOURCE_OVERLAP')
+      ) {
         setErrorLocal(textosActividades.errorRecursoOcupado);
-      } else if (apiCode === 'INSTRUCTOR_OVERLAP') {
+      } else if (
+        code === 'INSTRUCTOR_OVERLAP' ||
+        (msgLower.includes('instructor') && (msgLower.includes('ocupad') || msgLower.includes('clase'))) ||
+        msg.includes('INSTRUCTOR_OVERLAP')
+      ) {
         setErrorLocal(textosActividades.errorInstructorOcupado);
-      } else if (apiCode === 'INSTRUCTOR_INACTIVE') {
+      } else if (
+        code === 'INSTRUCTOR_INACTIVE' ||
+        msgLower.includes('inactivo') ||
+        msg.includes('INSTRUCTOR_INACTIVE')
+      ) {
         setErrorLocal(textosActividades.errorInstructorInactivo);
-      } else if (apiCode === 'INVALID_ACTIVITY_DURATION') {
+      } else if (
+        code === 'INVALID_ACTIVITY_DURATION' ||
+        msgLower.includes('duración') ||
+        msgLower.includes('30 minutos') ||
+        msg.includes('INVALID_ACTIVITY_DURATION')
+      ) {
         setErrorLocal(textosActividades.errorDuracionInvalida);
-      } else if (apiCode === 'INVALID_TIME_RANGE') {
-        setErrorLocal(textosActividades.errorRangoInvalido);
-      } else if (apiCode === 'ACTIVITY_DATE_IN_PAST' || apiCode === 'ACTIVITY_TIME_IN_PAST') {
+      } else if (
+        code === 'PAST_DATE_TIME' ||
+        msgLower.includes('pasado') ||
+        msgLower.includes('pasada') ||
+        msg.includes('PAST_DATE_TIME')
+      ) {
         setErrorLocal(textosActividades.errorFechaPasada);
-      } else if (!err?.status && !err?.response) {
-        setFalloIncierto(true);
+      } else if (
+        msgLower.includes('red') ||
+        msgLower.includes('conexión') ||
+        msgLower.includes('fetch') ||
+        msgLower.includes('timeout')
+      ) {
         setErrorLocal(textosActividades.errorInciertoRed);
+        setFalloIncierto(true);
       } else {
-        setErrorLocal(apiMsg || textosActividades.errorGenericoCreacion);
+        setErrorLocal(msg || textosActividades.errorGenericoCreacion);
       }
     }
   };
 
   const handleResetAndClose = () => {
+    setReservaCreada(null);
     setErrorLocal(null);
     setFalloIncierto(false);
-    setReservaCreada(null);
     onClose();
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-neutro-900/60 p-4 sm:p-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-actividad-titulo"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutro-900/50 backdrop-blur-xs"
     >
-      <div className="relative w-full max-w-lg rounded-xl bg-white p-6 sm:p-8 shadow-2xl border border-neutro-200">
-        <button
-          type="button"
-          onClick={handleResetAndClose}
-          className="absolute right-4 top-4 rounded-md p-1.5 text-neutro-400 hover:bg-neutro-100 hover:text-neutro-700 transition-colors"
-          aria-label="Cerrar modal"
-        >
-          <X className="size-5" aria-hidden="true" />
-        </button>
+      <div className="surface flex w-full max-w-lg flex-col gap-5 rounded-2xl p-6 shadow-elevated max-h-[90vh] overflow-y-auto">
+        {/* Cabecera / Cierre */}
+        <div className="flex items-center justify-between border-b border-neutro-100 pb-3">
+          <span className="text-xs font-semibold text-bronce-700 tracking-wide uppercase">
+            {textosActividades.nuevaReservaTitulo}
+          </span>
+          <button
+            type="button"
+            onClick={handleResetAndClose}
+            className="rounded p-1 text-neutro-400 hover:text-neutro-600 focus:outline-none"
+            aria-label="Cerrar modal"
+          >
+            ✕
+          </button>
+        </div>
 
         {reservaCreada ? (
           <div className="flex flex-col items-center text-center gap-4 py-2">
@@ -244,18 +277,6 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
                 <span>{textosActividades.precioPorHora}</span>
                 <span className="font-semibold text-neutro-900">{formatearGTQ(recurso.precio_hora)}</span>
               </div>
-              {Number(recurso.precio_instructor_hora || 0) > 0 && (
-                <div className="flex justify-between">
-                  <span>{textosActividades.precioInstructor}</span>
-                  <span className="font-semibold text-neutro-900">{formatearGTQ(recurso.precio_instructor_hora)}</span>
-                </div>
-              )}
-              {Number(recurso.precio_equipo || 0) > 0 && (
-                <div className="flex justify-between">
-                  <span>{textosActividades.precioEquipo}</span>
-                  <span className="font-semibold text-neutro-900">{formatearGTQ(recurso.precio_equipo)}</span>
-                </div>
-              )}
               <div className="pt-1.5 border-t border-neutro-200 flex justify-between font-medium text-neutro-900">
                 <span>{textosActividades.totalCalculado}:</span>
                 <span className="text-bronce-700 font-semibold">{formatearGTQ(totalEstimado)}</span>
@@ -275,7 +296,7 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
 
             {errorLocal && (
               <Alert tone="error">
-                <p>{errorLocal}</p>
+                <p className="text-xs">{errorLocal}</p>
                 {falloIncierto && (
                   <div className="mt-2">
                     <Link
@@ -379,9 +400,6 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
                 />
                 <label htmlFor="con_equipo" className="text-xs text-neutro-700 cursor-pointer">
                   {textosActividades.campoEquipo}
-                  {Number(recurso.precio_equipo || 0) > 0 && (
-                    <span className="text-neutro-500"> (+{formatearGTQ(recurso.precio_equipo)})</span>
-                  )}
                 </label>
               </div>
             </div>

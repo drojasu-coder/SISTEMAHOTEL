@@ -5,11 +5,16 @@ import type {
   RecursoActividadResponse,
   Instructor,
   InstructoresResponse,
+  InstructorResponse,
   ReservaActividad,
   ReservasActividadResponse,
   ReservaActividadResponse,
   CreateReservaActividadInput,
   UpdateReservaActividadInput,
+  CreateRecursoActividadInput,
+  UpdateRecursoActividadInput,
+  CreateInstructorInput,
+  UpdateInstructorInput,
 } from '../types';
 
 export const actividadesApi = {
@@ -32,11 +37,59 @@ export const actividadesApi = {
   },
 
   /**
+   * Creación administrativa de un recurso de actividad.
+   * POST /api/recursos-actividad (exclusivo admin)
+   */
+  createRecurso: async (data: CreateRecursoActividadInput): Promise<RecursoActividad> => {
+    const response = await api.post<RecursoActividadResponse>('/recursos-actividad', data);
+    return response.data;
+  },
+
+  /**
+   * Actualización administrativa de un recurso de actividad.
+   * PATCH /api/recursos-actividad/:id (exclusivo admin)
+   */
+  updateRecurso: async (
+    id: number,
+    data: UpdateRecursoActividadInput
+  ): Promise<RecursoActividad> => {
+    const response = await api.patch<RecursoActividadResponse>(
+      `/recursos-actividad/${id}`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
    * Consulta pública de instructores deportivos del hotel.
    * GET /api/instructores
    */
   getInstructores: async (): Promise<Instructor[]> => {
     const response = await api.get<InstructoresResponse>('/instructores');
+    return response.data;
+  },
+
+  /**
+   * Creación administrativa de un instructor deportivo.
+   * POST /api/instructores (exclusivo admin)
+   */
+  createInstructor: async (data: CreateInstructorInput): Promise<Instructor> => {
+    const response = await api.post<InstructorResponse>('/instructores', data);
+    return response.data;
+  },
+
+  /**
+   * Actualización administrativa de un instructor deportivo (datos o estado activo/inactivo).
+   * PATCH /api/instructores/:id (exclusivo admin)
+   */
+  updateInstructor: async (
+    id: number,
+    data: UpdateInstructorInput
+  ): Promise<Instructor> => {
+    const response = await api.patch<InstructorResponse>(
+      `/instructores/${id}`,
+      data
+    );
     return response.data;
   },
 

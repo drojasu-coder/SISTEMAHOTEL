@@ -57,6 +57,9 @@ export function usePagoResultado(pagoId: number) {
         void queryClient.invalidateQueries({
           queryKey: pagosQueryKeys.intentoActivo(pago.carrito_id, user.id),
         });
+        // Invalidar reservas de habitación y actividad al aprobar el carrito
+        void queryClient.invalidateQueries({ queryKey: ['reservas-habitacion'] });
+        void queryClient.invalidateQueries({ queryKey: ['reservas-actividad'] });
       } else if (pago.reserva_habitacion_id !== null) {
         // Si no proviene de carrito sino de reserva directa, invalidar reservas
         void queryClient.invalidateQueries({ queryKey: ['reservas-habitacion'] });

@@ -176,3 +176,52 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - `npm --prefix backend run typecheck`: 0 errores.
   - `npm --prefix Frontend run build`: compilación limpia en 9.37s.
   - Comprobación HTTP en vivo: `http://localhost:4000/api/amenidades` y `http://localhost:5173`.
+
+---
+
+## Cierre Integral del Módulo de Actividades Recreativas e Integración con Pagos
+
+- **Estado:** Completada, verificada e integrada en frontend y backend.
+- **Detalle de implementaciones y verificaciones:**
+  1. **Gestión Administrativa de Recursos de Actividad e Instructores:**
+     - **Endpoints y permisos:** Endpoints backend existentes (`/api/recursos-actividad`, `/api/instructores`) protegidos bajo permiso `servicios.administrar` (roles `admin`, `gerente_servicios`, `coordinador_actividades`).
+     - **Catálogo de Recursos de Actividad (`/admin/recursos-actividad`):**
+       - Componente `RecursosActividadList`: tarjetas con visualización de sede, tipo de actividad, identificador y tarifas en GTQ (`precio_hora`, `precio_equipo`, `precio_instructor_hora`).
+       - Filtros en tiempo real (`RecursosActividadFilters`): búsqueda textual (nombre o tipo), selector de sede hotelera y selector de tipo de actividad.
+       - Modal de creación/edición (`RecursoActividadFormModal`): validación de campos obligatorios, asignación de sede (en creación) y validación de tarifas no negativas.
+       - Manejo de estados de carga, error con reintento, catálogo vacío y sin resultados tras filtrar.
+     - **Catálogo de Instructores Deportivos (`/admin/instructores`):**
+       - Componente `InstructoresList`: tarjetas con especialidad, estado (`activo` / `inactivo`) con badges visuales y acciones operativas de activación/desactivación.
+       - Filtros en tiempo real (`InstructoresFilters`): búsqueda por nombre/especialidad y selector de estado.
+       - Modal de creación/edición (`InstructorFormModal`): campos de nombre, especialidad y estado activo.
+       - Manejo de conflictos de negocio del backend: captura limpia de `INSTRUCTOR_HAS_FUTURE_RESERVATIONS` (código HTTP 409) informando al usuario que no es posible desactivar un instructor con reservas futuras confirmadas.
+       - Sin eliminación permanente física, respetando la integridad referencial y las reservas históricas.
+     - **Navegación y Acceso:** Enlazados de forma visible desde el centro de administración de servicios (`ServiciosPage.tsx`) con rutas `/admin/recursos-actividad` y `/admin/instructores`.
+  2. **Verificación y Alineación de la Fórmula de Precios:**
+     - **Fórmula autoritativa del servidor:**
+       - Inspección de `backend/src/services/actividades/reservaActividad.service.ts` (líneas 120-135) y la invariante de QA `QA-RA-FIN-CANDIDATE-001` (`qa/registry.yml`):
+       - `duracionHoras = (timeToSeconds(horaFin) - timeToSeconds(horaInicio)) / 3600;`
+       - `total = Math.round((Number(recurso.precio_hora) * duracionHoras + Number.EPSILON) * 100) / 100;`
+       - El total persistido de la reserva se calcula estrictamente multiplicando la tarifa horaria del recurso (`precio_hora`) por la duración en horas, redondeado a dos decimales.
+       - Los campos opcionales `precio_equipo` y `precio_instructor_hora` son tarifas informativas del recurso; la creación de reserva no agrega recargos adicionales al total de la reserva de actividad.
+     - **Alineación en Frontend:**
+       - En `ReservaActividadModal.tsx`, se removió la etiqueta engañosa `(+Q25.00)` del checkbox de equipo y se aclaró que el importe se calcula con la tarifa por hora del recurso y la duración seleccionada.
+       - El frontend no envía campos inventados de precio al servidor y muestra el total devuelto por la API.
+  3. **Cierre del Recorrido de Actividades hasta el Pago y Combinación de Carrito:**
+     - **Enlace de referencia en carrito:** `CarritoItemCard.tsx` enlaza directamente a `/mis-reservas/actividades/${item.referencia_id}` cuando `tipo_item === "actividad"`.
+     - **Invalidación de caché tras pago:** `usePagoResultado.ts` invalida las consultas de `["reservas-actividad"]` además de `["reservas-habitacion"]` para reflejar el estado tras el pago.
+     - **Combinación de habitación y actividad en el mismo carrito:**
+       - En `backend/src/services/pago.service.ts`, `roomExposureBalance` fue corregido para contabilizar la porción no perteneciente a habitaciones en el saldo disponible del carrito (`remaining = round(remaining + nonRoomCartTotal)`), permitiendo pagar carritos combinados con reservas de habitación y actividad sin disparar falsos positivos de `PAYMENT_EXCEEDS_BALANCE`.
+       - Se verificó la coexistencia en un mismo carrito de ítems con el mismo ID numérico (`referencia_id: 1`) gracias a la clave discriminadora `tipo_item` (`habitacion` vs `actividad`).
+  4. **Pruebas Automatizadas y Entornos:**
+     - **Entorno aislado (puerto 55433):**
+       - Se creó la prueba de integración `backend/tests/pagos/pagoActividadHabitacionCombinacion.test.ts` ejecutada contra `TEST_DATABASE_URL="postgres://hotel_test_user:hotel_test_password@127.0.0.1:55433/hotel_test_db"`.
+       - Verificó creación de reserva de habitación, reserva de actividad, adición combinada al carrito, total conjunto de Q550.00, creación de pago procesando en Stripe simulado, recepción de webhook `payment_intent.succeeded`, persistencia de pago aprobado, carrito pagado, transición de habitación a confirmada, preservación del estado confirmado de actividad, e idempotencia ante repetición de webhook.
+       - Se ejecutó la suite completa de pagos (`backend/tests/pagos/`): 15 archivos de prueba, 44 tests pasando (100%).
+       - Se ejecutó la suite completa de actividades (`backend/tests/actividades/`): 5 archivos de prueba, 56 tests pasando (100%).
+     - **Pruebas Frontend:**
+       - 19 pruebas de actividades (`src/features/actividades/`): todas aprobadas.
+       - Suite completa frontend (`npm test`): 38 suites pasando, 316 pruebas aprobadas (19 pruebas de red real omitidas).
+       - Verificación de tipos backend (`npm run typecheck:all`): 0 errores.
+       - Verificación de tipos frontend (`tsc --noEmit`): 0 errores.
+       - Compilación de producción (`npm run build`): bundle generado correctamente en `Frontend/dist/`.

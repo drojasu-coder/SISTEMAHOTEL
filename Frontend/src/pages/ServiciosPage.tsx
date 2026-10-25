@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, Car, CalendarCheck, ChevronRight } from 'lucide-react';
+import { Sparkles, Car, CalendarCheck, ChevronRight, Dumbbell, Users } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { buttonStyles } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
 import { hasPermission } from '@/features/auth/permissions';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
+import { ACTIVIDADES_ROUTES } from '@/features/actividades';
 import { es } from '@/i18n/es';
 
 /**
@@ -13,7 +14,10 @@ import { es } from '@/i18n/es';
  * Centro de gestión para servicios complementarios, divididos entre:
  * 1. Catálogo de Amenidades (/admin/amenidades)
  * 2. Reservas de Amenidades (/admin/reservas-amenidades)
- * 3. Parqueos y Estacionamiento (/admin/parqueos - visible para quienes tienen habitaciones.gestionar)
+ * 3. Recursos de Actividades (/admin/recursos-actividad)
+ * 4. Instructores Deportivos (/admin/instructores)
+ * 5. Reservas de Actividades (/admin/reservas-actividades)
+ * 6. Parqueos y Estacionamiento (/admin/parqueos - visible para quienes tienen habitaciones.gestionar)
  */
 export const ServiciosPage: React.FC = () => {
   const { user } = useAuth();
@@ -85,6 +89,87 @@ export const ServiciosPage: React.FC = () => {
               className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
             >
               <span>{es.amenidades.adminReservas.titulo}</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Recursos e Instalaciones de Actividades */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <Dumbbell className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Instalaciones de actividades
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Administración de canchas, campos y áreas deportivas y recreativas por sede.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={ACTIVIDADES_ROUTES.ADMIN_RECURSOS}
+              className={buttonStyles({ variant: 'primary', className: 'w-full justify-between' })}
+            >
+              <span>Gestionar instalaciones</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Instructores Deportivos */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <Users className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Instructores deportivos
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Control de instructores activos, especialidades y disponibilidad de clases.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={ACTIVIDADES_ROUTES.ADMIN_INSTRUCTORES}
+              className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
+            >
+              <span>Gestionar instructores</span>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </Card>
+
+        {/* Tarjeta de Reservas de Actividades */}
+        <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
+                <CalendarCheck className="size-5" aria-hidden="true" />
+              </div>
+              <h2 className="font-serif text-lg font-bold text-neutro-900">
+                Reservas de actividades
+              </h2>
+            </div>
+            <p className="text-sm text-neutro-600">
+              Supervisión de reservas de canchas, instructores y estados operativos.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to={ACTIVIDADES_ROUTES.ADMIN_RESERVAS}
+              className={buttonStyles({ variant: 'secondary', className: 'w-full justify-between' })}
+            >
+              <span>Ver reservas de actividades</span>
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>
           </div>

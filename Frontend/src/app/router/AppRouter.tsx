@@ -46,6 +46,8 @@ import { MisReservasActividadesPage } from '@/pages/MisReservasActividadesPage';
 import { DetalleReservaActividadPage } from '@/pages/DetalleReservaActividadPage';
 import { AdminReservasActividadesPage } from '@/pages/AdminReservasActividadesPage';
 import { AdminDetalleReservaActividadPage } from '@/pages/AdminDetalleReservaActividadPage';
+import { AdminRecursosActividadPage } from '@/pages/AdminRecursosActividadPage';
+import { AdminInstructoresPage } from '@/pages/AdminInstructoresPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -148,6 +150,8 @@ export const AppRouter: React.FC = () => {
 
             {/* Actividades Recreativas (Exclusivo Admin) */}
             <Route element={<RequireAuth permission="servicios.administrar" />}>
+              <Route path="recursos-actividad" element={<AdminRecursosActividadPage />} />
+              <Route path="instructores" element={<AdminInstructoresPage />} />
               <Route path="reservas-actividades" element={<AdminReservasActividadesPage />} />
               <Route path="reservas-actividades/:id" element={<AdminDetalleReservaActividadPage />} />
             </Route>

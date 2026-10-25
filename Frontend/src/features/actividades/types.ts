@@ -26,6 +26,12 @@ export type ReservaActividad = Omit<
 export type CreateReservaActividadInput = components['schemas']['CreateReservaActividadRequest'];
 export type UpdateReservaActividadInput = components['schemas']['UpdateReservaActividadRequest'];
 
+export type CreateRecursoActividadInput = components['schemas']['CreateRecursoActividadRequest'];
+export type UpdateRecursoActividadInput = components['schemas']['UpdateRecursoActividadRequest'];
+
+export type CreateInstructorInput = components['schemas']['CreateInstructorRequest'];
+export type UpdateInstructorInput = components['schemas']['UpdateInstructorRequest'];
+
 export interface RecursosActividadResponse {
   status: string;
   data: RecursoActividad[];
@@ -39,6 +45,11 @@ export interface RecursoActividadResponse {
 export interface InstructoresResponse {
   status: string;
   data: Instructor[];
+}
+
+export interface InstructorResponse {
+  status: string;
+  data: Instructor;
 }
 
 export interface ReservasActividadResponse {

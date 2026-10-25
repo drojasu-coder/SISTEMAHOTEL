@@ -763,8 +763,17 @@ const roomExposureBalance = async (
     }
   }
 
+  const roomReservationsTotal = (details.roomReservations ?? []).reduce(
+    (sum: number, res: any) => sum + Number(res.total),
+    0,
+  );
+  const nonRoomCartTotal = Math.max(
+    0,
+    round(Number(details.total) - roomReservationsTotal),
+  );
+
   return {
-    remaining: round(remaining),
+    remaining: round(remaining + nonRoomCartTotal),
     directExposure,
   };
 };

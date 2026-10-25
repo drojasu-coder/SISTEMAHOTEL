@@ -43,7 +43,7 @@ export const textosActividades = {
   sinInstructor: 'Sin instructor (uso autónomo)',
   conEquipo: 'Incluye equipamiento deportivo',
   sinEquipo: 'Sin equipamiento adicional',
-  totalCalculado: 'Total estimado',
+  totalCalculado: 'Total de la reserva',
   estadoReserva: 'Estado de la reserva',
   pagarAhora: 'Pagar ahora en carrito',
 
@@ -56,10 +56,10 @@ export const textosActividades = {
   campoHoraFin: 'Hora de finalización',
   campoInstructor: 'Instructor (opcional)',
   seleccionarInstructor: 'Sin instructor asignado',
-  campoEquipo: 'Requerir equipamiento deportivo',
-  precioPorHora: 'Tarifa por hora de instalación:',
-  precioEquipo: 'Tarifa de equipamiento:',
-  precioInstructor: 'Tarifa por hora de instructor:',
+  campoEquipo: 'Requerir equipamiento deportivo (incluido en la reserva)',
+  precioPorHora: 'Tarifa de instalación (por hora):',
+  precioEquipo: 'Tarifa de referencia equipamiento:',
+  precioInstructor: 'Tarifa de referencia instructor:',
   duracionRegla: 'La duración debe ser de entre 30 minutos y 2 horas.',
   confirmarReserva: 'Confirmar reserva',
   procesandoReserva: 'Confirmando su reserva...',
@@ -87,7 +87,7 @@ export const textosActividades = {
   errorInciertoRed:
     'Ocurrió un problema de red al procesar su solicitud. Por favor revise su listado de Mis Reservas antes de intentar reservar nuevamente.',
 
-  // Administración
+  // Administración de Reservas
   adminSubtitulo: 'HOTEL HUNAHPÚ · ADMINISTRACIÓN',
   adminTitulo: 'Gestión de reservas de actividades',
   adminDescripcion:
@@ -109,6 +109,46 @@ export const textosActividades = {
     'No es posible completar la actividad porque aún no ha finalizado su horario programado.',
   actualizandoEstado: 'Actualizando estado...',
   estadoActualizadoExito: 'El estado de la reserva ha sido actualizado correctamente.',
+
+  // Administración de Recursos
+  adminRecursosTitulo: 'Instalaciones y recursos de actividades',
+  adminRecursosDesc:
+    'Administración del catálogo de canchas, campos y áreas deportivas y recreativas del hotel por sede.',
+  nuevoRecurso: 'Nuevo recurso',
+  editarRecurso: 'Editar recurso',
+  crearRecursoTitulo: 'Registrar nueva instalación o recurso',
+  editarRecursoTitulo: 'Editar instalación o recurso',
+  recursoGuardadoExito: 'El recurso de actividad se ha guardado correctamente.',
+  campoTipo: 'Tipo de actividad (ej. golf, tenis, billar, cancha)',
+  campoNombreRecurso: 'Nombre de la instalación (ej. Cancha 1)',
+  campoTarifaHora: 'Tarifa horaria base (GTQ)',
+  campoTarifaEquipo: 'Tarifa de equipamiento (GTQ)',
+  campoTarifaInstructor: 'Tarifa por hora de instructor (GTQ)',
+  notaTarifasRecurso:
+    'El importe total de las reservas se calcula autoritativamente en el servidor multiplicando la tarifa horaria por la duración reservada.',
+  sinRecursosTitulo: 'No hay recursos registrados',
+  sinRecursosDesc: 'No se encontraron recursos de actividad con los filtros aplicados.',
+
+  // Administración de Instructores
+  adminInstructoresTitulo: 'Instructores deportivos',
+  adminInstructoresDesc:
+    'Gestión de instructores disponibles para impartir clases y asistir a los huéspedes en sus actividades.',
+  nuevoInstructor: 'Nuevo instructor',
+  editarInstructor: 'Editar instructor',
+  crearInstructorTitulo: 'Registrar nuevo instructor',
+  editarInstructorTitulo: 'Editar instructor',
+  instructorGuardadoExito: 'El instructor se ha guardado correctamente.',
+  campoNombreInstructor: 'Nombre completo',
+  campoEspecialidad: 'Especialidad deportiva (ej. Tenis, Yoga, Natación)',
+  campoActivo: 'Instructor activo y disponible para reservas',
+  activarInstructor: 'Activar',
+  desactivarInstructor: 'Desactivar',
+  instructorActivo: 'Activo',
+  instructorInactivo: 'Inactivo',
+  sinInstructoresTitulo: 'No hay instructores registrados',
+  sinInstructoresDesc: 'No se encontraron instructores con los filtros aplicados.',
+  errorInstructorConReservasFuturas:
+    'El instructor tiene reservas futuras confirmadas y no puede desactivarse.',
 
   // Estados
   estados: {
