@@ -1942,6 +1942,130 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-24"
 
+  - id: QA-EVT-FIN-CANDIDATE-036
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      PATCH de invitados elimina del total y anticipo los servicios persistidos
+      de una cotización de evento
+    invariant: >-
+      Modificar únicamente numero_invitados en una ReservaEvento en cotizacion
+      debe conservar sus ReservaEventoServicio y mantener total = tarifa_base del
+      Salon + SUM(subtotal persistido); el anticipo debe conservar el 30% del
+      total resultante.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.patchServiceTotal.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-036: PATCH de invitados conserva servicios, total y anticipo de la cotización"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.patchServiceTotal.test.ts
+      database: hotel_test_db
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/reservas-evento/{reservaId}/servicios
+        - PATCH /api/reservas-evento/{reservaId}
+      patch_body: { numero_invitados: 60 }
+      excluded_modules: [carrito, pagos, stripe]
+    expected:
+      patch: "HTTP 200; numero_invitados 50 -> 60"
+      association: >-
+        ReservaEventoServicio permanece idéntica: servicio Q300.00, cantidad 2,
+        subtotal Q600.00.
+      total: "Q5000.00 + Q600.00 = Q5600.00"
+      anticipo: "30% de Q5600.00 = Q1680.00"
+    actual:
+      patch: "HTTP 200; code null; numero_invitados 50 -> 60"
+      association: >-
+        ReservaEventoServicio permaneció idéntica con cantidad 2, subtotal
+        Q600.00 y precio unitario snapshot derivado Q300.00.
+      total: "cayó de Q5600.00 a Q5000.00"
+      anticipo: "cayó de Q1680.00 a Q1500.00"
+      invariant_violated: true
+      red_result: "1 archivo falló, 1 test falló"
+    http_evidence:
+      reservation_create: "HTTP 201; total Q5000.00; anticipo Q1500.00"
+      add_service: "HTTP 201; cantidad 2; subtotal Q600.00; total Q5600.00"
+      patch_guests: "HTTP 200; code null; numero_invitados=60"
+      unexpected_500: false
+    database_evidence:
+      ids: "ReservaEvento=1; Salon=1; ServicioEvento=1; asociación=1"
+      reservation_before_patch: >-
+        estado=cotizacion; total=5600.00; anticipo=1680.00;
+        numero_invitados=50.
+      reservation_after_patch: >-
+        estado=cotizacion; total=5000.00; anticipo=1500.00;
+        numero_invitados=60.
+      salon: "tarifa_base=5000.00; capacidad_maxima=100"
+      service_master: "precio=300.00"
+      association_after_patch: >-
+        reserva_evento_id=1; servicio_evento_id=1; cantidad=2;
+        subtotal=600.00; precio snapshot derivado=300.00; idéntica=true.
+      calculation: >-
+        tarifa Q5000.00 + SUM(subtotales) Q600.00 = Q5600.00 esperado;
+        persistido Q5000.00; diferencia financiera Q600.00.
+      source_of_truth: PostgreSQL
+    suspected_execution_path: >-
+      PATCH /api/reservas-evento/{id} -> reservaEvento.controller.update ->
+      reservaEvento.service.update -> calculateAmounts(salon). El cálculo usa
+      únicamente Salon.tarifa_base y sobrescribe ReservaEvento.total y anticipo
+      sin sumar ReservaEventoServicio.subtotal, aunque la asociación persiste.
+    severity_recommendation: high
+    correction:
+      root_cause: >-
+        reservaEvento.service.update recalculaba total y anticipo con una función
+        local que solo recibía Salon.tarifa_base. La transacción conservaba las
+        asociaciones ReservaEventoServicio, pero omitía sus subtotales snapshot
+        al sobrescribir los importes de la reserva.
+      fix: >-
+        PATCH reutiliza el cálculo financiero común de reservas de evento y,
+        después de bloquear ReservaEvento y resolver el salón efectivo, consulta
+        las asociaciones persistidas antes de actualizar total y anticipo.
+      total_formula: >-
+        roundMoney(Number(Salon.tarifa_base) +
+        SUM(Number(ReservaEventoServicio.subtotal)))
+      services_source: >-
+        Exclusivamente ReservaEventoServicio.subtotal persistido; no consulta
+        ServicioEvento.precio vivo ni reescribe asociaciones.
+      anticipo_formula: >-
+        roundMoney(total * (env.EVENT_DEPOSIT_PERCENTAGE / 100)); se conserva la
+        regla vigente sin introducir un porcentaje hardcodeado.
+      transaction_scope: >-
+        Se conserva la transacción existente y el orden de PATCH:
+        ReservaEvento SELECT FOR UPDATE -> Salon SELECT FOR UPDATE según la
+        lógica vigente -> ReservaEventoServicio -> ReservaEvento update. No se
+        agregan locks de Pago, Carrito o Stripe. El lock de ReservaEvento también
+        serializa las mutaciones de servicios de esa misma reserva.
+      035_regression: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts: 1/1. La entrada
+        QA-EVT-FIN-CANDIDATE-035 no fue modificada.
+      production_files:
+        - backend/src/services/eventos/reservaEvento.service.ts
+        - backend/src/services/eventos/reservaEventoServicio.service.ts
+      test_modified_by_fixer: false
+      migrations_modified: false
+    verification:
+      focused: "GREEN; 1 file passed, 1 test passed"
+      reserva_evento_module: "GREEN; 1 file passed, 40 tests passed"
+      reserva_evento_servicio_module: "GREEN; 1 file passed, 39 tests passed"
+      qa_035: "GREEN; 1 file passed, 1 test passed"
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck: pass
+      typecheck_primary_command: "npm --prefix backend exec tsc -- --noEmit"
+      typecheck_primary_result: >-
+        npm 12 no localizó tsconfig; mostró ayuda de tsc y terminó con código 1
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck_explicit_result: pass
+      production_files_modified_by_test_author: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-24"
+
   - id: QA-AUTH-SEC-CANDIDATE-034
     status: closed
     severity: medium

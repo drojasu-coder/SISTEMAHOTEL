@@ -3,13 +3,13 @@ import { Op } from "sequelize";
 import { AppError }
   from "../../utils/AppError";
 
-import { env }
-  from "../../config/env";
-
 import {
   ROLES,
   Role,
 } from "../../constants/roles";
+
+import { calculateReservationAmounts }
+  from "./reservaEventoServicio.service";
 
 const db = require("../../models");
 
@@ -34,13 +34,6 @@ const blockingStates = [
   "cotizacion",
   "confirmada",
 ];
-
-const roundMoney = (
-  value: number
-) =>
-  Math.round(
-    (value + Number.EPSILON) * 100
-  ) / 100;
 
 const isValidCalendarDate = (
   value: string
@@ -252,28 +245,6 @@ const validateCapacity = (
   }
 };
 
-const calculateAmounts = (
-  salon: any
-) => {
-  const total = roundMoney(
-    Number(salon.tarifa_base)
-  );
-
-  const anticipo =
-    roundMoney(
-      total *
-        (
-          env.EVENT_DEPOSIT_PERCENTAGE /
-          100
-        )
-    );
-
-  return {
-    total,
-    anticipo,
-  };
-};
-
 export const getAll = async (
   requesterId: number,
   requesterRole: Role
@@ -411,8 +382,9 @@ export const create = async (
         total,
         anticipo,
       } =
-        calculateAmounts(
-          salon
+        await calculateReservationAmounts(
+          salon,
+          transaction
         );
 
       return ReservaEvento.create(
@@ -563,8 +535,10 @@ export const update = async (
         total,
         anticipo,
       } =
-        calculateAmounts(
-          salon
+        await calculateReservationAmounts(
+          salon,
+          transaction,
+          reserva.id
         );
 
       await reserva.update(
