@@ -11,6 +11,9 @@ import {
 import { calculateReservationAmounts }
   from "./reservaEventoServicio.service";
 
+import { eventFinancialExposure }
+  from "../pago.service";
+
 const db = require("../../models");
 
 const {
@@ -532,8 +535,8 @@ export const update = async (
       );
 
       const {
-        total,
-        anticipo,
+        total: proposedTotal,
+        anticipo: proposedAnticipo,
       } =
         await calculateReservationAmounts(
           salon,
@@ -541,11 +544,49 @@ export const update = async (
           reserva.id
         );
 
+      const changesFinancialObligation =
+        Math.round(
+          Number(reserva.total) *
+            100
+        ) !==
+        Math.round(
+          proposedTotal * 100
+        );
+
+      if (changesFinancialObligation) {
+        const exposure =
+          await eventFinancialExposure(
+            reserva.id,
+            transaction
+          );
+
+        if (exposure.processing > 0) {
+          throw new AppError(
+            409,
+            "RESERVATION_HAS_PROCESSING_PAYMENT",
+            "La reserva tiene un pago en procesamiento y no puede modificarse económicamente"
+          );
+        }
+
+        if (
+          exposure.approved >
+          proposedTotal
+        ) {
+          throw new AppError(
+            409,
+            "PAYMENT_EXCEEDS_NEW_TOTAL",
+            "Los pagos existentes exceden el nuevo total de la reserva"
+          );
+        }
+      }
+
       await reserva.update(
         {
           ...candidate,
-          total,
-          anticipo,
+          total:
+            proposedTotal,
+          anticipo:
+            proposedAnticipo,
         },
         {
           transaction,

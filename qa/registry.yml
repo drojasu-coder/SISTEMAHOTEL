@@ -2066,6 +2066,215 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-24"
 
+  - id: QA-EVT-FIN-CANDIDATE-037
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      PATCH permite reducir la obligación de una ReservaEvento por debajo de un
+      PaymentIntent procesando
+    invariant: >-
+      Una ReservaEvento con exposición financiera activa (aprobado neto más
+      procesando) no puede mutar su obligación de forma incompatible, dejando
+      PaymentIntent.amount distinto del total vigente o exposición aprobada neta
+      superior a la obligación. La mutación económica debe rechazarse con HTTP
+      409 y conservar la reserva cuando existe esa exposición.
+    reproduction:
+      phase: RED
+      variant: A
+      test_file: backend/tests/eventos/reservaEvento.paymentMutationBinding.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-037 A: rechaza reducir la obligación con un pago procesando"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.paymentMutationBinding.test.ts
+      database: hotel_test_db
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/carritos
+        - POST /api/carritos/{carritoId}/items
+        - POST /api/pagos
+        - PATCH /api/reservas-evento/{reservaId}
+      patch_body: { salon_id: 2 }
+      exclusions:
+        - sin cancelación
+        - sin DELETE
+        - sin estado cancelada
+        - sin mutar numero_invitados
+        - sin mutar ServicioEvento.precio
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      webhook_calls: 0
+    scenario:
+      ids: >-
+        ReservaEvento=1; Salon A=1; Salon B=2; Carrito=1; CarritoItem=1;
+        Pago=1; PaymentIntent=pi_evt_mutation_037_001.
+      salon_a: "tarifa Q5000.00; capacidad 100"
+      salon_b: "tarifa Q3000.00; capacidad 100"
+      reservation_before: >-
+        cotizacion; salón A; total Q5000.00; anticipo Q1500.00; 50 invitados.
+      cart: "un solo ítem evento; precio snapshot Q5000.00; cantidad 1"
+      payment: "tarjeta; total; Q5000.00; procesando; GTQ; Stripe local"
+      payment_intent: >-
+        pi_evt_mutation_037_001; requires_payment_method; 500000 centavos;
+        metadata pago_id=1, carrito_id=1, tipo_pago=total.
+      initial_exposure: >-
+        aprobado neto Q0.00 + procesando Q5000.00 = Q5000.00; coincide con la
+        obligación inicial Q5000.00.
+    expected:
+      patch: "HTTP 409; sin mutación"
+      reservation_after: "salón A; total Q5000.00; anticipo Q1500.00"
+      payment_after: "procesando; Q5000.00"
+      payment_intent_after: "requires_payment_method; Q5000.00"
+      authorization_matches_current_obligation: true
+      maximum_active_exposure: "Q5000.00"
+    actual:
+      patch: "HTTP 200; code null"
+      reservation_after: "cotizacion; salón B; total Q3000.00; anticipo Q900.00"
+      payment_after: "procesando; Q5000.00; sin cambios"
+      payment_intent_after: "requires_payment_method; Q5000.00; sin cambios"
+      approved_amount: "0.00"
+      processing_amount: "5000.00"
+      active_exposure: "5000.00"
+      current_obligation: "3000.00"
+      exposure_excess: "2000.00"
+      authorization_matches_current_obligation: false
+      invariant_violated: true
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló, 5 aserciones soft fallaron"
+    http_evidence:
+      reservation_create: "HTTP 201; total Q5000.00"
+      cart_create: "HTTP 201"
+      add_event: "HTTP 201; precio Q5000.00"
+      payment_create: "HTTP 201; procesando; Q5000.00"
+      patch_room: >-
+        HTTP 200; code null; salon_id 1 -> 2; total Q5000.00 -> Q3000.00;
+        anticipo Q1500.00 -> Q900.00.
+    database_evidence:
+      source_of_truth: PostgreSQL
+      final_reservation: >-
+        ReservaEvento id=1; cotizacion; salon_id=2; total=3000.00;
+        anticipo=900.00.
+      final_cart_item: >-
+        CarritoItem id=1; carrito_id=1; evento referencia_id=1;
+        precio=5000.00; cantidad=1.
+      final_payment: >-
+        Pago id=1; carrito_id=1; tarjeta; total; procesando; monto=5000.00;
+        reembolsos aprobados=0.00; pi_evt_mutation_037_001.
+      final_exposure: >-
+        consulta SQL directa y eventFinancialExposure coinciden: approved=0.00,
+        processing=5000.00, total=5000.00; obligación=3000.00.
+    stripe_mock_evidence:
+      create_payment_intent_calls: 1
+      update_metadata_calls: 0
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    lock_review:
+      reserva_evento: "SELECT FOR UPDATE presente en reservaEvento.service.update"
+      effective_salon: "SELECT FOR UPDATE presente en getSalonForReservation"
+      financial_exposure: >-
+        PATCH no invoca eventFinancialExposure y no bloquea Pago o Carrito antes
+        de recalcular y persistir total/anticipo.
+    suspected_execution_path: >-
+      PATCH /api/reservas-evento/{id} -> reservaEvento.controller.update ->
+      reservaEvento.service.update bloquea ReservaEvento y el Salon efectivo,
+      valida lifecycle/capacidad/disponibilidad, calcula importes para Salon B y
+      actualiza la reserva. La ruta no consulta eventFinancialExposure antes de
+      reducir total, aunque Pago.create sí usa esa función al crear compromisos.
+    root_cause: >-
+      reservaEvento.service.update recalculaba y persistía total/anticipo después
+      de cambiar el salón, pero no distinguía si el total realmente cambiaba ni
+      vinculaba esa mutación económica con la exposición financiera activa del
+      evento antes del UPDATE.
+    fix: >-
+      El PATCH calcula primero el total propuesto con el helper consolidado y,
+      únicamente cuando la obligación cambia, consulta eventFinancialExposure
+      dentro de la misma transacción; rechaza exposición procesando o aprobado
+      neto superior al nuevo total antes de persistir la reserva.
+    economic_mutation_detection: >-
+      Comparación en centavos entre ReservaEvento.total persistido y
+      proposedTotal. salon_id solo dispara la regla si su tarifa produce una
+      diferencia real; fecha, horas, tipo de evento y numero_invitados no quedan
+      bloqueados cuando el total calculado permanece igual.
+    proposed_total_strategy: >-
+      calculateReservationAmounts(salon efectivo, transaction, reserva.id)
+      obtiene tarifa_base del salón bloqueado más SUM de snapshots
+      ReservaEventoServicio.subtotal y deriva el anticipo configurado.
+    event_financial_exposure_helper: >-
+      Se reutiliza exclusivamente eventFinancialExposure de pago.service; no se
+      duplicó la agregación de Pago/Reembolso ni se consultó Stripe.
+    processing_rule: >-
+      Si cambia la obligación y exposure.processing > 0, responde HTTP 409 con
+      RESERVATION_HAS_PROCESSING_PAYMENT antes del UPDATE.
+    approved_rule: >-
+      Si processing=0 y exposure.approved > proposedTotal, responde HTTP 409 con
+      PAYMENT_EXCEEDS_NEW_TOTAL antes del UPDATE.
+    transaction_scope: >-
+      Cálculo, lectura de exposición, validaciones y UPDATE permanecen dentro de
+      la única transacción de reservaEvento.service.update; cualquier AppError
+      revierte la operación completa.
+    lock_order: >-
+      ReservaEvento FOR UPDATE -> Salon efectivo FOR UPDATE -> cálculo de
+      proposedTotal -> eventFinancialExposure sobre Pago/Reembolso -> UPDATE.
+      Se conserva sin cambios el orden de createPago corregido por QA-035.
+    "035_regression": >-
+      GREEN: reservaEvento.crossCartProcessing.test.ts, 1/1; no se modificó
+      createPago ni su orden Carrito -> reservas -> Pago.
+    "036_regression": >-
+      GREEN: reservaEvento.patchServiceTotal.test.ts, 1/1; el PATCH de invitados
+      conserva los subtotales snapshot, total y anticipo consolidados.
+    final_evidence:
+      patch: "HTTP 409; code RESERVATION_HAS_PROCESSING_PAYMENT"
+      reservation_after: "salón A; total Q5000.00; anticipo Q1500.00"
+      salons_after: "salón A Q5000.00 y salón B Q3000.00 sin cambios"
+      payment_after: "procesando; Q5000.00"
+      payment_intent_after: "requires_payment_method; Q5000.00"
+      exposure_after: "approved=Q0.00; processing=Q5000.00; total=Q5000.00"
+      stripe_calls_during_patch:
+        create: 0
+        update_metadata: 0
+        retrieve: 0
+        cancel: 0
+        refund: 0
+        webhook: 0
+    severity_recommendation: high
+    variant_b:
+      status: NOT_TESTED
+      reason: "La variante A confirmó la firma exacta; no era necesario aprobar vía webhook."
+    regressions_observed:
+      qa_035: >-
+        GREEN en reservaEvento.crossCartProcessing.test.ts; no se modificó el
+        test ni el orden de locks de createPago.
+      qa_036: >-
+        GREEN en reservaEvento.patchServiceTotal.test.ts; se conserva el cálculo
+        consolidado con subtotales snapshot al mutar invitados.
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: >-
+        GREEN: reservaEvento.paymentMutationBinding.test.ts, 1 archivo, 1 test.
+      qa_035_test: >-
+        GREEN: reservaEvento.crossCartProcessing.test.ts, 1 archivo, 1 test.
+      qa_036_test: >-
+        GREEN: reservaEvento.patchServiceTotal.test.ts, 1 archivo, 1 test.
+      reservation_module_test: >-
+        GREEN: reservaEvento.test.ts, 1 archivo, 40 tests.
+      reservation_service_module_test: >-
+        GREEN: reservaEventoServicio.test.ts, 1 archivo, 39 tests.
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck_explicit_result: pass
+      production_files_modified:
+        - backend/src/services/eventos/reservaEvento.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-24"
+
   - id: QA-AUTH-SEC-CANDIDATE-034
     status: closed
     severity: medium
