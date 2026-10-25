@@ -17,25 +17,6 @@ interface ReservaMesaModalProps {
   mesa: MesaConSucursal | null;
 }
 
-const HORARIOS_DISPONIBLES = [
-  "07:00",
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-  "21:00",
-  "22:00",
-];
-
 const getTodayDateString = (): string => {
   const now = new Date();
   const year = now.getFullYear();
@@ -285,20 +266,15 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                 {t.horaLabel}
               </label>
               <div className="relative mt-1">
-                <select
+                <input
                   id="reserva-hora"
+                  type="time"
                   value={hora}
                   onChange={(e) => setHora(e.target.value)}
                   required
                   disabled={createMutation.isPending}
                   className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 bg-blanco"
-                >
-                  {HORARIOS_DISPONIBLES.map((h) => (
-                    <option key={h} value={h}>
-                      {h} hrs
-                    </option>
-                  ))}
-                </select>
+                />
                 <Clock className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
               </div>
             </div>
