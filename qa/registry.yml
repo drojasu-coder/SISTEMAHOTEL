@@ -6152,3 +6152,130 @@ findings:
       test_file_modified: false
       migrations_modified: false
       verified_at: "2026-10-25"
+
+  - id: QA-SPA-CONC-CANDIDATE-045
+    status: closed
+    severity: high
+    category: CONC
+    title: >-
+      CREATE concurrente confirma citas incompatibles para el mismo terapeuta
+    invariant: >-
+      Para el mismo terapeuta puede existir como máximo una CitaBienestar en
+      estado confirmada dentro de una ventana incompatible según la semántica
+      productiva: hora_inicio existente < fin nuevo + 15 minutos y hora_fin
+      existente > inicio nuevo - 15 minutos. Cancelada y completada no bloquean.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.concurrency.test.ts
+      test_name: "QA-SPA-CONC-CANDIDATE-045: CREATE concurrente no confirma citas incompatibles para el mismo terapeuta"
+      endpoint: POST /api/citas-spa
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.concurrency.test.ts
+      requests: 20
+      runs_executed: 1
+      synchronization: "Promise.all natural, sin sleeps, barriers ni hooks artificiales"
+      buffer_minutes: 15
+    expected:
+      confirmed_overlap_count_max: 1
+      unexpected_500: false
+    actual:
+      therapist_id: 1
+      service_id: 1
+      service_duration_minutes: 60
+      service_price: "350.00"
+      target_date: "2026-12-09"
+      target_start: "10:00:00"
+      target_end: "11:00:00"
+      blocked_window_start: "09:45:00"
+      blocked_window_end: "11:15:00"
+      http_distribution:
+        "201:NO_CODE": 20
+      confirmed_overlap_count: 20
+      overlapping_ids:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 19
+        - 20
+      postgres_error_code: NONE
+      deadlock: false
+      serialization_error: false
+      timeout: false
+      unexpected_500: false
+      double_booking: true
+    http_evidence: >-
+      Los 20 POST simultáneos a /api/citas-spa recibieron HTTP 201 sin código de
+      error y respondieron con citas en estado confirmada. No hubo HTTP 409,
+      otros estados ni HTTP 500.
+    database_evidence: >-
+      Una consulta directa posterior sobre citas_bienestar, usando exactamente
+      terapeuta_id=1, fecha=2026-12-09, estado=confirmada, hora_inicio <
+      11:15:00 y hora_fin > 09:45:00, encontró 20 filas incompatibles con IDs
+      1 a 20. Todas tenían inicio 10:00:00, fin 11:00:00, servicio_id=1 y
+      usuario_id=2; el máximo permitido era 1.
+    suspected_execution_path: >-
+      POST /api/citas-spa atraviesa auth y validación, citaSpa.controller.create
+      y citaSpa.service.create. El servicio ejecuta CitaBienestar.findOne para
+      detectar solape confirmado y después CitaBienestar.create sin una
+      transacción serializadora, bloqueo compartido por terapeuta/fecha ni
+      constraint temporal PostgreSQL. Las 20 solicitudes pueden observar la
+      ausencia inicial de citas y luego insertar independientemente.
+    red_result: >-
+      CONFIRMED en la primera ejecución: 1 archivo falló y 1 test falló porque
+      CONFIRMED_OVERLAP_COUNT fue 20 y la aserción segura exigía <= 1.
+    root_cause: >-
+      La validación de solape confirmado y el INSERT se ejecutaban sin una
+      transacción ni un recurso común bloqueado. Las solicitudes concurrentes
+      podían observar simultáneamente que no existía solape y después insertar
+      citas incompatibles para el mismo terapeuta.
+    fix: >-
+      citaSpa.service.create ahora usa una transacción administrada, bloquea la
+      fila del terapeuta objetivo mediante SELECT FOR UPDATE antes de validar su
+      estado, y ejecuta dentro de esa misma transacción la carga del servicio,
+      el cálculo y consulta de solape, y el INSERT confirmado.
+    serialization_resource: >-
+      Fila de terapeutas identificada por terapeuta_id, adquirida con SELECT FOR UPDATE
+    transaction_scope: >-
+      BEGIN -> lock Terapeuta target -> validar existencia y activo -> cargar
+      ServicioBienestar -> calcular duración y buffer -> consultar solapes
+      confirmados -> INSERT CitaBienestar confirmada -> COMMIT; cualquier
+      AppError revierte la transacción.
+    lock_order_before: >-
+      Sin transacción ni locks explícitos: SELECT Terapeuta -> SELECT
+      ServicioBienestar -> SELECT solape CitaBienestar -> INSERT CitaBienestar.
+    lock_order_after: >-
+      SELECT Terapeuta FOR UPDATE -> SELECT ServicioBienestar -> SELECT solape
+      CitaBienestar confirmada -> INSERT CitaBienestar, todo dentro de una sola
+      transacción.
+    buffer_preserved: true
+    blocking_state: confirmada
+    http_distribution_after:
+      "201:NO_CODE": 1
+      "409:THERAPIST_BUSY_OR_BUFFER": 19
+    repeat_runs: "10/10 PASS después del primer GREEN oficial"
+    max_confirmed_overlap_observed: 1
+    deadlock_observed: false
+    timeout_observed: false
+    unexpected_500: false
+    044_regression:
+      status: pass
+      response: "409 CART_REFERENCE_NOT_AVAILABLE"
+      active_exposure: "Q350.00"
+    verified_at: "2026-10-25"

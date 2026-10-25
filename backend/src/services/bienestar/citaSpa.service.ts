@@ -126,13 +126,22 @@ const minutesToTime = (
 export const create = async (
   data: any
 ) => {
+  return db.sequelize.transaction(
+    async (
+      transaction: any
+    ) => {
   // ----------------------------------------------------
   // 1. Validar que el terapeuta exista
   // ----------------------------------------------------
 
   const terapeuta =
     await Terapeuta.findByPk(
-      data.terapeuta_id
+      data.terapeuta_id,
+      {
+        transaction,
+        lock:
+          transaction.LOCK.UPDATE,
+      }
     );
 
   if (!terapeuta) {
@@ -161,7 +170,10 @@ export const create = async (
 
   const servicio =
     await ServicioBienestar.findByPk(
-      data.servicio_bienestar_id
+      data.servicio_bienestar_id,
+      {
+        transaction,
+      }
     );
 
   if (!servicio) {
@@ -268,6 +280,7 @@ export const create = async (
           },
         ],
       },
+      transaction,
     });
 
   if (traslape) {
@@ -304,9 +317,13 @@ export const create = async (
 
       estado:
         "confirmada",
+    }, {
+      transaction,
     });
 
   return cita;
+    }
+  );
 };
 
 // ======================================================
