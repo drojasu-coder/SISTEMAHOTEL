@@ -610,16 +610,13 @@ const resolveBienestar =
     );
 
     /**
- * Una cita de bienestar que ya tenga
- * cualquier monto neto aprobado mediante
- * un carrito anterior no puede volver
- * a agregarse a otro carrito.
+ * Una cita de bienestar que ya tenga exposición financiera activa mediante
+ * un carrito anterior no puede volver a agregarse a otro carrito.
  *
- * Esto evita cobrar nuevamente una cita
- * que ya posee pagos asociados.
+ * Esto incluye dinero aprobado neto de reembolsos y pagos procesando.
  */
 if (
-  await hasCartReferenceApprovedPayment(
+  await hasCartReferenceActiveFinancialCommitment(
     "bienestar",
     cita.id,
     transaction

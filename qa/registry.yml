@@ -5847,6 +5847,193 @@ findings:
       migrations_modified: false
       verified_at: "2026-10-25"
 
+  - id: QA-SPA-FIN-CANDIDATE-044
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Una CitaBienestar admite dos pagos Stripe procesando en carritos
+      históricos distintos por el doble de su precio legítimo
+    invariant: >-
+      Para una CitaBienestar, la exposición activa agregada en todos sus
+      carritos históricos, definida como dinero aprobado neto más pagos en
+      estado procesando, nunca debe superar su obligación legítima. Un servicio
+      de Q350.00 admite como máximo Q350.00 de exposición, nunca Q700.00.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.crossCartProcessing.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-044: rechaza una segunda exposición procesando de la misma cita tras expirar C1"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.crossCartProcessing.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-044: rechaza una segunda exposición procesando de la misma cita tras expirar C1"
+      concurrency: false
+      webhook_used: false
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+    expected:
+      second_add: "HTTP 409 CART_REFERENCE_NOT_AVAILABLE o rechazo equivalente"
+      c2_item_created: false
+      p2_attempt: NOT_RUN
+      payment_intents_created: 1
+      local_payments_created: 1
+      maximum_legitimate_exposure: "350.00"
+      cita_state: confirmada
+      unexpected_500: false
+    actual:
+      client_id: 2
+      therapist_id: 1
+      service_id: 1
+      service_price: "350.00"
+      cita_id: 1
+      cita_state: confirmada
+      c1_id: 1
+      c1_state_before_expiry: activo
+      c1_state_after_expiry: expirado
+      c1_item_id: 1
+      c1_item_price: "350.00"
+      p1_create: "HTTP 201; code null"
+      p1_id: 1
+      p1_state: procesando
+      p1_amount: "350.00"
+      pi1_id: pi_spa_fin_044_1
+      pi1_state: requires_payment_method
+      c2_id: 2
+      second_add: "HTTP 201; code null"
+      c2_item_created: true
+      c2_item_id: 2
+      p2_attempt: "HTTP 201; code null"
+      p2_id: 2
+      p2_state: procesando
+      p2_amount: "350.00"
+      pi2_id: pi_spa_fin_044_2
+      payment_intents_created: 2
+      local_payments_created: 2
+      real_approved_money: "0.00"
+      real_processing_money: "700.00"
+      processing_from_c1: "350.00"
+      processing_from_c2: "350.00"
+      total_active_exposure: "700.00"
+      maximum_legitimate_exposure: "350.00"
+      double_processing_exposure: true
+      financial_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con siete aserciones de conducta segura:
+        C2 aceptó la referencia, persistió item y pago, creó un segundo
+        PaymentIntent y elevó la exposición activa de Q350.00 a Q700.00.
+    http_evidence:
+      therapist_create: "HTTP 201"
+      service_create: "HTTP 201; precio Q350.00"
+      cita_create: "HTTP 201; confirmada"
+      c1_create: "HTTP 201"
+      c1_add: "HTTP 201; item bienestar id=1; Q350.00"
+      p1_create: "HTTP 201; procesando; Q350.00; pi_spa_fin_044_1"
+      c2_create: "HTTP 201"
+      c2_add: "HTTP 201; item bienestar id=2; Q350.00"
+      p2_create: "HTTP 201; procesando; Q350.00; pi_spa_fin_044_2"
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      cita: >-
+        id=1; usuario_id=2; servicio_bienestar_id=1; terapeuta_id=1;
+        estado=confirmada
+      carts: "C1 id=1 expirado; C2 id=2 activo"
+      cart_item_rows: >-
+        id=1 carrito_id=1 bienestar referencia_id=1 precio Q350.00; id=2
+        carrito_id=2 bienestar referencia_id=1 precio Q350.00
+      payment_rows: >-
+        id=1 carrito_id=1 tarjeta procesando Q350.00 externo
+        pi_spa_fin_044_1; id=2 carrito_id=2 tarjeta procesando Q350.00 externo
+        pi_spa_fin_044_2
+      approved_refunds: "0.00"
+      approved_net: "0.00"
+      processing_total: "700.00"
+      processing_from_c1: "350.00"
+      processing_from_c2: "350.00"
+      total_active_exposure: "700.00"
+      maximum_legitimate_exposure: "350.00"
+      financial_violation: true
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 2
+      first: >-
+        pi_spa_fin_044_1; requires_payment_method; 35000 minor units; Q350.00;
+        metadata pago_id=1,carrito_id=1,tipo_pago=total
+      second: >-
+        pi_spa_fin_044_2; requires_payment_method; 35000 minor units; Q350.00;
+        metadata pago_id=2,carrito_id=2,tipo_pago=total
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      webhook_calls: 0
+    suspected_execution_path: >-
+      POST /api/carritos/{C2}/items entra por carritoItem.service.create y
+      resolveBienestar. Tras validar ownership y estado, resolveBienestar llama
+      hasCartReferenceApprovedPayment, que consulta únicamente dinero neto
+      aprobado de los carritos históricos y no considera el Pago procesando de
+      C1. Por eso persiste el item duplicado. POST /api/pagos para C2 calcula la
+      exposición por carrito_id=2, sin agregar C1 para CitaBienestar.id=1, y
+      persiste P2 antes de crear PI2.
+    root_cause: >-
+      resolveBienestar protegía la disponibilidad financiera únicamente con
+      hasCartReferenceApprovedPayment. Esa guarda recorría los carritos
+      históricos de la cita, pero omitía sus pagos en estado procesando, por lo
+      que la expiración de C1 ocultaba P1 al intentar agregar la cita a C2.
+    fix: >-
+      resolveBienestar reutiliza hasCartReferenceActiveFinancialCommitment para
+      rechazar el segundo ADD cuando cualquier carrito histórico de la cita
+      conserva dinero aprobado neto o un pago procesando.
+    validation_layer: "POST /api/carritos/{carritoId}/items; carritoItem.service.resolveBienestar"
+    financial_commitment_helper: hasCartReferenceActiveFinancialCommitment
+    historical_carts_included: true
+    approved_included: true
+    processing_included: true
+    refund_semantics: >-
+      Los reembolsos aprobados se descuentan del dinero aprobado mediante
+      approvedAmount; los estados rechazado, fallido y cancelado no crean
+      compromiso activo, preservando la semántica existente del helper.
+    second_add_result: "HTTP 409; CART_REFERENCE_NOT_AVAILABLE"
+    second_payment_created: false
+    paymentintent_count: 1
+    local_payment_count: 1
+    final_active_exposure: "350.00"
+    max_legitimate_exposure: "350.00"
+    financial_violation: false
+    regressions:
+      official_044: "PASS; 1 file passed, 1 test passed"
+      qa_cart_fin_candidate_014: "PASS; pagoCartMutationBinding.test.ts"
+      related_carts: >-
+        PASS; carritoItem.test.ts, reservaHabitacion.aggregateExposure.test.ts,
+        reservaEvento.crossCartProcessing.test.ts y
+        pagoActividad.crossCartProcessing.test.ts
+      related_payments: >-
+        PASS; pagoCartMutationBinding.test.ts y
+        pagoActividad.crossCartProcessing.test.ts
+      aggregate_result: "PASS; 5 files passed, 44 tests passed"
+      typecheck: pass
+    verified_at: "2026-10-25"
+    severity_recommendation: critical
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_red_preserved: "RED; 1 file failed, 1 test failed; 7 soft assertions"
+      focused: "GREEN; 1 file passed, 1 test passed"
+      qa_014_regression_observed: pass
+      qa_014_test_reexecuted: true
+      related_regressions: "GREEN; 5 files passed, 44 tests passed"
+      typecheck: pass
+      qa_045_investigated: false
+      qa_046_investigated: false
+      production_files_modified:
+        - backend/src/services/carrito/carritoItem.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-25"
+
   - id: QA-TR-DATA-CANDIDATE-043
     status: closed
     severity: high
