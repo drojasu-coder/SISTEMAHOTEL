@@ -707,4 +707,80 @@ describe("HTTP Eventos in isolated PostgreSQL (port 55433)", () => {
 
     await database.Carrito.destroy({ where: { id: newCartId }, force: true });
   });
+
+  it("Bloquea agregar a otro carrito una reserva de evento que ya tiene un pago en estado procesando (409)", async () => {
+    // 1. Crear nueva reserva de evento para client1
+    const reservaRes = await request(app)
+      .post("/api/reservas-evento")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        salon_id: salon2Id,
+        tipo_evento: "cumpleanos",
+        fecha: "2026-12-25",
+        hora_inicio: "10:00",
+        hora_fin: "14:00",
+        numero_invitados: 40,
+      });
+    expect(reservaRes.status).toBe(201);
+    const reservaId = reservaRes.body.data.id;
+
+    // 2. Crear primer carrito y añadir la reserva
+    const c1Res = await request(app)
+      .post("/api/carritos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({});
+    expect(c1Res.status).toBe(201);
+    const cart1Id = c1Res.body.data.id;
+
+    const add1Res = await request(app)
+      .post(`/api/carritos/${cart1Id}/items`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        tipo_item: "evento",
+        referencia_id: reservaId,
+      });
+    expect(add1Res.status).toBe(201);
+
+    // 3. Iniciar pago con tarjeta (estado: procesando)
+    const payRes = await request(app)
+      .post("/api/pagos")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        carrito_id: cart1Id,
+        monto: String(reservaRes.body.data.total),
+        metodo: "tarjeta",
+        tipo_pago: "total",
+        moneda: "GTQ",
+        idempotency_key: `idemp-eventos-proc-${Date.now()}`,
+      });
+    expect(payRes.status).toBe(201);
+    expect(payRes.body.data.estado).toBe("procesando");
+    const pagoId = Number(payRes.body.data.pago_id);
+
+    // 4. Crear segundo carrito e intentar añadir la misma reserva (debe fallar con 409)
+    const newCart = await database.Carrito.create({
+      usuario_id: client1UserId,
+      estado: "activo",
+      expira_en: new Date(Date.now() + 3600000),
+    });
+    const cart2Id = newCart.id;
+
+    const add2Res = await request(app)
+      .post(`/api/carritos/${cart2Id}/items`)
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        tipo_item: "evento",
+        referencia_id: reservaId,
+      });
+
+    expect(add2Res.status).toBe(409);
+    expect(add2Res.body.code).toBe("CART_REFERENCE_NOT_AVAILABLE");
+
+    // Limpieza aislada
+    await database.Pago.destroy({ where: { id: pagoId }, force: true });
+    await database.CarritoItem.destroy({ where: { carrito_id: cart1Id }, force: true });
+    await database.Carrito.destroy({ where: { id: cart1Id }, force: true });
+    await database.Carrito.destroy({ where: { id: cart2Id }, force: true });
+    await database.ReservaEvento.destroy({ where: { id: reservaId }, force: true });
+  });
 });

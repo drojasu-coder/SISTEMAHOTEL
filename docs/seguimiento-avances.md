@@ -446,3 +446,41 @@ Este documento registra de forma continua el avance técnico, archivos modificad
        - `npm --prefix backend run typecheck:all`: 0 errores.
        - `npm --prefix Frontend run typecheck`: 0 errores.
        - `npm --prefix Frontend run build`: compilación de producción exitosa en `Frontend/dist/`.
+
+---
+
+## Cierre de Entrega y Verificación del Flujo Comercial de Eventos y Salones
+
+- **Estado:** Completada, verificada y documentada formalmente.
+- **Aclaración del Modelo de Roles del Sistema:**
+  - El sistema cuenta globalmente con **6 roles definidos**: `admin`, `recepcionista`, `gerente_restaurante`, `gerente_habitaciones`, `empleado_operativo` y `cliente`.
+  - La indicación de "únicamente admin y cliente" se circunscribe con exclusividad a los participantes operativos del módulo de **Eventos y Salones**:
+    - **Cliente (`cliente`):** Rol autoservicio que consulta salones disponibles, solicita y modifica cotizaciones, gestiona servicios adicionales y realiza pagos mediante carrito y Stripe.
+    - **Administrador (`admin`):** Rol exclusivo bajo el permiso `servicios.administrar` para la configuración física de salones, catálogo de servicios adicionales y aprobación formal / cambio de estado operativo de reservas (`PATCH /api/reservas-evento/:id/estado`).
+    - Los roles restantes (`recepcionista`, `gerente_restaurante`, `gerente_habitaciones`, `empleado_operativo`) no participan en la administración de salones ni reservas de eventos, manteniendo intactos sus alcances y permisos en sus módulos correspondientes.
+- **Verificación del Flujo Comercial y Reglas de Negocio:**
+  - **Estados para adición al carrito:** Una reserva de evento solo puede ser agregada al carrito si se encuentra en estado no terminal (`cotizacion` o `confirmada`). Si la reserva ya posee pagos aprobados o en proceso (`procesando`), se rechaza con `409 CART_REFERENCE_NOT_AVAILABLE`.
+  - **Cotización y pago:** En el backend, `payableEventStates` admite el pago tanto en estado `cotizacion` como `confirmada`. No se exige aprobación administrativa previa para pagar el anticipo/total fijado por las tarifas autoritativas de salón y servicios. La aprobación administrativa posterior revalida la disponibilidad del salón.
+  - **Anticipo, Saldo y Pago Total:**
+    - *Backend:* El servidor calcula automáticamente `total = tarifa_base + servicios` y `anticipo = round(total * 0.50)` (50%). La capa de pagos valida `ADVANCE_BELOW_REQUIRED` y `ADVANCE_REQUIRED_FIRST` según el tipo de pago.
+    - *Interfaz (Frontend):* En `CheckoutPage.tsx`, el flujo actual de cliente inicia el intento con `tipo_pago: "total"` sobre el saldo pendiente del carrito. `ResumenCheckout.tsx` muestra de forma informativa el total, anticipo requerido y saldo, sin ofrecer un selector interactivo para fraccionar el pago con tarjeta en la pasarela actual.
+  - **Mutaciones concurrentes y protección contra importes desactualizados:**
+    - Agregar o retirar servicios mientras está en `cotizacion` recalcula `total` y `anticipo` en BD.
+    - Si se cancela la reserva o cambia su importe mientras está en carrito o con un PaymentIntent pendiente:
+      - Si se cancela: la creación del pago o el checkout la rechaza con `409 EVENT_RESERVATION_NOT_AVAILABLE`.
+      - Si cambia el monto: el frontend bloquea con aviso de importe modificado (`montoDifiere`) y el backend rechaza en webhook o creación con `409 STRIPE_PAYMENT_MISMATCH`.
+      - Se reforzó `resolveEvento` en `backend/src/services/carrito/carritoItem.service.ts` con `hasCartReferenceActiveFinancialCommitment` para impedir agregar a otro carrito una reserva con pagos en estado `procesando`.
+- **Evidencias y Pruebas Ejecutadas:**
+  - **Entorno aislado PostgreSQL (puerto 55433):**
+    - `backend/tests/integration/postgres.eventos.http.test.ts` (**19/19 pruebas aprobadas, 100%**), incluyendo la nueva prueba de bloqueo ante estado `procesando`.
+  - **Suites Unitarias de Eventos (Backend):**
+    - `backend/tests/eventos/reservaEvento.test.ts`: **40/40 pruebas aprobadas**.
+    - `backend/tests/eventos/reservaEventoServicio.test.ts`: **39/39 pruebas aprobadas**.
+    - `backend/tests/unit/openapi.test.ts`: **12/12 pruebas aprobadas**.
+  - **Suites de Frontend (Eventos, Carrito, Pagos):**
+    - `src/features/eventos`: **7/7 pruebas aprobadas** (Catálogo, Mis Reservas y Admin).
+    - `src/features/carrito` y `src/features/pagos`: **74/74 pruebas aprobadas**.
+  - **Chequeo de Tipos y Empaquetado:**
+    - `tsc --noEmit` (Frontend): 0 errores.
+    - `tsc --noEmit` (Backend): 0 errores.
+    - `npm run build` (Frontend): Compilación exitosa en 7.34s.

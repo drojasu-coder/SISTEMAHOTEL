@@ -388,9 +388,9 @@ const resolveEvento =
 
 /**
  * Una reserva de evento que ya tiene
- * cualquier monto neto aprobado mediante
- * otro carrito queda financieramente
- * comprometida.
+ * cualquier compromiso financiero activo (aprobado
+ * o procesando mediante Stripe PaymentIntent)
+ * queda financieramente bloqueada.
  *
  * No puede agregarse a un carrito nuevo,
  * porque los pagos están asociados al
@@ -398,7 +398,7 @@ const resolveEvento =
  * de doble cobro.
  */
 if (
-  await hasCartReferenceApprovedPayment(
+  await hasCartReferenceActiveFinancialCommitment(
     "evento",
     reserva.id,
     transaction
