@@ -9,6 +9,7 @@ const {
   ReservaMesa,
   Mesa,
   Usuario,
+  Sucursal,
 } = db;
 
 interface CreateReservaMesaData {
@@ -31,6 +32,18 @@ const reservaMesaInclude = [
       "zona",
       "capacidad",
       "estado",
+      "sucursal_id",
+    ],
+    include: [
+      {
+        model: Sucursal,
+        attributes: [
+          "id",
+          "nombre",
+          "direccion",
+          "telefono",
+        ],
+      },
     ],
   },
   {
@@ -306,6 +319,33 @@ export const getAll =
     );
   };
 
+export const getByUserId =
+  async (
+    userId: number
+  ) => {
+    return ReservaMesa.findAll(
+      {
+        where: {
+          usuario_id: userId,
+        },
+
+        include:
+          reservaMesaInclude,
+
+        order: [
+          [
+            "fecha",
+            "DESC",
+          ],
+          [
+            "hora",
+            "DESC",
+          ],
+        ],
+      }
+    );
+  };
+
 export const getById =
   async (
     id: number
@@ -324,6 +364,42 @@ export const getById =
         404,
         "TABLE_RESERVATION_NOT_FOUND",
         "La reserva de mesa solicitada no existe"
+      );
+    }
+
+    return reserva;
+  };
+
+export const getByIdForUser =
+  async (
+    id: number,
+    userId: number
+  ) => {
+    const reserva =
+      await ReservaMesa.findByPk(
+        id,
+        {
+          include:
+            reservaMesaInclude,
+        }
+      );
+
+    if (!reserva) {
+      throw new AppError(
+        404,
+        "TABLE_RESERVATION_NOT_FOUND",
+        "La reserva de mesa solicitada no existe"
+      );
+    }
+
+    if (
+      reserva.usuario_id !==
+      userId
+    ) {
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "No tiene permisos para acceder a esta reserva de mesa"
       );
     }
 

@@ -25,6 +25,51 @@ export const getAll =
     }
   };
 
+export const getMyReservations =
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const data =
+        await reservaMesaService.getByUserId(
+          req.user!.id
+        );
+
+      res.status(200).json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+export const getMyReservationById =
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const data =
+        await reservaMesaService.getByIdForUser(
+          Number(
+            req.params.id
+          ),
+          req.user!.id
+        );
+
+      res.status(200).json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
 export const getById =
   async (
     req: Request,

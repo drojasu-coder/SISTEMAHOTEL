@@ -2081,5 +2081,168 @@ it(
     ).toBe(1);
   }
 );
+
+    it(
+      "35. cliente lista sus propias reservas y verifica aislamiento",
+      async () => {
+        const mesaA = await createMesa();
+        const mesaB = await createMesa();
+
+        const clienteA = await createAuthenticatedUser({
+          rol: ROLES.CLIENTE,
+        });
+        const clienteB = await createAuthenticatedUser({
+          rol: ROLES.CLIENTE,
+        });
+
+        await request(app)
+          .post("/api/reservas-mesa")
+          .set("Authorization", `Bearer ${clienteA.token}`)
+          .send({
+            mesa_id: mesaA.id,
+            fecha: "2027-08-10",
+            hora: "12:00",
+            numero_comensales: 2,
+          });
+
+        await request(app)
+          .post("/api/reservas-mesa")
+          .set("Authorization", `Bearer ${clienteB.token}`)
+          .send({
+            mesa_id: mesaB.id,
+            fecha: "2027-08-11",
+            hora: "13:00",
+            numero_comensales: 3,
+          });
+
+        const resA = await request(app)
+          .get("/api/reservas-mesa/mis-reservas")
+          .set("Authorization", `Bearer ${clienteA.token}`);
+
+        expect(resA.status).toBe(200);
+        expect(resA.body.status).toBe("success");
+        expect(resA.body.data).toHaveLength(1);
+        expect(resA.body.data[0].mesa_id).toBe(mesaA.id);
+        expect(resA.body.data[0].usuario_id).toBe(clienteA.usuario.id);
+
+        const resB = await request(app)
+          .get("/api/reservas-mesa/mis-reservas")
+          .set("Authorization", `Bearer ${clienteB.token}`);
+
+        expect(resB.status).toBe(200);
+        expect(resB.body.data).toHaveLength(1);
+        expect(resB.body.data[0].mesa_id).toBe(mesaB.id);
+        expect(resB.body.data[0].usuario_id).toBe(clienteB.usuario.id);
+      }
+    );
+
+    it(
+      "36. admin recibe 403 al intentar acceder a mis-reservas",
+      async () => {
+        const admin = await createAuthenticatedUser({
+          rol: ROLES.ADMIN,
+        });
+
+        const response = await request(app)
+          .get("/api/reservas-mesa/mis-reservas")
+          .set("Authorization", `Bearer ${admin.token}`);
+
+        expect(response.status).toBe(403);
+        expect(response.body.code).toBe("INSUFFICIENT_PERMISSIONS");
+      }
+    );
+
+    it(
+      "37. sin token recibe 401 en mis-reservas",
+      async () => {
+        const response = await request(app)
+          .get("/api/reservas-mesa/mis-reservas");
+
+        expect(response.status).toBe(401);
+        expect(response.body.code).toBe("AUTH_TOKEN_REQUIRED");
+      }
+    );
+
+    it(
+      "38. cliente consulta detalle de su propia reserva en mis-reservas/:id",
+      async () => {
+        const mesa = await createMesa();
+        const cliente = await createAuthenticatedUser({
+          rol: ROLES.CLIENTE,
+        });
+
+        const created = await request(app)
+          .post("/api/reservas-mesa")
+          .set("Authorization", `Bearer ${cliente.token}`)
+          .send({
+            mesa_id: mesa.id,
+            fecha: "2027-08-15",
+            hora: "14:00",
+            numero_comensales: 2,
+          });
+
+        const response = await request(app)
+          .get(`/api/reservas-mesa/mis-reservas/${created.body.data.id}`)
+          .set("Authorization", `Bearer ${cliente.token}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(created.body.data.id);
+        expect(response.body.data.Mesa).toBeDefined();
+        expect(response.body.data.Mesa.Sucursal).toBeDefined();
+      }
+    );
+
+    it(
+      "39. cliente recibe 403 al consultar reserva de otro cliente en mis-reservas/:id",
+      async () => {
+        const mesa = await createMesa();
+        const clienteA = await createAuthenticatedUser({
+          rol: ROLES.CLIENTE,
+        });
+        const clienteB = await createAuthenticatedUser({
+          rol: ROLES.CLIENTE,
+        });
+
+        const created = await request(app)
+          .post("/api/reservas-mesa")
+          .set("Authorization", `Bearer ${clienteA.token}`)
+          .send({
+            mesa_id: mesa.id,
+            fecha: "2027-08-16",
+            hora: "15:00",
+            numero_comensales: 2,
+          });
+
+        const response = await request(app)
+          .get(`/api/reservas-mesa/mis-reservas/${created.body.data.id}`)
+          .set("Authorization", `Bearer ${clienteB.token}`);
+
+        expect(response.status).toBe(403);
+        expect(response.body.code).toBe("FORBIDDEN");
+      }
+    );
+
+    it(
+      "40. mis-reservas/:id devuelve 404 para reserva inexistente y 400 para ID no numérico",
+      async () => {
+        const cliente = await createAuthenticatedUser({
+          rol: ROLES.CLIENTE,
+        });
+
+        const notFound = await request(app)
+          .get("/api/reservas-mesa/mis-reservas/999999")
+          .set("Authorization", `Bearer ${cliente.token}`);
+
+        expect(notFound.status).toBe(404);
+        expect(notFound.body.code).toBe("TABLE_RESERVATION_NOT_FOUND");
+
+        const invalid = await request(app)
+          .get("/api/reservas-mesa/mis-reservas/abc")
+          .set("Authorization", `Bearer ${cliente.token}`);
+
+        expect(invalid.status).toBe(400);
+        expect(invalid.body.code).toBe("VALIDATION_ERROR");
+      }
+    );
   }
 );

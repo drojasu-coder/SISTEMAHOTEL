@@ -90,6 +90,94 @@ router.post(
 
 /**
  * @openapi
+ * /api/reservas-mesa/mis-reservas:
+ *   get:
+ *     tags:
+ *       - Reservas de Mesa
+ *     summary: Listar reservas de mesa del cliente autenticado
+ *     description: Operación exclusiva para clientes autenticados para consultar sus reservas de mesa.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reservas obtenidas correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/ReservaMesa'
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: Exclusivo para clientes
+ */
+router.get(
+  "/mis-reservas",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  controller.getMyReservations
+);
+
+/**
+ * @openapi
+ * /api/reservas-mesa/mis-reservas/{id}:
+ *   get:
+ *     tags:
+ *       - Reservas de Mesa
+ *     summary: Obtener detalle de una reserva de mesa del cliente autenticado
+ *     description: Permite al cliente autenticado consultar el detalle de una de sus reservas de mesa.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Reserva encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   $ref: '#/components/schemas/ReservaMesa'
+ *       400:
+ *         description: ID inválido
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: No tiene permisos para consultar esta reserva
+ *       404:
+ *         description: Reserva no encontrada
+ */
+router.get(
+  "/mis-reservas/:id",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  controller.getMyReservationById
+);
+
+/**
+ * @openapi
  * /api/reservas-mesa:
  *   get:
  *     tags:
