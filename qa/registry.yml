@@ -5727,6 +5727,241 @@ findings:
     042_regression: PASS
     043_regression: PASS
     verified_at: "2026-10-25"
+
+  - id: QA-SPA-FIN-CANDIDATE-049
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Una transferencia pendiente de C1 puede aprobarse tarde y duplicar a
+      Q700.00 la exposición aprobada de una CitaBienestar Q350 ya pagada en C2
+    invariant: >-
+      Para una CitaBienestar de Q350.00, la suma agregada en todos sus carritos
+      históricos de pagos en estado aprobado-like brutos menos reembolsos
+      aprobados, más pagos en estado procesando, nunca debe superar Q350.00.
+      Una transferencia pendiente se registra separadamente y, cuando se
+      intenta aprobar, debe revalidarse contra toda la exposición histórica de
+      la cita antes de convertirse en dinero aprobado.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      db_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      test_file: backend/tests/bienestar/citaSpa.lateTransferExposure.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-049: rechaza aprobar tarde una transferencia si la cita ya fue pagada en otro carrito"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.lateTransferExposure.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-049: rechaza aprobar tarde una transferencia si la cita ya fue pagada en otro carrito"
+      concurrency: false
+      stripe_used: false
+      payment_intent_used: false
+      real_stripe_calls: 0
+    actors:
+      client_id: 1
+      client_role: cliente
+      admin_id: 2
+      admin_role: admin
+      client_admin_operation_attempt: "HTTP 403 INSUFFICIENT_PERMISSIONS"
+    ids:
+      therapist_id: 1
+      service_id: 1
+      cita_id: 1
+      c1_id: 1
+      c1_item_id: 1
+      p1_transfer_id: 1
+      p2_cash_id: 2
+      refund_p2_id: 1
+      c2_id: 2
+      c2_item_id: 2
+      p3_cash_id: 3
+    fixture:
+      therapist_active: true
+      service_price: "350.00"
+      service_duration_minutes: 60
+      cita_owner_id: 1
+      cita_state: confirmada
+    expected:
+      late_p1_approval: "HTTP 409 o rechazo de negocio 4xx equivalente"
+      p1_final_state: pendiente
+      p3_final_state: aprobado
+      maximum_legitimate_exposure: "350.00"
+      cita_state: confirmada
+      unexpected_500: false
+    actual:
+      p1_transfer_create: "HTTP 201; code null; pendiente; Q350.00"
+      p1_state_before_approval: pendiente
+      p1_amount: "350.00"
+      p2_cash_create: "HTTP 201; code null; aprobado; Q350.00"
+      c1_state_after_p2: pagado
+      refund_p2: "HTTP 200; code null; aprobado; Q350.00"
+      p2_state_after_refund: reembolsado
+      approved_net_c1_after_refund: "0.00"
+      c1_state_after_refund: pagado
+      c2_add: "HTTP 201; code null"
+      c2_item_created: true
+      p3_cash_create: "HTTP 201; code null; aprobado; Q350.00"
+      c2_state_after_p3: pagado
+      late_p1_approval: "HTTP 200; code null; Transferencia aprobada correctamente"
+      p1_final_state: aprobado
+      p1_approved_net: "350.00"
+      p3_approved_net: "350.00"
+      total_approved_net: "700.00"
+      total_processing: "0.00"
+      pending_transfer_amount: "0.00"
+      total_active_exposure: "700.00"
+      maximum_legitimate_exposure: "350.00"
+      double_approved_exposure: true
+      financial_violation: true
+      cita_state: confirmada
+      unexpected_500: false
+    http_evidence: >-
+      POST /api/pagos creó P1 transferencia por Q350.00 con HTTP 201 pendiente.
+      El mismo endpoint, usado por admin, creó P2 efectivo por Q350.00 con HTTP
+      201 aprobado. POST /api/pagos/2/reembolso devolvió HTTP 200 y aprobó el
+      reembolso total. POST /api/carritos/2/items aceptó nuevamente la cita con
+      HTTP 201 y POST /api/pagos creó P3 efectivo por Q350.00 con HTTP 201
+      aprobado. Finalmente POST /api/pagos/1/aprobar-transferencia devolvió HTTP
+      200 sin código de error y respondió P1 en estado aprobado; no hubo HTTP
+      500. El cliente recibió HTTP 403 INSUFFICIENT_PERMISSIONS al intentar la
+      operación administrativa de aprobación.
+    database_evidence:
+      source_of_truth: PostgreSQL
+      after_p1: >-
+        Cita id=1 confirmada; C1 id=1 activo con item id=1 bienestar Q350.00;
+        P1 id=1 transferencia pendiente Q350.00; approved_net Q0.00;
+        processing Q0.00; pending_transfer Q350.00.
+      after_p2: >-
+        C1 pagado; P1 permaneció pendiente Q350.00; P2 id=2 efectivo aprobado
+        Q350.00; approved_net Q350.00; pending_transfer Q350.00.
+      after_refund: >-
+        Reembolso id=1 de P2 persistió aprobado por Q350.00 con id externo
+        qa-spa-fin-candidate-049-refund-p2; P2 quedó reembolsado; approved_net
+        de C1 Q0.00; C1 permaneció pagado y la cita confirmada.
+      after_c2_add: >-
+        C2 id=2 persistió item id=2 para la misma cita id=1 a Q350.00 mientras
+        P1 continuaba pendiente Q350.00.
+      after_p3: >-
+        P3 id=3 efectivo aprobado Q350.00; C2 pagado; approved_net agregado
+        Q350.00; processing Q0.00; pending_transfer Q350.00.
+      final: >-
+        P1 aprobado Q350.00, P2 reembolsado Q350.00 con reembolso aprobado
+        Q350.00 y P3 aprobado Q350.00. El neto aprobado agregado fue Q700.00,
+        processing Q0.00, pendiente Q0.00 y exposición activa Q700.00. C1 y C2
+        quedaron pagados y la cita id=1 permaneció confirmada.
+    suspected_execution_path: >-
+      POST /api/carritos/{id}/items atraviesa carritoItem.service.resolveBienestar,
+      cuya comprobación de compromiso activo no cuenta transferencias pendientes;
+      tras el reembolso total de P2 permite insertar la cita en C2. La aprobación
+      tardía atraviesa pago.routes -> pago.controller.aprobarTransferencia ->
+      pago.service.approveTransferencia. Ese flujo llama validateOpenOrigin sobre
+      C1 y calcula committedOrProcessingExposure únicamente para el origen C1;
+      ve P2 con neto cero y no agrega la exposición aprobada de P3 en C2 para la
+      misma CitaBienestar. Por ello actualiza P1 de pendiente a aprobado y vuelve
+      a aplicar C1 como pagado sin una revalidación financiera agregada por cita.
+    red_result: >-
+      CONFIRMED: 1 archivo falló y 1 test falló con cinco aserciones seguras.
+      La aprobación tardía respondió HTTP 200 en lugar de un rechazo 4xx, P1
+      terminó aprobado en vez de pendiente y PostgreSQL mostró Q700.00 de
+      exposición aprobada para una obligación máxima de Q350.00.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    production_files_modified: false
+    migrations_modified: false
+    existing_tests_modified: false
+    root_cause: >-
+      approveTransferencia validaba exclusivamente el saldo del carrito origen.
+      No agregaba los Pagos aprobados netos ni procesando de los demás carritos
+      históricos que contenían la misma CitaBienestar, de modo que una
+      transferencia pendiente antigua podía aprobarse después de que otro
+      carrito hubiera cubierto completamente la obligación de la cita.
+    correction: >-
+      pago.service agrega la exposición activa histórica por CitaBienestar y
+      valida en centavos la cuota proporcional del Pago candidato antes de
+      convertir una transferencia pendiente en aprobada. Efectivo y tarjeta se
+      validan antes de crear su compromiso aprobado/procesando; una transferencia
+      nueva continúa siendo pendiente y se revalida solo al intentar aprobarla.
+    historical_exposure_helper: >-
+      wellnessFinancialExposure descubre todos los carritos históricos mediante
+      CarritoItem(tipo_item=bienestar, referencia_id=cita), selecciona una sola
+      vez cada Pago por id y separa aprobado neto de procesando. Los estados
+      aprobado, reembolsado_parcial y reembolsado aportan monto bruto menos solo
+      Reembolsos aprobados, con piso cero por Pago; pendiente no aporta exposición
+      activa.
+    payment_allocation: >-
+      Cada Pago de carrito se asigna proporcionalmente entre todos sus items por
+      el peso persistido precio*cantidad. La aritmética y distribución del
+      residuo se realizan en centavos, ordenados por CarritoItem.id; las cuotas de
+      todos los items bienestar que referencian la cita se suman sin atribuir el
+      Pago completo a cada referencia.
+    obligation_source: >-
+      Se conserva ServicioBienestar.precio como obligación de la cita. Es la
+      fuente vigente usada por resolveBienestar para producir el snapshot de
+      precio del item y CitaBienestar no posee otro snapshot financiero propio;
+      esta corrección no introduce una política nueva de repricing.
+    concurrency_and_locks: >-
+      createPago y approveTransferencia conservan una sola transacción y el orden
+      Carrito -> ReservaHabitacion por id ascendente -> ReservaEvento por id
+      ascendente -> CitaBienestar por id ascendente -> Pago. wellnessExposureBalance
+      reutiliza las CitaBienestar ya bloqueadas por cartTotals; la fila canónica
+      de la cita serializa los compromisos entre carritos y no se añadió ningún
+      orden Pago -> CitaBienestar.
+    webhook_semantics: >-
+      payment_intent.succeeded convierte procesando en aprobado sin aumentar la
+      exposición activa y por eso no vuelve a sumar el Pago candidato. Las
+      lecturas de citas que ese flujo realiza después de bloquear Pago no toman
+      FOR UPDATE, evitando introducir el orden inverso Pago -> CitaBienestar.
+    final_evidence:
+      database: hotel_test_db
+      db_guard_invocations: 8
+      late_p1_approval: "HTTP 409 PAYMENT_EXCEEDS_BALANCE"
+      p1_final_state: pendiente
+      p3_final_state: aprobado
+      total_approved_net: "350.00"
+      total_processing: "0.00"
+      pending_transfer_amount: "350.00"
+      total_active_exposure: "350.00"
+      maximum_legitimate_exposure: "350.00"
+      double_approved_exposure: false
+      financial_violation: false
+      focused_named: "1 file passed, 1 test passed"
+      focused_file: "1 file passed, 1 test passed"
+      bienestar_044: PASS
+      bienestar_045: PASS
+      bienestar_046: PASS
+      bienestar_047: PASS
+      bienestar_048: PASS
+      bienestar_049: PASS
+      bienestar_regression: "6 files passed, 6 tests passed"
+      related_financial_regression: "14 files passed, 24 tests passed"
+      related_files:
+        - backend/tests/pagos/pago.idempotency.concurrency.test.ts
+        - backend/tests/pagos/pagoMixedRoomEventCart.test.ts
+        - backend/tests/eventos/reservaEvento.multiEventCartPayment.test.ts
+        - backend/tests/habitaciones/reservaHabitacion.aggregateExposure.test.ts
+        - backend/tests/eventos/reservaEvento.crossCartProcessing.test.ts
+        - backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+        - backend/tests/pagos/pagoActividadCanceledBeforePayment.test.ts
+        - backend/tests/pagos/pagoCartMutationBinding.test.ts
+        - backend/tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts
+        - backend/tests/eventos/reservaEvento.paymentMutationBinding.test.ts
+        - backend/tests/pagos/refundOutOfOrderReplay.test.ts
+        - backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+        - backend/tests/pagos/pago.integrity.test.ts
+        - backend/tests/pagos/pagoWebhookLockOrder.concurrency.test.ts
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json --noEmit
+      typecheck: PASS
+      production_files_modified:
+        - backend/src/services/pago.service.ts
+      registry_files_modified:
+        - qa/registry.yml
+      test_file_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_changes: none
+      verified_at: "2026-10-25"
     next_step: qa-focused.ps1 + qa-regression.ps1
 
   - id: QA-SPA-FUNC-CANDIDATE-048

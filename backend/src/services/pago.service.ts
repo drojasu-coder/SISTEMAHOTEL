@@ -19,6 +19,7 @@ const {
   ReservaEvento,
   ReservaActividad,
   CitaBienestar,
+  ServicioBienestar,
 } = db;
 
 export type PagoMetodo = "tarjeta" | "efectivo" | "transferencia";
@@ -508,6 +509,125 @@ export const eventFinancialExposure = async (
   };
 };
 
+/**
+ * Exposición financiera activa de una CitaBienestar a través de todos los
+ * carritos que histórica o actualmente contienen la referencia.
+ *
+ * Cada Pago se cuenta una sola vez, los pagos procesando se comprometen
+ * completos y únicamente los reembolsos aprobados reducen dinero aprobado.
+ */
+export const wellnessFinancialExposure = async (
+  citaId: number,
+  transaction: any,
+  excludePaymentId?: number,
+) => {
+  const cartIds = await historicalCartIdsForReference(
+    "bienestar",
+    citaId,
+    transaction,
+  );
+
+  if (cartIds.length === 0) {
+    return { approved: 0, processing: 0, total: 0 };
+  }
+
+  const whereClause: Record<string, unknown> = {
+    carrito_id: { [Op.in]: cartIds },
+    estado: {
+      [Op.in]: [
+        "aprobado",
+        "reembolsado_parcial",
+        "reembolsado",
+        "procesando",
+      ],
+    },
+  };
+  if (excludePaymentId) {
+    whereClause.id = { [Op.ne]: excludePaymentId };
+  }
+
+  const payments = await Pago.findAll({
+    where: whereClause,
+    attributes: ["id", "monto", "estado", "carrito_id"],
+    transaction,
+  });
+  const uniquePayments = [
+    ...new Map<number, any>(
+      (payments as any[]).map((payment: any) => [
+        Number(payment.id),
+        payment,
+      ]),
+    ).values(),
+  ];
+  const approvedPayments = uniquePayments.filter((payment: any) =>
+    ["aprobado", "reembolsado_parcial", "reembolsado"].includes(
+      String(payment.estado),
+    ),
+  );
+  const refunds = approvedPayments.length > 0
+    ? await db.Reembolso.findAll({
+        where: {
+          pago_id: {
+            [Op.in]: approvedPayments.map((payment: any) => payment.id),
+          },
+          estado: "aprobado",
+        },
+        attributes: ["pago_id", "monto"],
+        transaction,
+      })
+    : [];
+  const refundedByPayment = new Map<number, number>();
+  for (const refund of refunds as any[]) {
+    const paymentId = Number(refund.pago_id);
+    refundedByPayment.set(
+      paymentId,
+      round(
+        (refundedByPayment.get(paymentId) ?? 0) + Number(refund.monto),
+      ),
+    );
+  }
+
+  let approvedCents = 0;
+  let processingCents = 0;
+  for (const payment of uniquePayments as any[]) {
+    const paymentCents = toCents(payment.monto);
+    const carritoId = Number(payment.carrito_id);
+    if (payment.estado === "procesando") {
+      processingCents += await allocateCartAmountToReferenceCents(
+        carritoId,
+        paymentCents,
+        "bienestar",
+        citaId,
+        transaction,
+        true,
+      );
+      continue;
+    }
+
+    const approvedNetCents = Math.max(
+      0,
+      paymentCents -
+        toCents(refundedByPayment.get(Number(payment.id)) ?? 0),
+    );
+    approvedCents += await allocateCartAmountToReferenceCents(
+      carritoId,
+      approvedNetCents,
+      "bienestar",
+      citaId,
+      transaction,
+      true,
+    );
+  }
+
+  const approved = round(approvedCents / 100);
+  const processing = round(processingCents / 100);
+  return {
+    approved,
+    processing,
+    total: round(approved + processing),
+  };
+};
+
 
 /**
  * Comprueba si una referencia genérica que estuvo en un carrito
@@ -699,7 +819,12 @@ const confirmCartRoomReservations = async (carritoId: number, transaction: any) 
   }
 };
 
-const cartTotals = async (carritoId: number, transaction: any, allowPaidReservations = false) => {
+const cartTotals = async (
+  carritoId: number,
+  transaction: any,
+  allowPaidReservations = false,
+  lockWellnessAppointments = false,
+) => {
   const items = await CarritoItem.findAll({
     where: { carrito_id: carritoId },
     attributes: ["precio", "cantidad", "tipo_item", "referencia_id"],
@@ -723,10 +848,14 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
   ].sort((left, right) => left - right);
   const lockedWellnessAppointments = new Map<number, any>();
   for (const appointmentId of wellnessAppointmentIds) {
-    const appointment = await CitaBienestar.findByPk(appointmentId, {
-      transaction,
-      lock: transaction.LOCK.UPDATE,
-    });
+    const appointmentOptions: Record<string, unknown> = { transaction };
+    if (lockWellnessAppointments) {
+      appointmentOptions.lock = transaction.LOCK.UPDATE;
+    }
+    const appointment = await CitaBienestar.findByPk(
+      appointmentId,
+      appointmentOptions,
+    );
     if (!appointment) {
       throw new AppError(
         409,
@@ -806,7 +935,13 @@ const cartTotals = async (carritoId: number, transaction: any, allowPaidReservat
       return eventTotal * quantity;
     }))).reduce((sum, itemTotal) => sum + itemTotal, 0));
   const isOnlyRoom = items.length > 0 && items.every((item: any) => item.tipo_item === "habitacion");
-  return { total, requiredAdvance, isOnlyRoom };
+  return {
+    total,
+    requiredAdvance,
+    isOnlyRoom,
+    wellnessAppointmentIds,
+    wellnessAppointments: [...lockedWellnessAppointments.values()],
+  };
 };
 
 const approvedAdvanceAmount = async (where: Record<string, unknown>, transaction: any) => {
@@ -949,7 +1084,12 @@ const validateOpenOrigin = async (
     const eventReservations = serializeRoomExposure
       ? await lockEventReservations(eventReservationIds, transaction)
       : [];
-    const totals = await cartTotals(cart.id, transaction, allowPaid);
+    const totals = await cartTotals(
+      cart.id,
+      transaction,
+      allowPaid,
+      serializeRoomExposure,
+    );
     return {
       key: { carrito_id: cart.id },
       ...totals,
@@ -958,6 +1098,8 @@ const validateOpenOrigin = async (
       roomReservations,
       eventReservationIds,
       eventReservations,
+      wellnessAppointmentIds: totals.wellnessAppointmentIds ?? [],
+      wellnessAppointments: totals.wellnessAppointments ?? [],
     };
   }
 
@@ -985,6 +1127,8 @@ const validateOpenOrigin = async (
     roomReservations: [reservation],
     eventReservationIds: [],
     eventReservations: [],
+    wellnessAppointmentIds: [],
+    wellnessAppointments: [],
   };
 };
 
@@ -1100,6 +1244,77 @@ const eventExposureBalance = async (
         newCartAmountCents,
         "evento",
         Number(reservationId),
+        transaction,
+        true,
+      );
+      if (exposureCents + allocationCents > obligationCents) {
+        throw new AppError(
+          409,
+          "PAYMENT_EXCEEDS_BALANCE",
+          "El pago excede el saldo pendiente",
+        );
+      }
+    }
+  }
+
+  return { remaining: round(remainingCents / 100), remainingCents };
+};
+
+const wellnessExposureBalance = async (
+  details: any,
+  transaction: any,
+  newCartAmountCents?: number,
+  excludePaymentId?: number,
+) => {
+  if (!details.wellnessAppointmentIds?.length) {
+    return null;
+  }
+
+  const appointmentsById = new Map<number, any>(
+    (details.wellnessAppointments ?? []).map((appointment: any) => [
+      Number(appointment.id),
+      appointment,
+    ]),
+  );
+  let remainingCents = 0;
+
+  for (const citaId of details.wellnessAppointmentIds as number[]) {
+    const appointment = appointmentsById.get(Number(citaId));
+    if (!appointment) {
+      throw new AppError(
+        409,
+        "CART_REFERENCE_NOT_AVAILABLE",
+        "La cita de bienestar ya no se encuentra disponible",
+      );
+    }
+    const service = await ServicioBienestar.findByPk(
+      appointment.servicio_bienestar_id,
+      { transaction },
+    );
+    if (!service) {
+      throw new AppError(
+        404,
+        "WELLNESS_SERVICE_NOT_FOUND",
+        "El servicio de spa ya no se encuentra disponible",
+      );
+    }
+    const exposure = await wellnessFinancialExposure(
+      Number(citaId),
+      transaction,
+      excludePaymentId,
+    );
+    const obligationCents = toCents(service.precio);
+    const exposureCents = toCents(exposure.total);
+    remainingCents += Math.max(
+      0,
+      obligationCents - exposureCents,
+    );
+    if (newCartAmountCents !== undefined) {
+      const allocationCents = await allocateCartAmountToReferenceCents(
+        Number(details.origin.id),
+        newCartAmountCents,
+        "bienestar",
+        Number(citaId),
         transaction,
         true,
       );
@@ -1313,6 +1528,16 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       transaction,
       isCartOrigin ? amountCents : undefined,
     );
+    // Efectivo y tarjeta aumentan inmediatamente la exposición activa
+    // (aprobado o procesando). Una transferencia nueva permanece pendiente y
+    // se revalida únicamente cuando se intenta aprobar.
+    if (data.metodo !== "transferencia") {
+      await wellnessExposureBalance(
+        details,
+        transaction,
+        isCartOrigin ? amountCents : undefined,
+      );
+    }
     const exposure = roomBalance?.directExposure ??
       await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
@@ -1613,6 +1838,17 @@ export const approveTransferencia = async (pagoId: number) =>
       details,
       transaction,
       isCartOrigin ? amountCents : undefined,
+    );
+    // QA-SPA-FIN-CANDIDATE-049: validar exposición histórica agregada de cada
+    // CitaBienestar contenida en el carrito antes de aprobar la transferencia.
+    // El pago candidato (pagoId) todavía está pendiente, así que
+    // wellnessFinancialExposure no lo incluye; la cuota que aportaría se
+    // calcula aparte mediante allocateCartAmountToReferenceCents.
+    await wellnessExposureBalance(
+      details,
+      transaction,
+      isCartOrigin ? amountCents : undefined,
+      pagoId,
     );
     const exposure = roomBalance?.directExposure ??
       await committedOrProcessingExposure(details.key, transaction);
