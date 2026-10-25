@@ -1790,6 +1790,195 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-EVT-FIN-CANDIDATE-040
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un carrito mixto de habitación y evento no puede pagar su total porque el
+      saldo global se limita al saldo individual de la habitación
+    invariant: >-
+      Un único carrito del mismo cliente con una ReservaHabitacion válida de
+      Q100.00 y una ReservaEvento en cotización de Q5000.00, sin servicios, debe
+      aceptar un único pago tarjeta tipo total por Q5100.00 cuando no existe
+      exposición financiera previa. Debe crear exactamente un Pago procesando y
+      un PaymentIntent por Q5100.00, sin sobreexposición.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/pagos/pagoMixedRoomEventCart.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-040: un pago total cubre un carrito mixto de habitación y evento"
+      command: >-
+        npm --prefix backend test -- tests/pagos/pagoMixedRoomEventCart.test.ts
+      stripe_mode: FULL_LOCAL_MOCK
+      real_network_calls: 0
+      payment_attempts: 1
+      webhook_executed: false
+      transfer_variant_executed: false
+    expected:
+      payment_http: 201
+      payment_state: procesando
+      payment_amount: "5100.00"
+      payment_count: 1
+      payment_intent_amount_minor: 510000
+      payment_intent_count: 1
+    actual:
+      payment_http: 409
+      payment_code: PAYMENT_EXCEEDS_BALANCE
+      payment_message: "El pago excede el saldo pendiente"
+      payment_count: 0
+      payment_intent_count: 0
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló (2 aserciones soft)"
+    http_evidence:
+      cart_items: 2
+      cart_total: "5100.00"
+      cart_balance: "5100.00"
+      approved_before: "0.00"
+      processing_before: "0.00"
+      payment_attempt: "POST /api/pagos; Q5100.00; total; tarjeta"
+      response: "HTTP 409 PAYMENT_EXCEEDS_BALANCE"
+    database_evidence:
+      source_of_truth: PostgreSQL
+      client_id: 1
+      room_reservation_id: 1
+      event_reservation_id: 1
+      cart_id: 1
+      cart_state: activo
+      room_item: "habitacion; referencia 1; Q100.00; cantidad 1"
+      event_item: "evento; referencia 1; Q5000.00; cantidad 1"
+      persisted_item_count: 2
+      persisted_cart_total: "5100.00"
+      persisted_payment_count: 0
+      persisted_approved: "0.00"
+      persisted_processing: "0.00"
+      overexposure: false
+    observable_balances:
+      origin_http: "5100.00"
+      room_helper: "100.00"
+      event_helper: "5000.00"
+      global_internal: "NOT OBSERVABLE: helper privado; no se instrumentó producción"
+    stripe_evidence:
+      create_payment_intent_calls: 0
+      intent_count: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      createPago -> validateOpenOrigin obtiene total global Q5100.00 ->
+      roomExposureBalance obtiene remaining Q100.00 -> eventExposureBalance obtiene
+      remaining Q5000.00 -> Math.min(originRemaining, roomRemaining,
+      eventRemaining) reduce indebidamente el saldo global a Q100.00 ->
+      PAYMENT_EXCEEDS_BALANCE antes de persistir Pago o crear PaymentIntent.
+    violation: >-
+      El backend aplica el menor saldo individual como límite de un pago que cubre
+      obligaciones independientes sumadas en el mismo carrito; bloquea de forma
+      restrictiva Q5100.00 aunque total y saldo global son Q5100.00 y la exposición
+      es cero.
+    root_cause: >-
+      createPago y approveTransferencia combinaban mediante Math.min tres magnitudes
+      que no representan límites globales competidores: el saldo del carrito y los
+      saldos agregados por dominio habitación/evento. En un carrito mixto, el saldo
+      Q100.00 de habitación reducía incorrectamente a Q100.00 el límite de la
+      operación global Q5100.00.
+    fix: >-
+      Para origen Carrito, pago.service conserva originRemaining como único límite
+      global y, antes de Pago.create o de aprobar una transferencia, distribuye el
+      nuevo monto entre los CarritoItem persistidos. Bajo los locks de cada
+      referencia verifica que exposición financiera actual más la cuota nueva no
+      supere la obligación correspondiente. El origen directo ReservaHabitacion
+      conserva el mínimo entre su saldo de origen y su saldo de referencia.
+    global_balance_strategy: >-
+      Para Carrito: remainingCents = total del carrito en centavos menos exposición
+      aprobada neta y procesando del propio carrito; no suma roomRemaining con
+      eventRemaining, no duplica originRemaining y no aplica Math.min contra los
+      saldos de cada dominio. Para ReservaHabitacion directa se conserva el límite
+      previo de originRemaining contra roomRemaining.
+    reference_allocation_strategy: >-
+      Cada nueva cantidad de carrito se prorratea por
+      CarritoItem.precio*cantidad entre todos sus items persistidos. Cada validación
+      suma únicamente las cuotas cuyo tipo_item y referencia_id coinciden con la
+      ReservaHabitacion o ReservaEvento validada, reutilizando el mismo helper usado
+      por reservationFinancialExposure y eventFinancialExposure.
+    room_reference_validation: >-
+      Por cada ReservaHabitacion ya bloqueada se exige, en centavos,
+      reservationFinancialExposure.total + cuota nueva de habitación <=
+      ReservaHabitacion.total. La cuota conserva mayor residuo proporcional y
+      desempate por CarritoItem.id ascendente, como QA-RH-FIN-CANDIDATE-030.
+    event_reference_validation: >-
+      Por cada ReservaEvento ya bloqueada se exige, en centavos,
+      eventFinancialExposure.total + cuota nueva de evento <= ReservaEvento.total.
+      La cuota conserva la asignación de residuos por CarritoItem.id ascendente,
+      como QA-EVT-FIN-CANDIDATE-039.
+    cent_based_allocation: >-
+      Monto nuevo, obligaciones, exposición y límites se comparan en centavos
+      enteros. El prorrateo existente usa pesos enteros y BigInt; el truncamiento y
+      los residuos deterministas siguen las estrategias cerradas de QA-039/RH-030.
+    mixed_cart_behavior: >-
+      En el caso oficial, originRemaining=510000 centavos, roomRemaining=10000 y
+      eventRemaining=500000; el límite global final permanece 510000. El pago
+      Q5100.00 asigna 10000 centavos a la habitación y 500000 al evento, ambas
+      validaciones pasan y no existe sobreexposición.
+    transfer_behavior_if_changed: >-
+      Sí. approveTransferencia reutiliza la misma validación por cuotas y el mismo
+      límite global de Carrito antes de convertir un Pago pendiente en aprobado.
+      No cambian tipo_pago, anticipo, saldo ni total. No existe una prueba dedicada
+      de transferencia mixta en el alcance autorizado.
+    lock_order: >-
+      Sin cambios: Carrito FOR UPDATE -> ReservaHabitacion por id ascendente ->
+      ReservaEvento por id ascendente -> Pago/Reembolso. Todas las asignaciones y
+      validaciones ocurren dentro de la transacción después de esos locks; no se
+      agregaron locks de memoria ni inversiones de orden.
+    final_evidence:
+      payment_http: 201
+      payment_code: null
+      payment_state: procesando
+      payment_amount: "5100.00"
+      payment_count: 1
+      payment_intent_amount_minor: 510000
+      payment_intent_count: 1
+      stripe_create_count: 1
+      webhook_executed: false
+      blocked: false
+      overexposure: false
+      unexpected_500: false
+      final_origin_remaining_after_processing: "0.00"
+      allocations: "ReservaHabitacion Q100.00; ReservaEvento Q5000.00"
+    regressions:
+      qa_evt_035_cross_cart_processing: "GREEN; 1/1"
+      qa_evt_037_payment_mutation_binding: "GREEN; 1/1"
+      qa_evt_038_cancel_processing_payment: "GREEN; 1/1"
+      qa_evt_039_multi_event_cart: "GREEN; 1/1; permanece CLOSED"
+      qa_rh_020_aggregate_exposure: "GREEN; 1/1; permanece CLOSED"
+      qa_rh_030_multi_room_cart: "GREEN; 1/1; permanece CLOSED"
+      payment_idempotency_concurrency: "GREEN; 3/3"
+      webhook_lock_order_concurrency: "GREEN; 1/1"
+      cart_payment_binding_minimum: "GREEN; 1/1"
+    severity_recommendation: high
+    regressions_observed:
+      qa_035: "GREEN; permanece CLOSED"
+      qa_039: "GREEN; permanece CLOSED"
+      qa_rh_030: "GREEN; permanece CLOSED"
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: "GREEN; pagoMixedRoomEventCart 1/1"
+      related_tests: >-
+        GREEN; 9 archivos adicionales, 11 tests: multiEventCartPayment 1,
+        crossCartProcessing 1, paymentMutationBinding 1,
+        cancelProcessingPayment 1, multiRoomCartPayment 1, aggregateExposure 1,
+        pago.idempotency.concurrency 3, pagoWebhookLockOrder.concurrency 1 y
+        pagoCartMutationBinding 1.
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json --noEmit
+      typecheck: pass
+      production_files_modified: [backend/src/services/pago.service.ts]
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-24"
+
   - id: QA-EVT-FIN-CANDIDATE-039
     status: closed
     severity: high

@@ -909,6 +909,7 @@ const validateOpenOrigin = async (
 const roomExposureBalance = async (
   details: any,
   transaction: any,
+  newCartAmountCents?: number,
 ) => {
   if (!details.roomReservationIds?.length) {
     return null;
@@ -920,7 +921,7 @@ const roomExposureBalance = async (
       reservation,
     ]),
   );
-  let remaining = 0;
+  let remainingCents = 0;
   let directExposure: Awaited<
     ReturnType<typeof reservationFinancialExposure>
   > | null = null;
@@ -938,9 +939,28 @@ const roomExposureBalance = async (
       Number(reservationId),
       transaction,
     );
-    remaining = round(
-      remaining + Math.max(0, Number(reservation.total) - exposure.total),
+    const obligationCents = toCents(reservation.total);
+    const exposureCents = toCents(exposure.total);
+    remainingCents += Math.max(
+      0,
+      obligationCents - exposureCents,
     );
+    if (newCartAmountCents !== undefined) {
+      const allocationCents = await allocateCartAmountToReferenceCents(
+        Number(details.origin.id),
+        newCartAmountCents,
+        "habitacion",
+        Number(reservationId),
+        transaction,
+      );
+      if (exposureCents + allocationCents > obligationCents) {
+        throw new AppError(
+          409,
+          "PAYMENT_EXCEEDS_BALANCE",
+          "El pago excede el saldo pendiente",
+        );
+      }
+    }
     if (
       details.origin?.constructor?.name === "ReservaHabitacion" &&
       Number(details.origin.id) === Number(reservationId)
@@ -950,7 +970,8 @@ const roomExposureBalance = async (
   }
 
   return {
-    remaining: round(remaining),
+    remaining: round(remainingCents / 100),
+    remainingCents,
     directExposure,
   };
 };
@@ -958,6 +979,7 @@ const roomExposureBalance = async (
 const eventExposureBalance = async (
   details: any,
   transaction: any,
+  newCartAmountCents?: number,
 ) => {
   if (!details.eventReservationIds?.length) {
     return null;
@@ -984,13 +1006,32 @@ const eventExposureBalance = async (
       Number(reservationId),
       transaction,
     );
+    const obligationCents = toCents(reservation.total);
+    const exposureCents = toCents(exposure.total);
     remainingCents += Math.max(
       0,
-      toCents(reservation.total) - toCents(exposure.total),
+      obligationCents - exposureCents,
     );
+    if (newCartAmountCents !== undefined) {
+      const allocationCents = await allocateCartAmountToReferenceCents(
+        Number(details.origin.id),
+        newCartAmountCents,
+        "evento",
+        Number(reservationId),
+        transaction,
+        true,
+      );
+      if (exposureCents + allocationCents > obligationCents) {
+        throw new AppError(
+          409,
+          "PAYMENT_EXCEEDS_BALANCE",
+          "El pago excede el saldo pendiente",
+        );
+      }
+    }
   }
 
-  return { remaining: round(remainingCents / 100) };
+  return { remaining: round(remainingCents / 100), remainingCents };
 };
 
 const applyCartPaid = async (origin: any, total: number, paid: number, transaction: any) => {
@@ -1177,24 +1218,36 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     );
     if (serializedReplay) return serializedReplay;
 
-    const roomBalance = await roomExposureBalance(details, transaction);
-    const eventBalance = await eventExposureBalance(details, transaction);
+    const amountCents = toCents(amount);
+    const isCartOrigin = details.key.carrito_id !== undefined;
+    const roomBalance = await roomExposureBalance(
+      details,
+      transaction,
+      isCartOrigin ? amountCents : undefined,
+    );
+    await eventExposureBalance(
+      details,
+      transaction,
+      isCartOrigin ? amountCents : undefined,
+    );
     const exposure = roomBalance?.directExposure ??
       await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
     const advancePaid = details.requiredAdvance
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
-    const originRemaining = round(details.total - exposure.total);
-    const remaining = round(Math.min(
-      originRemaining,
-      roomBalance?.remaining ?? Number.POSITIVE_INFINITY,
-      eventBalance?.remaining ?? Number.POSITIVE_INFINITY,
-    ));
-    if (amount > remaining) {
+    const originRemainingCents =
+      toCents(details.total) - toCents(exposure.total);
+    const remainingCents = isCartOrigin
+      ? originRemainingCents
+      : Math.min(
+          originRemainingCents,
+          roomBalance?.remainingCents ?? Number.POSITIVE_INFINITY,
+        );
+    if (amountCents > remainingCents) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && amount < originRemaining) {
+    if (details.isOnlyRoom && amountCents < originRemainingCents) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (tipo === "anticipo") {
@@ -1465,8 +1518,18 @@ export const approveTransferencia = async (pagoId: number) =>
     }
     if (payment.estado !== "pendiente") throw new AppError(409, "PAYMENT_NOT_PENDING", "El pago no está pendiente");
     const details = origin;
-    const roomBalance = await roomExposureBalance(details, transaction);
-    const eventBalance = await eventExposureBalance(details, transaction);
+    const amountCents = toCents(payment.monto);
+    const isCartOrigin = details.key.carrito_id !== undefined;
+    const roomBalance = await roomExposureBalance(
+      details,
+      transaction,
+      isCartOrigin ? amountCents : undefined,
+    );
+    await eventExposureBalance(
+      details,
+      transaction,
+      isCartOrigin ? amountCents : undefined,
+    );
     const exposure = roomBalance?.directExposure ??
       await committedOrProcessingExposure(details.key, transaction);
     const paid = exposure.approved;
@@ -1474,16 +1537,18 @@ export const approveTransferencia = async (pagoId: number) =>
       ? await approvedAdvanceAmount(details.key, transaction)
       : 0;
     const type = payment.tipo_pago as PagoTipo;
-    const originRemaining = round(details.total - exposure.total);
-    const remaining = round(Math.min(
-      originRemaining,
-      roomBalance?.remaining ?? Number.POSITIVE_INFINITY,
-      eventBalance?.remaining ?? Number.POSITIVE_INFINITY,
-    ));
-    if (Number(payment.monto) > remaining) {
+    const originRemainingCents =
+      toCents(details.total) - toCents(exposure.total);
+    const remainingCents = isCartOrigin
+      ? originRemainingCents
+      : Math.min(
+          originRemainingCents,
+          roomBalance?.remainingCents ?? Number.POSITIVE_INFINITY,
+        );
+    if (amountCents > remainingCents) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && Number(payment.monto) < originRemaining) {
+    if (details.isOnlyRoom && amountCents < originRemainingCents) {
       throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
     }
     if (type === "anticipo") {
