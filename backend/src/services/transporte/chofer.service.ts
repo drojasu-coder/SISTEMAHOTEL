@@ -1,9 +1,15 @@
+import { Op } from "sequelize";
+
 import { AppError }
   from "../../utils/AppError";
 
 const db = require("../../models");
 
-const { Chofer } = db;
+const {
+  sequelize,
+  Chofer,
+  ReservaTransporte,
+} = db;
 
 interface CreateChoferData {
   nombre: string;
@@ -73,21 +79,59 @@ export const updateStatus = async (
   id: number,
   activo: boolean
 ) => {
-  const chofer =
-    await Chofer.findByPk(id);
+  return sequelize.transaction(
+    async (transaction: any) => {
+      const chofer =
+        await Chofer.findByPk(id, {
+          transaction,
+          lock:
+            transaction.LOCK.UPDATE,
+        });
 
-  if (!chofer) {
-    throw new AppError(
-      404,
-      "DRIVER_NOT_FOUND",
-      "El chofer solicitado no existe"
-    );
-  }
+      if (!chofer) {
+        throw new AppError(
+          404,
+          "DRIVER_NOT_FOUND",
+          "El chofer solicitado no existe"
+        );
+      }
 
-  await chofer.update({
-    activo,
-  });
+      if (
+        chofer.activo &&
+        activo === false
+      ) {
+        const futureReservation =
+          await ReservaTransporte.findOne({
+            attributes: ["id"],
+            where: {
+              chofer_id: id,
+              estado: "confirmada",
+              fecha_hora: {
+                [Op.gt]: new Date(),
+              },
+            },
+            transaction,
+          });
 
-  return chofer;
+        if (futureReservation) {
+          throw new AppError(
+            409,
+            "DRIVER_HAS_FUTURE_RESERVATIONS",
+            "El chofer tiene reservas futuras confirmadas y no puede desactivarse"
+          );
+        }
+      }
+
+      await chofer.update(
+        {
+          activo,
+        },
+        {
+          transaction,
+        }
+      );
+
+      return chofer;
+    }
+  );
 };
-

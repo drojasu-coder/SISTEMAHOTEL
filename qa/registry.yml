@@ -5609,3 +5609,121 @@ findings:
       migrations_modified: false
       existing_tests_modified: false
       verified_at: "2026-10-22"
+
+  - id: QA-TR-FUNC-CANDIDATE-042
+    status: closed
+    severity: high
+    category: FUNC
+    title: >-
+      Un chofer puede quedar inactivo mientras conserva una ReservaTransporte
+      futura confirmada asignada
+    invariant: >-
+      un chofer con reservas futuras confirmadas no puede desactivarse mientras
+      siga asignado.
+    approved_product_rule:
+      future_confirmed_reservations_block_deactivation: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/transporte/chofer.lifecycle.test.ts
+      test_name: "QA-TR-FUNC-CANDIDATE-042: rechaza desactivar un chofer con una reserva futura confirmada"
+      command: >-
+        npm --prefix backend test -- tests/transporte/chofer.lifecycle.test.ts
+      dynamic_scenario: "fecha y hora local + 7 días, duración de bloqueo de 120 minutos"
+    expected:
+      deactivation_http_status: 409
+      deactivation_error_code: DRIVER_HAS_FUTURE_RESERVATIONS
+      driver_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_driver_preserved: true
+      reservation_vehicle_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+    actual_before_fix:
+      current_local_datetime: "2026-10-25T05:57:24.292Z"
+      reservation_start: "2026-11-01T05:57:00.000Z"
+      reservation_end: "2026-11-01T07:57:00.000Z"
+      is_future: true
+      deactivation_http_status: 200
+      deactivation_error_code: null
+      driver_active_after_attempt: false
+      reservation_state_after_attempt: confirmada
+      reservation_driver_after: 1
+      reservation_vehicle_after: 1
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+      inactive_driver_with_future_confirmed_reservation: true
+      business_rule_violation: true
+    http_evidence: >-
+      Una reserva futura con chofer activo fue creada por POST
+      /api/reservas-transporte con HTTP 201 en estado confirmada y chofer_id=1.
+      PATCH /api/choferes/1/estado con activo=false recibió HTTP 200 sin código
+      de error, en lugar de HTTP 409.
+    database_evidence: >-
+      Consultas directas de PostgreSQL confirmaron antes del intento chofer
+      activo=true, reserva confirmada y chofer_id asignado. Después del PATCH,
+      el chofer quedó activo=false mientras la reserva futura continuó
+      confirmada con el mismo chofer_id; no hubo cancelación, desasignación ni
+      reasignación automática.
+    endpoint: PATCH /api/choferes/{id}/estado
+    suspected_execution_path: >-
+      chofer.routes -> chofer.controller.updateStatus ->
+      chofer.service.updateStatus; el servicio obtiene el chofer con findByPk y
+      ejecuta chofer.update({ activo }) sin transacción, sin bloqueo de fila y
+      sin consultar reservas de transporte futuras confirmadas asignadas al
+      chofer.
+    red_result: >-
+      1 test failed con tres aserciones de evidencia fallidas: HTTP 200 en lugar
+      de 409, código DRIVER_HAS_FUTURE_RESERVATIONS ausente y chofer persistido
+      inactivo (activo=false) en lugar de activo (activo=true). La reserva
+      permaneció confirmada y asignada al chofer inactivo.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    root_cause: >-
+      chofer.service.updateStatus modificaba el campo activo directamente con
+      chofer.update({ activo }) sin abrir una transacción, sin bloquear con
+      SELECT FOR UPDATE la fila del Chofer y sin verificar si existían filas de
+      ReservaTransporte en estado confirmada con fecha_hora posterior al momento
+      actual asignadas a ese chofer.
+    fix: >-
+      updateStatus encapsula la verificación y la actualización dentro de
+      sequelize.transaction. Adquiere bloqueo de fila con SELECT FOR UPDATE
+      sobre Chofer. Si la transición solicitada es activo=true a activo=false,
+      ejecuta dentro de la misma transacción una consulta sobre
+      ReservaTransporte con chofer_id, estado=confirmada y fecha_hora mayor al
+      momento actual (Op.gt Date). Si encuentra al menos una, revierte y arroja
+      AppError(409, "DRIVER_HAS_FUTURE_RESERVATIONS"). En caso contrario,
+      persiste el nuevo estado y hace commit.
+    validation_layer: service
+    transaction_scope: >-
+      sequelize.transaction alrededor de SELECT FOR UPDATE de Chofer, consulta
+      de ReservaTransporte y chofer.update
+    locking_strategy: SELECT ... FOR UPDATE sobre la fila del Chofer en actualización
+    future_reservation_definition: fecha_hora > NOW() (Op.gt new Date()) en reservas_transporte
+    blocking_state: estado = confirmada
+    automatic_cancellation: false
+    automatic_unassign: false
+    automatic_reassignment: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      deactivation_http_status: 409
+      deactivation_error_code: DRIVER_HAS_FUTURE_RESERVATIONS
+      driver_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_driver_preserved: true
+      reservation_vehicle_preserved: true
+      inactive_driver_with_future_confirmed_reservation: false
+      business_rule_violation: false
+      041_regression: "1 file passed, 1 test passed; DRIVER_OVERLAP_COUNT=1, VEHICLE_OVERLAP_COUNT=1"
+      related_transport_tests: "2 files passed, 2 tests passed"
+      typecheck: pass
+      test_file_modified: false
+      migrations_modified: false
+      verified_at: "2026-10-25"
