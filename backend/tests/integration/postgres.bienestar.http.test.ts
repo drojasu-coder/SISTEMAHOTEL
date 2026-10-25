@@ -1,5 +1,67 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+const stripeMock = vi.hoisted(() => {
+  let sequence = 0;
+  const intents = new Map<string, any>();
+  const webhook = { event: null as any };
+  const createPaymentIntent = vi.fn(
+    async (
+      amount: number | string,
+      currency: string,
+      metadata: Record<string, string>,
+      idempotencyKey?: string
+    ) => {
+      sequence += 1;
+      const id = `pi_bienestar_cart_${sequence}`;
+      const intent = {
+        id,
+        status: "requires_payment_method",
+        client_secret: `${id}_secret_qa_local`,
+        amount: Math.round(Number(amount) * 100),
+        currency: currency.toLowerCase(),
+        metadata: { ...metadata },
+        idempotency_key: idempotencyKey,
+      };
+      intents.set(id, intent);
+      return { ...intent };
+    }
+  );
+  const constructEvent = vi.fn(() => {
+    if (!webhook.event) {
+      throw new Error("No se configuró el webhook local para bienestar");
+    }
+    return webhook.event;
+  });
+
+  return {
+    intents,
+    webhook,
+    createPaymentIntent,
+    constructEvent,
+    retrievePaymentIntent: vi.fn(),
+    cancelPaymentIntent: vi.fn(),
+    createRefund: vi.fn(),
+  };
+});
+
+/** Mock controlado de Stripe para verificar el flujo real con PaymentIntent y webhook en BD aislada. */
+vi.mock("../../src/services/stripe.service", () => ({
+  toStripeAmount: (amount: number | string, currency: string) => {
+    if (currency !== "GTQ") {
+      throw new Error(`Moneda inesperada en mock Stripe: ${currency}`);
+    }
+    return Math.round(Number(amount) * 100);
+  },
+  stripeService: {
+    createPaymentIntent: stripeMock.createPaymentIntent,
+    retrievePaymentIntent: stripeMock.retrievePaymentIntent,
+    cancelPaymentIntent: stripeMock.cancelPaymentIntent,
+    createRefund: stripeMock.createRefund,
+    constructEvent: stripeMock.constructEvent,
+  },
+}));
+
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
 import { createIsolatedTestDatabase, TestDatabase } from "./testDatabase";
 import { generateAccessToken } from "../../src/utils/jwt";
@@ -16,8 +78,10 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
   let client2UserId: number;
 
   let activeTerapeutaId: number;
+  let activeTerapeuta2Id: number;
   let inactiveTerapeutaId: number;
   let servicioSpaId: number;
+  let servicioSpa45Id: number;
   let createdCitaId: number;
   let cartId: number;
 
@@ -60,10 +124,16 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
 
     // 2. Terapeutas
     const terapeutaActivo = await database.Terapeuta.create({
-      nombre: `Terapeuta Activo ${Date.now()}`,
+      nombre: `Terapeuta Activo 1 ${Date.now()}`,
       activo: true,
     });
     activeTerapeutaId = terapeutaActivo.id;
+
+    const terapeutaActivo2 = await database.Terapeuta.create({
+      nombre: `Terapeuta Activo 2 ${Date.now()}`,
+      activo: true,
+    });
+    activeTerapeuta2Id = terapeutaActivo2.id;
 
     const terapeutaInactivo = await database.Terapeuta.create({
       nombre: `Terapeuta Inactivo ${Date.now()}`,
@@ -71,13 +141,22 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     });
     inactiveTerapeutaId = terapeutaInactivo.id;
 
-    // 3. Servicio de Bienestar (60 mins, Q350.00)
+    // 3. Servicios de Bienestar
+    // Servicio de 60 mins (Q350.00)
     const servicio = await database.ServicioBienestar.create({
       nombre: `Masaje Terapéutico QA ${Date.now()}`,
       duracion_minutos: 60,
       precio: 350.0,
     });
     servicioSpaId = servicio.id;
+
+    // Servicio de 45 mins (Q250.00) para pruebas de casos límite
+    const servicio45 = await database.ServicioBienestar.create({
+      nombre: `Tratamiento Facial 45m QA ${Date.now()}`,
+      duracion_minutos: 45,
+      precio: 250.0,
+    });
+    servicioSpa45Id = servicio45.id;
   });
 
   afterAll(async () => {
@@ -89,14 +168,19 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
       await database.Pago.destroy({ where: { carrito_id: cartIds }, force: true });
       await database.Carrito.destroy({ where: { id: cartIds }, force: true });
     }
-    if (createdCitaId) {
-      await database.CitaBienestar.destroy({ where: { id: createdCitaId }, force: true });
-    }
+    const therapistIds = [activeTerapeutaId, activeTerapeuta2Id, inactiveTerapeutaId].filter(Boolean);
+    await database.CitaBienestar.destroy({ where: { terapeuta_id: therapistIds }, force: true });
     if (servicioSpaId) {
       await database.ServicioBienestar.destroy({ where: { id: servicioSpaId }, force: true });
     }
+    if (servicioSpa45Id) {
+      await database.ServicioBienestar.destroy({ where: { id: servicioSpa45Id }, force: true });
+    }
     if (activeTerapeutaId) {
       await database.Terapeuta.destroy({ where: { id: activeTerapeutaId }, force: true });
+    }
+    if (activeTerapeuta2Id) {
+      await database.Terapeuta.destroy({ where: { id: activeTerapeuta2Id }, force: true });
     }
     if (inactiveTerapeutaId) {
       await database.Terapeuta.destroy({ where: { id: inactiveTerapeutaId }, force: true });
@@ -129,7 +213,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
   });
 
   it("POST /api/servicios-spa rechaza a clientes con 403 y permite a administradores con 201", async () => {
-    // Cliente -> 403
     const forbiddenRes = await request(app)
       .post("/api/servicios-spa")
       .set("Authorization", `Bearer ${client1Token}`)
@@ -140,7 +223,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
       });
     expect(forbiddenRes.status).toBe(403);
 
-    // Admin -> 201
     const adminRes = await request(app)
       .post("/api/servicios-spa")
       .set("Authorization", `Bearer ${adminToken}`)
@@ -153,7 +235,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     expect(adminRes.body.status).toBe("success");
     expect(adminRes.body.data.nombre).toContain("Tratamiento Facial QA");
 
-    // Limpieza
     await database.ServicioBienestar.destroy({ where: { id: adminRes.body.data.id }, force: true });
   });
 
@@ -185,7 +266,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     expect(adminRes.status).toBe(201);
     expect(adminRes.body.status).toBe("success");
 
-    // Limpieza
     await database.Terapeuta.destroy({ where: { id: adminRes.body.data.id }, force: true });
   });
 
@@ -243,36 +323,240 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     createdCitaId = res.body.data.id;
   });
 
-  it("POST /api/citas-spa rechaza traslape o cita dentro del buffer de 15 minutos con 409 THERAPIST_BUSY_OR_BUFFER", async () => {
-    // La cita creada es 10:00 - 11:00.
-    // El buffer reglamentario requiere 15 minutos de descanso: el terapeuta está ocupado hasta las 11:15.
-    // Intentar a las 11:05 (dentro del buffer) debe fallar con 409
-    const bufferRes = await request(app)
+  // =========================================================================
+  // CASOS LÍMITE DEL DESCANSO DE 15 MINUTOS ENTRE CITAS (6 CASOS)
+  // =========================================================================
+
+  it("Verifica rigurosamente los 6 casos límite de descanso de 15 minutos respecto a una cita de 11:00 a 12:00", async () => {
+    const testFecha = "2026-11-25";
+
+    // Cita base: 11:00 a 12:00 (servicio de 60 mins)
+    const baseCitaRes = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpaId,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "11:00",
+      });
+    expect(baseCitaRes.status).toBe(201);
+    const baseCitaId = baseCitaRes.body.data.id;
+
+    // Caso 1: Nueva cita que termina a las 11:00 (duración 45 min, inicio 10:15) -> rechazada 409
+    const caso1 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "10:15",
+      });
+    expect(caso1.status).toBe(409);
+    expect(caso1.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
+
+    // Caso 2: Nueva cita que termina a las 10:46 (duración 45 min, inicio 10:01) -> rechazada 409
+    const caso2 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "10:01",
+      });
+    expect(caso2.status).toBe(409);
+    expect(caso2.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
+
+    // Caso 3: Nueva cita que termina exactamente a las 10:45 (duración 45 min, inicio 10:00) -> admitida 201
+    const caso3 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "10:00",
+      });
+    expect(caso3.status).toBe(201);
+    const caso3Id = caso3.body.data.id;
+
+    // Caso 4: Nueva cita que empieza a las 12:00 (duración 45 min, inicio 12:00) -> rechazada 409
+    const caso4 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "12:00",
+      });
+    expect(caso4.status).toBe(409);
+    expect(caso4.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
+
+    // Caso 5: Nueva cita que empieza a las 12:14 (duración 45 min, inicio 12:14) -> rechazada 409
+    const caso5 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "12:14",
+      });
+    expect(caso5.status).toBe(409);
+    expect(caso5.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
+
+    // Caso 6: Nueva cita que empieza exactamente a las 12:15 (duración 45 min, inicio 12:15) -> admitida 201
+    const caso6 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "12:15",
+      });
+    expect(caso6.status).toBe(201);
+    const caso6Id = caso6.body.data.id;
+
+    // Limpieza de citas creadas en este bloque de prueba
+    await database.CitaBienestar.destroy({
+      where: { id: [baseCitaId, caso3Id, caso6Id] },
+      force: true,
+    });
+  });
+
+  it("Comprueba que terapeutas distintos no se bloqueen entre sí en el mismo horario", async () => {
+    const testFecha = "2026-11-26";
+    // Terapeuta 1 reserva a las 11:00
+    const citaT1 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpaId,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "11:00",
+      });
+    expect(citaT1.status).toBe(201);
+
+    // Terapeuta 2 puede reservar al mismo horario (11:00) sin bloqueo
+    const citaT2 = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client2Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpaId,
+        terapeuta_id: activeTerapeuta2Id,
+        fecha: testFecha,
+        hora_inicio: "11:00",
+      });
+    expect(citaT2.status).toBe(201);
+
+    await database.CitaBienestar.destroy({
+      where: { id: [citaT1.body.data.id, citaT2.body.data.id] },
+      force: true,
+    });
+  });
+
+  it("Comprueba que citas canceladas no bloquean nuevas reservas y reactivación valida conflictos", async () => {
+    const testFecha = "2026-11-27";
+    // 1. Crear cita para las 15:00
+    const citaA = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpaId,
+        terapeuta_id: activeTerapeutaId,
+        fecha: testFecha,
+        hora_inicio: "15:00",
+      });
+    expect(citaA.status).toBe(201);
+    const citaAId = citaA.body.data.id;
+
+    // 2. Cancelar cita A
+    const cancelRes = await request(app)
+      .patch(`/api/citas-spa/${citaAId}/estado`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ estado: "cancelada" });
+    expect(cancelRes.status).toBe(200);
+
+    // 3. Crear cita B para el mismo terapeuta en el mismo horario (15:00) -> permitido porque A está cancelada
+    const citaB = await request(app)
       .post("/api/citas-spa")
       .set("Authorization", `Bearer ${client2Token}`)
       .send({
         servicio_bienestar_id: servicioSpaId,
         terapeuta_id: activeTerapeutaId,
-        fecha: "2026-11-20",
-        hora_inicio: "11:05",
+        fecha: testFecha,
+        hora_inicio: "15:00",
       });
+    expect(citaB.status).toBe(201);
+    const citaBId = citaB.body.data.id;
 
-    expect(bufferRes.status).toBe(409);
-    expect(bufferRes.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
+    // 4. Intentar reactivar cita A mientras B está confirmada -> debe fallar con 409
+    const reactivarConflicto = await request(app)
+      .patch(`/api/citas-spa/${citaAId}/estado`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ estado: "confirmada" });
+    expect(reactivarConflicto.status).toBe(409);
+    expect(reactivarConflicto.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
 
-    // Intentar a las 10:30 (en pleno traslape) debe fallar con 409
-    const overlapRes = await request(app)
+    // 5. Cancelar B y reactivar A -> debe permitirse excluyéndose a sí misma
+    await request(app)
+      .patch(`/api/citas-spa/${citaBId}/estado`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ estado: "cancelada" });
+
+    const reactivarExitoso = await request(app)
+      .patch(`/api/citas-spa/${citaAId}/estado`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ estado: "confirmada" });
+    expect(reactivarExitoso.status).toBe(200);
+    expect(reactivarExitoso.body.data.estado).toBe("confirmada");
+
+    await database.CitaBienestar.destroy({
+      where: { id: [citaAId, citaBId] },
+      force: true,
+    });
+  });
+
+  it("Comprueba protección de descanso entre citas en cruce de fechas (medianoche)", async () => {
+    const fechaDia1 = "2026-11-28";
+    const fechaDia2 = "2026-11-29";
+
+    // Cita que termina a las 23:55 del día 1 (duración 45 min, inicia 23:10)
+    // El buffer reglamentario de 15 minutos se extiende hasta las 00:10 del día 2
+    const citaFinDia = await request(app)
+      .post("/api/citas-spa")
+      .set("Authorization", `Bearer ${client1Token}`)
+      .send({
+        servicio_bienestar_id: servicioSpa45Id,
+        terapeuta_id: activeTerapeutaId,
+        fecha: fechaDia1,
+        hora_inicio: "23:10",
+      });
+    expect(citaFinDia.status).toBe(201);
+    const citaFinDiaId = citaFinDia.body.data.id;
+
+    // Intentar reservar al día 2 a las 00:05 (dentro del buffer que vence a las 00:10) -> debe ser rechazada con 409
+    const intentoDia2 = await request(app)
       .post("/api/citas-spa")
       .set("Authorization", `Bearer ${client2Token}`)
       .send({
-        servicio_bienestar_id: servicioSpaId,
+        servicio_bienestar_id: servicioSpa45Id,
         terapeuta_id: activeTerapeutaId,
-        fecha: "2026-11-20",
-        hora_inicio: "10:30",
+        fecha: fechaDia2,
+        hora_inicio: "00:05",
       });
+    expect(intentoDia2.status).toBe(409);
+    expect(intentoDia2.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
 
-    expect(overlapRes.status).toBe(409);
-    expect(overlapRes.body.code).toBe("THERAPIST_BUSY_OR_BUFFER");
+    await database.CitaBienestar.destroy({
+      where: { id: citaFinDiaId },
+      force: true,
+    });
   });
 
   // =========================================================================
@@ -280,7 +564,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
   // =========================================================================
 
   it("GET /api/citas-spa/mis-reservas devuelve únicamente las citas del cliente autenticado", async () => {
-    // Cliente 1 tiene su cita
     const res1 = await request(app)
       .get("/api/citas-spa/mis-reservas")
       .set("Authorization", `Bearer ${client1Token}`);
@@ -290,7 +573,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     const ids = res1.body.data.map((c: any) => c.id);
     expect(ids).toContain(createdCitaId);
 
-    // Cliente 2 no tiene citas creadas
     const res2 = await request(app)
       .get("/api/citas-spa/mis-reservas")
       .set("Authorization", `Bearer ${client2Token}`);
@@ -301,7 +583,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
   });
 
   it("GET /api/citas-spa/mis-reservas/:id protege la propiedad (403 si pertenece a otro cliente)", async () => {
-    // Cliente 1 consulta su propia cita -> 200
     const ownRes = await request(app)
       .get(`/api/citas-spa/mis-reservas/${createdCitaId}`)
       .set("Authorization", `Bearer ${client1Token}`);
@@ -309,7 +590,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     expect(ownRes.status).toBe(200);
     expect(ownRes.body.data.id).toBe(createdCitaId);
 
-    // Cliente 2 intenta consultar la cita de Cliente 1 -> 403 FORBIDDEN
     const forbiddenRes = await request(app)
       .get(`/api/citas-spa/mis-reservas/${createdCitaId}`)
       .set("Authorization", `Bearer ${client2Token}`);
@@ -350,7 +630,7 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     expect(res.body.status).toBe("success");
     expect(res.body.data.estado).toBe("completada");
 
-    // Restaurar a confirmada para las siguientes pruebas
+    // Restaurar a confirmada para la integración de carrito y pago
     const restoreRes = await request(app)
       .patch(`/api/citas-spa/${createdCitaId}/estado`)
       .set("Authorization", `Bearer ${adminToken}`)
@@ -360,10 +640,10 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
   });
 
   // =========================================================================
-  // INTEGRACIÓN CON CARRITO Y FLUJO DE COBRO
+  // INTEGRACIÓN CON CARRITO Y FLUJO DE COBRO REAL (STRIPE ELEMENTS + WEBHOOK)
   // =========================================================================
 
-  it("Integra la cita de bienestar en el carrito del cliente", async () => {
+  it("Integra la cita de bienestar en carrito y procesa el cobro completo mediante Stripe PaymentIntent y webhook payment_intent.succeeded", async () => {
     // 1. Crear carrito para cliente 1
     const cartRes = await request(app)
       .post("/api/carritos")
@@ -373,7 +653,7 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     expect(cartRes.status).toBe(201);
     cartId = cartRes.body.data.id;
 
-    // 2. Cliente 2 no puede agregar la cita de Cliente 1
+    // 2. Cliente 2 no puede agregar la cita de Cliente 1 (403)
     const otherCartRes = await request(app)
       .post("/api/carritos")
       .set("Authorization", `Bearer ${client2Token}`)
@@ -388,7 +668,6 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
         referencia_id: createdCitaId,
       });
 
-    // Debe denegar por no ser dueño de la cita
     expect(crossUserRes.status).toBe(403);
     await database.Carrito.destroy({ where: { id: otherCartId }, force: true });
 
@@ -417,26 +696,83 @@ describe("HTTP Bienestar & Spa in isolated PostgreSQL (port 55433)", () => {
     expect(item).toBeDefined();
     expect(Number(item.precio)).toBe(350);
 
-    // 5. Registrar pago para el carrito (efectivo por admin)
-    const payRes = await request(app)
+    // 5. Crear intento de pago con Stripe mediante la API real del checkout (POST /api/pagos)
+    const paymentRes = await request(app)
       .post("/api/pagos")
-      .set("Authorization", `Bearer ${adminToken}`)
+      .set("Authorization", `Bearer ${client1Token}`)
       .send({
         carrito_id: cartId,
-        monto: 350,
-        metodo: "efectivo",
+        monto: "350.00",
+        metodo: "tarjeta",
         tipo_pago: "total",
         moneda: "GTQ",
+        idempotency_key: `idemp-bienestar-stripe-${Date.now()}`,
       });
 
-    expect(payRes.status).toBe(201);
-    expect(payRes.body.data.estado).toBe("aprobado");
+    expect(paymentRes.status).toBe(201);
+    expect(paymentRes.body.data.estado).toBe("procesando");
+    expect(paymentRes.body.data.monto).toBe("350.00");
+    expect(paymentRes.body.data.payment_intent_id).toBeDefined();
+    expect(paymentRes.body.data.client_secret).toBeDefined();
 
-    // 6. Carrito queda pagado
-    const paidCart = await database.Carrito.findByPk(cartId);
-    expect(paidCart.estado).toBe("pagado");
+    const paymentId = Number(paymentRes.body.data.pago_id);
+    const paymentIntentId = paymentRes.body.data.payment_intent_id;
+    const paymentIntent = stripeMock.intents.get(paymentIntentId);
+    expect(paymentIntent).toBeDefined();
 
-    // 7. Intentar volver a agregar la cita pagada a un nuevo carrito debe fallar con 409
+    // 6. Simular webhook de Stripe: payment_intent.succeeded
+    paymentIntent.status = "succeeded";
+    stripeMock.webhook.event = {
+      id: `evt_bienestar_${Date.now()}`,
+      type: "payment_intent.succeeded",
+      data: {
+        object: {
+          id: paymentIntent.id,
+          status: paymentIntent.status,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+          metadata: { ...paymentIntent.metadata },
+        },
+      },
+    };
+
+    const webhookRes = await request(app)
+      .post("/api/pagos/stripe/webhook")
+      .set("Stripe-Signature", "t=1,v1=qa-local-signature")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ id: stripeMock.webhook.event.id }));
+
+    expect(webhookRes.status).toBe(200);
+    expect(webhookRes.body.received).toBe(true);
+
+    // 7. Verificar persistencia y efectos locales:
+    // Pago aprobado
+    const pagoDb = await database.Pago.findByPk(paymentId);
+    expect(pagoDb).not.toBeNull();
+    expect(pagoDb.estado).toBe("aprobado");
+    expect(Number(pagoDb.monto)).toBe(350);
+    expect(pagoDb.fecha_pago).not.toBeNull();
+
+    // Carrito queda pagado
+    const cartDb = await database.Carrito.findByPk(cartId);
+    expect(cartDb.estado).toBe("pagado");
+
+    // Estado operativo de la cita se conserva en confirmada
+    const citaDb = await database.CitaBienestar.findByPk(createdCitaId);
+    expect(citaDb.estado).toBe("confirmada");
+
+    // 8. Replay del webhook (idempotencia): enviar el mismo evento no debe duplicar pagos ni causar error
+    const replayWebhookRes = await request(app)
+      .post("/api/pagos/stripe/webhook")
+      .set("Stripe-Signature", "t=1,v1=qa-local-signature")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({ id: stripeMock.webhook.event.id }));
+
+    expect(replayWebhookRes.status).toBe(200);
+    const totalPagos = await database.Pago.count({ where: { carrito_id: cartId } });
+    expect(totalPagos).toBe(1);
+
+    // 9. Intentar volver a agregar la cita pagada a un nuevo carrito debe fallar con 409
     const newCart = await database.Carrito.create({
       usuario_id: client1UserId,
       estado: "activo",

@@ -102,7 +102,7 @@ Este documento registra de forma continua el avance técnico, archivos modificad
     - `AdminLayout` incluye enlace persistente "Volver al sitio" hacia `/`.
   - **Visibilidad y protección de acciones por rol:**
     - Acciones de mutación (crear/editar/eliminar) en habitaciones, tipos, amenidades, parqueos, mesas y sedes están estrictamente condicionadas a los permisos del usuario mediante `hasPermission(...)` (p. ej., `canManageHabitaciones`, `canManageTipos`, `canManageParqueos`, etc.). Los botones correspondientes no se renderizan para roles no autorizados.
-    - Menús del panel (`PANEL_MODULES`) filtran dinámicamente las opciones según los roles autorizados por el backend en `getPanelModules(...)`.
+    - Menús del panel (`PANEL_MODULES`) filtran dinámicamente las opciones según los roles autorizados por el backend en `getPanelModules(...)`.\
 - **Archivos relevantes:**
   - `Frontend/src/app/router/AppRouter.tsx`
   - `Frontend/src/layouts/AdminLayout.tsx`
@@ -223,8 +223,6 @@ Este documento registra de forma continua el avance técnico, archivos modificad
        - 19 pruebas de actividades (`src/features/actividades/`): todas aprobadas.
        - Suite completa frontend (`npm test`): 38 suites pasando, 316 pruebas aprobadas (19 pruebas de red real omitidas).
        - Verificación de tipos backend (`npm run typecheck:all`): 0 errores.
-       - Verificación de tipos frontend (`tsc --noEmit`): 0 errores.
-       - Compilación de producción (`npm run build`): bundle generado correctamente en `Frontend/dist/`.
 
 ---
 
@@ -239,8 +237,13 @@ Este documento registra de forma continua el avance técnico, archivos modificad
      - **Reglas de negocio y disponibilidad:**
        - El terapeuta debe existir y encontrarse activo (`422 THERAPIST_INACTIVE`).
        - La duración se calcula autoritativamente en el servidor a partir de `duracion_minutos` del servicio, determinando `hora_fin`.
-       - Control de solapamientos y tiempo de descanso: el sistema exige un buffer obligatorio de 15 minutos entre sesiones del mismo profesional (`409 THERAPIST_BUSY_OR_BUFFER`).
-       - Reactivación administrativa a `confirmada` revalida la disponibilidad y el buffer del profesional asignado.
+       - **Regla rigurosa de descanso de 15 minutos en ambos sentidos:** Se exige un buffer simétrico y bidireccional de 15 minutos de descanso entre sesiones del mismo profesional:
+         $$\text{candStartMs} < \text{bufferEndMs} \quad \land \quad \text{candEndMs} > \text{bufferStartMs}$$
+         donde $\text{bufferStartMs} = \text{startMs} - 15\text{ min}$ y $\text{bufferEndMs} = \text{endMs} + 15\text{ min}$.
+         Aplica sin sesgo de orden de inserción, no restringe falsamente la búsqueda a un único día calendario (cubriendo cruces de medianoche entre fechas adyacentes) y se ejecuta bajo transacción con bloqueo exclusivo de fila (`lock: transaction.LOCK.UPDATE`) sobre el terapeuta, serializando reservas concurrentes.
+       - Citas canceladas no bloquean nuevas reservas.
+       - Terapeutas distintos no se bloquean mutuamente en el mismo intervalo.
+       - Reactivación administrativa a `confirmada` revalida la disponibilidad y el buffer del profesional asignado, excluyendo la propia cita de los conflictos (`[Op.ne]: id`).
      - **Nuevos endpoints cliente implementados:**
        - `GET /api/citas-spa/mis-reservas`: Lista exclusivamente las citas del cliente autenticado.
        - `GET /api/citas-spa/mis-reservas/:id`: Consulta individual con verificación estricta de propiedad (403 `FORBIDDEN` para otros clientes).
@@ -288,15 +291,41 @@ Este documento registra de forma continua el avance técnico, archivos modificad
        - Soporte para `tipo_item === "bienestar"`, etiqueta "Bienestar" y enlace directo a `/mis-reservas/bienestar/:id`.
      - **Validación durante checkout (`cartTotals` en `pago.service.ts`):**
        - Validación de disponibilidad de la cita de bienestar antes de registrar pagos, rechazando citas canceladas (`CART_REFERENCE_NOT_AVAILABLE`).
-     - **Cobro y actualización:**
-       - Pago de carritos con ítems de bienestar aprobado satisfactoriamente.
-       - Transición del carrito a estado `pagado`.
-       - Invalidación de caché en `usePagoResultado.ts` para refrescar las consultas de bienestar (`["citas-bienestar"]`).
-       - Separación estricta entre el estado operativo de la cita (`confirmada`) y el estado financiero (`pagado` en carrito y pago).
+     - **Cobro real mediante Stripe Elements y Webhook:**
+       - La pasarela utiliza **Stripe Elements con PaymentIntent** (`POST /api/pagos` con `metodo: "tarjeta"`, `tipo_pago: "total"`, `idempotency_key`), devolviendo `client_secret` y `payment_intent_id` con estado `procesando`.
+       - Confirmación y persistencia mediante el evento oficial `payment_intent.succeeded` procesado en `POST /api/pagos/stripe/webhook` con firma criptográfica.
+       - Transición del pago a `aprobado` y del carrito a `pagado`.
+       - Preservación del estado operativo de la cita (`confirmada`), manteniendo desacoplado el estado operativo del financiero.
+       - Idempotencia garantizada ante reenvío o repetición del mismo evento de webhook.
+       - Protección contra reutilización: rechazo con `409 CART_REFERENCE_NOT_AVAILABLE` al intentar agregar una cita ya pagada a un nuevo carrito.
+     - **Invalidación de caché frontend:**
+       - Implementada en `Frontend/src/features/pagos/hooks/usePagoResultado.ts`, invalidando `['citas-bienestar']` al aprobarse el pago del carrito.
   6. **Pruebas y Verificación:**
      - **Entorno aislado (hotel_test_db en puerto 55433):**
-       - Suite de integración HTTP: `backend/tests/integration/postgres.bienestar.http.test.ts` (13/13 pruebas pasando, 100%).
-       - Cobertura: endpoints públicos, protección 403 para clientes en rutas admin, restricción de reservas exclusivamente a clientes, cálculo de hora_fin, validación de buffer de 15 minutos, aislamiento entre clientes en mis-reservas, protección de propiedad 403, transiciones de estado administrativo, adición al carrito, cálculo de total, registro y aprobación de pago, y bloqueo de adición duplicada de citas pagadas.
+       - Suite de integración HTTP: `backend/tests/integration/postgres.bienestar.http.test.ts` (**16/16 pruebas pasando, 100%**).
+       - Cobertura completa:
+         1. Catálogo público de servicios (`GET /api/servicios-spa`).
+         2. Permisos administrativos en servicios (403 cliente / 201 admin).
+         3. Catálogo público de terapeutas (`GET /api/terapeutas`).
+         4. Permisos administrativos en terapeutas (403 cliente / 201 admin).
+         5. Restricción de reservas exclusivamente a clientes (403 admin).
+         6. Rechazo de terapeutas inactivos (`422 THERAPIST_INACTIVE`).
+         7. Creación de cita y cálculo autoritativo de `hora_fin`.
+         8. **6 casos límite de descanso de 15 minutos** respecto a una cita de 11:00 a 12:00:
+            - Cita que termina a las 11:00 (10:15 - 11:00) $\to$ rechazada (409).
+            - Cita que termina a las 10:46 (10:01 - 10:46) $\to$ rechazada (409).
+            - Cita que termina a las 10:45 (10:00 - 10:45) $\to$ admitida (201).
+            - Cita que empieza a las 12:00 (12:00 - 12:45) $\to$ rechazada (409).
+            - Cita que empieza a las 12:14 (12:14 - 12:59) $\to$ rechazada (409).
+            - Cita que empieza a las 12:15 (12:15 - 13:00) $\to$ admitida (201).
+         9. No interferencia entre terapeutas distintos en el mismo horario (admitida 201).
+         10. No bloqueo por citas canceladas y revalidación de traslapes en reactivación con auto-exclusión (`[Op.ne]: id`).
+         11. Protección de descanso en cruces de medianoche entre fechas de calendario contiguas.
+         12. Consulta de mis reservas aislada por cliente (`GET /api/citas-spa/mis-reservas`).
+         13. Protección de propiedad en detalle de reserva (403 ajeno / 200 propio).
+         14. Consulta administrativa de citas (`GET /api/citas-spa`).
+         15. Actualización administrativa de estado operativo (`PATCH /api/citas-spa/:id/estado`).
+         16. Flujo completo de carrito a pago con Stripe PaymentIntent, webhook `payment_intent.succeeded`, persistencia de pago aprobado, carrito pagado, preservación de cita confirmada, replay idempotente de webhook y rechazo de re-adición al carrito.
      - **Pruebas unitarias de contrato OpenAPI:**
        - `backend/tests/unit/openapi.test.ts` (11/11 pruebas pasando, 100%).
      - **Pruebas frontend (Vitest / React Testing Library):**
