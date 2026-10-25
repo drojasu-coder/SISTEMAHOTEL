@@ -92,6 +92,94 @@ router.post(
 
 /**
  * @openapi
+ * /api/reservas-actividad/mis-reservas:
+ *   get:
+ *     tags:
+ *       - Reservas de Actividad
+ *     summary: Listar reservas de actividad del cliente autenticado
+ *     description: Operación exclusiva para clientes autenticados para consultar sus reservas de actividad.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reservas obtenidas correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     : '#/components/schemas/ReservaActividad'
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: Exclusivo para clientes
+ */
+router.get(
+  "/mis-reservas",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  reservaActividadController.getMyReservations
+);
+
+/**
+ * @openapi
+ * /api/reservas-actividad/mis-reservas/{id}:
+ *   get:
+ *     tags:
+ *       - Reservas de Actividad
+ *     summary: Obtener detalle de una reserva de actividad del cliente autenticado
+ *     description: Permite al cliente autenticado consultar el detalle de una de sus reservas de actividad.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Reserva encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 data:
+ *                   : '#/components/schemas/ReservaActividad'
+ *       400:
+ *         description: ID inválido
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: No tiene permisos para acceder a esta reserva
+ *       404:
+ *         description: Reserva no encontrada
+ */
+router.get(
+  "/mis-reservas/:id",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  reservaActividadController.getMyReservationById
+);
+
+/**
+ * @openapi
  * /api/reservas-actividad:
  *   get:
  *     tags:

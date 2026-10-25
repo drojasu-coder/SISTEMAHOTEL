@@ -1842,6 +1842,20 @@ ReservaActividad: {
       type: "boolean",
       example: true,
     },
+    total: {
+      type: "string",
+      example: "75.00",
+    },
+    RecursoActividad: {
+      $ref: "#/components/schemas/RecursoActividad",
+    },
+    Instructor: {
+      $ref: "#/components/schemas/Instructor",
+      nullable: true,
+    },
+    Usuario: {
+      $ref: "#/components/schemas/Usuario",
+    },
     estado: {
       type: "string",
       enum: [

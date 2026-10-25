@@ -3208,5 +3208,104 @@ it(
     ).toBe(1);
   }
 );
+
+    it(
+      "45. cliente puede listar exclusivamente sus propias reservas en /mis-reservas",
+      async () => {
+        const recurso = await createRecursoActividad();
+        const clienteA = await createAuthenticatedUser({ rol: ROLES.CLIENTE });
+        const clienteB = await createAuthenticatedUser({ rol: ROLES.CLIENTE });
+
+        await createReservaActividadFixture({
+          usuario_id: clienteA.usuario.id,
+          recurso_id: recurso.id,
+          fecha: "2027-12-23",
+          hora_inicio: "10:00:00",
+          hora_fin: "11:00:00",
+        });
+
+        await createReservaActividadFixture({
+          usuario_id: clienteB.usuario.id,
+          recurso_id: recurso.id,
+          fecha: "2027-12-23",
+          hora_inicio: "14:00:00",
+          hora_fin: "15:00:00",
+        });
+
+        const res = await request(app)
+          .get("/api/reservas-actividad/mis-reservas")
+          .set("Authorization", `Bearer ${clienteA.token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe("success");
+        expect(res.body.data).toHaveLength(1);
+        expect(res.body.data[0].usuario_id).toBe(clienteA.usuario.id);
+        expect(res.body.data[0].RecursoActividad).toBeDefined();
+        expect(res.body.data[0].RecursoActividad.Sucursal).toBeDefined();
+      }
+    );
+
+    it(
+      "46. cliente puede consultar el detalle de su propia reserva en /mis-reservas/:id",
+      async () => {
+        const recurso = await createRecursoActividad();
+        const cliente = await createAuthenticatedUser({ rol: ROLES.CLIENTE });
+
+        const reserva = await createReservaActividadFixture({
+          usuario_id: cliente.usuario.id,
+          recurso_id: recurso.id,
+          fecha: "2027-12-24",
+          hora_inicio: "10:00:00",
+          hora_fin: "11:00:00",
+        });
+
+        const res = await request(app)
+          .get(`/api/reservas-actividad/mis-reservas/${reserva.id}`)
+          .set("Authorization", `Bearer ${cliente.token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe("success");
+        expect(res.body.data.id).toBe(reserva.id);
+        expect(res.body.data.usuario_id).toBe(cliente.usuario.id);
+        expect(res.body.data.RecursoActividad.id).toBe(recurso.id);
+      }
+    );
+
+    it(
+      "47. cliente no puede consultar la reserva de otro cliente en /mis-reservas/:id",
+      async () => {
+        const recurso = await createRecursoActividad();
+        const dueno = await createAuthenticatedUser({ rol: ROLES.CLIENTE });
+        const intruso = await createAuthenticatedUser({ rol: ROLES.CLIENTE });
+
+        const reserva = await createReservaActividadFixture({
+          usuario_id: dueno.usuario.id,
+          recurso_id: recurso.id,
+          fecha: "2027-12-25",
+          hora_inicio: "10:00:00",
+          hora_fin: "11:00:00",
+        });
+
+        const res = await request(app)
+          .get(`/api/reservas-actividad/mis-reservas/${reserva.id}`)
+          .set("Authorization", `Bearer ${intruso.token}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe("INSUFFICIENT_PERMISSIONS");
+      }
+    );
+
+    it(
+      "48. admin no puede acceder a /mis-reservas",
+      async () => {
+        const admin = await createAuthenticatedUser({ rol: ROLES.ADMIN });
+
+        const res = await request(app)
+          .get("/api/reservas-actividad/mis-reservas")
+          .set("Authorization", `Bearer ${admin.token}`);
+
+        expect(res.status).toBe(403);
+      }
+    );
   }
 );

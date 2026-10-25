@@ -10,6 +10,7 @@ const {
   RecursoActividad,
   Instructor,
   Usuario,
+  Sucursal,
 } = db;
 
 type EstadoReservaActividad =
@@ -39,6 +40,20 @@ const reservaActividadInclude = [
       "id",
       "tipo",
       "nombre",
+      "sucursal_id",
+      "precio_hora",
+      "precio_equipo",
+      "precio_instructor_hora",
+    ],
+    include: [
+      {
+        model: Sucursal,
+        attributes: [
+          "id",
+          "nombre",
+          "direccion",
+        ],
+      },
     ],
   },
   {
@@ -509,6 +524,33 @@ export const getAll =
     );
   };
 
+export const getByUserId =
+  async (
+    userId: number
+  ) => {
+    return ReservaActividad.findAll(
+      {
+        where: {
+          usuario_id: userId,
+        },
+
+        include:
+          reservaActividadInclude,
+
+        order: [
+          [
+            "fecha",
+            "DESC",
+          ],
+          [
+            "hora_inicio",
+            "DESC",
+          ],
+        ],
+      }
+    );
+  };
+
 export const getById =
   async (
     id: number
@@ -527,6 +569,42 @@ export const getById =
         404,
         "RESERVATION_NOT_FOUND",
         "La reserva solicitada no existe"
+      );
+    }
+
+    return reserva;
+  };
+
+export const getByIdForUser =
+  async (
+    id: number,
+    userId: number
+  ) => {
+    const reserva =
+      await ReservaActividad.findByPk(
+        id,
+        {
+          include:
+            reservaActividadInclude,
+        }
+      );
+
+    if (!reserva) {
+      throw new AppError(
+        404,
+        "RESERVATION_NOT_FOUND",
+        "La reserva solicitada no existe"
+      );
+    }
+
+    if (
+      reserva.usuario_id !==
+      userId
+    ) {
+      throw new AppError(
+        403,
+        "INSUFFICIENT_PERMISSIONS",
+        "No tiene permisos para ver esta reserva de actividad"
       );
     }
 
