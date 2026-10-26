@@ -383,7 +383,7 @@ describe("Sucursal Imagen Principal Integration Tests", () => {
       ciudad: "Sololá",
       direccion: "Panajachel",
       activa: true,
-      imagen_key: "sedes/2/portada_1792961997929_90ce1baa6953.webp",
+      imagen_key: "sedes/hotel-hunahpu-atitlan/portada/portada-1792961997929-90ce1baa6953.webp",
     });
 
     try {

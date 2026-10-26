@@ -212,4 +212,22 @@ La guía referencia `var(--color-bronce-600)`, `var(--font-sans)` en estilos en 
 
 ---
 
-**Detengo aquí (FIN DE FASE A).** Muestro la tabla de §5 para su confirmación de qué componentes adaptar. Espero su instrucción antes de iniciar la Fase B.
+**Estado tras Lote 2 (completado):** Los siguientes componentes de la tabla de §5 ya están implementados en `src/components/ui/`:
+
+| Componente de la guía | Estado tras Lote 2 | Archivo |
+|-----------------------|--------------------|---------|
+| `Card` (+ Header/Content/Footer) | ✅ Hecho (adaptado) | `src/components/ui/Card.tsx` |
+| `Field` | ✅ Hecho (nuevo) | `src/components/ui/Field.tsx` |
+| `Select` | ✅ Hecho (nuevo) | `src/components/ui/Select.tsx` |
+| `Textarea` | ✅ Hecho (nuevo) | `src/components/ui/Textarea.tsx` |
+| `Checkbox` | ✅ Hecho (nuevo) | `src/components/ui/Checkbox.tsx` |
+| `Radio` | ✅ Hecho (nuevo) | `src/components/ui/Radio.tsx` |
+| `Switch` | ✅ Hecho (nuevo) | `src/components/ui/Switch.tsx` |
+| `DateField` | ✅ Hecho (nuevo) | `src/components/ui/DateField.tsx` |
+| `TimeField` | ✅ Hecho (nuevo) | `src/components/ui/TimeField.tsx` |
+| `Pagination` | ✅ Hecho (nuevo) | `src/components/ui/Pagination.tsx` |
+| `Table` | ✅ Hecho (nuevo) | `src/components/ui/Table.tsx` |
+
+Los componentes se integran sin romper contratos existentes: `Button` conserva sus variantes `primary/secondary/ghost/danger` y `isLoading`; `Input` conserva su contrato de `forwardRef`. No se integró ninguno en páginas todavía.
+
+Espero su instrucción para iniciar el **Lote 3**.

@@ -20,6 +20,10 @@ export const es = {
     saltarAlContenido: 'Saltar al contenido',
     proximamente: 'Próximamente',
     sinDatos: 'Sin información disponible',
+    pagina: 'Página',
+    de: 'de',
+    anterior: 'Anterior',
+    siguiente: 'Siguiente',
   },
   estados: {
     disponible: 'Disponible',
@@ -813,4 +817,8 @@ export const es = {
       rol: 'Rol',
       rolNota: 'Solo visible en entorno de desarrollo.',
       notificaciones: 'Notificaciones',
+      contador: 'Tiempo de retención',
+      expirado: 'El tiempo ha expirado. Revise la disponibilidad.',
+      avisoTiempo: 'Quedan menos de 2 minutos.',
+      cronologia: 'Historial de estados',
     },};
