@@ -35,7 +35,7 @@ describe('Field', () => {
     const label = screen.getByText('Sin id') as HTMLLabelElement;
     const forAttr = label.getAttribute('for');
     expect(forAttr).toBeDefined();
-    const help = document.querySelector(`#${forAttr!}-help`);
+    const help = document.getElementById(`${forAttr!}-help`);
     expect(help?.textContent).toBe('pista');
   });
 

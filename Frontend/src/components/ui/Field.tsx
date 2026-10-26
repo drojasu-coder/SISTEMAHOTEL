@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { es } from '@/i18n/es';
 
@@ -27,7 +27,7 @@ export function Field({
   children,
   className,
 }: FieldProps) {
-  const id = givenId ?? crypto.randomUUID();
+  const id = givenId ?? useId();
   const helpId = `${id}-help`;
   return (
     <div className={cn('flex min-w-0 flex-col gap-2', className)} data-invalid={!!error || undefined}>
