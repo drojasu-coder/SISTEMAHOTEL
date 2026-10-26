@@ -155,6 +155,75 @@ const formatDateOnly = (d: Date) => {
  * Valida disponibilidad y descanso de 15 minutos entre sesiones
  * de un terapeuta de forma bidireccional y persistente.
  */
+export const validateTherapistAvailability = async ({
+  terapeutaId,
+  fecha,
+  horaInicio,
+  duracionMinutos,
+  excludeCitaId,
+  transaction,
+}: {
+  terapeutaId: number;
+  fecha: string;
+  horaInicio: string;
+  duracionMinutos: number;
+  excludeCitaId?: number;
+  transaction?: any;
+}) => {
+  const [year, month, day] = fecha.split("-").map(Number);
+  const [startH, startM] = horaInicio.split(":").map(Number);
+  const startDate = new Date(year, month - 1, day, startH, startM, 0, 0);
+  const startMs = startDate.getTime();
+  const endMs = startMs + duracionMinutos * 60 * 1000;
+
+  const bufferStartMs = startMs - BUFFER_MINUTOS * 60 * 1000;
+  const bufferEndMs = endMs + BUFFER_MINUTOS * 60 * 1000;
+
+  const bufferStartDate = new Date(bufferStartMs);
+  const bufferEndDate = new Date(bufferEndMs);
+
+  const relevantDates = Array.from(
+    new Set([fecha, formatDateOnly(bufferStartDate), formatDateOnly(bufferEndDate)])
+  );
+
+  const existingCitas = await CitaBienestar.findAll({
+    where: {
+      terapeuta_id: terapeutaId,
+      fecha: { [Op.in]: relevantDates },
+      estado: "confirmada",
+      ...(excludeCitaId ? { id: { [Op.ne]: excludeCitaId } } : {}),
+    },
+    transaction,
+  });
+
+  for (const cand of existingCitas) {
+    const [cYear, cMonth, cDay] = cand.fecha.split("-").map(Number);
+    const [cStartH, cStartM] = cand.hora_inicio.split(":").map(Number);
+    const candStartDate = new Date(cYear, cMonth - 1, cDay, cStartH, cStartM, 0, 0);
+    const candStartMs = candStartDate.getTime();
+
+    const [cEndH, cEndM] = cand.hora_fin.split(":").map(Number);
+    let candEndDate = new Date(cYear, cMonth - 1, cDay, cEndH, cEndM, 0, 0);
+    let candEndMs = candEndDate.getTime();
+    if (candEndMs <= candStartMs) {
+      candEndMs += 24 * 60 * 60 * 1000;
+    }
+
+    if (candStartMs < bufferEndMs && candEndMs > bufferStartMs) {
+      throw new AppError(
+        409,
+        "THERAPIST_BUSY_OR_BUFFER",
+        "El terapeuta no está disponible en este horario. Se requiere un tiempo de descanso de 15 minutos entre citas."
+      );
+    }
+  }
+
+  const endDate = new Date(endMs);
+  const horaFinCalculada = `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}:00`;
+
+  return { horaFinCalculada };
+};
+
 export const assertTherapistAvailability = async ({
   therapistId,
   date,
@@ -171,83 +240,20 @@ export const assertTherapistAvailability = async ({
   excludeAppointmentId?: number;
 }) => {
   const startMinutes = timeToMinutes(startTime);
-  const endMinutes = timeToMinutes(endTime);
-  const bufferedStart = minutesToTime(
-    Math.max(startMinutes - THERAPIST_BUFFER_MINUTES, 0)
-  );
-  const bufferedEnd = minutesToTime(
-    endMinutes + THERAPIST_BUFFER_MINUTES
-  );
-
-  const overlap = await CitaBienestar.findOne({
-    where: {
-      terapeuta_id: therapistId,
-      fecha: date,
-      estado: "confirmada",
-      ...(excludeAppointmentId !== undefined
-        ? {
-            id: {
-              [Op.ne]: excludeAppointmentId,
-            },
-          }
-        : {}),
-      [Op.and]: [
-        {
-          hora_inicio: {
-            [Op.lt]: bufferedEnd,
-          },
-        },
-        {
-          hora_fin: {
-            [Op.gt]: bufferedStart,
-          },
-        },
-      ],
-    },
-    transaction,
-  });
-
-  if (overlap) {
-    throw new AppError(
-      409,
-      "THERAPIST_BUSY_OR_BUFFER",
-      "El terapeuta no está disponible en este horario. Se requiere un tiempo de descanso de 15 minutos entre citas."
-    );
+  let endMinutes = timeToMinutes(endTime);
+  if (endMinutes <= startMinutes) {
+    endMinutes += 24 * 60;
   }
-};
+  const duracionMinutos = endMinutes - startMinutes;
 
-/**
- * Compatibilidad con validateTherapistAvailability
- */
-export const validateTherapistAvailability = async ({
-  terapeutaId,
-  fecha,
-  horaInicio,
-  duracionMinutos,
-  excludeCitaId,
-  transaction,
-}: {
-  terapeutaId: number;
-  fecha: string;
-  horaInicio: string;
-  duracionMinutos: number;
-  excludeCitaId?: number;
-  transaction?: any;
-}) => {
-  const startMinutes = timeToMinutes(horaInicio);
-  const endMinutes = startMinutes + duracionMinutos;
-  const horaFinCalculada = minutesToTime(endMinutes);
-
-  await assertTherapistAvailability({
-    therapistId: terapeutaId,
-    date: fecha,
-    startTime: horaInicio,
-    endTime: horaFinCalculada,
+  await validateTherapistAvailability({
+    terapeutaId: therapistId,
+    fecha: date,
+    horaInicio: startTime,
+    duracionMinutos,
+    excludeCitaId: excludeAppointmentId,
     transaction,
-    excludeAppointmentId: excludeCitaId,
   });
-
-  return { horaFinCalculada };
 };
 
 // ======================================================
@@ -302,21 +308,13 @@ export const create = async (data: any) => {
     }
 
     // ----------------------------------------------------
-    // 4. Calcular duración de la cita
+    // 4. Validar traslape + buffer y calcular hora_fin
     // ----------------------------------------------------
-    const inicioMinutos = timeToMinutes(data.hora_inicio);
-    const finServicioMinutos =
-      inicioMinutos + Number(servicio.duracion_minutos);
-    const horaFinCalculada = minutesToTime(finServicioMinutos);
-
-    // ----------------------------------------------------
-    // 5. Validar traslape + buffer
-    // ----------------------------------------------------
-    await assertTherapistAvailability({
-      therapistId: data.terapeuta_id,
-      date: data.fecha,
-      startTime: data.hora_inicio,
-      endTime: horaFinCalculada,
+    const { horaFinCalculada } = await validateTherapistAvailability({
+      terapeutaId: data.terapeuta_id,
+      fecha: data.fecha,
+      horaInicio: data.hora_inicio,
+      duracionMinutos: Number(servicio.duracion_minutos),
       transaction,
     });
 
