@@ -320,7 +320,7 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       409:
- *         description: Ya existe una habitación con ese número en la sucursal
+ *         description: Conflicto operativo (número duplicado, habitación en mantenimiento o cambio de tipo incompatible con reservas activas)
  *         content:
  *           application/json:
  *             schema:

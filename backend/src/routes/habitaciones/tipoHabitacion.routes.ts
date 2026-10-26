@@ -212,6 +212,11 @@ router.post(
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: Conflicto por reducción de capacidad incompatible con reservas activas
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.patch(
   "/:id",

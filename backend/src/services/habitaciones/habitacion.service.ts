@@ -159,10 +159,58 @@ export const updateHabitacion = async (
     }
   }
 
-  if (data.tipo_habitacion_id !== undefined) {
+  if (
+    data.tipo_habitacion_id !== undefined &&
+    data.tipo_habitacion_id !== habitacion.tipo_habitacion_id
+  ) {
+    const nuevoTipoHabitacion = await TipoHabitacion.findByPk(
+      data.tipo_habitacion_id,
+      {
+        transaction,
+        lock: transaction.LOCK.SHARE,
+      }
+    );
+
+    if (!nuevoTipoHabitacion) {
+      throw new AppError(
+        404,
+        "TIPO_HABITACION_NOT_FOUND",
+        "El tipo de habitación no fue encontrado"
+      );
+    }
+
+    const today = getTodayDate();
+    const reservaConflicto = await ReservaHabitacion.findOne({
+      where: {
+        habitacion_id: id,
+        estado: {
+          [Op.in]: ["pendiente", "confirmada"],
+        },
+        fecha_salida: {
+          [Op.gt]: today,
+        },
+        numero_huespedes: {
+          [Op.gt]: nuevoTipoHabitacion.capacidad_maxima,
+        },
+      },
+      order: [["numero_huespedes", "DESC"], ["fecha_entrada", "ASC"]],
+      transaction,
+    });
+
+    if (reservaConflicto) {
+      throw new AppError(
+        409,
+        "ROOM_TYPE_CHANGE_CAPACITY_CONFLICT",
+        `No es posible cambiar la habitación ${habitacion.numero} al tipo "${nuevoTipoHabitacion.nombre}" (capacidad máxima: ${nuevoTipoHabitacion.capacidad_maxima} ${nuevoTipoHabitacion.capacidad_maxima === 1 ? "huésped" : "huéspedes"}) porque tiene reservas activas con ${reservaConflicto.numero_huespedes} huéspedes que superan dicho límite.`
+      );
+    }
+  } else if (data.tipo_habitacion_id !== undefined) {
     const tipoHabitacion = await TipoHabitacion.findByPk(
       data.tipo_habitacion_id,
-      { transaction }
+      {
+        transaction,
+        lock: transaction.LOCK.SHARE,
+      }
     );
 
     if (!tipoHabitacion) {

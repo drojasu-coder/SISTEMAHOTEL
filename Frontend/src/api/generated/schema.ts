@@ -1826,7 +1826,7 @@ export interface paths {
         };
         /**
          * Listar sucursales
-         * @description Obtiene todas las sucursales disponibles.
+         * @description Obtiene todas las sucursales disponibles enriquecidas con la URL prefirmada de su fotografía principal si disponen de ella.
          */
         get: {
             parameters: {
@@ -2115,6 +2115,214 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/sucursales/{id}/imagen-presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Solicitar URL prefirmada para subida de imagen principal
+         * @description Genera una URL prefirmada PUT de corta duración hacia una clave temporal en S3, vinculando la subida al usuario y sede. Requiere rol administrador.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PresignImageRequest"];
+                };
+            };
+            responses: {
+                /** @description URL prefirmada y ticket de subida generados correctamente */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PresignImageResponse"];
+                    };
+                };
+                /** @description Tipo de contenido inválido */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Usuario sin permisos de administración */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sucursal no encontrada */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sucursales/{id}/imagen-confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar y validar la subida de fotografía de sede
+         * @description Descarga el archivo de la clave temporal, valida sus bytes decodificables (formato JPEG/PNG/WebP, máx 5MB y dimensiones razonables), lo publica bajo una clave definitiva única y lo asocia a la sede. Requiere rol administrador.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConfirmImageRequest"];
+                };
+            };
+            responses: {
+                /** @description Imagen validada y asociada exitosamente a la sede */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SucursalResponse"];
+                    };
+                };
+                /** @description Archivo corrupto, tamaño excedido o formato inválido */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Ticket de subida no autorizado */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sucursal o archivo temporal no encontrado */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sucursales/{id}/imagen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Quitar la imagen principal de la sede
+         * @description Desvincula la imagen principal de la sede y elimina el objeto en S3 si no está referenciado. Requiere rol administrador.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Imagen retirada exitosamente */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SucursalResponse"];
+                    };
+                };
+                /** @description Usuario no autenticado */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Usuario sin permisos de administración */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sucursal no encontrada */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/reservas-mesa": {
@@ -5745,6 +5953,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Conflicto por reducción de capacidad incompatible con reservas activas */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         trace?: never;
@@ -7270,7 +7487,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Ya existe una habitación con ese número en la sucursal */
+                /** @description Conflicto operativo (número duplicado, habitación en mantenimiento o cambio de tipo incompatible con reservas activas) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -12761,6 +12978,10 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+            /** @example sedes/2/portada_1729881234_abcdef.webp */
+            imagen_key?: string | null;
+            /** @example https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/sedes/2/portada_1729881234_abcdef.webp?... */
+            imagen_url?: string | null;
         };
         Salon: {
             /** @example 1 */
@@ -13122,6 +13343,35 @@ export interface components {
             /** @example success */
             status: string;
             data: components["schemas"]["Sucursal"][];
+        };
+        PresignImageRequest: {
+            /**
+             * @example image/webp
+             * @enum {string}
+             */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            /** @example portada.webp */
+            fileName?: string | null;
+        };
+        PresignImageResponse: {
+            /** @example success */
+            status: string;
+            data: {
+                /** @example https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/sedes/temp/... */
+                uploadUrl: string;
+                /** @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... */
+                uploadToken: string;
+                /** @example sedes/temp/2_1_1729881234_abcdef.webp */
+                tempKey: string;
+                /** @example 900 */
+                expiresInSeconds: number;
+            };
+        };
+        ConfirmImageRequest: {
+            /** @example eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... */
+            uploadToken: string;
+            /** @example sedes/temp/2_1_1729881234_abcdef.webp */
+            tempKey: string;
         };
         Parqueo: {
             /** @example 1 */

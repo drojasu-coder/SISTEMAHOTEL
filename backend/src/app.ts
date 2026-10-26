@@ -53,6 +53,7 @@ import proveedorProductoRoutes from "./routes/proveedores/proveedorProducto.rout
 import cuentaPorPagarRoutes from "./routes/proveedores/cuentaPorPagar.routes";
 import pagoRoutes from "./routes/pagos/pago.routes";
 import { stripeWebhook } from "./controllers/pagos/pago.controller";
+import mediaRoutes from "./routes/media/media.routes";
 
 const app = express();
 
@@ -184,6 +185,7 @@ app.use("/api/boletos-parque", boletoParqueRoutes);
 app.use("/api/reservas-mesa", reservaMesaRoutes);
 app.use("/api/carritos/:carritoId/items", carritoItemsRoutes);
 app.use("/api/carritos", carritoRoutes);
+app.use("/api/media", mediaRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);

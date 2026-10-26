@@ -355,6 +355,16 @@ const options: swaggerJsdoc.Options = {
               type: "string",
               format: "date-time",
             },
+            imagen_key: {
+              type: "string",
+              nullable: true,
+              example: "sedes/2/portada_1729881234_abcdef.webp",
+            },
+            imagen_url: {
+              type: "string",
+              nullable: true,
+              example: "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/sedes/2/portada_1729881234_abcdef.webp?...",
+            },
           },
         },
 
@@ -1182,6 +1192,71 @@ CarritoItemResponse: {
               items: {
                 $ref: "#/components/schemas/Sucursal",
               },
+            },
+          },
+        },
+
+        PresignImageRequest: {
+          type: "object",
+          required: ["contentType"],
+          properties: {
+            contentType: {
+              type: "string",
+              enum: ["image/jpeg", "image/png", "image/webp"],
+              example: "image/webp",
+            },
+            fileName: {
+              type: "string",
+              nullable: true,
+              example: "portada.webp",
+            },
+          },
+        },
+
+        PresignImageResponse: {
+          type: "object",
+          required: ["status", "data"],
+          properties: {
+            status: {
+              type: "string",
+              example: "success",
+            },
+            data: {
+              type: "object",
+              required: ["uploadUrl", "uploadToken", "tempKey", "expiresInSeconds"],
+              properties: {
+                uploadUrl: {
+                  type: "string",
+                  example: "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/sedes/temp/...",
+                },
+                uploadToken: {
+                  type: "string",
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                },
+                tempKey: {
+                  type: "string",
+                  example: "sedes/temp/2_1_1729881234_abcdef.webp",
+                },
+                expiresInSeconds: {
+                  type: "integer",
+                  example: 900,
+                },
+              },
+            },
+          },
+        },
+
+        ConfirmImageRequest: {
+          type: "object",
+          required: ["uploadToken", "tempKey"],
+          properties: {
+            uploadToken: {
+              type: "string",
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            },
+            tempKey: {
+              type: "string",
+              example: "sedes/temp/2_1_1729881234_abcdef.webp",
             },
           },
         },

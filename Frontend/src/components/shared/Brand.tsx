@@ -1,23 +1,55 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '@/lib/cn';
 import { es } from '@/i18n/es';
-import { brandMedia } from '@/app/config/media';
+import { useBranding } from '@/features/media/hooks/useBranding';
 
-interface BrandProps {
-  /** Para fondos oscuros. */
+export interface BrandProps {
+  /** Para fondos oscuros (ej. Footer). Usa logoHorizontalBlanco. */
   inverse?: boolean;
+  /** Variante de presentación: 'full' (horizontal) o 'compact' (isotipo). Por defecto 'full'. */
+  variant?: 'full' | 'compact';
   className?: string;
 }
 
 /**
- * Marca del hotel. Usa el logo de S3 cuando esté configurado en `brandMedia`;
- * mientras tanto presenta el nombre en texto, sin imágenes locales.
+ * Marca institucional de HOTEL HUNAHPÚ.
+ * Carga el logo vectorial dinámicamente desde AWS S3 mediante URLs prefirmadas
+ * gestionadas con TanStack Query.
+ *
+ * Características:
+ * - Soporta variantes 'full' (horizontal color o blanco) y 'compact' (isotipo color).
+ * - Si la imagen falla (error de red o decodificación), muestra fallback textual institucional.
+ * - Si llega una nueva URL (por renovación o recuperación), se reintenta automáticamente
+ *   sin quedarse atrapado en el estado de error anterior.
  */
-export const Brand: React.FC<BrandProps> = ({ inverse = false, className }) => {
-  const src = inverse ? brandMedia.logoHorizontalBlanco : brandMedia.logoHorizontalColor;
+export const Brand: React.FC<BrandProps> = ({
+  inverse = false,
+  variant = 'full',
+  className,
+}) => {
+  const { data: branding, isError } = useBranding();
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  if (src) {
-    return <img src={src} alt={es.marca.nombre} className={cn('h-8 w-auto object-contain md:h-10', className)} />;
+  let src: string | undefined;
+  if (variant === 'compact') {
+    src = branding?.isotipoColor;
+  } else {
+    src = inverse
+      ? branding?.logoHorizontalBlanco
+      : branding?.logoHorizontalColor;
+  }
+
+  const hasImageError = Boolean(src && failedSrc === src);
+
+  if (src && !isError && !hasImageError) {
+    return (
+      <img
+        src={src}
+        alt={es.marca.nombre}
+        className={cn('h-8 w-auto object-contain md:h-10', className)}
+        onError={() => setFailedSrc(src)}
+      />
+    );
   }
 
   return (

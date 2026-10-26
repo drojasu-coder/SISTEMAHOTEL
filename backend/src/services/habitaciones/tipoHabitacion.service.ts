@@ -1,8 +1,10 @@
+import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
+import { getTodayDate } from "./reservaHabitacion.service";
 
 const db = require("../../models");
 
-const { TipoHabitacion, Habitacion } = db;
+const { sequelize, TipoHabitacion, Habitacion, ReservaHabitacion } = db;
 
 interface CreateTipoHabitacionData {
   nombre: string;
@@ -52,13 +54,73 @@ export const createTipoHabitacion = async (
 export const updateTipoHabitacion = async (
   id: number,
   data: UpdateTipoHabitacionData
-) => {
-  const tipoHabitacion = await getTipoHabitacionById(id);
+) => sequelize.transaction(async (transaction: any) => {
+  const tipoHabitacion = await TipoHabitacion.findByPk(id, {
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
 
-  await tipoHabitacion.update(data);
+  if (!tipoHabitacion) {
+    throw new AppError(
+      404,
+      "TIPO_HABITACION_NOT_FOUND",
+      "El tipo de habitación no fue encontrado"
+    );
+  }
+
+  if (
+    data.capacidad_maxima !== undefined &&
+    data.capacidad_maxima < tipoHabitacion.capacidad_maxima
+  ) {
+    const habitaciones = await Habitacion.findAll({
+      where: {
+        tipo_habitacion_id: id,
+      },
+      attributes: ["id", "numero"],
+      transaction,
+    });
+
+    if (habitaciones.length > 0) {
+      const habitacionIds = habitaciones.map((h: any) => h.id);
+      const today = getTodayDate();
+
+      const reservaConflicto = await ReservaHabitacion.findOne({
+        where: {
+          habitacion_id: {
+            [Op.in]: habitacionIds,
+          },
+          estado: {
+            [Op.in]: ["pendiente", "confirmada"],
+          },
+          fecha_salida: {
+            [Op.gt]: today,
+          },
+          numero_huespedes: {
+            [Op.gt]: data.capacidad_maxima,
+          },
+        },
+        order: [["numero_huespedes", "DESC"], ["fecha_entrada", "ASC"]],
+        transaction,
+      });
+
+      if (reservaConflicto) {
+        const habitacionAfectada = habitaciones.find(
+          (h: any) => h.id === reservaConflicto.habitacion_id
+        );
+        const numeroHab = habitacionAfectada?.numero ?? reservaConflicto.habitacion_id;
+        throw new AppError(
+          409,
+          "CAPACITY_REDUCTION_CONFLICT",
+          `No es posible reducir la capacidad a ${data.capacidad_maxima} ${data.capacidad_maxima === 1 ? "huésped" : "huéspedes"} porque existen reservas activas (como en la habitación ${numeroHab}) con ${reservaConflicto.numero_huespedes} huéspedes que superan dicho límite.`
+        );
+      }
+    }
+  }
+
+  await tipoHabitacion.update(data, { transaction });
 
   return tipoHabitacion;
-};
+});
 
 export const deleteTipoHabitacion = async (id: number) => {
   const tipoHabitacion = await getTipoHabitacionById(id);

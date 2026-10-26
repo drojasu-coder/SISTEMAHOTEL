@@ -46,3 +46,17 @@ export const updateSucursalSchema = z.object({
     })
     .optional(),
 });
+
+// Esquema para solicitud de URL prefirmada de subida de imagen de sede
+export const presignImageSchema = z.object({
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp"], {
+    message: "El tipo de contenido debe ser image/jpeg, image/png o image/webp",
+  }),
+  fileName: z.string().max(255).optional(),
+});
+
+// Esquema para confirmación y validación de subida de imagen de sede
+export const confirmImageSchema = z.object({
+  uploadToken: z.string().min(1, "El token de subida es obligatorio"),
+  tempKey: z.string().min(1, "La clave temporal es obligatoria"),
+});

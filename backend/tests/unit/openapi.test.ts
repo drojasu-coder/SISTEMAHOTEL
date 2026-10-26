@@ -83,8 +83,8 @@ describe("generated OpenAPI contract", () => {
       0,
     );
 
-    expect(Object.keys(paths)).toHaveLength(103);
-    expect(operations).toBe(194);
+    expect(Object.keys(paths)).toHaveLength(106);
+    expect(operations).toBe(197);
   });
   it("contains complete reservas and disponibilidad schemas and contract responses (BE-011, BE-012)", () => {
     const paths = swaggerSpec.paths as Record<string, Record<string, any>>;

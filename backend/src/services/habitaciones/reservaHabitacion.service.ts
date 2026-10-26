@@ -791,6 +791,14 @@ const validateLockedReferences = async (
 
         transaction,
 
+        lock:
+
+          transaction
+
+            .LOCK
+
+            .SHARE,
+
       }
 
     );

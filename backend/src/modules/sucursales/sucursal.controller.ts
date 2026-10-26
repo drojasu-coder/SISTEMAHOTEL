@@ -45,3 +45,37 @@ export const remove = async (req: Request, res: Response, next: NextFunction) =>
     next(error);
   }
 };
+
+export const presignImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sedeId = Number(req.params.id);
+    const userId = (req as any).user.id;
+    const { contentType } = req.body;
+    const result = await sucursalService.requestImageUpload(sedeId, userId, contentType);
+    res.status(200).json({ status: "success", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sedeId = Number(req.params.id);
+    const userId = (req as any).user.id;
+    const { uploadToken, tempKey } = req.body;
+    const sucursal = await sucursalService.confirmImageUpload(sedeId, userId, uploadToken, tempKey);
+    res.status(200).json({ status: "success", data: sucursal });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sedeId = Number(req.params.id);
+    const sucursal = await sucursalService.removeImage(sedeId);
+    res.status(200).json({ status: "success", data: sucursal });
+  } catch (error) {
+    next(error);
+  }
+};

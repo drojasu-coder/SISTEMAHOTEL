@@ -58,6 +58,11 @@ const envSchema = z.object({
   STRIPE_ENABLED: booleanFromEnv,
   STRIPE_SECRET_KEY: optionalString,
   STRIPE_WEBHOOK_SECRET: optionalString,
+
+  // AWS S3
+  AWS_REGION: z.string().min(1).default("us-east-2"),
+  AWS_S3_BUCKET: z.string().min(1).default("hotel-hunahpu-media-2026"),
+  AWS_PROFILE: optionalString,
 });
 
 export type Env = z.infer<typeof envSchema>;

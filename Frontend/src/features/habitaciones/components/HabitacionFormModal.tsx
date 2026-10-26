@@ -114,7 +114,11 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
             }
           }
         } else if (err.status === 409) {
-          setError("numero", { message: err.message });
+          if (err.code === "ROOM_TYPE_CHANGE_CAPACITY_CONFLICT") {
+            setError("tipo_habitacion_id", { message: err.message });
+          } else {
+            setError("numero", { message: err.message });
+          }
         }
       }
     }
