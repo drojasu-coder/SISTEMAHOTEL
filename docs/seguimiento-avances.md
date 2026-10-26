@@ -489,3 +489,53 @@ Este documento registra de forma continua el avance técnico, archivos modificad
     - `tsc --noEmit` (Frontend): 0 errores.
     - `tsc --noEmit` (Backend): 0 errores.
     - `npm run build` (Frontend): Compilación exitosa en 7.34s.
+
+---
+
+## Unificación de refactor/backend-architecture y ux/004-componentes (Lote Medios S3, UI y Validación)
+
+- **Estado:** Completada, verificada y activada localmente.
+- **Identificación de Hashes y Árbol de Integración:**
+  - **Rama de integración destino:** `refactor/backend-architecture`
+  - **HEAD base antes del merge:** `c15bf9a2024db539031efb7bb059a4bb80cb8c3f`
+    - Comprobado que contiene como ancestros verificados: `6338f3d` (origen de QA José), `fc03aeb` (cierre de eventos) y `9bf92c6` (pruebas y contratos de eventos).
+  - **HEAD del lote entregado de `ux/004-componentes`:** `591692e1a3efd8502d33d9c3629f64bfcb72233f` (`feat(media): integrar almacenamiento privado S3, branding y gestion de imagenes en sedes`).
+  - **Commit de merge unificado:** `845cc5bd6be2218ba079c2b6eb80207a9fc094d3`
+    - Integración limpia sin conflictos textuales.
+- **Lote Funcional Integrado:**
+  1. **Almacenamiento S3 Privado y Prefirmado:** Servicio de almacenamiento en AWS S3 con prefijos autorizados (`sedes/`, `branding/`), generación de URLs prefirmadas de subida y lectura firmadas temporalmente con expiración controlada, y exclusión de secretos en el control de versiones.
+  2. **Validación Exhaustiva de Imágenes y Seguridad:** Decodificación ráster con `sharp`, validación de tipos MIME reales (`image/jpeg`, `image/png`, `image/webp`), saneamiento de metadatos EXIF sensibles, reempaquetado seguro y control de aforo / capacidad en habitaciones.
+  3. **Gestión de Imágenes de Sedes e Idempotencia:** Endpoints `POST /api/sucursales/:id/imagen-presign`, `POST /api/sucursales/:id/imagen-confirmar` y `DELETE /api/sucursales/:id/imagen`. Idempotencia persistente en base de datos mediante la tabla `confirmaciones_subida`, disociación automática de créditos fotográficos (`KNOWN_ASSET_CREDITS`) y limpieza de objetos huérfanos en S3.
+  4. **Componentes Base de Interfaz y Utilidades:** Inclusión de componentes UI reutilizables (`Badge`, `DataState`, `EmptyState`, `ErrorState`, `Skeleton`, `Spinner`, `Toast`), formateador monetario oficial `formatQ` (GTQ), y soporte de branding dinámico (`Brand.tsx`, `useBranding.ts`).
+  5. **Contratos OpenAPI y Tipos Frontend:** OpenAPI actualizado a **106 paths y 197 operaciones**. Tipos de frontend regenerados fielmente en `Frontend/src/api/generated/schema.ts`.
+- **Estado de Migraciones en Base de Datos:**
+  - Migraciones añadidas en el lote:
+    - `20261025150000-add-imagen-key-to-sucursales.js`
+    - `20261026000000-create-confirmaciones-subida.js`
+  - **Entorno de desarrollo local (`hotel_db:5432`):** Ambas migraciones ya se encontraban aplicadas (`up`). **No hay migraciones pendientes de aplicar**.
+  - **Entorno de pruebas aislado (`hotel_test_db:55433`):** Verificadas exitosamente en el entorno de pruebas.
+- **Evidencias y Resultados de Verificación:**
+  - **Contratos OpenAPI (`backend/tests/unit/openapi.test.ts`):** 12/12 pruebas aprobadas (100%).
+  - **Pruebas de Medios e Integridad Backend (PostgreSQL aislado 55433):**
+    - `backend/tests/unit/s3.service.test.ts`: 5/5 pruebas aprobadas.
+    - `backend/tests/unit/imageValidation.service.test.ts`: 8/8 pruebas aprobadas.
+    - `backend/tests/integration/postgres.sucursalImagen.test.ts`: 10/10 pruebas aprobadas.
+    - `backend/tests/integration/postgres.capacidadHabitacionIntegridad.test.ts`: 13/13 pruebas aprobadas.
+  - **Pruebas Frontend (Medios, Sedes, Componentes UI y Utilidades):**
+    - 12 archivos de test, 60 pruebas aprobadas (100%).
+  - **Regresiones de Integración de Módulos Previos (PostgreSQL aislado 55433):**
+    - `postgres.auth.test.ts`: 3/3 aprobadas.
+    - `postgres.eventos.http.test.ts`: 22/22 aprobadas.
+    - `postgres.bienestar.http.test.ts`: 16/16 aprobadas.
+    - `postgres.carrito.http.test.ts`: 9/9 aprobadas.
+    - `postgres.payments.test.ts`: 2/2 aprobadas.
+  - **Chequeo de Tipos y Compilación:**
+    - `npm --prefix backend run typecheck:all`: 0 errores.
+    - `npm --prefix Frontend run typecheck`: 0 errores.
+    - `npm --prefix Frontend run build`: compilación de producción exitosa (1927 módulos transformados).
+- **Activación de Servicios Locales y Convivencia entre Agentes:**
+  - Se identificó que la carpeta principal (`/home/diegorojas/Workspace/Universidad/DESARROLLOWEB/SISTEMAHOTEL`) se encuentra en la rama `ux/004-componentes` con archivos de componentes UI de formularios en edición activa por otro agente.
+  - Para preservar completamente el trabajo del otro agente sin provocar conflictos de trabajo en curso ni alterar su rama, se preparó el entorno de ejecución unificado en el worktree dedicado `/tmp/SISTEMAHOTEL-runtime` en la rama `refactor/backend-architecture` (commit `845cc5b`).
+  - Los procesos antiguos que ejecutaban código no integrado fueron detenidos limpiamente y los servicios fueron reiniciados desde `/tmp/SISTEMAHOTEL-runtime`:
+    - **Backend (Puerto 4000):** Escuchando activamente. Health check `GET /api/health` responde 200 OK (`"API de Hotel está funcionando correctamente"`), `GET /api/media/branding` responde 200 OK con URLs prefirmadas de S3 y `GET /api/sucursales` responde 200 OK con sedes y claves de imagen.
+    - **Frontend (Puerto 5173):** Vite en ejecución activa respondiendo 200 OK.
