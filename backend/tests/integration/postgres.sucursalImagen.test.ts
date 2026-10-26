@@ -7,7 +7,7 @@ import { env } from "../../src/config/env";
 import { ROLES } from "../../src/constants/roles";
 import { generateAccessToken } from "../../src/utils/jwt";
 import * as s3Service from "../../src/services/storage/s3.service";
-import { clearConfirmedTokensCache } from "../../src/modules/sucursales/sucursal.service";
+import { clearConfirmedTokensCache, getSedeStorageSlug } from "../../src/modules/sucursales/sucursal.service";
 import { S3Client } from "@aws-sdk/client-s3";
 
 const db = require("../../src/models");
@@ -146,7 +146,8 @@ describe("Sucursal Imagen Principal Integration Tests", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("success");
     expect(res.body.data.uploadUrl).toBeDefined();
-    expect(res.body.data.tempKey).toMatch(new RegExp(`^sedes/temp/${testSede.id}_${adminUser.id}_`));
+    const slug = getSedeStorageSlug(testSede);
+    expect(res.body.data.tempKey).toMatch(new RegExp(`^sedes/temp/${slug}_${adminUser.id}_`));
     expect(res.body.data.uploadToken).toBeDefined();
     expect(res.body.data.expiresInSeconds).toBe(900);
   });
@@ -186,7 +187,8 @@ describe("Sucursal Imagen Principal Integration Tests", () => {
 
     expect(confirmRes.status).toBe(200);
     expect(confirmRes.body.status).toBe("success");
-    expect(confirmRes.body.data.imagen_key).toMatch(new RegExp(`^sedes/${testSede.id}/portada_.*\\.png$`));
+    const slug = getSedeStorageSlug(testSede);
+    expect(confirmRes.body.data.imagen_key).toMatch(new RegExp(`^sedes/${slug}/portada/portada-.*\\.png$`));
     expect(confirmRes.body.data.imagen_url).toBeDefined();
     expect(confirmRes.body.data.imagen_expires_at).toBeDefined();
 
@@ -381,7 +383,7 @@ describe("Sucursal Imagen Principal Integration Tests", () => {
       ciudad: "Sololá",
       direccion: "Panajachel",
       activa: true,
-      imagen_key: "sedes/2/portada_1792961997929_90ce1baa6953.webp",
+      imagen_key: "sedes/hotel-hunahpu-atitlan/portada/portada-1792961997929-90ce1baa6953.webp",
     });
 
     try {

@@ -46,12 +46,15 @@ export interface UploadTokenPayload {
  */
 export function getSedeStorageSlug(sede: { id: number; nombre?: string }): string {
   if (sede?.nombre) {
-    const normalized = sede.nombre
+    let normalized = sede.nombre
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
+    if (normalized.includes("hunapu")) {
+      normalized = normalized.replace("hunapu", "hunahpu");
+    }
     if (normalized) {
       return normalized;
     }
@@ -64,8 +67,15 @@ export function getSedeStorageSlug(sede: { id: number; nombre?: string }): strin
  * Si la imagen es reemplazada o eliminada, el crédito se disocia automáticamente.
  */
 const KNOWN_ASSET_CREDITS: Record<string, string> = {
+  // Atitlán oficial (portada y clave previa de transición)
   "sedes/hotel-hunahpu-atitlan/portada/portada-1792961997929-90ce1baa6953.webp": "Chad Davis (CC BY 2.0)",
-  "sedes/2/portada_1792961997929_90ce1baa6953.webp": "Chad Davis (CC BY 2.0)", // Conservado durante la transición
+  "sedes/2/portada_1792961997929_90ce1baa6953.webp": "Chad Davis (CC BY 2.0)",
+  // Antigua oficial (destino)
+  "sedes/hotel-hunahpu-antigua/portada/portada-1792976550336-c6e0ea0e64f3.webp": "Chad Davis (CC BY 2.0)",
+  // Xela oficial (destino)
+  "sedes/hotel-hunahpu-xela/portada/portada-1792976553574-024b2ef909c7.webp": "Simon Burchell (CC BY-SA 4.0)",
+  // Capital oficial (destino)
+  "sedes/hotel-hunahpu-capital/portada/portada-1792976556088-50343740bac6.webp": "Rene Hernandez (CC BY-SA 2.0)",
 };
 
 /**
