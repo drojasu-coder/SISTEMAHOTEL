@@ -91,3 +91,61 @@
 
 **Descartados (no parte de este lote):** `PermissionGate`, `QRPlaceholder`, `ImageUploader`, `WaitlistModal`, `NotificationBell`, `ConnectionBanner`, `SuggestAlternatives`, `MobileStaffLayout`, `reembolso`.
 **No tocados:** `calcularNoches`, `Modal`, `Drawer`, contratos de componentes existentes.
+
+
+## Auditoría e Integración Fotográfica Integral (24 Activos AWS S3)
+
+### 1. Tabla de Auditoría de los 24 Activos de S3
+
+| # | Clave S3 | Asignación en BD | Pantallas Frontend | Estado Actual |
+|---|----------|------------------|--------------------|---------------|
+| 1 | `sedes/hotel-hunahpu-antigua/portada/portada-1792976550336-c6e0ea0e64f3.webp` | `sucursales.imagen_key` (id: 1) | Gestión de Sedes (`SedesList`), Selector de sedes | En uso activo |
+| 2 | `sedes/hotel-hunahpu-atitlan/portada/portada-1792961997929-90ce1baa6953.webp` | `sucursales.imagen_key` (id: 2) | Gestión de Sedes (`SedesList`), Selector de sedes | En uso activo |
+| 3 | `sedes/hotel-hunahpu-xela/portada/portada-1792976553574-024b2ef909c7.webp` | `sucursales.imagen_key` (id: 3) | Gestión de Sedes (`SedesList`), Selector de sedes | En uso activo |
+| 4 | `sedes/hotel-hunahpu-capital/portada/portada-1792976556088-50343740bac6.webp` | `sucursales.imagen_key` (id: 4) | Gestión de Sedes (`SedesList`), Selector de sedes | En uso activo |
+| 5 | `sedes/hotel-hunahpu-antigua/restaurante/restaurante-1792979382402-8965e135bf0c.webp` | `sucursales.restaurante_imagen_key` (id: 1) | Catálogo Gastronómico (`CatalogoRestauranteCliente`), Banner y Mesas | En uso activo |
+| 6 | `sedes/hotel-hunahpu-atitlan/restaurante/restaurante-1792979380626-ed36344b711b.webp` | `sucursales.restaurante_imagen_key` (id: 2) | Catálogo Gastronómico (`CatalogoRestauranteCliente`), Banner y Mesas | En uso activo |
+| 7 | `sedes/hotel-hunahpu-xela/restaurante/restaurante-1792979384445-ec4e9ccb7221.webp` | `sucursales.restaurante_imagen_key` (id: 3) | Catálogo Gastronómico (`CatalogoRestauranteCliente`), Banner y Mesas | En uso activo |
+| 8 | `sedes/hotel-hunahpu-capital/restaurante/restaurante-1792979386020-7a136c58e912.webp` | `sucursales.restaurante_imagen_key` (id: 4) | Catálogo Gastronómico (`CatalogoRestauranteCliente`), Banner y Mesas | En uso activo |
+| 9 | `sedes/hotel-hunahpu-antigua/amenidades/area-descanso-1792979382890-7c927720f18a.webp` | `amenidades.imagen_key` (id: 1) | Catálogo de Amenidades (`CatalogoAmenidadesCliente`) | En uso activo |
+| 10 | `sedes/hotel-hunahpu-atitlan/amenidades/piscina-terraza-1792979381008-038e78a52f05.webp` | `amenidades.imagen_key` (id: 2) | Catálogo de Amenidades (`CatalogoAmenidadesCliente`) | En uso activo |
+| 11 | `sedes/hotel-hunahpu-xela/amenidades/gimnasio-sauna-1792979384813-e01a1568baf4.webp` | `amenidades.imagen_key` (id: 3) | Catálogo de Amenidades (`CatalogoAmenidadesCliente`) | En uso activo |
+| 12 | `sedes/hotel-hunahpu-capital/amenidades/salon-ejecutivo-1792979386396-151d6e1b7244.webp` | `amenidades.imagen_key` (id: 4) | Catálogo de Amenidades (`CatalogoAmenidadesCliente`) | En uso activo |
+| 13 | `sedes/hotel-hunahpu-antigua/habitaciones/individual-1792979381507-3a2dc3c5b8fc.webp` | `habitaciones.imagen_key` (id: 1, hab 101) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 14 | `sedes/hotel-hunahpu-antigua/habitaciones/doble-1792979381786-9cd99362721f.webp` | `habitaciones.imagen_key` (id: 2, hab 102) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 15 | `sedes/hotel-hunahpu-antigua/habitaciones/suite-1792979382090-513f3df1acd7.webp` | `habitaciones.imagen_key` (id: 3, hab 103) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 16 | `sedes/hotel-hunahpu-atitlan/habitaciones/individual-1792979378527-420f162f2ab7.webp` | `tipos_habitacion.imagen_key` (id: 1) / `habitaciones.imagen_key` (id: 4, hab 201) | Catálogo de Tipos (`TiposHabitacionList`), Disponibles (`HabitacionesDisponiblesList`) | En uso activo |
+| 17 | `sedes/hotel-hunahpu-atitlan/habitaciones/doble-1792979379614-1f76606e8cc7.webp` | `tipos_habitacion.imagen_key` (id: 2) / `habitaciones.imagen_key` (id: 5, hab 202) | Catálogo de Tipos (`TiposHabitacionList`), Disponibles (`HabitacionesDisponiblesList`) | En uso activo |
+| 18 | `sedes/hotel-hunahpu-atitlan/habitaciones/suite-1792979380176-40a2118460a9.webp` | `tipos_habitacion.imagen_key` (id: 3) / `habitaciones.imagen_key` (id: 6, hab 203) | Catálogo de Tipos (`TiposHabitacionList`), Disponibles (`HabitacionesDisponiblesList`) | En uso activo |
+| 19 | `sedes/hotel-hunahpu-xela/habitaciones/individual-1792979383570-c0c20efce3e7.webp` | `habitaciones.imagen_key` (id: 7, hab 301) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 20 | `sedes/hotel-hunahpu-xela/habitaciones/doble-1792979383865-a403d4595839.webp` | `habitaciones.imagen_key` (id: 8, hab 302) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 21 | `sedes/hotel-hunahpu-xela/habitaciones/suite-1792979384157-60ca7a5535f4.webp` | `habitaciones.imagen_key` (id: 9, hab 303) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 22 | `sedes/hotel-hunahpu-capital/habitaciones/individual-1792979385123-9363904f8dd0.webp` | `habitaciones.imagen_key` (id: 10, hab 401) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 23 | `sedes/hotel-hunahpu-capital/habitaciones/doble-1792979385446-cd158329ef17.webp` | `habitaciones.imagen_key` (id: 11, hab 402) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+| 24 | `sedes/hotel-hunahpu-capital/habitaciones/suite-1792979385758-59871b8cbe76.webp` | `habitaciones.imagen_key` (id: 12, hab 403) | Reserva de Habitaciones (`HabitacionesDisponiblesList`) | En uso activo |
+
+### 2. Correcciones Implementadas
+
+1. **Activación de las habitaciones sin uso en PostgreSQL (`hotel_db`):**
+   - Se crearon las habitaciones para las 3 sedes faltantes (Atitlán: 201, 202, 203; Xela: 301, 302, 303; Capital: 401, 402, 403), asociándoles directamente sus `imagen_key` de S3.
+   - `tipos_habitacion` mantiene las fotos de Atitlán como imagen genérica de respaldo (`fallback`) cuando una habitación no disponga de fotografía individual.
+2. **Unificación y Dinamismo de Créditos con Enlace:**
+   - Se adaptó `backend/src/services/storage/credits.ts` para proveer `AssetCreditInfo` (`autor`, `licencia`, `url`, `texto`) para cada una de las 24 claves oficiales.
+   - Se actualizaron todos los componentes frontend (`SedesList`, `CatalogoAmenidadesCliente`, `CatalogoRestauranteCliente`, `TiposHabitacionList`, `HabitacionesDisponiblesList`) para renderizar hipervínculos clickeables a las fuentes oficiales de Wikimedia Commons con `target="_blank"` y `rel="noopener noreferrer"`.
+3. **Verificación de Crédito Portada Atitlán:**
+   - Portada oficial `01_portada_sede_atitlan`: autor verificado **Chad Davis**, licencia **CC BY 2.0** (`https://commons.wikimedia.org/wiki/File:Lake_Atitl%C3%A1n_%26_Panajachel_Guatemala.jpg`), coherente con `METADATOS.json` y `README.md`.
+4. **Unicidad de Archivos:**
+   - El cómputo de hashes SHA-256 sobre los 24 archivos WebP confirmó 24 hashes únicos (0 duplicados a nivel binario).
+
+### 3. Fotografías Dudosas Dejadas a Decisión del Usuario
+
+De conformidad con las restricciones, no se sustituyó ninguna imagen de forma autónoma. Se listan las siguientes observaciones para decisión del usuario:
+1. **Habitaciones de Xela (Misma habitación):** Las fotografías de individual, doble y suite de Xela corresponden a tres tomas o ángulos distintos del *mismo cuarto* ("Zimmer 323" de Hotel Kasererbräu en Salzburgo, Austria por Thomas Ledl).
+2. **Reutilización del Resort Amantaka (Laos):** La suite, restaurante y piscina de Atitlán, junto con la doble y suite de Antigua y el restaurante de Xela, fueron tomadas todas en el resort de lujo Amantaka en Luang Prabang, Laos (Basile Morin).
+3. **Ubicaciones foráneas:** Diversas imágenes de habitaciones guatemaltecas provienen de hoteles de Osaka (Japón), Kobe (Japón), Lévis (Quebec) y Millbrae (San Francisco Airport, CA).
+
+### 4. Resultados de Verificación Final
+- **AWS S3:** 24/24 URLs prefirmadas validadas con respuesta HTTP 200 OK.
+- **Backend:** 14/14 suites unitarias (89 pruebas) + 2/2 suites de integración con base PostgreSQL aislada (17 pruebas) aprobadas al 100%. Typecheck sin errores.
+- **Frontend:** 71 suites (441 pruebas) aprobadas al 100%, 0 fallos. Typecheck y compilación de producción con Vite exitosas.
+- **Dependencias:** 0 modificaciones en `package.json` y `package-lock.json` en ambos proyectos.
