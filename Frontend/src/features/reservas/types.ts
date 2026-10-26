@@ -13,7 +13,17 @@ export const ESTADOS_RESERVA_HABITACION = [
 export type EstadoReservaHabitacion = Schemas["ReservaHabitacion"]["estado"];
 
 export type ReservaHabitacionUsuario = Schemas["ReservaHabitacionUsuario"];
-export type ReservaHabitacionTipo = Schemas["ReservaHabitacionTipo"];
+export type ReservaHabitacionTipo = Schemas["ReservaHabitacionTipo"] & {
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: number | null;
+  imagen_creditos?: {
+    autor?: string;
+    fuente?: string;
+    licencia?: string;
+    url?: string;
+  } | null;
+};
 export type ReservaHabitacionSucursal = Schemas["ReservaHabitacionSucursal"];
 export type ReservaHabitacionHabitacion = Schemas["ReservaHabitacionHabitacion"];
 
@@ -31,7 +41,18 @@ export type DisponibilidadHabitacionQuery =
 /**
  * Estructura de habitación devuelta por la consulta de disponibilidad por fechas.
  */
-export type HabitacionDisponible = Schemas["HabitacionDisponible"];
+export type HabitacionDisponible = Schemas["HabitacionDisponible"] & {
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: number | null;
+  imagen_creditos?: {
+    autor?: string;
+    fuente?: string;
+    licencia?: string;
+    url?: string;
+  } | null;
+  TipoHabitacion?: ReservaHabitacionTipo;
+};
 
 export type CreateReservaHabitacionRequest =
   Schemas["CreateReservaHabitacionRequest"];

@@ -1,6 +1,19 @@
 import type { components } from "@/api/generated/schema";
 
-export type Amenidad = components["schemas"]["Amenidad"];
+export interface AssetCreditInfo {
+  autor?: string;
+  fuente?: string;
+  licencia?: string;
+  url?: string;
+}
+
+export type Amenidad = components["schemas"]["Amenidad"] & {
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: number | null;
+  imagen_creditos?: AssetCreditInfo | null;
+};
+
 export type AmenidadesResponse = components["schemas"]["AmenidadesResponse"];
 export type AmenidadResponse = components["schemas"]["AmenidadResponse"];
 export type CreateAmenidadInput = components["schemas"]["CreateAmenidadRequest"];

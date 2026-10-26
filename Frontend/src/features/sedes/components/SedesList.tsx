@@ -78,7 +78,20 @@ export const SedesList: React.FC<SedesListProps> = ({
                       <span>{sede.nombre}</span>
                       {sede.imagen_creditos && (
                         <span className="block text-[11px] font-normal text-neutro-500 mt-0.5">
-                          Foto: {sede.imagen_creditos}
+                          {typeof sede.imagen_creditos === 'string' ? (
+                            `Foto: ${sede.imagen_creditos}`
+                          ) : sede.imagen_creditos.url ? (
+                            <a
+                              href={sede.imagen_creditos.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-selva-700 transition-colors"
+                            >
+                              Foto: {sede.imagen_creditos.autor} ({sede.imagen_creditos.licencia || 'CC'})
+                            </a>
+                          ) : (
+                            `Foto: ${sede.imagen_creditos.autor} (${sede.imagen_creditos.licencia || 'CC'})`
+                          )}
                         </span>
                       )}
                     </div>
@@ -149,7 +162,20 @@ export const SedesList: React.FC<SedesListProps> = ({
                 />
                 {sede.imagen_creditos && (
                   <span className="absolute bottom-2 right-2 rounded-md bg-neutro-950/75 px-2 py-0.5 text-[10px] text-white backdrop-blur-xs">
-                    {sede.imagen_creditos}
+                    {typeof sede.imagen_creditos === 'string' ? (
+                      sede.imagen_creditos
+                    ) : sede.imagen_creditos.url ? (
+                      <a
+                        href={sede.imagen_creditos.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-neutro-200 transition-colors"
+                      >
+                        Foto: {sede.imagen_creditos.autor} ({sede.imagen_creditos.licencia || 'CC'})
+                      </a>
+                    ) : (
+                      `Foto: ${sede.imagen_creditos.autor} (${sede.imagen_creditos.licencia || 'CC'})`
+                    )}
                   </span>
                 )}
               </div>

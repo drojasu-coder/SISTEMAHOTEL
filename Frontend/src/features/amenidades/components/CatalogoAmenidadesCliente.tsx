@@ -172,9 +172,42 @@ export const CatalogoAmenidadesCliente: React.FC = () => {
               return (
                 <Card
                   key={item.id}
-                  className="flex flex-col justify-between overflow-hidden transition-shadow hover:shadow-md border border-neutro-200"
+                  className="flex flex-col justify-between overflow-hidden p-0 transition-shadow hover:shadow-md border border-neutro-200"
                 >
-                  <div className="p-6">
+                  <div>
+                    {item.imagen_url ? (
+                      <div className="relative aspect-[16/9] w-full overflow-hidden bg-neutro-100">
+                        <img
+                          src={item.imagen_url}
+                          alt={item.nombre}
+                          className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                          loading="lazy"
+                        />
+                        {item.imagen_creditos?.autor && (
+                          <span className="absolute bottom-1 right-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                            {item.imagen_creditos.url ? (
+                              <a
+                                href={item.imagen_creditos.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline hover:text-neutro-200 transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Foto: {item.imagen_creditos.autor} ({item.imagen_creditos.licencia || "CC"})
+                              </a>
+                            ) : (
+                              `Foto: ${item.imagen_creditos.autor} (${item.imagen_creditos.licencia || "CC"})`
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex aspect-[16/9] w-full items-center justify-center bg-sand-100 text-neutro-400">
+                        <Sparkles className="size-8 text-bronce-400" aria-hidden="true" />
+                      </div>
+                    )}
+
+                    <div className="p-6">
                     <div className="flex items-center gap-1.5 text-xs font-medium text-bronce-700 mb-2">
                       <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
                       <span>{sedeNombre}</span>
@@ -189,6 +222,7 @@ export const CatalogoAmenidadesCliente: React.FC = () => {
                       <span>
                         Aforo máximo: <strong>{t.aforoPersonas(item.aforo_maximo)}</strong>
                       </span>
+                    </div>
                     </div>
                   </div>
 

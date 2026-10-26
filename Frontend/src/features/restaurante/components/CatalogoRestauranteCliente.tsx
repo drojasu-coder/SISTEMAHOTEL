@@ -53,6 +53,11 @@ export const CatalogoRestauranteCliente: React.FC = () => {
     return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
   }, [sedesQuery.data, mesas]);
 
+  const sedeSeleccionada = useMemo(() => {
+    if (!sedeFiltro || !sedesQuery.data) return null;
+    return sedesQuery.data.find((s) => String(s.id) === sedeFiltro);
+  }, [sedeFiltro, sedesQuery.data]);
+
   const mesasFiltradas = useMemo(() => {
     return mesas.filter((m) => {
       const matchSede =
@@ -162,6 +167,46 @@ export const CatalogoRestauranteCliente: React.FC = () => {
         </div>
       </div>
 
+      {/* Banner Fotográfico del Restaurante de la Sede */}
+      {sedeSeleccionada?.restaurante_imagen_url && (
+        <div className="relative overflow-hidden rounded-xl border border-neutro-200 bg-neutro-900 text-blanco shadow-soft">
+          <div className="relative aspect-[21/9] sm:aspect-[28/9] w-full overflow-hidden">
+            <img
+              src={sedeSeleccionada.restaurante_imagen_url}
+              alt={`Restaurante de ${sedeSeleccionada.nombre}`}
+              className="h-full w-full object-cover opacity-90"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+            <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <div>
+                <span className="text-xs uppercase tracking-wider text-bronce-300 font-semibold">
+                  Experiencia Gastronómica
+                </span>
+                <h2 className="text-xl sm:text-2xl font-serif font-bold text-blanco">
+                  Restaurante {sedeSeleccionada.nombre}
+                </h2>
+              </div>
+              {sedeSeleccionada.restaurante_imagen_creditos?.autor && (
+                <span className="text-[11px] text-neutro-300 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm self-start sm:self-auto z-10">
+                  {sedeSeleccionada.restaurante_imagen_creditos.url ? (
+                    <a
+                      href={sedeSeleccionada.restaurante_imagen_creditos.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-blanco transition-colors"
+                    >
+                      Foto: {sedeSeleccionada.restaurante_imagen_creditos.autor} ({sedeSeleccionada.restaurante_imagen_creditos.licencia || "CC"})
+                    </a>
+                  ) : (
+                    `Foto: ${sedeSeleccionada.restaurante_imagen_creditos.autor} (${sedeSeleccionada.restaurante_imagen_creditos.licencia || "CC"})`
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Estado: Cargando */}
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-busy="true">
@@ -226,15 +271,45 @@ export const CatalogoRestauranteCliente: React.FC = () => {
           {mesasFiltradas.map((mesa) => {
             const enMantenimiento = mesa.estado === "mantenimiento";
             const sedeNombre = mesa.Sucursal?.nombre || `Sede #${mesa.sucursal_id}`;
+            const sucursalMesa = sedesQuery.data?.find((s) => s.id === mesa.sucursal_id);
 
             return (
               <Card
                 key={mesa.id}
-                className={`flex flex-col justify-between p-6 transition-shadow hover:shadow-md ${
+                className={`flex flex-col justify-between overflow-hidden p-0 transition-shadow hover:shadow-md ${
                   enMantenimiento ? "opacity-75 bg-neutro-50 border-neutro-200" : ""
                 }`}
               >
-                <div className="space-y-4">
+                <div>
+                  {sucursalMesa?.restaurante_imagen_url ? (
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-neutro-100">
+                      <img
+                        src={sucursalMesa.restaurante_imagen_url}
+                        alt={`Restaurante ${sedeNombre}`}
+                        className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                        loading="lazy"
+                      />
+                      {sucursalMesa.restaurante_imagen_creditos?.autor && (
+                        <span className="absolute bottom-1 right-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                          {sucursalMesa.restaurante_imagen_creditos.url ? (
+                            <a
+                              href={sucursalMesa.restaurante_imagen_creditos.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-neutro-200 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Foto: {sucursalMesa.restaurante_imagen_creditos.autor} ({sucursalMesa.restaurante_imagen_creditos.licencia || "CC"})
+                            </a>
+                          ) : (
+                            `Foto: ${sucursalMesa.restaurante_imagen_creditos.autor} (${sucursalMesa.restaurante_imagen_creditos.licencia || "CC"})`
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+
+                  <div className="p-6 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-lg font-bold text-neutro-900">
@@ -275,9 +350,10 @@ export const CatalogoRestauranteCliente: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                  </div>
                 </div>
 
-                <div className="pt-6 mt-4 border-t border-neutro-100">
+                <div className="p-6 pt-0">
                   <Button
                     type="button"
                     variant={enMantenimiento ? "ghost" : "primary"}
