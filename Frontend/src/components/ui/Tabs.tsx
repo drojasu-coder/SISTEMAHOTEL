@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { es } from '@/i18n/es';
 
@@ -6,7 +6,7 @@ export type TabItem = {
   id: string;
   label: string;
   disabled?: boolean;
-  content?: React.ReactNode;
+  content?: ReactNode;
 };
 
 export interface TabsProps {
@@ -33,7 +33,7 @@ export function Tabs({
 }: TabsProps) {
   const id = useId();
   const [activeId, setActiveId] = useState(value);
-  const tablistRef = useRef<HTMLElement>(null);
+  const tablistRef = useRef<HTMLDivElement>(null);
 
   const handleChange = useCallback(
     (nextId: string) => {
@@ -55,7 +55,7 @@ export function Tabs({
       else next = (current + (event.key === 'ArrowRight' ? 1 : -1) + enabled.length) % enabled.length;
       const nextId = enabled[next].id;
       handleChange(nextId);
-      const nextElement = tablistRef.current?.querySelector(`[id="${id}-${nextId}"]`);
+      const nextElement = tablistRef.current?.querySelector<HTMLButtonElement>(`[id="${id}-${nextId}"]`);
       nextElement?.focus();
     },
     [items, id, handleChange],
@@ -96,8 +96,7 @@ export function Tabs({
         })}
       </div>
       {items.map((item) =>
-        item.content ? (
-          <div
+        item.content ? (          <div
             key={item.id}
             id={`${id}-${item.id}-panel`}
             role="tabpanel"

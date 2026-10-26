@@ -1,4 +1,3 @@
-import React from 'react';
 import { cn } from '@/lib/cn';
 import { formatQ } from '@/utils/formatQ';
 import { es } from '@/i18n/es';
