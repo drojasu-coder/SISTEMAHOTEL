@@ -20,6 +20,10 @@ export const es = {
     saltarAlContenido: 'Saltar al contenido',
     proximamente: 'Próximamente',
     sinDatos: 'Sin información disponible',
+    pagina: 'Página',
+    de: 'de',
+    anterior: 'Anterior',
+    siguiente: 'Siguiente',
   },
   estados: {
     disponible: 'Disponible',
