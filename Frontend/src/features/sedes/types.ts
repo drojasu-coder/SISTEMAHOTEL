@@ -9,6 +9,10 @@ export interface Sucursal {
   ciudad: string | null;
   telefono: string | null;
   activa: boolean;
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: string | null;
+  imagen_creditos?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -36,4 +40,16 @@ export interface UpdateSucursalInput {
   ciudad?: string | null;
   telefono?: string | null;
   activa?: boolean;
+}
+
+export interface PresignImageResult {
+  uploadUrl: string;
+  uploadToken: string;
+  tempKey: string;
+  expiresInSeconds: number;
+}
+
+export interface PresignImageResponse {
+  status: 'success';
+  data: PresignImageResult;
 }

@@ -107,12 +107,16 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
       }
       onClose();
     } catch (err: unknown) {
-      if (err instanceof ApiError && err.status === 400) {
-        const fieldErrors = getFieldErrors(err);
-        for (const [field, msg] of Object.entries(fieldErrors)) {
-          if (field in tipoHabitacionFormSchema.shape) {
-            setError(field as keyof TipoHabitacionFormData, { message: msg });
+      if (err instanceof ApiError) {
+        if (err.status === 400) {
+          const fieldErrors = getFieldErrors(err);
+          for (const [field, msg] of Object.entries(fieldErrors)) {
+            if (field in tipoHabitacionFormSchema.shape) {
+              setError(field as keyof TipoHabitacionFormData, { message: msg });
+            }
           }
+        } else if (err.status === 409) {
+          setError("capacidad_maxima", { message: err.message });
         }
       }
     }
@@ -140,16 +144,21 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
           {...register("nombre")}
         />
 
-        <Input
-          label={textosTiposHabitacion.capacidadMaximaLabel}
-          id="tipo-capacidad"
-          type="text"
-          inputMode="numeric"
-          placeholder={textosTiposHabitacion.capacidadPlaceholder}
-          error={errors.capacidad_maxima?.message}
-          disabled={isPending}
-          {...register("capacidad_maxima")}
-        />
+        <div className="flex flex-col gap-1.5">
+          <Input
+            label={textosTiposHabitacion.capacidadMaximaLabel}
+            id="tipo-capacidad"
+            type="text"
+            inputMode="numeric"
+            placeholder={textosTiposHabitacion.capacidadPlaceholder}
+            error={errors.capacidad_maxima?.message}
+            disabled={isPending}
+            {...register("capacidad_maxima")}
+          />
+          <p className="text-[0.6875rem] text-neutro-500">
+            {es.tiposHabitacion.capacidadAyuda}
+          </p>
+        </div>
 
         <Input
           label={textosTiposHabitacion.tarifaNocheLabel}

@@ -1,22 +1,18 @@
 /**
  * Referencias centralizadas de medios de marca.
  *
- * Las imágenes y logos definitivos se servirán desde AWS S3 (el backend autoriza las
- * cargas con URLs prefirmadas). Mientras esa integración no exista, no se incluyen
- * archivos locales: los componentes muestran la marca en texto.
- * No guardar aquí URLs firmadas temporales.
+ * Los logos de HOTEL HUNAHPÚ se sirven desde el bucket privado de AWS S3 mediante
+ * URLs prefirmadas emitidas por el backend (GET /api/media/branding).
+ * Para renderizarlos en la interfaz reactiva, use el hook `useBranding()`.
+ *
+ * No guardar enlaces temporales como configuración permanente o estática.
  */
 export interface BrandMedia {
   logoHorizontalColor: string | null;
   logoHorizontalBlanco: string | null;
   isotipoColor: string | null;
+  expiresAt?: string | null;
 }
 
-const cleanUrl = (value: unknown): string | null =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-
-export const brandMedia: BrandMedia = {
-  logoHorizontalColor: cleanUrl(import.meta.env.VITE_BRAND_LOGO_HORIZONTAL_COLOR),
-  logoHorizontalBlanco: cleanUrl(import.meta.env.VITE_BRAND_LOGO_HORIZONTAL_BLANCO),
-  isotipoColor: cleanUrl(import.meta.env.VITE_BRAND_ISOTIPO_COLOR),
-};
+export { useBranding } from '@/features/media/hooks/useBranding';
+export { fetchBranding } from '@/features/media/api/mediaApi';

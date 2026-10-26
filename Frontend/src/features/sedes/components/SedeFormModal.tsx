@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Modal } from '@/components/ui/Modal';
@@ -13,7 +13,13 @@ import {
   sanitizeSedePayload,
   type SedeFormData,
 } from '../schemas/sedeSchema';
-import { useCreateSedeMutation, useUpdateSedeMutation } from '../hooks/useSedes';
+import {
+  useCreateSedeMutation,
+  useUpdateSedeMutation,
+  useUploadSedeImageMutation,
+  useRemoveSedeImageMutation,
+} from '../hooks/useSedes';
+import { SedeImageUploader } from './SedeImageUploader';
 import type { Sucursal } from '../types';
 
 interface SedeFormModalProps {
@@ -35,8 +41,18 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
 
   const createMutation = useCreateSedeMutation();
   const updateMutation = useUpdateSedeMutation();
+  const uploadImageMutation = useUploadSedeImageMutation();
+  const removeImageMutation = useRemoveSedeImageMutation();
 
   const activeMutation = isEditing ? updateMutation : createMutation;
+
+  // Estado para la fotografía de portada
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [persistedSedeId, setPersistedSedeId] = useState<number | null>(null);
 
   const {
     register,
@@ -56,6 +72,13 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
 
   useEffect(() => {
     if (open) {
+      setSelectedFile(null);
+      setRemoveMarked(false);
+      setIsUploadingImage(false);
+      setUploadProgress(0);
+      setImageError(null);
+      setPersistedSedeId(null);
+
       if (sede) {
         reset({
           nombre: sede.nombre ?? '',
@@ -73,23 +96,36 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
       }
       createMutation.reset();
       updateMutation.reset();
+      uploadImageMutation.reset();
+      removeImageMutation.reset();
     }
   }, [open, sede, reset]);
 
   const onSubmit = async (data: SedeFormData) => {
+    setImageError(null);
     const payload = sanitizeSedePayload(data);
+
+    let targetSedeId: number;
     try {
       if (isEditing && sede) {
+        targetSedeId = sede.id;
         await updateMutation.mutateAsync({
           id: sede.id,
           data: payload,
         });
-        onSuccess(es.sedes.actualizadaExito);
+      } else if (persistedSedeId) {
+        // La sede ya fue creada previamente en este mismo formulario (reintento de imagen)
+        targetSedeId = persistedSedeId;
+        await updateMutation.mutateAsync({
+          id: persistedSedeId,
+          data: payload,
+        });
       } else {
-        await createMutation.mutateAsync(payload);
-        onSuccess(es.sedes.creadaExito);
+        // Primera creación: obtener el ID antes de subir la imagen
+        const created = await createMutation.mutateAsync(payload);
+        targetSedeId = created.id;
+        setPersistedSedeId(created.id);
       }
-      onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = getFieldErrors(err);
@@ -99,10 +135,51 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
           }
         }
       }
+      return;
     }
+
+    // 2. Si se marcó quitar la imagen existente
+    if (removeMarked && (sede?.id || persistedSedeId)) {
+      try {
+        await removeImageMutation.mutateAsync(targetSedeId);
+      } catch (err: any) {
+        setImageError('No fue posible retirar la imagen actual.');
+        return;
+      }
+    }
+
+    // 3. Si hay un nuevo archivo seleccionado, subirlo
+    if (selectedFile) {
+      setIsUploadingImage(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetSedeId,
+          file: selectedFile,
+          onProgress: (pct) => setUploadProgress(pct),
+        });
+      } catch (err: any) {
+        setIsUploadingImage(false);
+        setImageError(
+          err?.message ||
+            'Error al subir la fotografía. La información de la sede fue guardada; puede reintentar la subida.',
+        );
+        return; // Permite reintentar la imagen sin duplicar la sede
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
+    onSuccess(isEditing ? es.sedes.actualizadaExito : es.sedes.creadaExito);
+    onClose();
   };
 
-  const isPending = activeMutation.isPending || isSubmitting;
+  const isPending =
+    activeMutation.isPending ||
+    uploadImageMutation.isPending ||
+    removeImageMutation.isPending ||
+    isUploadingImage ||
+    isSubmitting;
 
   return (
     <Modal open={open} onClose={onClose} title={title} description={description}>
@@ -150,6 +227,22 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
           error={errors.telefono?.message}
           disabled={isPending}
           {...register('telefono')}
+        />
+
+        {/* Componente de carga y gestión de fotografía principal */}
+        <SedeImageUploader
+          currentImageUrl={sede?.imagen_url}
+          onFileSelect={(file) => {
+            setSelectedFile(file);
+            setRemoveMarked(false);
+          }}
+          onRemoveCurrent={() => setRemoveMarked((prev) => !prev)}
+          selectedFile={selectedFile}
+          removeMarked={removeMarked}
+          disabled={isPending}
+          isUploading={isUploadingImage}
+          uploadProgress={uploadProgress}
+          error={imageError}
         />
 
         <div className="mt-2 flex items-center justify-end gap-3 border-t border-neutro-200 pt-4">
