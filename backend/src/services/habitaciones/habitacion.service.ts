@@ -2,6 +2,8 @@ import { Op } from "sequelize";
 import { validateDates, validateNotPast, getNights, calculateTotal } from "./reservaHabitacion.service";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
+import * as s3Service from "../storage/s3.service";
+import { getAssetCredits } from "../storage/credits";
 
 const db = require("../../models");
 
@@ -40,6 +42,7 @@ interface CreateHabitacionData {
   tipo_habitacion_id: number;
   numero: string;
   estado?: "disponible" | "ocupada" | "mantenimiento" | "limpieza";
+  imagen_key?: string | null;
 }
 
 interface UpdateHabitacionData {
@@ -47,18 +50,61 @@ interface UpdateHabitacionData {
   tipo_habitacion_id?: number;
   numero?: string;
   estado?: "disponible" | "ocupada" | "mantenimiento" | "limpieza";
+  imagen_key?: string | null;
+}
+
+export async function serializeHabitacion(h: any): Promise<any> {
+  if (!h) return null;
+  const plain = typeof h.get === "function" ? h.get({ plain: true }) : { ...h };
+  const effectiveKey = plain.imagen_key || plain.TipoHabitacion?.imagen_key || null;
+  const mediaResult = await s3Service.resolveMediaUrlWithExpiry(effectiveKey);
+  plain.imagen_url = mediaResult.url;
+  plain.imagen_expires_at = mediaResult.expiresAt;
+  plain.imagen_creditos = getAssetCredits(effectiveKey);
+
+  if (plain.TipoHabitacion) {
+    const tipoMedia = await s3Service.resolveMediaUrlWithExpiry(plain.TipoHabitacion.imagen_key);
+    plain.TipoHabitacion.imagen_url = tipoMedia.url;
+    plain.TipoHabitacion.imagen_expires_at = tipoMedia.expiresAt;
+    plain.TipoHabitacion.imagen_creditos = getAssetCredits(plain.TipoHabitacion.imagen_key);
+  }
+  return plain;
 }
 
 export const getAllHabitaciones = async () => {
-  return await Habitacion.findAll({
+  const habitaciones = await Habitacion.findAll({
+    include: [
+      {
+        model: TipoHabitacion,
+        required: false,
+      },
+      {
+        model: Sucursal,
+        attributes: ["id", "nombre", "activa"],
+        required: false,
+      },
+    ],
     order: [["id", "ASC"]],
   });
+  return Promise.all(habitaciones.map(serializeHabitacion));
 };
 
 export const getHabitacionById = async (
   id: number
 ) => {
-  const habitacion = await Habitacion.findByPk(id);
+  const habitacion = await Habitacion.findByPk(id, {
+    include: [
+      {
+        model: TipoHabitacion,
+        required: false,
+      },
+      {
+        model: Sucursal,
+        attributes: ["id", "nombre", "activa"],
+        required: false,
+      },
+    ],
+  });
 
   if (!habitacion) {
     throw new AppError(
@@ -68,7 +114,7 @@ export const getHabitacionById = async (
     );
   }
 
-  return habitacion;
+  return serializeHabitacion(habitacion);
 };
 
 export const createHabitacion = async (
@@ -113,12 +159,15 @@ export const createHabitacion = async (
     );
   }
 
-  return await Habitacion.create({
+  const habitacion = await Habitacion.create({
     sucursal_id: data.sucursal_id,
     tipo_habitacion_id: data.tipo_habitacion_id,
     numero: data.numero,
     estado: data.estado,
+    imagen_key: data.imagen_key,
   });
+
+  return serializeHabitacion(habitacion);
 };
 
 export const updateHabitacion = async (
@@ -284,7 +333,7 @@ export const updateHabitacion = async (
 
   await habitacion.update(data, { transaction });
 
-  return habitacion;
+  return serializeHabitacion(habitacion);
 });
 
 export const deleteHabitacion = async (
@@ -403,37 +452,51 @@ export const getHabitacionesDisponibles = async (
     order: [["numero", "ASC"], ["id", "ASC"]],
   });
 
-  return habitaciones.map((h: any) => {
-    const tarifaNoche = Number(h.TipoHabitacion.tarifa_noche).toFixed(2);
-    const totalEstimado = calculateTotal(
-      query.fecha_entrada,
-      query.fecha_salida,
-      h.TipoHabitacion.tarifa_noche
-    );
+  return Promise.all(
+    habitaciones.map(async (h: any) => {
+      const tarifaNoche = Number(h.TipoHabitacion.tarifa_noche).toFixed(2);
+      const totalEstimado = calculateTotal(
+        query.fecha_entrada,
+        query.fecha_salida,
+        h.TipoHabitacion.tarifa_noche
+      );
 
-    return {
-      id: h.id,
-      numero: h.numero,
-      estado: h.estado,
-      sucursal_id: h.sucursal_id,
-      tipo_habitacion_id: h.tipo_habitacion_id,
-      noches,
-      tarifa_noche: tarifaNoche,
-      total_estimado: totalEstimado,
-      Sucursal: h.Sucursal
-        ? {
-            id: h.Sucursal.id,
-            nombre: h.Sucursal.nombre,
-            activa: h.Sucursal.activa,
-          }
-        : undefined,
-      TipoHabitacion: {
-        id: h.TipoHabitacion.id,
-        nombre: h.TipoHabitacion.nombre,
-        capacidad_maxima: h.TipoHabitacion.capacidad_maxima,
+      const effectiveKey = h.imagen_key || h.TipoHabitacion?.imagen_key || null;
+      const mediaResult = await s3Service.resolveMediaUrlWithExpiry(effectiveKey);
+      const tipoMediaResult = await s3Service.resolveMediaUrlWithExpiry(h.TipoHabitacion?.imagen_key);
+
+      return {
+        id: h.id,
+        numero: h.numero,
+        estado: h.estado,
+        sucursal_id: h.sucursal_id,
+        tipo_habitacion_id: h.tipo_habitacion_id,
+        imagen_key: h.imagen_key ?? null,
+        imagen_url: mediaResult.url,
+        imagen_expires_at: mediaResult.expiresAt,
+        imagen_creditos: getAssetCredits(effectiveKey),
+        noches,
         tarifa_noche: tarifaNoche,
-        descripcion: h.TipoHabitacion.descripcion ?? null,
-      },
-    };
-  });
+        total_estimado: totalEstimado,
+        Sucursal: h.Sucursal
+          ? {
+              id: h.Sucursal.id,
+              nombre: h.Sucursal.nombre,
+              activa: h.Sucursal.activa,
+            }
+          : undefined,
+        TipoHabitacion: {
+          id: h.TipoHabitacion.id,
+          nombre: h.TipoHabitacion.nombre,
+          capacidad_maxima: h.TipoHabitacion.capacidad_maxima,
+          tarifa_noche: tarifaNoche,
+          descripcion: h.TipoHabitacion.descripcion ?? null,
+          imagen_key: h.TipoHabitacion.imagen_key ?? null,
+          imagen_url: tipoMediaResult.url,
+          imagen_expires_at: tipoMediaResult.expiresAt,
+          imagen_creditos: getAssetCredits(h.TipoHabitacion.imagen_key),
+        },
+      };
+    })
+  );
 };

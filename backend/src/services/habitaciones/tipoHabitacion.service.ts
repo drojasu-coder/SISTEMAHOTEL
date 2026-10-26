@@ -1,6 +1,8 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { getTodayDate } from "./reservaHabitacion.service";
+import * as s3Service from "../storage/s3.service";
+import { getAssetCredits } from "../storage/credits";
 
 const db = require("../../models");
 
@@ -11,6 +13,7 @@ interface CreateTipoHabitacionData {
   capacidad_maxima: number;
   tarifa_noche: number;
   descripcion?: string | null;
+  imagen_key?: string | null;
 }
 
 interface UpdateTipoHabitacionData {
@@ -18,12 +21,24 @@ interface UpdateTipoHabitacionData {
   capacidad_maxima?: number;
   tarifa_noche?: number;
   descripcion?: string | null;
+  imagen_key?: string | null;
+}
+
+export async function serializeTipoHabitacion(tipo: any): Promise<any> {
+  if (!tipo) return null;
+  const plain = typeof tipo.get === "function" ? tipo.get({ plain: true }) : { ...tipo };
+  const mediaResult = await s3Service.resolveMediaUrlWithExpiry(plain.imagen_key);
+  plain.imagen_url = mediaResult.url;
+  plain.imagen_expires_at = mediaResult.expiresAt;
+  plain.imagen_creditos = getAssetCredits(plain.imagen_key);
+  return plain;
 }
 
 export const getAllTipoHabitaciones = async () => {
-  return await TipoHabitacion.findAll({
+  const tipos = await TipoHabitacion.findAll({
     order: [["id", "ASC"]],
   });
+  return Promise.all(tipos.map(serializeTipoHabitacion));
 };
 
 export const getTipoHabitacionById = async (id: number) => {
@@ -37,18 +52,20 @@ export const getTipoHabitacionById = async (id: number) => {
     );
   }
 
-  return tipoHabitacion;
+  return serializeTipoHabitacion(tipoHabitacion);
 };
 
 export const createTipoHabitacion = async (
   data: CreateTipoHabitacionData
 ) => {
-  return await TipoHabitacion.create({
+  const tipo = await TipoHabitacion.create({
     nombre: data.nombre,
     capacidad_maxima: data.capacidad_maxima,
     tarifa_noche: data.tarifa_noche,
     descripcion: data.descripcion,
+    imagen_key: data.imagen_key,
   });
+  return serializeTipoHabitacion(tipo);
 };
 
 export const updateTipoHabitacion = async (
@@ -119,11 +136,19 @@ export const updateTipoHabitacion = async (
 
   await tipoHabitacion.update(data, { transaction });
 
-  return tipoHabitacion;
+  return serializeTipoHabitacion(tipoHabitacion);
 });
 
 export const deleteTipoHabitacion = async (id: number) => {
-  const tipoHabitacion = await getTipoHabitacionById(id);
+  const tipoHabitacion = await TipoHabitacion.findByPk(id);
+
+  if (!tipoHabitacion) {
+    throw new AppError(
+      404,
+      "TIPO_HABITACION_NOT_FOUND",
+      "El tipo de habitación no fue encontrado"
+    );
+  }
 
   const habitacion = await Habitacion.findOne({
     where: {

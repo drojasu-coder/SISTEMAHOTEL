@@ -32,6 +32,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "disponible",
       },
+      imagen_key: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

@@ -44,6 +44,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      restaurante_imagen_key: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

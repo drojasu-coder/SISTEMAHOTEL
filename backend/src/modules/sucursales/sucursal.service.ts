@@ -7,6 +7,10 @@ import {
   validateAndProcessImage,
   ProcessedImage,
 } from "../../services/media/imageValidation.service";
+import {
+  KNOWN_ASSET_CREDITS,
+  getAssetCredits,
+} from "../../services/storage/credits";
 
 const db = require("../../models");
 const { Sucursal, Habitacion, ConfirmacionSubida } = db;
@@ -62,21 +66,7 @@ export function getSedeStorageSlug(sede: { id: number; nombre?: string }): strin
   return `sede-${sede?.id || "unknown"}`;
 }
 
-/**
- * Catálogo de créditos dinámicos asociados a activos fotográficos oficiales verificados.
- * Si la imagen es reemplazada o eliminada, el crédito se disocia automáticamente.
- */
-const KNOWN_ASSET_CREDITS: Record<string, string> = {
-  // Atitlán oficial (portada y clave previa de transición)
-  "sedes/hotel-hunahpu-atitlan/portada/portada-1792961997929-90ce1baa6953.webp": "Chad Davis (CC BY 2.0)",
-  "sedes/2/portada_1792961997929_90ce1baa6953.webp": "Chad Davis (CC BY 2.0)",
-  // Antigua oficial (destino)
-  "sedes/hotel-hunahpu-antigua/portada/portada-1792976550336-c6e0ea0e64f3.webp": "Chad Davis (CC BY 2.0)",
-  // Xela oficial (destino)
-  "sedes/hotel-hunahpu-xela/portada/portada-1792976553574-024b2ef909c7.webp": "Simon Burchell (CC BY-SA 4.0)",
-  // Capital oficial (destino)
-  "sedes/hotel-hunahpu-capital/portada/portada-1792976556088-50343740bac6.webp": "Rene Hernandez (CC BY-SA 2.0)",
-};
+export { KNOWN_ASSET_CREDITS };
 
 /**
  * Cache en memoria de respuestas para optimización local en el proceso (TTL 15 min).
@@ -107,18 +97,30 @@ export function clearConfirmedTokensCache(): void {
 
 /**
  * Enriquece la sucursal agregando la URL de lectura resuelta, su fecha de expiración ISO
- * y los créditos fotográficos dinámicos vinculados a la imagen activa.
+ * y los créditos fotográficos dinámicos vinculados a la portada y al restaurante.
  */
 export async function serializeSucursal(sucursal: any): Promise<any> {
   if (!sucursal) return null;
   const plain = typeof sucursal.get === "function" ? sucursal.get({ plain: true }) : { ...sucursal };
+
+  // Portada de sede
   const mediaResult = await s3Service.resolveMediaUrlWithExpiry(plain.imagen_key);
   plain.imagen_url = mediaResult.url;
   plain.imagen_expires_at = mediaResult.expiresAt;
-  plain.imagen_creditos =
-    plain.imagen_key && KNOWN_ASSET_CREDITS[plain.imagen_key]
-      ? KNOWN_ASSET_CREDITS[plain.imagen_key]
-      : null;
+  plain.imagen_creditos = getAssetCredits(plain.imagen_key);
+
+  // Restaurante de sede
+  if (plain.restaurante_imagen_key) {
+    const restMedia = await s3Service.resolveMediaUrlWithExpiry(plain.restaurante_imagen_key);
+    plain.restaurante_imagen_url = restMedia.url;
+    plain.restaurante_imagen_expires_at = restMedia.expiresAt;
+    plain.restaurante_imagen_creditos = getAssetCredits(plain.restaurante_imagen_key);
+  } else {
+    plain.restaurante_imagen_url = null;
+    plain.restaurante_imagen_expires_at = null;
+    plain.restaurante_imagen_creditos = null;
+  }
+
   return plain;
 }
 
