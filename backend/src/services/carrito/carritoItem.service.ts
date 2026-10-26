@@ -14,6 +14,7 @@ import {
   hasCartReferenceApprovedPayment,
   hasCartReferenceActiveFinancialCommitment,
   eventFinancialExposure,
+  cartFinancialExposure,
 } from "../pago.service";
 
 const db = require("../../models");
@@ -23,7 +24,6 @@ const {
 
   Carrito,
   CarritoItem,
-  Pago,
   Promocion,
 
   ReservaHabitacion,
@@ -241,30 +241,29 @@ const assertCartCanBeMutated =
     carritoId: number,
     transaction: any
   ) => {
-    const processingPayment =
-      await Pago.findOne({
-        where: {
-          carrito_id:
-            carritoId,
-
-          estado:
-            "procesando",
-        },
-
-        attributes: [
-          "id",
-        ],
-
-        transaction,
-      });
+    const exposure =
+      await cartFinancialExposure(
+        carritoId,
+        transaction
+      );
 
     if (
-      processingPayment
+      exposure.processing > 0
     ) {
       throw new AppError(
         409,
         "CART_HAS_PROCESSING_PAYMENT",
         "El carrito no puede modificarse mientras tenga un pago en procesamiento"
+      );
+    }
+
+    if (
+      exposure.approved > 0
+    ) {
+      throw new AppError(
+        409,
+        "CART_HAS_APPROVED_PAYMENT",
+        "El carrito no puede modificarse mientras tenga dinero aprobado"
       );
     }
   };

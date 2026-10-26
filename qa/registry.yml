@@ -5728,6 +5728,201 @@ findings:
     043_regression: PASS
     verified_at: "2026-10-25"
 
+  - id: QA-SPA-FIN-CANDIDATE-050
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Eliminar un ítem de CitaBienestar después de dinero aprobado reasigna
+      dinámicamente Q500.00 a una obligación de Q100.00 y pierde la exposición
+      histórica de la cita eliminada
+    invariant: >-
+      Después de persistir dinero aprobado, la composición del carrito que
+      determina su asignación financiera no puede mutarse destructivamente. La
+      exposición aprobada de cada CitaBienestar debe conservar su asignación
+      durable y nunca superar el precio obligatorio del servicio asociado.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      db_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      test_file: backend/tests/bienestar/citaSpa.approvedCartMutation.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-050: rechaza eliminar un item que reasigna pago aprobado entre citas"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.approvedCartMutation.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-050: rechaza eliminar un item que reasigna pago aprobado entre citas"
+      concurrency: false
+      refunds_used: false
+      transfers_used: false
+      stripe_mode: FULL_FORBIDDEN_MOCK
+      real_stripe_calls: 0
+    scenario:
+      actors: "Cliente id=1 propietario; admin id=2 autorizado para efectivo"
+      therapists: "dos terapeutas activos distintos, ids 1 y 2"
+      cita_a: >-
+        id=1; confirmada; servicio A id=1; duración 60 minutos; obligación
+        Q100.00; terapeuta id=1; 10:00-11:00.
+      cita_b: >-
+        id=2; confirmada; servicio B id=2; duración 60 minutos; obligación
+        Q900.00; terapeuta id=2; 12:00-13:00.
+      cart_before_payment: >-
+        Carrito id=1 activo con item A id=1 snapshot Q100.00 e item B id=2
+        snapshot Q900.00; total HTTP y PostgreSQL Q1000.00.
+      approved_payment: >-
+        Admin registró Pago id=1 efectivo, tipo_pago=total permitido por el
+        enum productivo, monto parcial Q500.00, estado aprobado; el carrito
+        permaneció activo.
+    expected:
+      delete_item_b: "HTTP 409 o rechazo de negocio equivalente"
+      cart_state: activo
+      cart_items_after: "A y B permanecen"
+      cart_total_after: "1000.00"
+      cita_a_exposure_after: "approved Q50.00; processing Q0.00; total Q50.00"
+      cita_b_exposure_after: "approved Q450.00; processing Q0.00; total Q450.00"
+      maximum_exposure_per_cita: "obligación de su servicio"
+      unexpected_500: false
+    actual:
+      payment_create: "HTTP 201; aprobado Q500.00; code null"
+      cart_state_after_payment: activo
+      delete_item_b: "HTTP 204; code null"
+      item_a_after: "presente; snapshot Q100.00"
+      item_b_after: ausente
+      cart_total_after: "100.00"
+      payment_after: "id=1; efectivo; total; aprobado; Q500.00; sin cambios"
+      cita_a_exposure_after: "approved Q500.00; processing Q0.00; total Q500.00"
+      cita_a_obligation: "100.00"
+      cita_a_overexposure: "400.00"
+      cita_b_exposure_after: "approved Q0.00; processing Q0.00; total Q0.00"
+      cita_b_exposure_history_lost: true
+      unexpected_500: false
+      financial_violation: true
+    http_evidence: >-
+      Los endpoints reales crearon dos terapeutas (201), dos servicios (201),
+      dos citas propias confirmadas (201), un carrito (201), ambos ítems (201)
+      y listaron total Q1000.00 (200). POST /api/pagos ejecutado por admin aceptó
+      Q500.00 en efectivo con HTTP 201 y persistió estado aprobado. DELETE
+      /api/carritos/1/items/2 ejecutado por el cliente propietario respondió
+      HTTP 204 sin código; no hubo HTTP 500.
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_delete: >-
+        Carrito id=1 activo; items bienestar id=1/cita=1/precio=100.00 e
+        id=2/cita=2/precio=900.00; total Q1000.00; Pago id=1 aprobado efectivo
+        Q500.00; cero reembolsos; ambas citas confirmadas. La función productiva
+        wellnessFinancialExposure, ejecutada dentro de transacciones READ ONLY,
+        devolvió A approved=50/processing=0/total=50 y B
+        approved=450/processing=0/total=450.
+      after_delete: >-
+        Carrito id=1 siguió activo pero solo conservó item A y total Q100.00;
+        item B fue eliminado. Pago id=1 siguió aprobado por Q500.00, ambas citas
+        siguieron confirmadas y no aparecieron reembolsos. La misma función
+        productiva devolvió A approved=500/processing=0/total=500 y B
+        approved=0/processing=0/total=0: A excedió Q400.00 su obligación y B
+        perdió Q450.00 de exposición histórica.
+    mutation_helper_observed:
+      processing_blocks: true
+      processing_basis: >-
+        Revisión estática de assertCartCanBeMutated: busca Pago estado
+        procesando y lanza HTTP 409 CART_HAS_PROCESSING_PAYMENT.
+      approved_blocks: false
+      approved_basis: >-
+        Con Pago aprobado persistido, la misma ruta no encontró una guarda y el
+        DELETE real respondió 204 destruyendo el ítem B.
+    suspected_execution_path: >-
+      DELETE /api/carritos/{carritoId}/items/{id} ->
+      carritoItem.controller.remove -> carritoItem.service.remove ->
+      assertCartCanBeMutated. El helper consulta exclusivamente pagos con
+      estado=procesando; no consulta pagos aprobado-like ni
+      wellnessFinancialExposure. Después CarritoItem.findOne localiza el ítem y
+      item.destroy lo elimina. wellnessFinancialExposure descubre carritos por
+      los CarritoItem existentes y distribuye cada pago según los pesos actuales
+      precio*cantidad; por eso la eliminación hace que Q500.00 se asigne por
+      completo a A y deja a B sin vínculo histórico.
+    red_result: >-
+      CONFIRMED: 1 archivo falló y 1 test falló con ocho aserciones seguras. El
+      DELETE devolvió 204 en vez de 409, eliminó B, redujo el carrito a Q100.00,
+      reasignó A de Q50.00 a Q500.00 y redujo B de Q450.00 a Q0.00.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    severity_recommendation: critical
+    root_cause: >-
+      assertCartCanBeMutated serializaba ADD y DELETE mediante el lock FOR
+      UPDATE del Carrito, pero solo consultaba la existencia de Pago en estado
+      procesando. Omitía el dinero aprobado-like neto de reembolsos aprobados,
+      aunque la asignación financiera de bienestar se calcula dinámicamente con
+      la composición actual del carrito. Por ello un carrito activo parcialmente
+      pagado todavía admitía cambios que reasignaban o borraban exposición.
+    correction:
+      date: "2026-10-25"
+      files:
+        - backend/src/services/carrito/carritoItem.service.ts
+        - backend/src/services/pago.service.ts
+      details: >-
+        Se exportó cartFinancialExposure como adaptación mínima de la semántica
+        financiera existente committedOrProcessingExposure y
+        assertCartCanBeMutated ahora rechaza toda mutación de composición cuando
+        existe exposición activa. Los pagos procesando conservan HTTP 409 y
+        CART_HAS_PROCESSING_PAYMENT; el neto aprobado positivo devuelve HTTP 409
+        y CART_HAS_APPROVED_PAYMENT. ADD y DELETE usan la misma guarda dentro de
+        la transacción después de bloquear el Carrito.
+      approved_semantics: >-
+        Pago aprobado, reembolsado_parcial o reembolsado menos únicamente sus
+        Reembolsos aprobados; cada pago se limita a neto no negativo.
+      full_approved_refund: >-
+        El reembolso aprobado total deja approved=0 y permite modificar si no
+        existe Pago procesando; reembolsos pendientes o rechazados no reducen el
+        compromiso.
+      add_result: >-
+        Protegido por la misma guarda previa a CarritoItem.create: con neto
+        aprobado positivo devuelve HTTP 409 CART_HAS_APPROVED_PAYMENT.
+      quantity_endpoint: "NOT APPLICABLE: no existe endpoint PUT/PATCH de cantidad para CarritoItem"
+    concurrency_analysis: >-
+      ADD y DELETE ya bloquean Carrito FOR UPDATE antes de evaluar exposición.
+      createPago, aprobación tardía y webhook exitoso de carrito respetan el
+      orden canónico Carrito -> referencias -> Pago, por lo que una creación o
+      aprobación financiera concurrente no puede intercalarse con la mutación.
+      La guarda reutiliza lecturas Pago -> Reembolso de la semántica financiera
+      existente. Un reembolso manual bloquea Pago -> Reembolso sin adquirir
+      después Carrito, de modo que no introduce un orden inverso cíclico; la
+      mutación observa el neto antes o después del commit del reembolso.
+    why_invariant_is_restored: >-
+      Mientras approved neto + processing sea mayor que cero, ninguna de las dos
+      operaciones que cambia la composición puede crear o destruir ítems. Los
+      pesos Q100/Q900 permanecen estables, por lo que Q500 continúa asignado
+      Q50/Q450 y no se pierde el vínculo histórico de ninguna CitaBienestar.
+    production_files_modified: true
+    migrations_modified: false
+    existing_tests_modified: false
+    new_test_files: 1
+    verification:
+      red_focused: "RED; 1 archivo falló, 1 test falló; 8 aserciones soft"
+      focused: "PASS; 1 archivo, 1 test"
+      module_file: "PASS; 1 archivo, 1 test"
+      qa_044_050: "PASS; 7 archivos, 7 tests"
+      related_regression: "PASS; 9 archivos, 51 tests"
+      related_files:
+        - backend/tests/carrito/carritoItem.test.ts
+        - backend/tests/pagos/pagoCartMutationBinding.test.ts
+        - backend/tests/pagos/pagoMixedRoomEventCart.test.ts
+        - backend/tests/pagos/pago.idempotency.concurrency.test.ts
+        - backend/tests/habitaciones/reservaHabitacion.multiRoomCartPayment.test.ts
+        - backend/tests/eventos/reservaEvento.multiEventCartPayment.test.ts
+        - backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+        - backend/tests/pagos/refundOutOfOrderReplay.test.ts
+        - backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+      typecheck: pass
+      typecheck_command: >-
+        npm --prefix backend exec -- tsc --project backend/tsconfig.json --noEmit
+      stripe_forbidden_calls: 0
+      qa_044_049_tests_executed: true
+      qa_044_049_observed: PASS
+      db_guard_confirmations: 4
+      database: hotel_test_db
+      verified_at: "2026-10-25"
+
   - id: QA-SPA-FIN-CANDIDATE-049
     status: closed
     severity: critical

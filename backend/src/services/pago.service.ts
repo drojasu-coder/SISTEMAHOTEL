@@ -180,8 +180,17 @@ const committedOrProcessingExposure = async (
     (sum: number, payment: any) => sum + Number(payment.monto),
     0,
   );
-  return { approved, total: round(approved + processing) };
+  return {
+    approved,
+    processing: round(processing),
+    total: round(approved + processing),
+  };
 };
+
+export const cartFinancialExposure = (
+  carritoId: number,
+  transaction: any,
+) => committedOrProcessingExposure({ carrito_id: carritoId }, transaction);
 
 const historicalCartIdsForReference = async (
   tipoItem: string,
