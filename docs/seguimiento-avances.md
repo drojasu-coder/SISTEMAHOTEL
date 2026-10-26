@@ -539,3 +539,40 @@ Este documento registra de forma continua el avance técnico, archivos modificad
   - Los procesos antiguos que ejecutaban código no integrado fueron detenidos limpiamente y los servicios fueron reiniciados desde `/tmp/SISTEMAHOTEL-runtime`:
     - **Backend (Puerto 4000):** Escuchando activamente. Health check `GET /api/health` responde 200 OK (`"API de Hotel está funcionando correctamente"`), `GET /api/media/branding` responde 200 OK con URLs prefirmadas de S3 y `GET /api/sucursales` responde 200 OK con sedes y claves de imagen.
     - **Frontend (Puerto 5173):** Vite en ejecución activa respondiendo 200 OK.
+
+---
+
+## Normalización del Entorno de Ejecución en Carpeta Principal (SISTEMAHOTEL)
+
+- **Estado:** Completada, verificada y activada exclusivamente en la carpeta principal.
+- **Rama Final y HEAD:**
+  - **Ubicación:** `/home/diegorojas/Workspace/Universidad/DESARROLLOWEB/SISTEMAHOTEL`
+  - **Rama activa:** `refactor/backend-architecture`
+  - **HEAD final:** `63af139` (contiene el merge `3851011` y la corrección de tipos TypeScript).
+- **Integración Completa de `ux/004-componentes`:**
+  - Se rescataron e integraron todos los avances de la rama `ux/004-componentes`:
+    1. **Lote 2 de Componentes UI:** `Card` (Header, Content, Footer), `Field` (con `useId`), `Checkbox`, `Radio`, `Select`, `Switch`, `Textarea`, `DateField`, `TimeField`, `Pagination`, `Table` con pruebas completas.
+    2. **Lote 3 de Componentes UI:** `Countdown`, `PriceSummary`, `StatusTimeline`, `Stepper`, `Tabs` con pruebas y textos en `Frontend/src/i18n/es.ts`.
+    3. **Medios y Créditos de Sedes:** Créditos oficiales para Antigua, Xela, Capital y Atitlán en `KNOWN_ASSET_CREDITS` y normalización de slugs con tolerancia `hunapu` / `hunahpu`.
+    4. **Auditoría UI:** Registro y actualización de componentes en `docs/auditoria-componentes.md` y `docs/mejoras-ux.md`.
+- **Desvinculación y Limpieza de Entornos Temporales:**
+  - Se detuvieron los procesos temporales que ejecutaban desde `/tmp/SISTEMAHOTEL-runtime` (PIDs 214213, 214222, 214304, 214312).
+  - Se eliminó el worktree temporal `/tmp/SISTEMAHOTEL-runtime`.
+  - No queda ningún servidor ni proceso del hotel ejecutándose desde `/tmp`.
+- **Devolución de Servicios a la Carpeta Principal:**
+  - **Backend (Puerto 4000):**
+    - Proceso PID `223457` / `223474` iniciado desde `/home/diegorojas/Workspace/Universidad/DESARROLLOWEB/SISTEMAHOTEL/backend`.
+    - Conexión efectiva a PostgreSQL `hotel_db:5432`.
+    - Respuestas verificadas: `GET /api/health` (200 OK), `GET /api/media/branding` (200 OK), `GET /api/sucursales` (200 OK).
+  - **Frontend (Puerto 5173):**
+    - Proceso PID `223549` iniciado desde `/home/diegorojas/Workspace/Universidad/DESARROLLOWEB/SISTEMAHOTEL/Frontend` mediante `vite`.
+    - Respuesta verificada: `GET /` (HTTP/1.1 200 OK).
+- **Comandos Normales de Arranque (Manual):**
+  - Backend: `cd /home/diegorojas/Workspace/Universidad/DESARROLLOWEB/SISTEMAHOTEL/backend && npm run dev`
+  - Frontend: `cd /home/diegorojas/Workspace/Universidad/DESARROLLOWEB/SISTEMAHOTEL/Frontend && npm run dev`
+- **Resultados de Verificación Final:**
+  - `npm --prefix backend run typecheck:all`: 0 errores.
+  - `npm --prefix Frontend run typecheck`: 0 errores.
+  - `npm --prefix Frontend run build`: compilación limpia en 8.72s.
+  - Vitest UI (`Frontend/src/components/ui`): 23 archivos, 85 pruebas aprobadas (100%).
+  - Vitest Backend (`openapi.test.ts`, `postgres.sucursalImagen.test.ts`, `s3.service.test.ts`, `imageValidation.service.test.ts` en 55433): 4 archivos, 35 pruebas aprobadas (100%).
