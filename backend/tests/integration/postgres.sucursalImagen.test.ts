@@ -389,7 +389,11 @@ describe("Sucursal Imagen Principal Integration Tests", () => {
     try {
       const resAtitlan = await request(app).get(`/api/sucursales/${atitlanSede.id}`);
       expect(resAtitlan.status).toBe(200);
-      expect(resAtitlan.body.data.imagen_creditos).toBe("Chad Davis (CC BY 2.0)");
+      expect(resAtitlan.body.data.imagen_creditos).toMatchObject({
+        autor: "Chad Davis",
+        licencia: "CC BY 2.0",
+        texto: "Chad Davis (CC BY 2.0)",
+      });
       expect(resAtitlan.body.data.imagen_expires_at).toBeDefined();
 
       // Caso B: Imagen reemplazada con una nueva clave

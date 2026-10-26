@@ -162,4 +162,70 @@ describe("HTTP habitaciones against isolated PostgreSQL (hotel_test_db)", () => 
     expect(encontrada).toBeDefined();
     expect(encontrada.numero).toBe("101-B");
   });
+
+  it("retorna la imagen y créditos de la sede cuando la habitación tiene imagen_key propia", async () => {
+    const antiguaKey = "sedes/hotel-hunahpu-antigua/habitaciones/individual-1792979381507-3a2dc3c5b8fc.webp";
+    const habConFoto = await database.Habitacion.create({
+      sucursal_id: testSucursalId,
+      tipo_habitacion_id: testTipoId,
+      numero: "201-FOTO",
+      estado: "disponible",
+      imagen_key: antiguaKey,
+    });
+
+    const res = await request(app)
+      .get(`/api/habitaciones/${habConFoto.id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.imagen_key).toBe(antiguaKey);
+    expect(res.body.data.imagen_url).toBeDefined();
+    expect(res.body.data.imagen_creditos).toMatchObject({
+      autor: "jjmusgrove",
+      licencia: "CC BY 2.0",
+      texto: "jjmusgrove (CC BY 2.0)",
+    });
+
+    await database.Habitacion.destroy({ where: { id: habConFoto.id }, force: true });
+  });
+
+  it("aplica el respaldo de imagen del tipo cuando la habitación no tiene foto propia", async () => {
+    const atitlanSuiteKey = "sedes/hotel-hunahpu-atitlan/habitaciones/suite-1792979380176-40a2118460a9.webp";
+    const tipoConFoto = await database.TipoHabitacion.create({
+      nombre: `Tipo Con Respaldo ${Date.now()}`,
+      capacidad_maxima: 2,
+      tarifa_noche: 800.0,
+      activa: true,
+      imagen_key: atitlanSuiteKey,
+    });
+
+    const habSinFoto = await database.Habitacion.create({
+      sucursal_id: testSucursalId,
+      tipo_habitacion_id: tipoConFoto.id,
+      numero: "301-R",
+      estado: "disponible",
+      imagen_key: null,
+    });
+
+    const res = await request(app)
+      .get(`/api/habitaciones/${habSinFoto.id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.imagen_key).toBeNull();
+    // La imagen y los créditos efectivos se respaldan desde el TipoHabitacion
+    expect(res.body.data.imagen_url).toBeDefined();
+    expect(res.body.data.imagen_creditos).toMatchObject({
+      autor: "Basile Morin",
+      licencia: "CC BY-SA 4.0",
+    });
+    expect(res.body.data.TipoHabitacion.imagen_key).toBe(atitlanSuiteKey);
+    expect(res.body.data.TipoHabitacion.imagen_creditos).toMatchObject({
+      autor: "Basile Morin",
+      licencia: "CC BY-SA 4.0",
+    });
+
+    await database.Habitacion.destroy({ where: { id: habSinFoto.id }, force: true });
+    await database.TipoHabitacion.destroy({ where: { id: tipoConFoto.id }, force: true });
+  });
 });
