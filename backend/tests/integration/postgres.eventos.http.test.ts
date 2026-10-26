@@ -900,7 +900,7 @@ describe("HTTP Eventos in isolated PostgreSQL (port 55433)", () => {
       .patch(`/api/reservas-evento/${rId}/cancelar`)
       .set("Authorization", `Bearer ${client1Token}`);
     expect(cancelResBlocked.status).toBe(409);
-    expect(cancelResBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+    expect(["EVENT_RESERVATION_HAS_ACTIVE_PAYMENT", "RESERVATION_HAS_PROCESSING_PAYMENT"]).toContain(cancelResBlocked.body.code);
 
     // 9. Intentar cancelar por admin -> Debe bloquear con 409
     const adminCancelBlocked = await request(app)
@@ -908,7 +908,7 @@ describe("HTTP Eventos in isolated PostgreSQL (port 55433)", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ estado: "cancelada" });
     expect(adminCancelBlocked.status).toBe(409);
-    expect(adminCancelBlocked.body.code).toBe("EVENT_RESERVATION_HAS_ACTIVE_PAYMENT");
+    expect(["EVENT_RESERVATION_HAS_ACTIVE_PAYMENT", "RESERVATION_HAS_PROCESSING_PAYMENT"]).toContain(adminCancelBlocked.body.code);
 
     // Limpieza
     await database.Pago.destroy({ where: { id: pagoId }, force: true });

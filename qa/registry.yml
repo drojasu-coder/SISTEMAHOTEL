@@ -1790,6 +1790,1391 @@ findings:
       existing_tests_modified: false
       verified_at: "2026-10-22"
 
+  - id: QA-EVT-FIN-CANDIDATE-040
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un carrito mixto de habitación y evento no puede pagar su total porque el
+      saldo global se limita al saldo individual de la habitación
+    invariant: >-
+      Un único carrito del mismo cliente con una ReservaHabitacion válida de
+      Q100.00 y una ReservaEvento en cotización de Q5000.00, sin servicios, debe
+      aceptar un único pago tarjeta tipo total por Q5100.00 cuando no existe
+      exposición financiera previa. Debe crear exactamente un Pago procesando y
+      un PaymentIntent por Q5100.00, sin sobreexposición.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/pagos/pagoMixedRoomEventCart.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-040: un pago total cubre un carrito mixto de habitación y evento"
+      command: >-
+        npm --prefix backend test -- tests/pagos/pagoMixedRoomEventCart.test.ts
+      stripe_mode: FULL_LOCAL_MOCK
+      real_network_calls: 0
+      payment_attempts: 1
+      webhook_executed: false
+      transfer_variant_executed: false
+    expected:
+      payment_http: 201
+      payment_state: procesando
+      payment_amount: "5100.00"
+      payment_count: 1
+      payment_intent_amount_minor: 510000
+      payment_intent_count: 1
+    actual:
+      payment_http: 409
+      payment_code: PAYMENT_EXCEEDS_BALANCE
+      payment_message: "El pago excede el saldo pendiente"
+      payment_count: 0
+      payment_intent_count: 0
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló (2 aserciones soft)"
+    http_evidence:
+      cart_items: 2
+      cart_total: "5100.00"
+      cart_balance: "5100.00"
+      approved_before: "0.00"
+      processing_before: "0.00"
+      payment_attempt: "POST /api/pagos; Q5100.00; total; tarjeta"
+      response: "HTTP 409 PAYMENT_EXCEEDS_BALANCE"
+    database_evidence:
+      source_of_truth: PostgreSQL
+      client_id: 1
+      room_reservation_id: 1
+      event_reservation_id: 1
+      cart_id: 1
+      cart_state: activo
+      room_item: "habitacion; referencia 1; Q100.00; cantidad 1"
+      event_item: "evento; referencia 1; Q5000.00; cantidad 1"
+      persisted_item_count: 2
+      persisted_cart_total: "5100.00"
+      persisted_payment_count: 0
+      persisted_approved: "0.00"
+      persisted_processing: "0.00"
+      overexposure: false
+    observable_balances:
+      origin_http: "5100.00"
+      room_helper: "100.00"
+      event_helper: "5000.00"
+      global_internal: "NOT OBSERVABLE: helper privado; no se instrumentó producción"
+    stripe_evidence:
+      create_payment_intent_calls: 0
+      intent_count: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      createPago -> validateOpenOrigin obtiene total global Q5100.00 ->
+      roomExposureBalance obtiene remaining Q100.00 -> eventExposureBalance obtiene
+      remaining Q5000.00 -> Math.min(originRemaining, roomRemaining,
+      eventRemaining) reduce indebidamente el saldo global a Q100.00 ->
+      PAYMENT_EXCEEDS_BALANCE antes de persistir Pago o crear PaymentIntent.
+    violation: >-
+      El backend aplica el menor saldo individual como límite de un pago que cubre
+      obligaciones independientes sumadas en el mismo carrito; bloquea de forma
+      restrictiva Q5100.00 aunque total y saldo global son Q5100.00 y la exposición
+      es cero.
+    root_cause: >-
+      createPago y approveTransferencia combinaban mediante Math.min tres magnitudes
+      que no representan límites globales competidores: el saldo del carrito y los
+      saldos agregados por dominio habitación/evento. En un carrito mixto, el saldo
+      Q100.00 de habitación reducía incorrectamente a Q100.00 el límite de la
+      operación global Q5100.00.
+    fix: >-
+      Para origen Carrito, pago.service conserva originRemaining como único límite
+      global y, antes de Pago.create o de aprobar una transferencia, distribuye el
+      nuevo monto entre los CarritoItem persistidos. Bajo los locks de cada
+      referencia verifica que exposición financiera actual más la cuota nueva no
+      supere la obligación correspondiente. El origen directo ReservaHabitacion
+      conserva el mínimo entre su saldo de origen y su saldo de referencia.
+    global_balance_strategy: >-
+      Para Carrito: remainingCents = total del carrito en centavos menos exposición
+      aprobada neta y procesando del propio carrito; no suma roomRemaining con
+      eventRemaining, no duplica originRemaining y no aplica Math.min contra los
+      saldos de cada dominio. Para ReservaHabitacion directa se conserva el límite
+      previo de originRemaining contra roomRemaining.
+    reference_allocation_strategy: >-
+      Cada nueva cantidad de carrito se prorratea por
+      CarritoItem.precio*cantidad entre todos sus items persistidos. Cada validación
+      suma únicamente las cuotas cuyo tipo_item y referencia_id coinciden con la
+      ReservaHabitacion o ReservaEvento validada, reutilizando el mismo helper usado
+      por reservationFinancialExposure y eventFinancialExposure.
+    room_reference_validation: >-
+      Por cada ReservaHabitacion ya bloqueada se exige, en centavos,
+      reservationFinancialExposure.total + cuota nueva de habitación <=
+      ReservaHabitacion.total. La cuota conserva mayor residuo proporcional y
+      desempate por CarritoItem.id ascendente, como QA-RH-FIN-CANDIDATE-030.
+    event_reference_validation: >-
+      Por cada ReservaEvento ya bloqueada se exige, en centavos,
+      eventFinancialExposure.total + cuota nueva de evento <= ReservaEvento.total.
+      La cuota conserva la asignación de residuos por CarritoItem.id ascendente,
+      como QA-EVT-FIN-CANDIDATE-039.
+    cent_based_allocation: >-
+      Monto nuevo, obligaciones, exposición y límites se comparan en centavos
+      enteros. El prorrateo existente usa pesos enteros y BigInt; el truncamiento y
+      los residuos deterministas siguen las estrategias cerradas de QA-039/RH-030.
+    mixed_cart_behavior: >-
+      En el caso oficial, originRemaining=510000 centavos, roomRemaining=10000 y
+      eventRemaining=500000; el límite global final permanece 510000. El pago
+      Q5100.00 asigna 10000 centavos a la habitación y 500000 al evento, ambas
+      validaciones pasan y no existe sobreexposición.
+    transfer_behavior_if_changed: >-
+      Sí. approveTransferencia reutiliza la misma validación por cuotas y el mismo
+      límite global de Carrito antes de convertir un Pago pendiente en aprobado.
+      No cambian tipo_pago, anticipo, saldo ni total. No existe una prueba dedicada
+      de transferencia mixta en el alcance autorizado.
+    lock_order: >-
+      Sin cambios: Carrito FOR UPDATE -> ReservaHabitacion por id ascendente ->
+      ReservaEvento por id ascendente -> Pago/Reembolso. Todas las asignaciones y
+      validaciones ocurren dentro de la transacción después de esos locks; no se
+      agregaron locks de memoria ni inversiones de orden.
+    final_evidence:
+      payment_http: 201
+      payment_code: null
+      payment_state: procesando
+      payment_amount: "5100.00"
+      payment_count: 1
+      payment_intent_amount_minor: 510000
+      payment_intent_count: 1
+      stripe_create_count: 1
+      webhook_executed: false
+      blocked: false
+      overexposure: false
+      unexpected_500: false
+      final_origin_remaining_after_processing: "0.00"
+      allocations: "ReservaHabitacion Q100.00; ReservaEvento Q5000.00"
+    regressions:
+      qa_evt_035_cross_cart_processing: "GREEN; 1/1"
+      qa_evt_037_payment_mutation_binding: "GREEN; 1/1"
+      qa_evt_038_cancel_processing_payment: "GREEN; 1/1"
+      qa_evt_039_multi_event_cart: "GREEN; 1/1; permanece CLOSED"
+      qa_rh_020_aggregate_exposure: "GREEN; 1/1; permanece CLOSED"
+      qa_rh_030_multi_room_cart: "GREEN; 1/1; permanece CLOSED"
+      payment_idempotency_concurrency: "GREEN; 3/3"
+      webhook_lock_order_concurrency: "GREEN; 1/1"
+      cart_payment_binding_minimum: "GREEN; 1/1"
+    severity_recommendation: high
+    regressions_observed:
+      qa_035: "GREEN; permanece CLOSED"
+      qa_039: "GREEN; permanece CLOSED"
+      qa_rh_030: "GREEN; permanece CLOSED"
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: "GREEN; pagoMixedRoomEventCart 1/1"
+      related_tests: >-
+        GREEN; 9 archivos adicionales, 11 tests: multiEventCartPayment 1,
+        crossCartProcessing 1, paymentMutationBinding 1,
+        cancelProcessingPayment 1, multiRoomCartPayment 1, aggregateExposure 1,
+        pago.idempotency.concurrency 3, pagoWebhookLockOrder.concurrency 1 y
+        pagoCartMutationBinding 1.
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json --noEmit
+      typecheck: pass
+      production_files_modified: [backend/src/services/pago.service.ts]
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-24"
+
+  - id: QA-EVT-FIN-CANDIDATE-039
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un carrito con dos eventos independientes no puede pagar su total porque
+      el saldo global se limita al saldo individual mínimo
+    invariant: >-
+      Un carrito activo con dos ReservaEvento independientes de Q5000.00 cada
+      una y total Q10000.00 debe aceptar un único pago tarjeta tipo total por
+      Q10000.00. Tras succeeded, el dinero atribuido entre ambos eventos debe
+      sumar exactamente el dinero real persistido, nunca duplicarlo.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.multiEventCartPayment.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-039: un pago total cubre dos eventos sin límite individual ni atribución duplicada"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.multiEventCartPayment.test.ts -t
+        "QA-EVT-FIN-CANDIDATE-039: un pago total cubre dos eventos sin límite
+        individual ni atribución duplicada"
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_network_calls: 0
+      payment_attempts: 1
+    scenario:
+      client_id: 1
+      salons: "A id=1 tarifa Q5000.00; B id=2 tarifa Q5000.00"
+      reservations: >-
+        ReservaEvento A id=1 y B id=2; ambas cotizacion, total Q5000.00,
+        anticipo Q1500.00; salones distintos y sin conflictos.
+      cart: >-
+        C1 id=1 activo; dos CarritoItem evento id=1/2, cantidad 1 y precio
+        Q5000.00 cada uno; total PostgreSQL y HTTP Q10000.00.
+      exclusions: >-
+        Sin habitaciones, actividades, servicios, segundo carrito, expiración,
+        PATCH, cancelación ni variante parcial.
+    expected:
+      payment: >-
+        HTTP 201; un Pago procesando Q10000.00 y un PaymentIntent local por
+        1000000 unidades menores.
+      webhook: >-
+        succeeded local HTTP 200; Pago aprobado Q10000.00 y Carrito pagado.
+      attribution: >-
+        eventFinancialExposure(A) + eventFinancialExposure(B) = Q10000.00,
+        igual al dinero real persistido y sin duplicación.
+      unexpected_500: false
+    actual:
+      payment: >-
+        HTTP 409 PAYMENT_EXCEEDS_BALANCE; El pago excede el saldo pendiente.
+      payment_persistence: "0 filas Pago; aprobado Q0.00; procesando Q0.00"
+      payment_intent: "no creado; createPaymentIntent calls=0"
+      webhook: "NOT RUN: rechazo previo a Pago y PaymentIntent"
+      cart_final: "activo; 2 items; total Q10000.00"
+      event_exposure_a: "approved=Q0.00; processing=Q0.00; total=Q0.00"
+      event_exposure_b: "approved=Q0.00; processing=Q0.00; total=Q0.00"
+      attributed_sum: "Q0.00; coincide con dinero real Q0.00; no duplicado"
+      invariant_violated: true
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló, 2 aserciones soft fallaron"
+    remaining_evidence:
+      observable_before: >-
+        A Q5000.00 y B Q5000.00 derivados de total persistido menos
+        eventFinancialExposure; saldo global HTTP Q10000.00.
+      observable_after_rejection: >-
+        A Q5000.00; B Q5000.00; saldo global derivado de PostgreSQL Q10000.00.
+      internal_limiter_value: >-
+        NOT OBSERVABLE: la respuesta no expone remaining y el test no instrumenta
+        producción.
+    http_evidence:
+      reservations: "2x HTTP 201; cotizacion; Q5000.00 cada una"
+      cart_create: "HTTP 201"
+      add_items: "2x HTTP 201; Q5000.00 cada uno"
+      list_items: "HTTP 200; 2 items; total Q10000.00"
+      payment_summary_before: "HTTP 200; total Q10000.00; saldo Q10000.00"
+      payment_attempt: "HTTP 409 PAYMENT_EXCEEDS_BALANCE"
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      reservations: >-
+        ids 1/2; salon_id 1/2; cotizacion; total 5000.00 y anticipo 1500.00
+        cada una.
+      items: >-
+        ids 1/2; carrito_id=1; tipo_item=evento; referencia_id=1/2;
+        precio=5000.00; cantidad=1.
+      cart: "id=1; activo; item_count=2; total=10000.00"
+      payments: 0
+      real_money: >-
+        aprobado neto Q0.00 + procesando Q0.00 = Q0.00.
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      create_payment_intent_calls: 0
+      intents: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      POST /api/pagos -> createPago -> validateOpenOrigin obtiene el total global
+      Q10000.00 y bloquea ambas ReservaEvento -> eventExposureBalance recorre A/B
+      pero combina sus saldos con Math.min, produciendo un límite individual de
+      Q5000.00 en vez de capacidad agregada Q10000.00 -> createPago compara el
+      monto global Q10000.00 contra ese límite y lanza PAYMENT_EXCEEDS_BALANCE
+      antes de Pago.create y Stripe.
+    root_cause: >-
+      eventExposureBalance aplicaba Math.min a los saldos de ReservaEvento aunque
+      createPago compara ese resultado con un monto global de carrito. Además,
+      eventFinancialExposure atribuía íntegramente cada Pago de carrito a cada
+      evento encontrado en él, en vez de distribuir el dinero entre sus items.
+    fix: >-
+      pago.service ahora suma las obligaciones pendientes individuales de los
+      eventos y distribuye cada Pago de carrito por los pesos persistidos de todos
+      sus CarritoItem antes de atribuir únicamente la porción del tipo evento y
+      referencia exactos. createPago y approveTransferencia siguen consumiendo el
+      mismo eventExposureBalance corregido.
+    event_cart_balance_strategy: >-
+      SUM(max(0, ReservaEvento.total - eventFinancialExposure.total)) para todas
+      las ReservaEvento únicas del carrito. Este límite agregado se combina con
+      Math.min contra originRemaining y el límite agregado de habitaciones ya
+      existente. En carritos mixtos sigue siendo una salvaguarda por categoría y
+      no vuelve más restrictivo el comportamiento previo; originRemaining continúa
+      siendo el límite global autoritativo del carrito.
+    event_payment_allocation_strategy: >-
+      Cada Pago.id deduplicado se distribuye por separado entre todos los items
+      persistidos de su carrito, con peso CarritoItem.precio * cantidad. Solo se
+      suma al evento la cuota de items cuyo tipo_item es exactamente evento y cuyo
+      referencia_id coincide; no se mezclan espacios de ids de habitaciones,
+      actividades u otros tipos. Se incluyen carritos actuales, históricos y
+      expirados porque la búsqueda no filtra estado de Carrito.
+    cent_based_allocation: >-
+      Pago, reembolsos, pesos y cuotas se convierten a centavos enteros; la
+      división proporcional usa BigInt y las cuotas siempre suman exactamente el
+      monto distribuido. Un carrito con un único item ponderado le asigna el monto
+      completo.
+    residual_strategy: >-
+      Después de truncar las cuotas proporcionales, los centavos restantes se
+      entregan de a uno por CarritoItem.id ascendente. La atribución de habitaciones
+      conserva su estrategia previa de mayor residuo proporcional, con desempate
+      por id ascendente.
+    processing_allocation: >-
+      Todo el monto de cada Pago procesando se distribuye sin netear reembolsos y
+      se acumula separadamente como processing.
+    approved_allocation: >-
+      Para estados aprobado, reembolsado_parcial y reembolsado se calcula primero
+      el neto no negativo de cada Pago y después se distribuye ese neto; no se
+      agregan varios pagos antes del prorrateo.
+    refund_semantics: >-
+      Solo Reembolso con estado aprobado reduce la exposición aprobada. Reembolsos
+      pendientes o rechazados no alteran la atribución y el neto de cada Pago se
+      limita a cero antes de distribuirlo.
+    locking_strategy: >-
+      Sin cambios: Carrito FOR UPDATE -> ReservaHabitacion por id ascendente ->
+      ReservaEvento por id ascendente -> Pago/Reembolso. La ReservaEvento sigue
+      siendo el lock canónico de su exposición; no se introdujeron locks en
+      memoria, orden Pago -> Carrito ni checks financieros fuera de la transacción.
+    final_evidence:
+      payment_http: 201
+      payment_before_webhook: "procesando; Q10000.00"
+      payment_intent: >-
+        exactamente uno; pi_evt_multi_event_cart_039_001; 1000000 unidades
+        menores; GTQ; sin red ni cargos reales
+      webhook: "HTTP 200; payment_intent.succeeded"
+      payment_after_webhook: "aprobado; Q10000.00"
+      cart_after_webhook: pagado
+      event_a_exposure: "approved=Q5000.00; processing=Q0.00; total=Q5000.00"
+      event_b_exposure: "approved=Q5000.00; processing=Q0.00; total=Q5000.00"
+      attributed_sum: "Q10000.00"
+      real_approved_money: "Q10000.00"
+      duplicated_attribution: false
+      unexpected_500: false
+    regressions:
+      qa_evt_035: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts, 1/1; preserva exposición
+        histórica y procesando entre carritos.
+      qa_evt_036: >-
+        GREEN; reservaEvento.patchServiceTotal.test.ts, 1/1; no se modificó el
+        cálculo ni persistencia de servicios de evento.
+      qa_evt_037: >-
+        GREEN; reservaEvento.paymentMutationBinding.test.ts, 1/1; la exposición
+        atribuida continúa vinculando mutaciones económicas.
+      qa_evt_038: >-
+        GREEN; reservaEvento.cancelProcessingPayment.test.ts, 1/1; procesando
+        continúa bloqueando cancelación.
+      qa_rh_030: >-
+        GREEN; reservaHabitacion.multiRoomCartPayment.test.ts, 1/1; atribución y
+        saldo multi-habitación permanecen cerrados.
+    severity_recommendation: high
+    verification:
+      focused: >-
+        GREEN; reservaEvento.multiEventCartPayment.test.ts, 1 archivo, 1 test.
+        La misma ejecución cubre el único test aislado y el archivo completo.
+      related_event_tests: >-
+        GREEN; crossCartProcessing 1/1; patchServiceTotal 1/1;
+        paymentMutationBinding 1/1; cancelProcessingPayment 1/1.
+      related_room_tests: >-
+        GREEN; multiRoomCartPayment 1/1; aggregateExposure 1/1.
+      related_payment_cart_tests: >-
+        GREEN; pagoWebhookLockOrder.concurrency 1/1;
+        pago.idempotency.concurrency 3/3.
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck: pass
+      qa_035_through_038_regressions: "GREEN; 4/4 archivos, 4/4 tests"
+      rh_030_regression: "GREEN; 1/1"
+      production_files_modified: true
+      production_files:
+        - backend/src/services/pago.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      test_modified_by_fixer: false
+      unrelated_changes: none
+      verified_at: "2026-10-24"
+
+  - id: QA-EVT-FIN-CANDIDATE-035
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Un evento con un PaymentIntent procesando puede recrearse y pagarse otra
+      vez después de expirar el carrito original
+    invariant: >-
+      Una ReservaEvento con Q5,000.00 de exposición financiera procesando en
+      Stripe mediante C1 no puede agregarse a C2 ni originar un segundo intento
+      de pago cuando C1 expira; la exposición activa agregada para la misma
+      referencia nunca debe superar su total de Q5,000.00.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.crossCartProcessing.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-035: no permite un segundo intento de pago del mismo evento tras expirar C1"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.crossCartProcessing.test.ts
+      database: hotel_test_db
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/carritos
+        - POST /api/carritos/{c1}/items
+        - POST /api/pagos
+        - POST /api/carritos
+        - POST /api/carritos/{c2}/items
+        - POST /api/pagos
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+    scenario:
+      event_total: "5000.00"
+      event_advance: "1500.00"
+      c1_payment: "tarjeta; total; Q5000.00; procesando; pi_evt_fin_035_1"
+      expiration: >-
+        Solo expira_en de C1 se llevó al pasado; crear C2 ejecutó la expiración
+        normal y dejó C1 en estado expirado preservando su ítem y pago.
+      c2_second_attempt: "tarjeta; total; Q5000.00"
+    expected:
+      add_to_c2: "HTTP 409 CART_REFERENCE_NOT_AVAILABLE"
+      c2_item_count: 0
+      c2_payment_count: 0
+      second_payment: NOT RUN
+      stripe_create_payment_intent_calls: 1
+      maximum_active_exposure: "5000.00"
+    actual:
+      add_to_c2: "HTTP 201; mismo evento persistido en C2"
+      second_payment: "HTTP 201; procesando; Q5000.00; pi_evt_fin_035_2"
+      stripe_create_payment_intent_calls: 2
+      approved_amount: "0.00"
+      processing_amount: "10000.00"
+      total_active_exposure: "10000.00"
+      excess_exposure: "5000.00"
+      invariant_violated: true
+      red_result: "1 archivo falló, 1 test falló, 7 aserciones soft fallaron"
+    http_evidence:
+      reservation_create: "HTTP 201; total Q5000.00; anticipo Q1500.00"
+      c1_create: "HTTP 201"
+      c1_add_event: "HTTP 201; precio Q5000.00"
+      c1_payment: "HTTP 201; procesando; pago_id=1; pi_evt_fin_035_1"
+      c2_create: "HTTP 201"
+      c2_add_event: "HTTP 201; item_id=2; precio Q5000.00"
+      c2_payment: "HTTP 201; procesando; pago_id=2; pi_evt_fin_035_2"
+      unexpected_500: false
+    database_evidence:
+      reservation: >-
+        ReservaEvento id=1; cotizacion; total=5000.00; anticipo=1500.00.
+      cart_c1: >-
+        Carrito id=1; expirado; conserva CarritoItem evento referencia_id=1 por
+        Q5000.00 y Pago id=1 procesando por Q5000.00 asociado a
+        pi_evt_fin_035_1.
+      cart_c2: >-
+        Carrito id=2; activo; contiene una segunda CarritoItem evento
+        referencia_id=1 por Q5000.00 y Pago id=2 procesando por Q5000.00
+        asociado a pi_evt_fin_035_2.
+      calculation: >-
+        aprobado neto Q0.00 + procesando C1 Q5000.00 + procesando C2 Q5000.00
+        = exposición activa Q10000.00; excedente sobre el total Q5000.00.
+      source_of_truth: PostgreSQL
+    stripe_mock_evidence:
+      create_payment_intent_calls: 2
+      intent_1: "pi_evt_fin_035_1; 500000 centavos; carrito_id=1; pago_id=1"
+      intent_2: "pi_evt_fin_035_2; 500000 centavos; carrito_id=2; pago_id=2"
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      POST /api/carritos/{id}/items -> carritoItem.service.create ->
+      resolveReference -> resolveEvento. resolveEvento consulta únicamente
+      hasCartReferenceApprovedPayment, que no incluye pagos procesando; por eso
+      permite insertar el evento en C2. POST /api/pagos -> pago.service.createPago
+      calcula committedOrProcessingExposure solo sobre C2, no sobre todos los
+      carritos históricos que contienen esa ReservaEvento, y crea un segundo
+      Pago/PaymentIntent por el total completo.
+    severity_recommendation: critical
+    root_cause: >-
+      La resolución de ReservaEvento solo reconocía dinero aprobado histórico y
+      omitía Pago en estado procesando. createPago, a su vez, limitaba el saldo
+      por la llave carrito_id actual, sin agregar la exposición de todos los
+      carritos históricos que contienen la misma ReservaEvento.
+    fix: >-
+      Se agregó exposición financiera agregada por ReservaEvento y se reutiliza
+      al resolver el ADD y al validar createPago. Antes de Pago.create y Stripe,
+      createPago bloquea las ReservaEvento del carrito y rechaza cualquier monto
+      que exceda su saldo agregado.
+    aggregate_event_exposure: >-
+      aprobado neto de reembolsos aprobados + todos los pagos procesando de los
+      carritos que contienen CarritoItem(tipo_item=evento,
+      referencia_id=ReservaEvento.id), deduplicando Pago.id
+    historical_carts_included: true
+    processing_included: true
+    approved_refunds_included: true
+    locking_strategy: >-
+      SELECT FOR UPDATE en orden Carrito -> ReservaHabitacion por id ascendente
+      -> ReservaEvento por id ascendente -> Pago; no se bloquean los carritos
+      históricos y la serialización financiera ocurre por ReservaEvento.
+    second_commitment_result: >-
+      ADD a C2 rechazado con HTTP 409 CART_REFERENCE_NOT_AVAILABLE; no se ejecutó
+      el segundo pago y no se crearon P2 ni PI2.
+    stripe_create_calls: 1
+    final_exposure: >-
+      approved=0.00; processing=5000.00; total=5000.00; event_total=5000.00
+    correction:
+      production_files:
+        - backend/src/services/pago.service.ts
+        - backend/src/services/carrito/carritoItem.service.ts
+      test_modified_by_fixer: false
+      migrations_modified: false
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: "GREEN; 1 file passed, 1 test passed"
+      related_tests: >-
+        GREEN; reservaEvento/reservaEventoServicio 79/79;
+        carrito/carritoItem 57/57; QA-014 1/1; QA-020 1/1; QA-030 1/1
+      typecheck: pass
+      typecheck_primary_command: "npm --prefix backend exec tsc -- --noEmit"
+      typecheck_primary_result: >-
+        npm 12 no localizó tsconfig; mostró ayuda de tsc y terminó con código 1
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck_explicit_result: pass
+      production_files_modified: true
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-24"
+
+  - id: QA-EVT-FIN-CANDIDATE-036
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      PATCH de invitados elimina del total y anticipo los servicios persistidos
+      de una cotización de evento
+    invariant: >-
+      Modificar únicamente numero_invitados en una ReservaEvento en cotizacion
+      debe conservar sus ReservaEventoServicio y mantener total = tarifa_base del
+      Salon + SUM(subtotal persistido); el anticipo debe conservar el 30% del
+      total resultante.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.patchServiceTotal.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-036: PATCH de invitados conserva servicios, total y anticipo de la cotización"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.patchServiceTotal.test.ts
+      database: hotel_test_db
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/reservas-evento/{reservaId}/servicios
+        - PATCH /api/reservas-evento/{reservaId}
+      patch_body: { numero_invitados: 60 }
+      excluded_modules: [carrito, pagos, stripe]
+    expected:
+      patch: "HTTP 200; numero_invitados 50 -> 60"
+      association: >-
+        ReservaEventoServicio permanece idéntica: servicio Q300.00, cantidad 2,
+        subtotal Q600.00.
+      total: "Q5000.00 + Q600.00 = Q5600.00"
+      anticipo: "30% de Q5600.00 = Q1680.00"
+    actual:
+      patch: "HTTP 200; code null; numero_invitados 50 -> 60"
+      association: >-
+        ReservaEventoServicio permaneció idéntica con cantidad 2, subtotal
+        Q600.00 y precio unitario snapshot derivado Q300.00.
+      total: "cayó de Q5600.00 a Q5000.00"
+      anticipo: "cayó de Q1680.00 a Q1500.00"
+      invariant_violated: true
+      red_result: "1 archivo falló, 1 test falló"
+    http_evidence:
+      reservation_create: "HTTP 201; total Q5000.00; anticipo Q1500.00"
+      add_service: "HTTP 201; cantidad 2; subtotal Q600.00; total Q5600.00"
+      patch_guests: "HTTP 200; code null; numero_invitados=60"
+      unexpected_500: false
+    database_evidence:
+      ids: "ReservaEvento=1; Salon=1; ServicioEvento=1; asociación=1"
+      reservation_before_patch: >-
+        estado=cotizacion; total=5600.00; anticipo=1680.00;
+        numero_invitados=50.
+      reservation_after_patch: >-
+        estado=cotizacion; total=5000.00; anticipo=1500.00;
+        numero_invitados=60.
+      salon: "tarifa_base=5000.00; capacidad_maxima=100"
+      service_master: "precio=300.00"
+      association_after_patch: >-
+        reserva_evento_id=1; servicio_evento_id=1; cantidad=2;
+        subtotal=600.00; precio snapshot derivado=300.00; idéntica=true.
+      calculation: >-
+        tarifa Q5000.00 + SUM(subtotales) Q600.00 = Q5600.00 esperado;
+        persistido Q5000.00; diferencia financiera Q600.00.
+      source_of_truth: PostgreSQL
+    suspected_execution_path: >-
+      PATCH /api/reservas-evento/{id} -> reservaEvento.controller.update ->
+      reservaEvento.service.update -> calculateAmounts(salon). El cálculo usa
+      únicamente Salon.tarifa_base y sobrescribe ReservaEvento.total y anticipo
+      sin sumar ReservaEventoServicio.subtotal, aunque la asociación persiste.
+    severity_recommendation: high
+    correction:
+      root_cause: >-
+        reservaEvento.service.update recalculaba total y anticipo con una función
+        local que solo recibía Salon.tarifa_base. La transacción conservaba las
+        asociaciones ReservaEventoServicio, pero omitía sus subtotales snapshot
+        al sobrescribir los importes de la reserva.
+      fix: >-
+        PATCH reutiliza el cálculo financiero común de reservas de evento y,
+        después de bloquear ReservaEvento y resolver el salón efectivo, consulta
+        las asociaciones persistidas antes de actualizar total y anticipo.
+      total_formula: >-
+        roundMoney(Number(Salon.tarifa_base) +
+        SUM(Number(ReservaEventoServicio.subtotal)))
+      services_source: >-
+        Exclusivamente ReservaEventoServicio.subtotal persistido; no consulta
+        ServicioEvento.precio vivo ni reescribe asociaciones.
+      anticipo_formula: >-
+        roundMoney(total * (env.EVENT_DEPOSIT_PERCENTAGE / 100)); se conserva la
+        regla vigente sin introducir un porcentaje hardcodeado.
+      transaction_scope: >-
+        Se conserva la transacción existente y el orden de PATCH:
+        ReservaEvento SELECT FOR UPDATE -> Salon SELECT FOR UPDATE según la
+        lógica vigente -> ReservaEventoServicio -> ReservaEvento update. No se
+        agregan locks de Pago, Carrito o Stripe. El lock de ReservaEvento también
+        serializa las mutaciones de servicios de esa misma reserva.
+      035_regression: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts: 1/1. La entrada
+        QA-EVT-FIN-CANDIDATE-035 no fue modificada.
+      production_files:
+        - backend/src/services/eventos/reservaEvento.service.ts
+        - backend/src/services/eventos/reservaEventoServicio.service.ts
+      test_modified_by_fixer: false
+      migrations_modified: false
+    verification:
+      focused: "GREEN; 1 file passed, 1 test passed"
+      reserva_evento_module: "GREEN; 1 file passed, 40 tests passed"
+      reserva_evento_servicio_module: "GREEN; 1 file passed, 39 tests passed"
+      qa_035: "GREEN; 1 file passed, 1 test passed"
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck: pass
+      typecheck_primary_command: "npm --prefix backend exec tsc -- --noEmit"
+      typecheck_primary_result: >-
+        npm 12 no localizó tsconfig; mostró ayuda de tsc y terminó con código 1
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck_explicit_result: pass
+      production_files_modified_by_test_author: false
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-24"
+
+  - id: QA-EVT-FIN-CANDIDATE-037
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      PATCH permite reducir la obligación de una ReservaEvento por debajo de un
+      PaymentIntent procesando
+    invariant: >-
+      Una ReservaEvento con exposición financiera activa (aprobado neto más
+      procesando) no puede mutar su obligación de forma incompatible, dejando
+      PaymentIntent.amount distinto del total vigente o exposición aprobada neta
+      superior a la obligación. La mutación económica debe rechazarse con HTTP
+      409 y conservar la reserva cuando existe esa exposición.
+    reproduction:
+      phase: RED
+      variant: A
+      test_file: backend/tests/eventos/reservaEvento.paymentMutationBinding.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-037 A: rechaza reducir la obligación con un pago procesando"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.paymentMutationBinding.test.ts
+      database: hotel_test_db
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/carritos
+        - POST /api/carritos/{carritoId}/items
+        - POST /api/pagos
+        - PATCH /api/reservas-evento/{reservaId}
+      patch_body: { salon_id: 2 }
+      exclusions:
+        - sin cancelación
+        - sin DELETE
+        - sin estado cancelada
+        - sin mutar numero_invitados
+        - sin mutar ServicioEvento.precio
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      webhook_calls: 0
+    scenario:
+      ids: >-
+        ReservaEvento=1; Salon A=1; Salon B=2; Carrito=1; CarritoItem=1;
+        Pago=1; PaymentIntent=pi_evt_mutation_037_001.
+      salon_a: "tarifa Q5000.00; capacidad 100"
+      salon_b: "tarifa Q3000.00; capacidad 100"
+      reservation_before: >-
+        cotizacion; salón A; total Q5000.00; anticipo Q1500.00; 50 invitados.
+      cart: "un solo ítem evento; precio snapshot Q5000.00; cantidad 1"
+      payment: "tarjeta; total; Q5000.00; procesando; GTQ; Stripe local"
+      payment_intent: >-
+        pi_evt_mutation_037_001; requires_payment_method; 500000 centavos;
+        metadata pago_id=1, carrito_id=1, tipo_pago=total.
+      initial_exposure: >-
+        aprobado neto Q0.00 + procesando Q5000.00 = Q5000.00; coincide con la
+        obligación inicial Q5000.00.
+    expected:
+      patch: "HTTP 409; sin mutación"
+      reservation_after: "salón A; total Q5000.00; anticipo Q1500.00"
+      payment_after: "procesando; Q5000.00"
+      payment_intent_after: "requires_payment_method; Q5000.00"
+      authorization_matches_current_obligation: true
+      maximum_active_exposure: "Q5000.00"
+    actual:
+      patch: "HTTP 200; code null"
+      reservation_after: "cotizacion; salón B; total Q3000.00; anticipo Q900.00"
+      payment_after: "procesando; Q5000.00; sin cambios"
+      payment_intent_after: "requires_payment_method; Q5000.00; sin cambios"
+      approved_amount: "0.00"
+      processing_amount: "5000.00"
+      active_exposure: "5000.00"
+      current_obligation: "3000.00"
+      exposure_excess: "2000.00"
+      authorization_matches_current_obligation: false
+      invariant_violated: true
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló, 5 aserciones soft fallaron"
+    http_evidence:
+      reservation_create: "HTTP 201; total Q5000.00"
+      cart_create: "HTTP 201"
+      add_event: "HTTP 201; precio Q5000.00"
+      payment_create: "HTTP 201; procesando; Q5000.00"
+      patch_room: >-
+        HTTP 200; code null; salon_id 1 -> 2; total Q5000.00 -> Q3000.00;
+        anticipo Q1500.00 -> Q900.00.
+    database_evidence:
+      source_of_truth: PostgreSQL
+      final_reservation: >-
+        ReservaEvento id=1; cotizacion; salon_id=2; total=3000.00;
+        anticipo=900.00.
+      final_cart_item: >-
+        CarritoItem id=1; carrito_id=1; evento referencia_id=1;
+        precio=5000.00; cantidad=1.
+      final_payment: >-
+        Pago id=1; carrito_id=1; tarjeta; total; procesando; monto=5000.00;
+        reembolsos aprobados=0.00; pi_evt_mutation_037_001.
+      final_exposure: >-
+        consulta SQL directa y eventFinancialExposure coinciden: approved=0.00,
+        processing=5000.00, total=5000.00; obligación=3000.00.
+    stripe_mock_evidence:
+      create_payment_intent_calls: 1
+      update_metadata_calls: 0
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      webhook_calls: 0
+      network_calls: 0
+      real_charges: 0
+    lock_review:
+      reserva_evento: "SELECT FOR UPDATE presente en reservaEvento.service.update"
+      effective_salon: "SELECT FOR UPDATE presente en getSalonForReservation"
+      financial_exposure: >-
+        PATCH no invoca eventFinancialExposure y no bloquea Pago o Carrito antes
+        de recalcular y persistir total/anticipo.
+    suspected_execution_path: >-
+      PATCH /api/reservas-evento/{id} -> reservaEvento.controller.update ->
+      reservaEvento.service.update bloquea ReservaEvento y el Salon efectivo,
+      valida lifecycle/capacidad/disponibilidad, calcula importes para Salon B y
+      actualiza la reserva. La ruta no consulta eventFinancialExposure antes de
+      reducir total, aunque Pago.create sí usa esa función al crear compromisos.
+    root_cause: >-
+      reservaEvento.service.update recalculaba y persistía total/anticipo después
+      de cambiar el salón, pero no distinguía si el total realmente cambiaba ni
+      vinculaba esa mutación económica con la exposición financiera activa del
+      evento antes del UPDATE.
+    fix: >-
+      El PATCH calcula primero el total propuesto con el helper consolidado y,
+      únicamente cuando la obligación cambia, consulta eventFinancialExposure
+      dentro de la misma transacción; rechaza exposición procesando o aprobado
+      neto superior al nuevo total antes de persistir la reserva.
+    economic_mutation_detection: >-
+      Comparación en centavos entre ReservaEvento.total persistido y
+      proposedTotal. salon_id solo dispara la regla si su tarifa produce una
+      diferencia real; fecha, horas, tipo de evento y numero_invitados no quedan
+      bloqueados cuando el total calculado permanece igual.
+    proposed_total_strategy: >-
+      calculateReservationAmounts(salon efectivo, transaction, reserva.id)
+      obtiene tarifa_base del salón bloqueado más SUM de snapshots
+      ReservaEventoServicio.subtotal y deriva el anticipo configurado.
+    event_financial_exposure_helper: >-
+      Se reutiliza exclusivamente eventFinancialExposure de pago.service; no se
+      duplicó la agregación de Pago/Reembolso ni se consultó Stripe.
+    processing_rule: >-
+      Si cambia la obligación y exposure.processing > 0, responde HTTP 409 con
+      RESERVATION_HAS_PROCESSING_PAYMENT antes del UPDATE.
+    approved_rule: >-
+      Si processing=0 y exposure.approved > proposedTotal, responde HTTP 409 con
+      PAYMENT_EXCEEDS_NEW_TOTAL antes del UPDATE.
+    transaction_scope: >-
+      Cálculo, lectura de exposición, validaciones y UPDATE permanecen dentro de
+      la única transacción de reservaEvento.service.update; cualquier AppError
+      revierte la operación completa.
+    lock_order: >-
+      ReservaEvento FOR UPDATE -> Salon efectivo FOR UPDATE -> cálculo de
+      proposedTotal -> eventFinancialExposure sobre Pago/Reembolso -> UPDATE.
+      Se conserva sin cambios el orden de createPago corregido por QA-035.
+    "035_regression": >-
+      GREEN: reservaEvento.crossCartProcessing.test.ts, 1/1; no se modificó
+      createPago ni su orden Carrito -> reservas -> Pago.
+    "036_regression": >-
+      GREEN: reservaEvento.patchServiceTotal.test.ts, 1/1; el PATCH de invitados
+      conserva los subtotales snapshot, total y anticipo consolidados.
+    final_evidence:
+      patch: "HTTP 409; code RESERVATION_HAS_PROCESSING_PAYMENT"
+      reservation_after: "salón A; total Q5000.00; anticipo Q1500.00"
+      salons_after: "salón A Q5000.00 y salón B Q3000.00 sin cambios"
+      payment_after: "procesando; Q5000.00"
+      payment_intent_after: "requires_payment_method; Q5000.00"
+      exposure_after: "approved=Q0.00; processing=Q5000.00; total=Q5000.00"
+      stripe_calls_during_patch:
+        create: 0
+        update_metadata: 0
+        retrieve: 0
+        cancel: 0
+        refund: 0
+        webhook: 0
+    severity_recommendation: high
+    variant_b:
+      status: NOT_TESTED
+      reason: "La variante A confirmó la firma exacta; no era necesario aprobar vía webhook."
+    regressions_observed:
+      qa_035: >-
+        GREEN en reservaEvento.crossCartProcessing.test.ts; no se modificó el
+        test ni el orden de locks de createPago.
+      qa_036: >-
+        GREEN en reservaEvento.patchServiceTotal.test.ts; se conserva el cálculo
+        consolidado con subtotales snapshot al mutar invitados.
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_test: >-
+        GREEN: reservaEvento.paymentMutationBinding.test.ts, 1 archivo, 1 test.
+      qa_035_test: >-
+        GREEN: reservaEvento.crossCartProcessing.test.ts, 1 archivo, 1 test.
+      qa_036_test: >-
+        GREEN: reservaEvento.patchServiceTotal.test.ts, 1 archivo, 1 test.
+      reservation_module_test: >-
+        GREEN: reservaEvento.test.ts, 1 archivo, 40 tests.
+      reservation_service_module_test: >-
+        GREEN: reservaEventoServicio.test.ts, 1 archivo, 39 tests.
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck_explicit_result: pass
+      production_files_modified:
+        - backend/src/services/eventos/reservaEvento.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-24"
+
+  - id: QA-EVT-FIN-CANDIDATE-038
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      La cancelación de ReservaEvento deja un PaymentIntent procesando cobrable
+      y el webhook succeeded no puede reconciliarlo
+    invariant: >-
+      Una ReservaEvento con un Pago procesando no debe pasar a cancelada mientras
+      el PaymentIntent asociado permanezca activo, salvo compensación financiera
+      segura y verificable. Si el intent llega a succeeded, el backend debe
+      reconciliar de forma coherente el pago y la reserva o compensar el cobro.
+    reproduction:
+      phase: RED
+      test_file: backend/tests/eventos/reservaEvento.cancelProcessingPayment.test.ts
+      test_name: "QA-EVT-FIN-CANDIDATE-038: no cancela un evento con PaymentIntent procesando activo"
+      command: >-
+        npm --prefix backend test --
+        tests/eventos/reservaEvento.cancelProcessingPayment.test.ts
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      endpoint_sequence:
+        - POST /api/reservas-evento
+        - POST /api/carritos
+        - POST /api/carritos/{carritoId}/items
+        - POST /api/pagos
+        - PATCH /api/reservas-evento/{reservaId}/cancelar
+        - POST /api/pagos/stripe/webhook
+        - POST /api/pagos/stripe/webhook (replay exacto único)
+      cancellation_payload: NO_BODY
+      route_selection: >-
+        PATCH general /api/reservas-evento/{id} no admite estado en
+        updateReservaEventoSchema; se usó exclusivamente la ruta real específica
+        PATCH /api/reservas-evento/{id}/cancelar, que no recibe body.
+      stripe_mode: FULL_LOCAL_MOCK
+      network_calls: 0
+      real_stripe_charges: 0
+    scenario:
+      ids: >-
+        Cliente=1; Salon=1; ReservaEvento=1; Carrito=1; CarritoItem=1;
+        Pago=1; PaymentIntent=pi_evt_cancel_038_001;
+        webhook=evt_evt_cancel_038_001.
+      salon: "tarifa_base Q5000.00; capacidad 100"
+      reservation_before: >-
+        cotizacion; total Q5000.00; anticipo Q1500.00; sin servicios.
+      cart: "un solo carrito con un solo ítem evento por Q5000.00"
+      payment: "tarjeta; total; Q5000.00; procesando; GTQ"
+      payment_intent_before: >-
+        requires_payment_method; 500000 centavos; metadata pago_id=1,
+        carrito_id=1, tipo_pago=total.
+      exposure_before: >-
+        PostgreSQL y eventFinancialExposure: approved=Q0.00,
+        processing=Q5000.00, total=Q5000.00.
+    expected:
+      preferred_cancellation: >-
+        HTTP 409 RESERVATION_HAS_PROCESSING_PAYMENT; ReservaEvento permanece en
+        cotizacion, Pago procesando e intent activo sin cancel/refund externo.
+      alternative_safe_outcome: >-
+        Compensación atómica verificable que desactive el intent y elimine la
+        exposición procesando antes de persistir cancelada.
+      financial_violation: false
+      unexpected_500: false
+    actual:
+      cancellation: >-
+        HTTP 200; code null; ReservaEvento quedó cancelada y el Pago continuó
+        procesando Q5000.00; PaymentIntent continuó requires_payment_method.
+      cancellation_compensation: >-
+        Ninguna: cancel calls=0, refund calls=0, Pago sin cambio y exposición
+        processing=Q5000.00.
+      active_window: true
+      first_webhook: >-
+        Tras simular succeeded externo por Q5000.00, HTTP 409
+        EVENT_RESERVATION_NOT_AVAILABLE; Pago siguió procesando y la divergencia
+        Stripe/local quedó en Q5000.00.
+      exact_replay: >-
+        El mismo event id/type/object se entregó exactamente una vez adicional;
+        HTTP 409 EVENT_RESERVATION_NOT_AVAILABLE y divergencia Q5000.00 intacta.
+      final_intent: "succeeded; neto externo Q5000.00; refundedAmount=0"
+      final_local: >-
+        ReservaEvento cancelada; Pago procesando Q5000.00; approved Q0.00;
+        processing Q5000.00; reembolsos aprobados Q0.00.
+      violation_a: true
+      violation_b: true
+      violation_c: false
+      invariant_violated: true
+      unexpected_500: false
+      red_result: "1 archivo falló, 1 test falló, 2 aserciones soft fallaron"
+    http_evidence:
+      reservation_create: "HTTP 201; cotizacion; total Q5000.00"
+      cart_create: "HTTP 201"
+      add_event: "HTTP 201; precio Q5000.00"
+      payment_create: >-
+        HTTP 201; Pago=1 procesando Q5000.00;
+        PaymentIntent=pi_evt_cancel_038_001.
+      cancel: >-
+        HTTP 200; code null; mensaje Reserva de evento cancelada correctamente.
+      webhook_first: "HTTP 409 EVENT_RESERVATION_NOT_AVAILABLE"
+      webhook_exact_replay: "HTTP 409 EVENT_RESERVATION_NOT_AVAILABLE"
+      webhook_construct_calls: 2
+    database_evidence:
+      source_of_truth: PostgreSQL
+      before_cancel: >-
+        ReservaEvento=1 cotizacion Q5000.00; Pago=1 procesando Q5000.00;
+        approved=Q0.00; processing=Q5000.00; refunds=Q0.00.
+      immediately_after_cancel: >-
+        ReservaEvento=1 cancelada Q5000.00; Pago=1 procesando Q5000.00;
+        approved=Q0.00; processing=Q5000.00; refunds=Q0.00.
+      after_first_webhook: >-
+        Sin reconciliación: ReservaEvento cancelada; Pago procesando;
+        approved=Q0.00; processing=Q5000.00; divergencia=Q5000.00.
+      after_exact_replay: >-
+        Estado idéntico: ReservaEvento cancelada; Pago procesando;
+        approved=Q0.00; processing=Q5000.00; divergencia=Q5000.00.
+      event_financial_exposure_final: >-
+        approved=0; processing=5000; total=5000.
+    stripe_mock_evidence:
+      create_payment_intent_calls: 1
+      intent_before_cancel: requires_payment_method
+      intent_after_cancel: requires_payment_method
+      intent_after_external_transition: succeeded
+      amount_minor: 500000
+      retrieve_calls: 0
+      update_metadata_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      exact_webhook_replays: 1
+      network_calls: 0
+      real_charges: 0
+    suspected_execution_path: >-
+      PATCH /api/reservas-evento/{id}/cancelar ->
+      reservaEvento.controller.cancel -> reservaEvento.service.cancel bloquea
+      ReservaEvento FOR UPDATE, valida únicamente ownership y estados
+      cancelada/expirada, y persiste estado=cancelada sin consultar
+      eventFinancialExposure, Pago o Stripe. Luego el webhook succeeded encuentra
+      el Pago por id_transaccion_externo y lo actualiza tentativamente a aprobado,
+      pero validateOpenOrigin -> cartTotals observa la ReservaEvento cancelada y
+      lanza EVENT_RESERVATION_NOT_AVAILABLE; la transacción revierte el cambio de
+      Pago. El replay exacto recorre la misma ruta y vuelve a dejar la divergencia.
+    root_cause: >-
+      reservaEvento.service.cancel validaba ownership y los estados terminales
+      bajo el lock de ReservaEvento, pero persistía estado=cancelada sin consultar
+      la exposición financiera agregada del evento. Por ello ignoraba los pagos
+      procesando conservados en carritos históricos y dejaba activo el
+      PaymentIntent después de cerrar localmente la reserva.
+    fix: >-
+      Después de bloquear y validar la ReservaEvento, cancel reutiliza
+      eventFinancialExposure dentro de la misma transacción y, si
+      exposure.processing > 0, lanza AppError 409
+      RESERVATION_HAS_PROCESSING_PAYMENT antes del UPDATE. No cancela el intent,
+      no crea reembolsos y no cambia la política vigente para dinero aprobado.
+    cancel_validation_layer: >-
+      reservaEvento.service.cancel, después de localizar ReservaEvento FOR UPDATE
+      y validar existencia, ownership y estados cancelada/expirada, y antes de
+      reserva.update({ estado: cancelada }).
+    financial_exposure_helper: >-
+      Se reutiliza exclusivamente eventFinancialExposure de pago.service con
+      reserva.id y la transacción de cancel; no se duplicó la agregación de
+      Pago/Reembolso ni se consultó Stripe.
+    processing_rule: >-
+      exposure.processing > 0 rechaza la cancelación con HTTP 409 y código
+      RESERVATION_HAS_PROCESSING_PAYMENT. Con processing=0 se conserva exactamente
+      el flujo anterior, incluido el tratamiento vigente de dinero aprobado.
+    transaction_scope: >-
+      El lock de ReservaEvento, la lectura de exposición, la validación financiera
+      y el eventual UPDATE pertenecen a la única transacción de cancel; el
+      AppError revierte sin mutar estado ni exposición.
+    lock_order: >-
+      ReservaEvento SELECT FOR UPDATE -> eventFinancialExposure sobre carritos
+      históricos, Pago y Reembolso -> eventual ReservaEvento UPDATE. No se
+      agregaron locks ni se alteró el orden canónico de createPago; el lock de
+      ReservaEvento serializa la creación concurrente de compromisos del evento.
+    stripe_calls_during_cancel:
+      create_payment_intent: 0
+      retrieve: 0
+      update_metadata: 0
+      cancel: 0
+      refund: 0
+      construct_event: 0
+    webhook_execution_after_fix: >-
+      NOT RUN: la cancelación quedó bloqueada antes de crear la ventana activa;
+      no hubo primer delivery ni replay, y constructEvent tuvo 0 llamadas.
+    final_evidence:
+      cancel_flow: >-
+        PATCH /api/reservas-evento/{id}/cancelar sin body -> HTTP 409;
+        code RESERVATION_HAS_PROCESSING_PAYMENT.
+      reservation_before: "cotizacion; total Q5000.00; anticipo Q1500.00"
+      reservation_after: "cotizacion; total Q5000.00; anticipo Q1500.00"
+      payment_before: "procesando; Q5000.00"
+      payment_after: "procesando; Q5000.00"
+      exposure_before: "approved=Q0.00; processing=Q5000.00; total=Q5000.00"
+      exposure_after: "approved=Q0.00; processing=Q5000.00; total=Q5000.00"
+      intent_before: "requires_payment_method; 500000 centavos"
+      intent_after: "requires_payment_method; 500000 centavos"
+      approved_refunds_before: "Q0.00"
+      approved_refunds_after: "Q0.00"
+      active_processing_window: false
+      webhook_executed: false
+      webhook_replayed: false
+      stripe_local_divergence: "Q0.00"
+      financial_violation: false
+      unexpected_500: false
+    severity_recommendation: high
+    regressions_observed:
+      qa_035: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts, 1 archivo, 1 test;
+        permanece CLOSED y su entrada no fue modificada.
+      qa_036: >-
+        GREEN; reservaEvento.patchServiceTotal.test.ts, 1 archivo, 1 test;
+        permanece CLOSED y su entrada no fue modificada.
+      qa_037: >-
+        GREEN; reservaEvento.paymentMutationBinding.test.ts, 1 archivo, 1 test;
+        permanece CLOSED y su entrada no fue modificada.
+    verification:
+      focused_test: >-
+        GREEN; reservaEvento.cancelProcessingPayment.test.ts, 1 archivo, 1 test.
+      qa_035_test: >-
+        GREEN; reservaEvento.crossCartProcessing.test.ts, 1 archivo, 1 test.
+      qa_036_test: >-
+        GREEN; reservaEvento.patchServiceTotal.test.ts, 1 archivo, 1 test.
+      qa_037_test: >-
+        GREEN; reservaEvento.paymentMutationBinding.test.ts, 1 archivo, 1 test.
+      reservation_module_test: >-
+        GREEN; reservaEvento.test.ts, 1 archivo, 40 tests.
+      reservation_service_module_test: >-
+        GREEN; reservaEventoServicio.test.ts, 1 archivo, 39 tests.
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json
+        --noEmit
+      typecheck: pass
+      production_files_modified:
+        - backend/src/services/eventos/reservaEvento.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-24"
+
+  - id: QA-AUTH-SEC-CANDIDATE-034
+    status: closed
+    severity: medium
+    category: SECURITY
+    title: >-
+      Login y registro públicos carecen de límite de solicitudes por IP
+    approved_product_rule:
+      login: { max_requests: 10, window_minutes: 15 }
+      register: { max_requests: 5, window_minutes: 30 }
+      scope: { key: IP }
+      response: { http: 429, code: TOO_MANY_REQUESTS }
+      storage_current_architecture: in_memory
+      future_distributed_architecture: Redis_or_gateway_WAF
+    invariant: >-
+      Desde una misma IP, POST /api/auth/login admite como máximo 10 solicitudes
+      en 15 minutos y la solicitud 11 responde HTTP 429 TOO_MANY_REQUESTS. POST
+      /api/auth/register admite como máximo 5 solicitudes en 30 minutos y la
+      solicitud 6 responde HTTP 429 TOO_MANY_REQUESTS sin crear un usuario.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/auth/authRateLimit.test.ts
+      test_name: "QA-AUTH-SEC-CANDIDATE-034: limita login y register por IP"
+      command: >-
+        npm --prefix backend test -- tests/auth/authRateLimit.test.ts
+      request_mode: sequential_and_rapid
+      request_ip: NOT_OBSERVABLE
+      x_forwarded_for_used: false
+      real_waits_used: false
+      stripe_used: false
+      payments_used: false
+      cart_used: false
+    expected:
+      login_first_10: "10x HTTP 401 INVALID_CREDENTIALS"
+      login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+      register_first_5: "5x HTTP 201"
+      register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+      persisted_register_users: 5
+      unexpected_500: false
+    actual:
+      login_first_10: "10x HTTP 401 INVALID_CREDENTIALS"
+      login_request_11: "HTTP 401 INVALID_CREDENTIALS"
+      login_request_11_reached_auth_flow: true
+      bcrypt_compare_calls: NOT_OBSERVABLE
+      register_first_5: "5x HTTP 201"
+      register_request_6: "HTTP 201; code null"
+      register_request_6_reached_register_flow: true
+      persisted_register_users: 6
+      users_created_before_cleanup: 7
+      users_created_detail: "1 fixture de login y 6 usuarios por register"
+      unexpected_500: false
+      rate_limit_currently_present: false
+      login_limit_violation: true
+      register_limit_violation: true
+      red_result: >-
+        1 archivo falló, 1 test falló con 5 aserciones soft: login 11 no devolvió
+        429/código esperado, register 6 no devolvió 429/código esperado y el sexto
+        usuario quedó persistido en PostgreSQL.
+    http_evidence:
+      login_requests_executed: 11
+      login_first_10_distribution: "401=10"
+      login_request_11_status: 401
+      login_request_11_code: INVALID_CREDENTIALS
+      register_requests_executed: 6
+      register_first_5_distribution: "201=5"
+      register_request_6_status: 201
+      register_request_6_code: null
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      login_fixture_email: qa034-login@example.test
+      register_emails_persisted:
+        - qa034-register-01@example.test
+        - qa034-register-02@example.test
+        - qa034-register-03@example.test
+        - qa034-register-04@example.test
+        - qa034-register-05@example.test
+        - qa034-register-06@example.test
+      test_users_before_cleanup: 7
+      test_users_after_cleanup: 0
+      cleanup: pass
+    suspected_execution_path: >-
+      app monta authRoutes directamente en /api/auth. POST /login ejecuta
+      validateBody y authController.login, que alcanza auth.service.login y
+      bcrypt.compare en cada credencial incorrecta. POST /register ejecuta
+      validateBody y authController.register, que alcanza auth.service.register,
+      genera el hash y crea cada Usuario. Las rutas no interponen middleware de
+      rate limiting ni mantienen contadores por req.ip, por lo que todas las
+      solicitudes llegan al flujo de autenticación o registro.
+    root_cause: >-
+      Las rutas públicas POST /api/auth/login y POST /api/auth/register no tenían
+      un middleware previo a la validación y al controlador que contabilizara y
+      limitara solicitudes por req.ip; por ello cada intento alcanzaba los flujos
+      costosos de autenticación o creación de usuario.
+    correction: >-
+      Se agregó un factory de rate limiting con ventanas fijas y almacenamiento
+      en memoria por instancia, clave req.ip, reloj inyectable y limpieza
+      oportunista de entradas expiradas. auth.routes crea instancias privadas e
+      independientes: login 10 solicitudes/15 minutos y register 5
+      solicitudes/30 minutos. Ambos limiters se ejecutan antes de validateBody y
+      responden mediante AppError con HTTP 429 y código TOO_MANY_REQUESTS.
+    initial_global_regression:
+      result: fail
+      failed_files: 4
+      failed_tests: 112
+      reason: in_memory_rate_limit_state_leaked_between_tests
+      domain_regressions: false
+      source: user_confirmed
+    isolation_fix:
+      strategy: reset buckets between tests
+      reset_api: resetAuthRateLimitersForTests
+      reset_execution_point: backend/tests/setup/database.ts beforeEach
+      resets_login_bucket: true
+      resets_register_bucket: true
+      buckets_remain_independent: true
+      production_policy_changed: false
+    second_regression_run:
+      result: fail
+      passed: 389
+      failed: 1
+      reason: >-
+        un test individual de concurrencia crea suficientes usuarios autenticados
+        desde la misma IP sintética de Supertest para consumir el límite de login
+      source: user_confirmed
+    fixture_isolation_fix:
+      strategy: >-
+        resetear los buckets de autenticación inmediatamente antes del POST login
+        usado exclusivamente para autenticar fixtures de dominio
+      reset_api: resetAuthRateLimitersForTests
+      reset_execution_point: backend/tests/helpers/auth.ts createAuthenticatedUser
+      amenidad_test_auth_call_count: 20
+      same_test_exceeds_login_limit: true
+      dedicated_auth_rate_limit_test_uses_fixture_helper: false
+      production_policy_changed: false
+      final_verification:
+        database: hotel_test_db
+        db_guard_output:
+          - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+          - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+        auth_rate_limit:
+          result: "1 file passed; 1 test passed"
+          login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+          register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+        amenidad:
+          result: "1 file passed; 38 tests passed"
+          concurrency_test_36: pass
+        carrito_item: "1 file passed; 40 tests passed"
+        reserva_habitacion: "1 file passed; 36 tests passed"
+        reserva_parqueo: "1 file passed; 32 tests passed"
+        qa_032_regression: "1 file passed; 1 test passed"
+        qa_033_regression: "1 file passed; 1 test passed"
+        typecheck: pass
+        qa_034_test_modified: false
+        amenidad_test_modified: false
+        production_files_modified: []
+        test_infrastructure_files_modified:
+          - backend/tests/helpers/auth.ts
+        migrations_modified: false
+        verified_at: "2026-10-24"
+    severity_recommendation: medium
+    verification:
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused: "1 file failed, 1 test failed por las dos violaciones esperadas"
+      typecheck_command: "cd backend; npx tsc --noEmit"
+      typecheck: pass
+      qa_032_executed: false
+      qa_032_regression_observed: none
+      qa_033_executed: false
+      qa_033_regression_observed: none
+      production_files_modified: false
+      migrations_modified: false
+      existing_tests_modified: false
+      new_test_files: 1
+      verified_at: "2026-10-23"
+    final_verification:
+      database: hotel_test_db
+      db_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused:
+        command: >-
+          npm --prefix backend test -- tests/auth/authRateLimit.test.ts
+        result: "1 file passed; 1 test passed"
+        login_first_10: "10x HTTP 401 INVALID_CREDENTIALS"
+        login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+        login_request_11_reached_auth_flow: false
+        register_first_5: "5x HTTP 201"
+        register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+        register_request_6_reached_register_flow: false
+        persisted_register_users: 5
+        users_created_before_cleanup: 6
+        users_after_cleanup: 0
+        cleanup: pass
+      qa_032:
+        command: >-
+          npm --prefix backend test -- tests/auth/facturaOwnership.test.ts
+        result: "1 file passed; 1 test passed"
+      qa_033:
+        command: >-
+          npm --prefix backend test --
+          tests/auth/proveedorFinancialReads.auth.test.ts
+        result: "1 file passed; 1 test passed"
+      related_auth:
+        command: "npm --prefix backend test -- tests/auth/auth.test.ts"
+        result: "1 file passed; 8 tests passed"
+      isolation_regression:
+        auth_rate_limit:
+          command: >-
+            npm --prefix backend test -- tests/auth/authRateLimit.test.ts
+          result: "1 file passed; 1 test passed"
+          login_request_11: "HTTP 429 TOO_MANY_REQUESTS"
+          register_request_6: "HTTP 429 TOO_MANY_REQUESTS"
+        carrito_item:
+          command: >-
+            npm --prefix backend test -- tests/carrito/carritoItem.test.ts
+          result: "1 file passed; 40 tests passed"
+        reserva_habitacion:
+          command: >-
+            npm --prefix backend test -- tests/habitaciones/reservaHabitacion.test.ts
+          result: "1 file passed; 36 tests passed"
+        reserva_parqueo:
+          command: >-
+            npm --prefix backend test -- tests/habitaciones/reservaParqueo.test.ts
+          result: "1 file passed; 32 tests passed"
+        qa_032:
+          command: >-
+            npm --prefix backend test -- tests/auth/facturaOwnership.test.ts
+          result: "1 file passed; 1 test passed"
+        qa_033:
+          command: >-
+            npm --prefix backend test --
+            tests/auth/proveedorFinancialReads.auth.test.ts
+          result: "1 file passed; 1 test passed"
+        db_guard_output:
+          - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+          - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      typecheck:
+        command: "cd backend; npx tsc --noEmit"
+        result: pass
+      production_files_modified:
+        - backend/src/middlewares/rateLimit.middleware.ts
+        - backend/src/routes/auth.routes.ts
+      test_file_modified: false
+      test_setup_files_modified:
+        - backend/tests/setup/database.ts
+      migrations_modified: false
+      verified_at: "2026-10-23"
+
   - id: QA-AUTH-SEC-CANDIDATE-033
     status: closed
     severity: high
@@ -4224,3 +5609,1505 @@ findings:
       migrations_modified: false
       existing_tests_modified: false
       verified_at: "2026-10-22"
+
+  - id: QA-TR-CONC-CANDIDATE-041
+    status: closed
+    result: CLOSED
+    severity: high
+    category: CONC
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    title: >-
+      CREATE concurrente puede confirmar traslados solapados con el mismo
+      chofer
+    invariant: >-
+      Un chofer o vehículo no puede quedar asignado a más de una
+      ReservaTransporte confirmada/activa dentro de la misma ventana temporal
+      solapada.
+    reproduction:
+      test_file: backend/tests/transporte/reservaTransporte.concurrency.test.ts
+      test_name: "QA-TR-CONC-CANDIDATE-041: CREATE concurrente no confirma traslados solapados con el mismo chofer o vehículo"
+      endpoint: POST /api/reservas-transporte
+      concurrent_requests: 20
+      persistence_source: PostgreSQL
+    expected:
+      driver_overlap_count_max: 1
+      vehicle_overlap_count_max: 1
+      unexpected_500: false
+    evidence_history:
+      local:
+        result: NOT REPRODUCED
+        evidence: >-
+          La verificación local histórica registrada terminó con 1 archivo y 1
+          test aprobados; DRIVER_OVERLAP_COUNT=1 y VEHICLE_OVERLAP_COUNT=1.
+        verified_at: "2026-10-25"
+      ci:
+        result: CONFIRMED
+        workflow: Backend QA
+        branch: qa/backend-automation
+        tested_commit_message: "fix(transport): protect capacity for future reservations"
+        global_test_files: "1 failed, 52 passed, 53 test files"
+        global_tests: "1 failed, 398 passed, 399 tests"
+        assertion_location: "tests/transporte/reservaTransporte.concurrency.test.ts:386"
+        assertion: "expect(driverOverlaps.length).toBeLessThanOrEqual(1)"
+        expected_driver_overlap_count_max: 1
+        actual_driver_overlap_count: 2
+        vehicle_overlap_result: not_available
+    http_evidence: >-
+      El caso ejecuta 20 POST simultáneos contra /api/reservas-transporte. La
+      distribución exacta de respuestas no está disponible en la evidencia CI;
+      el fallo reportado ocurrió en la aserción PostgreSQL de solape del chofer,
+      después de las comprobaciones del caso que limitan cada respuesta a HTTP
+      201/409 y rechazan cualquier HTTP 500 inesperado.
+    database_evidence: >-
+      La consulta directa posterior sobre reservas_transporte encontró 2 filas
+      confirmadas dentro de la misma ventana temporal para el chofer disputado;
+      el máximo permitido era 1. El resultado equivalente para el vehículo no
+      está disponible y no se infiere.
+    suspected_execution_path: >-
+      Hipótesis causal: la disponibilidad se consulta antes de adquirir los
+      bloqueos; Vehiculo y Chofer se bloquean después mediante FOR UPDATE/SKIP
+      LOCKED; no se revalidan los solapes tras adquirir esos locks y no existe
+      una constraint temporal PostgreSQL que impida confirmar el segundo
+      solape. Esta hipótesis no constituye un fix ejecutado.
+    previous_local_result: NOT REPRODUCED
+    ci_result_before_fix: CONFIRMED
+    root_cause: >-
+      La lista de recursos bloqueados se calculaba antes de adquirir los locks
+      de Vehiculo y Chofer. Si otra transacción confirmaba y liberaba los locks
+      entre esa lectura y la selección, la transacción rezagada podía adquirir
+      esos mismos recursos usando filtros obsoletos y confirmar sin volver a
+      comprobar las reservas solapadas ya persistidas.
+    fix: >-
+      assignResources conserva la selección automática con FOR UPDATE/SKIP
+      LOCKED y, tras adquirir ambos recursos, vuelve a consultar dentro de la
+      misma transacción las reservas confirmadas solapadas. Si el vehículo o el
+      chofer seleccionados ya están bloqueados temporalmente, no devuelve una
+      asignación.
+    revalidation_strategy: >-
+      Segunda ejecución de getBlockedResourceIds después de los locks, usando
+      estado=confirmada, fecha_hora > target-block, fecha_hora < target+block y
+      excludeReservationId para excluir la propia reserva en PATCH y /asignar.
+      La decisión final comprueba los IDs concretos de Vehiculo y Chofer
+      seleccionados contra esa lectura posterior a los locks.
+    transaction_scope: >-
+      CREATE mantiene selección, locks, revalidación e INSERT en una sola
+      transacción. PATCH y /asignar mantienen el lock de ReservaTransporte, la
+      selección, los locks, la revalidación y el UPDATE en sus respectivas
+      transacciones existentes.
+    lock_order: >-
+      CREATE: Vehiculo -> Chofer. PATCH y /asignar: ReservaTransporte ->
+      Vehiculo -> Chofer. Los flujos 042 y 043 conservan Chofer -> consulta no
+      bloqueante de ReservaTransporte y Vehiculo -> consulta no bloqueante de
+      ReservaTransporte, respectivamente; la revalidación añadida no adquiere
+      locks de ReservaTransporte y no introduce un orden inverso.
+    skip_locked_strategy: >-
+      Se conserva SKIP LOCKED en Vehiculo y Chofer para que una asignación
+      automática no espere recursos disputados. La revalidación posterior
+      evita que un recurso liberado tras una lectura inicial obsoleta produzca
+      una segunda confirmación; el perdedor puede quedar pendiente o recibir el
+      conflicto controlado ya definido por el flujo.
+    create_behavior: >-
+      Confirma únicamente si ambos recursos continúan libres después de sus
+      locks y de la revalidación; de lo contrario crea la reserva pendiente.
+    patch_behavior: >-
+      Bloquea la reserva pendiente, excluye su propio ID al evaluar solapes y
+      solo la confirma si la revalidación posterior a los locks conserva ambos
+      recursos disponibles; si no, permanece pendiente.
+    assign_behavior: >-
+      Bloquea la reserva pendiente, excluye su propio ID y solo confirma tras
+      revalidar ambos recursos; si no están disponibles devuelve el conflicto
+      controlado TRANSPORT_RESOURCES_UNAVAILABLE y revierte la transacción.
+    repeat_runs: "10/10 PASS"
+    driver_overlap_max_observed: 1
+    vehicle_overlap_max_observed: 1
+    deadlock_observed: false
+    timeout_observed: false
+    unexpected_500: false
+    042_regression: PASS
+    043_regression: PASS
+    verified_at: "2026-10-25"
+
+  - id: QA-SPA-FIN-CANDIDATE-049
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Una transferencia pendiente de C1 puede aprobarse tarde y duplicar a
+      Q700.00 la exposición aprobada de una CitaBienestar Q350 ya pagada en C2
+    invariant: >-
+      Para una CitaBienestar de Q350.00, la suma agregada en todos sus carritos
+      históricos de pagos en estado aprobado-like brutos menos reembolsos
+      aprobados, más pagos en estado procesando, nunca debe superar Q350.00.
+      Una transferencia pendiente se registra separadamente y, cuando se
+      intenta aprobar, debe revalidarse contra toda la exposición histórica de
+      la cita antes de convertirse en dinero aprobado.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      db_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      test_file: backend/tests/bienestar/citaSpa.lateTransferExposure.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-049: rechaza aprobar tarde una transferencia si la cita ya fue pagada en otro carrito"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.lateTransferExposure.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-049: rechaza aprobar tarde una transferencia si la cita ya fue pagada en otro carrito"
+      concurrency: false
+      stripe_used: false
+      payment_intent_used: false
+      real_stripe_calls: 0
+    actors:
+      client_id: 1
+      client_role: cliente
+      admin_id: 2
+      admin_role: admin
+      client_admin_operation_attempt: "HTTP 403 INSUFFICIENT_PERMISSIONS"
+    ids:
+      therapist_id: 1
+      service_id: 1
+      cita_id: 1
+      c1_id: 1
+      c1_item_id: 1
+      p1_transfer_id: 1
+      p2_cash_id: 2
+      refund_p2_id: 1
+      c2_id: 2
+      c2_item_id: 2
+      p3_cash_id: 3
+    fixture:
+      therapist_active: true
+      service_price: "350.00"
+      service_duration_minutes: 60
+      cita_owner_id: 1
+      cita_state: confirmada
+    expected:
+      late_p1_approval: "HTTP 409 o rechazo de negocio 4xx equivalente"
+      p1_final_state: pendiente
+      p3_final_state: aprobado
+      maximum_legitimate_exposure: "350.00"
+      cita_state: confirmada
+      unexpected_500: false
+    actual:
+      p1_transfer_create: "HTTP 201; code null; pendiente; Q350.00"
+      p1_state_before_approval: pendiente
+      p1_amount: "350.00"
+      p2_cash_create: "HTTP 201; code null; aprobado; Q350.00"
+      c1_state_after_p2: pagado
+      refund_p2: "HTTP 200; code null; aprobado; Q350.00"
+      p2_state_after_refund: reembolsado
+      approved_net_c1_after_refund: "0.00"
+      c1_state_after_refund: pagado
+      c2_add: "HTTP 201; code null"
+      c2_item_created: true
+      p3_cash_create: "HTTP 201; code null; aprobado; Q350.00"
+      c2_state_after_p3: pagado
+      late_p1_approval: "HTTP 200; code null; Transferencia aprobada correctamente"
+      p1_final_state: aprobado
+      p1_approved_net: "350.00"
+      p3_approved_net: "350.00"
+      total_approved_net: "700.00"
+      total_processing: "0.00"
+      pending_transfer_amount: "0.00"
+      total_active_exposure: "700.00"
+      maximum_legitimate_exposure: "350.00"
+      double_approved_exposure: true
+      financial_violation: true
+      cita_state: confirmada
+      unexpected_500: false
+    http_evidence: >-
+      POST /api/pagos creó P1 transferencia por Q350.00 con HTTP 201 pendiente.
+      El mismo endpoint, usado por admin, creó P2 efectivo por Q350.00 con HTTP
+      201 aprobado. POST /api/pagos/2/reembolso devolvió HTTP 200 y aprobó el
+      reembolso total. POST /api/carritos/2/items aceptó nuevamente la cita con
+      HTTP 201 y POST /api/pagos creó P3 efectivo por Q350.00 con HTTP 201
+      aprobado. Finalmente POST /api/pagos/1/aprobar-transferencia devolvió HTTP
+      200 sin código de error y respondió P1 en estado aprobado; no hubo HTTP
+      500. El cliente recibió HTTP 403 INSUFFICIENT_PERMISSIONS al intentar la
+      operación administrativa de aprobación.
+    database_evidence:
+      source_of_truth: PostgreSQL
+      after_p1: >-
+        Cita id=1 confirmada; C1 id=1 activo con item id=1 bienestar Q350.00;
+        P1 id=1 transferencia pendiente Q350.00; approved_net Q0.00;
+        processing Q0.00; pending_transfer Q350.00.
+      after_p2: >-
+        C1 pagado; P1 permaneció pendiente Q350.00; P2 id=2 efectivo aprobado
+        Q350.00; approved_net Q350.00; pending_transfer Q350.00.
+      after_refund: >-
+        Reembolso id=1 de P2 persistió aprobado por Q350.00 con id externo
+        qa-spa-fin-candidate-049-refund-p2; P2 quedó reembolsado; approved_net
+        de C1 Q0.00; C1 permaneció pagado y la cita confirmada.
+      after_c2_add: >-
+        C2 id=2 persistió item id=2 para la misma cita id=1 a Q350.00 mientras
+        P1 continuaba pendiente Q350.00.
+      after_p3: >-
+        P3 id=3 efectivo aprobado Q350.00; C2 pagado; approved_net agregado
+        Q350.00; processing Q0.00; pending_transfer Q350.00.
+      final: >-
+        P1 aprobado Q350.00, P2 reembolsado Q350.00 con reembolso aprobado
+        Q350.00 y P3 aprobado Q350.00. El neto aprobado agregado fue Q700.00,
+        processing Q0.00, pendiente Q0.00 y exposición activa Q700.00. C1 y C2
+        quedaron pagados y la cita id=1 permaneció confirmada.
+    suspected_execution_path: >-
+      POST /api/carritos/{id}/items atraviesa carritoItem.service.resolveBienestar,
+      cuya comprobación de compromiso activo no cuenta transferencias pendientes;
+      tras el reembolso total de P2 permite insertar la cita en C2. La aprobación
+      tardía atraviesa pago.routes -> pago.controller.aprobarTransferencia ->
+      pago.service.approveTransferencia. Ese flujo llama validateOpenOrigin sobre
+      C1 y calcula committedOrProcessingExposure únicamente para el origen C1;
+      ve P2 con neto cero y no agrega la exposición aprobada de P3 en C2 para la
+      misma CitaBienestar. Por ello actualiza P1 de pendiente a aprobado y vuelve
+      a aplicar C1 como pagado sin una revalidación financiera agregada por cita.
+    red_result: >-
+      CONFIRMED: 1 archivo falló y 1 test falló con cinco aserciones seguras.
+      La aprobación tardía respondió HTTP 200 en lugar de un rechazo 4xx, P1
+      terminó aprobado en vez de pendiente y PostgreSQL mostró Q700.00 de
+      exposición aprobada para una obligación máxima de Q350.00.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    production_files_modified: false
+    migrations_modified: false
+    existing_tests_modified: false
+    root_cause: >-
+      approveTransferencia validaba exclusivamente el saldo del carrito origen.
+      No agregaba los Pagos aprobados netos ni procesando de los demás carritos
+      históricos que contenían la misma CitaBienestar, de modo que una
+      transferencia pendiente antigua podía aprobarse después de que otro
+      carrito hubiera cubierto completamente la obligación de la cita.
+    correction: >-
+      pago.service agrega la exposición activa histórica por CitaBienestar y
+      valida en centavos la cuota proporcional del Pago candidato antes de
+      convertir una transferencia pendiente en aprobada. Efectivo y tarjeta se
+      validan antes de crear su compromiso aprobado/procesando; una transferencia
+      nueva continúa siendo pendiente y se revalida solo al intentar aprobarla.
+    historical_exposure_helper: >-
+      wellnessFinancialExposure descubre todos los carritos históricos mediante
+      CarritoItem(tipo_item=bienestar, referencia_id=cita), selecciona una sola
+      vez cada Pago por id y separa aprobado neto de procesando. Los estados
+      aprobado, reembolsado_parcial y reembolsado aportan monto bruto menos solo
+      Reembolsos aprobados, con piso cero por Pago; pendiente no aporta exposición
+      activa.
+    payment_allocation: >-
+      Cada Pago de carrito se asigna proporcionalmente entre todos sus items por
+      el peso persistido precio*cantidad. La aritmética y distribución del
+      residuo se realizan en centavos, ordenados por CarritoItem.id; las cuotas de
+      todos los items bienestar que referencian la cita se suman sin atribuir el
+      Pago completo a cada referencia.
+    obligation_source: >-
+      Se conserva ServicioBienestar.precio como obligación de la cita. Es la
+      fuente vigente usada por resolveBienestar para producir el snapshot de
+      precio del item y CitaBienestar no posee otro snapshot financiero propio;
+      esta corrección no introduce una política nueva de repricing.
+    concurrency_and_locks: >-
+      createPago y approveTransferencia conservan una sola transacción y el orden
+      Carrito -> ReservaHabitacion por id ascendente -> ReservaEvento por id
+      ascendente -> CitaBienestar por id ascendente -> Pago. wellnessExposureBalance
+      reutiliza las CitaBienestar ya bloqueadas por cartTotals; la fila canónica
+      de la cita serializa los compromisos entre carritos y no se añadió ningún
+      orden Pago -> CitaBienestar.
+    webhook_semantics: >-
+      payment_intent.succeeded convierte procesando en aprobado sin aumentar la
+      exposición activa y por eso no vuelve a sumar el Pago candidato. Las
+      lecturas de citas que ese flujo realiza después de bloquear Pago no toman
+      FOR UPDATE, evitando introducir el orden inverso Pago -> CitaBienestar.
+    final_evidence:
+      database: hotel_test_db
+      db_guard_invocations: 8
+      late_p1_approval: "HTTP 409 PAYMENT_EXCEEDS_BALANCE"
+      p1_final_state: pendiente
+      p3_final_state: aprobado
+      total_approved_net: "350.00"
+      total_processing: "0.00"
+      pending_transfer_amount: "350.00"
+      total_active_exposure: "350.00"
+      maximum_legitimate_exposure: "350.00"
+      double_approved_exposure: false
+      financial_violation: false
+      focused_named: "1 file passed, 1 test passed"
+      focused_file: "1 file passed, 1 test passed"
+      bienestar_044: PASS
+      bienestar_045: PASS
+      bienestar_046: PASS
+      bienestar_047: PASS
+      bienestar_048: PASS
+      bienestar_049: PASS
+      bienestar_regression: "6 files passed, 6 tests passed"
+      related_financial_regression: "14 files passed, 24 tests passed"
+      related_files:
+        - backend/tests/pagos/pago.idempotency.concurrency.test.ts
+        - backend/tests/pagos/pagoMixedRoomEventCart.test.ts
+        - backend/tests/eventos/reservaEvento.multiEventCartPayment.test.ts
+        - backend/tests/habitaciones/reservaHabitacion.aggregateExposure.test.ts
+        - backend/tests/eventos/reservaEvento.crossCartProcessing.test.ts
+        - backend/tests/pagos/pagoActividad.crossCartProcessing.test.ts
+        - backend/tests/pagos/pagoActividadCanceledBeforePayment.test.ts
+        - backend/tests/pagos/pagoCartMutationBinding.test.ts
+        - backend/tests/habitaciones/reservaHabitacion.paymentMutationBinding.test.ts
+        - backend/tests/eventos/reservaEvento.paymentMutationBinding.test.ts
+        - backend/tests/pagos/refundOutOfOrderReplay.test.ts
+        - backend/tests/pagos/pagoWebhookRefundReplay.test.ts
+        - backend/tests/pagos/pago.integrity.test.ts
+        - backend/tests/pagos/pagoWebhookLockOrder.concurrency.test.ts
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json --noEmit
+      typecheck: PASS
+      production_files_modified:
+        - backend/src/services/pago.service.ts
+      registry_files_modified:
+        - qa/registry.yml
+      test_file_modified_by_fixer: false
+      migrations_modified: false
+      unrelated_changes: none
+      verified_at: "2026-10-25"
+    next_step: qa-focused.ps1 + qa-regression.ps1
+
+  - id: QA-SPA-FUNC-CANDIDATE-048
+    status: closed
+    severity: high
+    category: FUNC
+    invariant: >-
+      Para el mismo terapeuta puede existir como máximo una CitaBienestar en
+      estado confirmada dentro de una ventana incompatible según el buffer
+      productivo de 15 minutos, tanto al crear una cita como al reactivar una
+      cita cancelada mediante PATCH de estado.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.reactivationOverlap.test.ts
+      test_name: "QA-SPA-FUNC-CANDIDATE-048: rechaza reactivar una cita cancelada si el terapeuta ya tiene una cita confirmada incompatible"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.reactivationOverlap.test.ts
+      create_endpoint: POST /api/citas-spa
+      status_endpoint: PATCH /api/citas-spa/{id}/estado
+      client_id: 1
+      admin_id: 2
+      therapist_id: 1
+      service_id: 1
+      service_duration_minutes: 60
+      target_date: "2026-11-24"
+      target_start: "10:00:00"
+      target_end: "11:00:00"
+      buffer_minutes: 15
+      appointment_a_id: 1
+      appointment_b_id: 2
+    expected:
+      reactivation_http_status: 409
+      reactivation_code: THERAPIST_BUSY_OR_BUFFER
+      appointment_a_final_state: cancelada
+      appointment_b_final_state: confirmada
+      confirmed_overlap_count_max: 1
+      unexpected_500: false
+    actual:
+      appointment_a_create_http: 201
+      appointment_a_state_before_cancel: confirmada
+      appointment_a_cancel_http: 200
+      appointment_a_state_after_cancel: cancelada
+      appointment_b_create_http: 201
+      appointment_b_state_before_reactivation: confirmada
+      reactivation_http_status: 200
+      reactivation_code: NONE
+      appointment_a_final_state: confirmada
+      appointment_b_final_state: confirmada
+      confirmed_overlap_count: 2
+      confirmed_ids:
+        - 1
+        - 2
+      unexpected_500: false
+      double_booking: true
+    http_evidence: >-
+      La cita A fue creada confirmada con HTTP 201 y cancelada por el admin con
+      HTTP 200. La cita B se creó confirmada con HTTP 201 en el mismo terapeuta,
+      servicio, fecha y hora. El PATCH de A de cancelada a confirmada respondió
+      HTTP 200 sin código de error en vez de rechazar la reactivación con 409.
+    database_evidence: >-
+      La consulta directa a PostgreSQL sobre citas_bienestar para
+      terapeuta_id=1, fecha=2026-11-24, estado=confirmada, hora_inicio <
+      11:15:00 y hora_fin > 09:45:00 encontró dos filas: IDs 1 y 2, ambas con
+      inicio 10:00:00, fin 11:00:00, servicio_bienestar_id=1 y estado
+      confirmada. El máximo permitido era 1.
+    lock_observation:
+      cita_for_update_in_update_status: true
+      therapist_for_update_in_update_status: false
+      overlap_check_in_update_status: false
+    suspected_execution_path: >-
+      PATCH /api/citas-spa/{id}/estado atraviesa autenticación, autorización
+      admin, validación, citaSpa.controller.updateStatus y
+      citaSpa.service.updateStatus. El servicio abre una transacción y bloquea
+      únicamente la fila de CitaBienestar objetivo con SELECT FOR UPDATE, pero
+      al pasar de cancelada a confirmada no bloquea la fila Terapeuta ni repite
+      la consulta de solape y buffer usada por create; actualiza estado
+      directamente, permitiendo que A y B queden confirmadas en la misma
+      ventana.
+    red_result: >-
+      CONFIRMED: el test enfocado falló con PATCH HTTP 200, A y B confirmadas y
+      dos filas incompatibles persistidas; no hubo respuestas HTTP 500.
+    confirmed_at: "2026-10-25"
+    root_cause: >-
+      updateStatus serializaba la CitaBienestar objetivo para proteger la
+      cancelación financiera de 047, pero cualquier transición desde un estado
+      distinto hacia confirmada actualizaba directamente la fila. No bloqueaba
+      el Terapeuta, no validaba que existiera y estuviera activo ni reutilizaba
+      el predicado de solape con buffer empleado por create, por lo que una cita
+      cancelada podía reactivarse sobre otra cita confirmada incompatible.
+    fix: >-
+      Se extrajo una única validación de disponibilidad que conserva el rango y
+      las comparaciones estrictas de CREATE. CREATE y reactivación usan ahora el
+      mismo predicado. Al reactivar, updateStatus mantiene el lock de la cita,
+      obtiene el Terapeuta asociado con SELECT FOR UPDATE, aplica los mismos
+      errores de existencia/actividad de CREATE, consulta solo citas confirmadas
+      con buffer de 15 minutos excluyendo el ID objetivo y actualiza el estado
+      únicamente cuando la ventana sigue disponible.
+    validation_layer: citaSpa.service.updateStatus
+    shared_overlap_helper: assertTherapistAvailability
+    reactivation_rule: >-
+      Solo cuando estado solicitado es confirmada y el estado persistido actual
+      no es confirmada se serializa el Terapeuta y se revalida su ventana
+      almacenada fecha/hora_inicio/hora_fin. Un conflicto responde HTTP 409
+      THERAPIST_BUSY_OR_BUFFER y la transacción conserva la cita en su estado
+      previo; no se cambian campos temporales ni recursos y no se cancela ni
+      reasigna la cita competidora.
+    therapist_serialization: >-
+      La reactivación obtiene Terapeuta con SELECT FOR UPDATE dentro de la misma
+      transacción que bloqueó la CitaBienestar objetivo, consulta solapes y
+      actualiza el estado. CREATE conserva Terapeuta SELECT FOR UPDATE antes de
+      consultar solapes e insertar, por lo que ambos flujos compiten sobre la
+      misma fila canónica del terapeuta.
+    therapist_missing_http: 404
+    therapist_missing_code: THERAPIST_NOT_FOUND
+    therapist_inactive_http: 422
+    therapist_inactive_code: THERAPIST_INACTIVE
+    buffer_minutes: 15
+    overlap_state: confirmada
+    overlap_predicate: >-
+      existing.hora_inicio < effective_end + 15 minutos AND
+      existing.hora_fin > max(effective_start - 15 minutos, 00:00:00).
+    strict_boundaries_preserved: true
+    stored_effective_range_used_for_reactivation: true
+    self_exclusion: true
+    self_exclusion_operator: id != cita.id
+    transaction_scope: >-
+      BEGIN -> CitaBienestar objetivo SELECT FOR UPDATE -> Terapeuta asociado
+      SELECT FOR UPDATE -> validación activo -> lectura de solape confirmada con
+      exclusión propia -> rechazo y ROLLBACK, o CitaBienestar UPDATE y COMMIT.
+    lock_order: >-
+      CREATE sigue Terapeuta -> lectura de solape -> INSERT de nueva cita;
+      cancelación sigue CitaBienestar -> lecturas MVCC de exposición financiera
+      -> UPDATE o 409; reactivación sigue CitaBienestar -> Terapeuta -> lectura
+      de solape excluyendo la cita -> UPDATE o 409. Pago conserva Carrito ->
+      CitaBienestar y no toma Terapeuta.
+    deadlock_analysis: >-
+      No se identificó ciclo concreto. CREATE nunca bloquea una CitaBienestar
+      existente después de Terapeuta; el ciclo de vida de Terapeuta consulta
+      citas sin bloquearlas; pago no toma Terapeuta. Reactivación no consulta ni
+      bloquea Carrito/Pago y cancelación no toma Terapeuta. Dos reactivaciones
+      pueden bloquear citas distintas, pero se serializan en Terapeuta y ninguna
+      intenta después obtener el lock de la cita objetivo de la otra.
+    deadlock_cycle_found: false
+    green_result:
+      reactivation_http_status: 409
+      reactivation_code: THERAPIST_BUSY_OR_BUFFER
+      appointment_a_final_state: cancelada
+      appointment_b_final_state: confirmada
+      confirmed_overlap_count: 1
+      confirmed_overlap_count_max: 1
+      double_booking: false
+      unexpected_500: false
+    regressions:
+      official_048_focused: "PASS; 1 file passed, 1 test passed"
+      official_044: "PASS; 1 file passed, 1 test passed"
+      official_045: "PASS; 1 file passed, 1 test passed; máximo permitido 1"
+      official_045_distribution: "no emitida por el reporter predeterminado"
+      official_046: "PASS; 1 file passed, 1 test passed"
+      official_047: "PASS; 1 file passed, 1 test passed; cancelación segura"
+      bienestar_aggregate: "PASS; 5 files passed, 5 tests passed"
+      typecheck: pass
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --noEmit --project
+        backend/tsconfig.json
+      db_guard_occurrences: 6
+      db_guard_breakdown: >-
+        6 ejecuciones GREEN mostraron database=hotel_test_db y entorno seguro:
+        048, 044, 045, 046, 047 y agregado de los cinco archivos.
+    production_files_modified:
+      - backend/src/services/bienestar/citaSpa.service.ts
+    migrations_modified: false
+    existing_tests_modified: false
+    pago_service_modified: false
+    verified_at: "2026-10-25"
+    next_step: manual diff review
+
+  - id: QA-SPA-FIN-CANDIDATE-047
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Cancelar una CitaBienestar con pago Stripe procesando deja un cobro
+      succeeded externo que el webhook no puede reconciliar localmente
+    invariant: >-
+      CitaBienestar no debe cancelarse mientras exista un Pago tarjeta en estado
+      procesando con un PaymentIntent activo, salvo que la cancelación compense
+      el compromiso de forma durable. Nunca deben coexistir PaymentIntent
+      succeeded, Pago local procesando y cita cancelada porque el webhook no
+      puede reconciliar el ledger.
+    reproduction:
+      phase: RED
+      date: "2026-10-25"
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.cancelProcessingPayment.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-047: no cancela una CitaBienestar con PaymentIntent procesando activo"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.cancelProcessingPayment.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-047: no cancela una CitaBienestar con PaymentIntent procesando activo"
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+      payment_method: tarjeta
+      webhook_before_cancel: false
+      exact_replay_count: 1
+    ids:
+      client_id: 1
+      admin_id: 2
+      therapist_id: 1
+      service_id: 1
+      cita_id: 1
+      cart_id: 1
+      cart_item_id: 1
+      payment_id: 1
+      payment_intent_id: pi_spa_cancel_047_001
+      webhook_event_id: evt_spa_cancel_047_001
+    fixture:
+      therapist_active: true
+      service_price: "350.00"
+      service_duration_minutes: 60
+      cita_date: "2026-11-24"
+      cita_state_before: confirmada
+      cart_state_before: activo
+      cart_item_type: bienestar
+      cart_item_price: "350.00"
+    payment_create:
+      http: 201
+      code: null
+      state: procesando
+      amount: "350.00"
+      payment_intent_state: requires_payment_method
+      approved_before: "0.00"
+      processing_before: "350.00"
+    cancel_attempt:
+      endpoint: PATCH /api/citas-spa/1/estado
+      payload: "estado=cancelada"
+      http: 200
+      code: null
+      cita_state_after: cancelada
+      cart_state_after: activo
+      payment_state_after: procesando
+      payment_intent_state_after: requires_payment_method
+      processing_after: "350.00"
+      intent_canceled_by_backend: false
+      refund_created: false
+      uncanceled_processing_window: true
+    webhook:
+      executed: true
+      event_type: payment_intent.succeeded
+      external_intent_state: succeeded
+      first_delivery:
+        http: 409
+        code: CART_REFERENCE_NOT_AVAILABLE
+        cita_state: cancelada
+        cart_state: activo
+        payment_state: procesando
+        approved: "0.00"
+        processing: "350.00"
+        approved_refunds: "0.00"
+        divergence: "350.00"
+      replay:
+        executed: true
+        exact_same_event: true
+        http: 409
+        code: CART_REFERENCE_NOT_AVAILABLE
+        cita_state: cancelada
+        cart_state: activo
+        payment_state: procesando
+        approved: "0.00"
+        processing: "350.00"
+        approved_refunds: "0.00"
+        divergence: "350.00"
+    stripe_evidence:
+      create_calls: 1
+      cancel_calls: 0
+      refund_calls: 0
+      construct_event_calls: 2
+      final_status: succeeded
+      external_net: "350.00"
+    database_evidence:
+      source_of_truth: PostgreSQL
+      final_cita_state: cancelada
+      final_cart_state: activo
+      final_cart_item_count: 1
+      final_payment_count: 1
+      final_payment_state: procesando
+      final_payment_amount: "350.00"
+      final_refund_count: 0
+      final_approved_net: "0.00"
+      final_processing: "350.00"
+    divergence:
+      external_succeeded_net: "350.00"
+      local_approved_net: "0.00"
+      local_processing: "350.00"
+      amount: "350.00"
+      present_after_first_webhook: true
+      present_after_exact_replay: true
+    violation: >-
+      El administrador canceló la cita con HTTP 200 mientras Pago 1 seguía
+      procesando y el PaymentIntent permanecía activo. Tras simular succeeded,
+      el webhook legítimo y su replay exacto respondieron 409
+      CART_REFERENCE_NOT_AVAILABLE; PostgreSQL conservó la cita cancelada, el
+      Pago procesando, aprobado neto Q0.00 y cero reembolsos, mientras el mock
+      externo conservó Q350.00 succeeded.
+    http_evidence: >-
+      POST /api/pagos respondió HTTP 201 y creó Pago 1 procesando asociado a
+      pi_spa_cancel_047_001. PATCH /api/citas-spa/1/estado respondió HTTP 200 sin
+      código. El primer POST /api/pagos/stripe/webhook y el replay del mismo
+      evento respondieron HTTP 409 CART_REFERENCE_NOT_AVAILABLE. No hubo HTTP
+      500.
+    suspected_execution_path: >-
+      citaSpa.routes -> citaSpa.controller.updateStatus ->
+      citaSpa.service.updateStatus carga la cita y persiste estado=cancelada sin
+      consultar ni compensar pagos procesando del carrito histórico. Después,
+      pago.controller.stripeWebhook -> pago.service.processStripeWebhook cambia
+      el Pago a aprobado dentro de una transacción, pero validateOpenOrigin llama
+      cartTotals; la revalidación de bienestar detecta la cita cancelada y arroja
+      CART_REFERENCE_NOT_AVAILABLE, revirtiendo también la aprobación local. El
+      replay recorre el mismo camino y deja la divergencia durable.
+    red_result: >-
+      CONFIRMED: 1 archivo falló y 1 test falló con tres aserciones de conducta
+      segura; safeOutcome=false, externalLocalDivergence=true y
+      financialViolation=true.
+    root_cause: >-
+      citaSpa.service.updateStatus leía y actualizaba CitaBienestar fuera de una
+      transacción y no consultaba los Pagos procesando asociados mediante los
+      carritos históricos de la cita. Por ello permitía persistir cancelada
+      mientras un PaymentIntent todavía podía completarse externamente.
+    fix: >-
+      updateStatus ahora ejecuta una transacción administrada, obtiene la
+      CitaBienestar objetivo con SELECT FOR UPDATE y, únicamente al transicionar
+      hacia cancelada, consulta la exposición procesando de todos sus carritos
+      históricos. Si el monto es mayor que cero revierte con HTTP 409
+      RESERVATION_HAS_PROCESSING_PAYMENT. La revalidación financiera de carrito
+      también bloquea las CitaBienestar referenciadas antes de validar su estado
+      y antes de crear o aprobar Pago; los demás cambios de estado conservan el
+      comportamiento anterior.
+    validation_layer: citaSpa.service.updateStatus
+    financial_exposure_helper: cartReferenceProcessingExposure
+    historical_carts_included: true
+    transaction_scope: >-
+      BEGIN -> CitaBienestar SELECT FOR UPDATE -> lectura de CarritoItem
+      histórico -> lectura de Pago estado=procesando -> rechazo y ROLLBACK, o
+      CitaBienestar UPDATE y COMMIT.
+    locking_strategy: >-
+      Cancelación bloquea primero la CitaBienestar objetivo y después ejecuta
+      lecturas sin lock de CarritoItem/Pago. createPago y approveTransferencia
+      bloquean primero Carrito y, en cartTotals, bloquean secuencialmente las
+      CitaBienestar únicas por ID ascendente antes de validar estado y continuar
+      hacia Pago/PaymentIntent. El helper de exposición sigue siendo read-only y
+      no bloquea Carrito.
+    payment_serialization: >-
+      La fila CitaBienestar es el recurso compartido entre cancelación y
+      creación/aprobación financiera. Si cancelación obtiene el lock primero,
+      persiste cancelada y el pago reanudado falla con
+      CART_REFERENCE_NOT_AVAILABLE. Si el pago obtiene el lock primero, conserva
+      la cita confirmada hasta persistir su compromiso y la cancelación reanudada
+      detecta exposición procesando y falla con
+      RESERVATION_HAS_PROCESSING_PAYMENT. Carritos mixtos deduplican IDs de
+      bienestar y los bloquean secuencialmente en orden numérico ascendente.
+    deadlock_analysis: >-
+      No se identificó ciclo concreto: creación/aprobación por transferencia
+      sigue Carrito -> referencias existentes -> CitaBienestar ascendente ->
+      Pago; cancelación sigue CitaBienestar -> lecturas MVCC sin lock de
+      CarritoItem/Pago y nunca intenta Carrito FOR UPDATE. Dos pagos sobre citas
+      comunes toman todas las filas CitaBienestar en el mismo orden ascendente.
+      El webhook Stripe conserva su orden existente Carrito -> Pago ->
+      CitaBienestar, pero cancelación no intenta bloquear Pago ni Carrito, por lo
+      que tampoco forma un ciclo con esta ruta; no se modificó el webhook.
+    processing_rule: >-
+      Solo la suma positiva de Pagos con estado procesando en cualquier carrito
+      histórico bloquea la transición hacia cancelada. aprobado,
+      reembolsado_parcial y reembolsado no se incorporan a esta regla; fallido,
+      rechazado y cancelado tampoco bloquean. No se cambió la política de dinero
+      aprobado.
+    cancel_http: 409
+    cancel_code: RESERVATION_HAS_PROCESSING_PAYMENT
+    cita_state_after: confirmada
+    payment_state_after: procesando
+    payment_amount_after: "350.00"
+    payment_intent_state_after: requires_payment_method
+    processing_after: "350.00"
+    intent_canceled: false
+    refund_created: false
+    uncanceled_processing_window: false
+    webhook_executed: false
+    external_local_divergence: false
+    financial_violation: false
+    regressions:
+      official_047_focused: "PASS; 1 file passed, 1 test passed"
+      official_047_file: "PASS; 1 file passed, 1 test passed"
+      official_044: "PASS; 1 file passed, 1 test passed"
+      official_045: "PASS; 1 file passed, 1 test passed"
+      official_046: "PASS; 1 file passed, 1 test passed"
+      bienestar_aggregate: "PASS; 4 files passed, 4 tests passed"
+      related_financial: >-
+        PASS; 4 files passed, 6 tests passed:
+        reservaHabitacion.cancelProcessingPayment.test.ts,
+        reservaEvento.cancelProcessingPayment.test.ts,
+        pago.idempotency.concurrency.test.ts y
+        pagoCartMutationBinding.test.ts.
+      typecheck: pass
+      typecheck_command: >-
+        npm --prefix backend exec tsc -- --project backend/tsconfig.json --noEmit
+      db_guard_occurrences: 8
+      db_guard_breakdown: "1 RED confirmado + 7 ejecuciones GREEN"
+    severity_recommendation: high
+    production_files_modified_before_fix: false
+    production_files_modified:
+      - backend/src/services/bienestar/citaSpa.service.ts
+      - backend/src/services/pago.service.ts
+    migrations_modified: false
+    existing_tests_modified: false
+    regressions_044_045_046_observed: pass
+    candidate_048_investigated: false
+    verified_at: "2026-10-25"
+
+  - id: QA-SPA-FIN-CANDIDATE-046
+    status: closed
+    severity: high
+    category: FIN
+    title: >-
+      Un CarritoItem histórico permite aprobar en efectivo y pagar el carrito
+      después de cancelar su CitaBienestar
+    invariant: >-
+      Después de que CitaBienestar.estado sea cancelada, cualquier intento de
+      crear un nuevo compromiso financiero desde un CarritoItem que conserve esa
+      referencia debe responder HTTP 409 CART_REFERENCE_NOT_AVAILABLE o un error
+      de negocio equivalente, sin persistir Pago y sin marcar el carrito pagado.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.cancelledCartPayment.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-046: rechaza pagar una cita de bienestar cancelada después de agregarla al carrito"
+      endpoint_cancel: PATCH /api/citas-spa/1/estado
+      endpoint_payment: POST /api/pagos
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.cancelledCartPayment.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-046: rechaza pagar una cita de bienestar cancelada después de agregarla al carrito"
+      execution: sequential
+      carts: 1
+      payment_method: efectivo
+      real_stripe_calls: 0
+    actor_roles:
+      client:
+        id: 1
+        role: cliente
+      cancellation_actor:
+        id: 2
+        role: admin
+      payment_actor:
+        id: 2
+        role: admin
+      cash_authorized: true
+      qa_019_preserved: >-
+        El pago en efectivo no fue autodeclarado por el cliente; lo registró un
+        admin incluido en PAYMENT_ADMINISTRATIVE_ROLES.
+    fixture:
+      therapist_id: 1
+      therapist_active: true
+      service_id: 1
+      service_price: "350.00"
+      service_duration_minutes: 60
+      cita_id: 1
+      cart_id: 1
+      cart_item_id: 1
+    expected:
+      payment_http: 409
+      payment_code: CART_REFERENCE_NOT_AVAILABLE
+      payment_rows: 0
+      approved_amount: "0.00"
+      net_approved: "0.00"
+      cart_state: activo
+      cita_state: cancelada
+      item_may_persist: true
+    actual:
+      cita_before:
+        id: 1
+        usuario_id: 1
+        terapeuta_id: 1
+        servicio_bienestar_id: 1
+        fecha: "2035-10-25"
+        hora_inicio: "10:00:00"
+        hora_fin: "11:00:00"
+        estado: confirmada
+      cart_before:
+        id: 1
+        usuario_id: 1
+        estado: activo
+      item_snapshot:
+        id: 1
+        carrito_id: 1
+        tipo_item: bienestar
+        referencia_id: 1
+        descripcion: "Masaje QA SPA FIN 046 - 2035-10-25 10:00:00"
+        precio: "350.00"
+        cantidad: 1
+      payments_before: 0
+      cancel_attempt:
+        http: 200
+        code: null
+        response_state: cancelada
+      cita_after_cancel: cancelada
+      cart_after_cancel: activo
+      item_after_cancel: present
+      payments_after_cancel: 0
+      payment_attempt:
+        http: 201
+        code: null
+        method: efectivo
+      payment_row:
+        id: 1
+        carrito_id: 1
+        monto: "350.00"
+        metodo: efectivo
+        tipo_pago: total
+        moneda: GTQ
+        estado: aprobado
+        pasarela: null
+        id_transaccion_externo: null
+      cita_after_payment: cancelada
+      cart_after_payment: pagado
+      item_after_payment: present
+      refund_rows: 0
+      approved_amount: "350.00"
+      approved_refunds: "0.00"
+      net_approved: "350.00"
+      canceled_reference_paid: true
+      durable_financial_commitment: true
+      financial_violation: true
+    http_evidence: >-
+      PATCH /api/citas-spa/1/estado respondió HTTP 200 y cancelada. El posterior
+      POST /api/pagos, autenticado como admin y con efectivo Q350.00, respondió
+      HTTP 201 sin código de error y devolvió Pago 1 en estado aprobado.
+    database_evidence: >-
+      Antes de pagar, PostgreSQL conservaba CitaBienestar 1 cancelada, Carrito 1
+      activo, CarritoItem 1 tipo bienestar presente a Q350.00 y cero pagos.
+      Después del intento persistió Pago 1 aprobado por Q350.00, sin reembolsos,
+      con aprobado neto Q350.00; el carrito quedó pagado mientras la cita siguió
+      cancelada y el item permaneció presente.
+    violation: >-
+      Una referencia cancelada originó un compromiso financiero durable y
+      aprobado por Q350.00, y además convirtió el carrito a pagado.
+    suspected_execution_path: >-
+      POST /api/pagos atraviesa pago.controller.create y pago.service.createPago.
+      validateOpenOrigin bloquea el carrito y llama cartTotals, pero cartTotals
+      revalida estados de habitación, actividad y evento; para tipo bienestar
+      usa directamente el snapshot precio/cantidad sin cargar ni validar
+      CitaBienestar. createPago crea entonces Pago aprobado para efectivo y
+      applyCartPaid vuelve a sumar el snapshot, por lo que marca el carrito
+      pagado aunque la cita referenciada está cancelada.
+    red_result: >-
+      CONFIRMED en la primera ejecución enfocada: 1 archivo falló, 1 test falló
+      y 8 aserciones seguras demostraron HTTP 201, ausencia del código esperado,
+      Pago durable, carrito pagado, Q350.00 aprobados netos y violación financiera.
+    root_cause: >-
+      cartTotals revalidaba referencias de habitación, actividad y evento, pero
+      para tipo_item bienestar sumaba únicamente el snapshot precio/cantidad sin
+      volver a cargar CitaBienestar ni comprobar que siguiera confirmada.
+    fix: >-
+      La validación financiera común de cartTotals ahora carga cada
+      CitaBienestar referenciada dentro de la transacción de Pago y rechaza con
+      HTTP 409 CART_REFERENCE_NOT_AVAILABLE si no existe o su estado no es
+      confirmada.
+    validation_layer: pago.service.cartTotals via validateOpenOrigin
+    reference_revalidation: >-
+      CitaBienestar debe existir y estado debe ser exactamente confirmada antes
+      de crear Pago, crear PaymentIntent o aprobar posteriormente el compromiso.
+    payment_methods_protected:
+      - efectivo
+      - tarjeta
+      - transferencia
+      - aprobacion_tardia_transferencia
+      - aprobacion_webhook_tarjeta
+    transaction_scope: >-
+      La lectura se ejecuta en la transacción financiera existente y conserva el
+      orden Carrito FOR UPDATE -> referencias canónicas de habitación/evento ->
+      revalidación CitaBienestar -> Pago; no se añadió un lock arbitrario.
+    canceled_reference_behavior: HTTP 409 CART_REFERENCE_NOT_AVAILABLE
+    cart_item_preserved: true
+    payment_created: false
+    approved_amount: "0.00"
+    cart_state_after: activo
+    financial_violation: false
+    044_regression: pass
+    045_regression: pass
+    payment_regressions:
+      result: pass
+      files: 16
+      tests: 18
+      transfer_test_coverage: >-
+        No existe un archivo dedicado a transferencia en backend/tests; la ruta
+        de aprobación fue inspeccionada y comparte validateOpenOrigin.
+    severity_recommendation: high
+    verified_at: "2026-10-25"
+
+  - id: QA-TR-FUNC-CANDIDATE-042
+    status: closed
+    severity: high
+    category: FUNC
+    title: >-
+      Un chofer puede quedar inactivo mientras conserva una ReservaTransporte
+      futura confirmada asignada
+    invariant: >-
+      un chofer con reservas futuras confirmadas no puede desactivarse mientras
+      siga asignado.
+    approved_product_rule:
+      future_confirmed_reservations_block_deactivation: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/transporte/chofer.lifecycle.test.ts
+      test_name: "QA-TR-FUNC-CANDIDATE-042: rechaza desactivar un chofer con una reserva futura confirmada"
+      command: >-
+        npm --prefix backend test -- tests/transporte/chofer.lifecycle.test.ts
+      dynamic_scenario: "fecha y hora local + 7 días, duración de bloqueo de 120 minutos"
+    expected:
+      deactivation_http_status: 409
+      deactivation_error_code: DRIVER_HAS_FUTURE_RESERVATIONS
+      driver_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_driver_preserved: true
+      reservation_vehicle_preserved: true
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+    actual_before_fix:
+      current_local_datetime: "2026-10-25T05:57:24.292Z"
+      reservation_start: "2026-11-01T05:57:00.000Z"
+      reservation_end: "2026-11-01T07:57:00.000Z"
+      is_future: true
+      deactivation_http_status: 200
+      deactivation_error_code: null
+      driver_active_after_attempt: false
+      reservation_state_after_attempt: confirmada
+      reservation_driver_after: 1
+      reservation_vehicle_after: 1
+      automatic_cancellation: false
+      automatic_unassign: false
+      automatic_reassignment: false
+      inactive_driver_with_future_confirmed_reservation: true
+      business_rule_violation: true
+    http_evidence: >-
+      Una reserva futura con chofer activo fue creada por POST
+      /api/reservas-transporte con HTTP 201 en estado confirmada y chofer_id=1.
+      PATCH /api/choferes/1/estado con activo=false recibió HTTP 200 sin código
+      de error, en lugar de HTTP 409.
+    database_evidence: >-
+      Consultas directas de PostgreSQL confirmaron antes del intento chofer
+      activo=true, reserva confirmada y chofer_id asignado. Después del PATCH,
+      el chofer quedó activo=false mientras la reserva futura continuó
+      confirmada con el mismo chofer_id; no hubo cancelación, desasignación ni
+      reasignación automática.
+    endpoint: PATCH /api/choferes/{id}/estado
+    suspected_execution_path: >-
+      chofer.routes -> chofer.controller.updateStatus ->
+      chofer.service.updateStatus; el servicio obtiene el chofer con findByPk y
+      ejecuta chofer.update({ activo }) sin transacción, sin bloqueo de fila y
+      sin consultar reservas de transporte futuras confirmadas asignadas al
+      chofer.
+    red_result: >-
+      1 test failed con tres aserciones de evidencia fallidas: HTTP 200 en lugar
+      de 409, código DRIVER_HAS_FUTURE_RESERVATIONS ausente y chofer persistido
+      inactivo (activo=false) en lugar de activo (activo=true). La reserva
+      permaneció confirmada y asignada al chofer inactivo.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    root_cause: >-
+      chofer.service.updateStatus modificaba el campo activo directamente con
+      chofer.update({ activo }) sin abrir una transacción, sin bloquear con
+      SELECT FOR UPDATE la fila del Chofer y sin verificar si existían filas de
+      ReservaTransporte en estado confirmada con fecha_hora posterior al momento
+      actual asignadas a ese chofer.
+    fix: >-
+      updateStatus encapsula la verificación y la actualización dentro de
+      sequelize.transaction. Adquiere bloqueo de fila con SELECT FOR UPDATE
+      sobre Chofer. Si la transición solicitada es activo=true a activo=false,
+      ejecuta dentro de la misma transacción una consulta sobre
+      ReservaTransporte con chofer_id, estado=confirmada y fecha_hora mayor al
+      momento actual (Op.gt Date). Si encuentra al menos una, revierte y arroja
+      AppError(409, "DRIVER_HAS_FUTURE_RESERVATIONS"). En caso contrario,
+      persiste el nuevo estado y hace commit.
+    validation_layer: service
+    transaction_scope: >-
+      sequelize.transaction alrededor de SELECT FOR UPDATE de Chofer, consulta
+      de ReservaTransporte y chofer.update
+    locking_strategy: SELECT ... FOR UPDATE sobre la fila del Chofer en actualización
+    future_reservation_definition: fecha_hora > NOW() (Op.gt new Date()) en reservas_transporte
+    blocking_state: estado = confirmada
+    automatic_cancellation: false
+    automatic_unassign: false
+    automatic_reassignment: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      deactivation_http_status: 409
+      deactivation_error_code: DRIVER_HAS_FUTURE_RESERVATIONS
+      driver_active_after_attempt: true
+      reservation_state_after_attempt: confirmada
+      reservation_driver_preserved: true
+      reservation_vehicle_preserved: true
+      inactive_driver_with_future_confirmed_reservation: false
+      business_rule_violation: false
+      041_regression: "1 file passed, 1 test passed; DRIVER_OVERLAP_COUNT=1, VEHICLE_OVERLAP_COUNT=1"
+      related_transport_tests: "2 files passed, 2 tests passed"
+      typecheck: pass
+      test_file_modified: false
+      migrations_modified: false
+      verified_at: "2026-10-25"
+
+  - id: QA-SPA-FIN-CANDIDATE-044
+    status: closed
+    severity: critical
+    category: FIN
+    title: >-
+      Una CitaBienestar admite dos pagos Stripe procesando en carritos
+      históricos distintos por el doble de su precio legítimo
+    invariant: >-
+      Para una CitaBienestar, la exposición activa agregada en todos sus
+      carritos históricos, definida como dinero aprobado neto más pagos en
+      estado procesando, nunca debe superar su obligación legítima. Un servicio
+      de Q350.00 admite como máximo Q350.00 de exposición, nunca Q700.00.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.crossCartProcessing.test.ts
+      test_name: "QA-SPA-FIN-CANDIDATE-044: rechaza una segunda exposición procesando de la misma cita tras expirar C1"
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.crossCartProcessing.test.ts -t
+        "QA-SPA-FIN-CANDIDATE-044: rechaza una segunda exposición procesando de la misma cita tras expirar C1"
+      concurrency: false
+      webhook_used: false
+      stripe_mode: FULL_LOCAL_MOCK
+      real_stripe_calls: 0
+    expected:
+      second_add: "HTTP 409 CART_REFERENCE_NOT_AVAILABLE o rechazo equivalente"
+      c2_item_created: false
+      p2_attempt: NOT_RUN
+      payment_intents_created: 1
+      local_payments_created: 1
+      maximum_legitimate_exposure: "350.00"
+      cita_state: confirmada
+      unexpected_500: false
+    actual:
+      client_id: 2
+      therapist_id: 1
+      service_id: 1
+      service_price: "350.00"
+      cita_id: 1
+      cita_state: confirmada
+      c1_id: 1
+      c1_state_before_expiry: activo
+      c1_state_after_expiry: expirado
+      c1_item_id: 1
+      c1_item_price: "350.00"
+      p1_create: "HTTP 201; code null"
+      p1_id: 1
+      p1_state: procesando
+      p1_amount: "350.00"
+      pi1_id: pi_spa_fin_044_1
+      pi1_state: requires_payment_method
+      c2_id: 2
+      second_add: "HTTP 201; code null"
+      c2_item_created: true
+      c2_item_id: 2
+      p2_attempt: "HTTP 201; code null"
+      p2_id: 2
+      p2_state: procesando
+      p2_amount: "350.00"
+      pi2_id: pi_spa_fin_044_2
+      payment_intents_created: 2
+      local_payments_created: 2
+      real_approved_money: "0.00"
+      real_processing_money: "700.00"
+      processing_from_c1: "350.00"
+      processing_from_c2: "350.00"
+      total_active_exposure: "700.00"
+      maximum_legitimate_exposure: "350.00"
+      double_processing_exposure: true
+      financial_violation: true
+      unexpected_500: false
+      red_result: >-
+        1 archivo falló, 1 test falló con siete aserciones de conducta segura:
+        C2 aceptó la referencia, persistió item y pago, creó un segundo
+        PaymentIntent y elevó la exposición activa de Q350.00 a Q700.00.
+    http_evidence:
+      therapist_create: "HTTP 201"
+      service_create: "HTTP 201; precio Q350.00"
+      cita_create: "HTTP 201; confirmada"
+      c1_create: "HTTP 201"
+      c1_add: "HTTP 201; item bienestar id=1; Q350.00"
+      p1_create: "HTTP 201; procesando; Q350.00; pi_spa_fin_044_1"
+      c2_create: "HTTP 201"
+      c2_add: "HTTP 201; item bienestar id=2; Q350.00"
+      p2_create: "HTTP 201; procesando; Q350.00; pi_spa_fin_044_2"
+      unexpected_500: false
+    database_evidence:
+      source_of_truth: PostgreSQL
+      cita: >-
+        id=1; usuario_id=2; servicio_bienestar_id=1; terapeuta_id=1;
+        estado=confirmada
+      carts: "C1 id=1 expirado; C2 id=2 activo"
+      cart_item_rows: >-
+        id=1 carrito_id=1 bienestar referencia_id=1 precio Q350.00; id=2
+        carrito_id=2 bienestar referencia_id=1 precio Q350.00
+      payment_rows: >-
+        id=1 carrito_id=1 tarjeta procesando Q350.00 externo
+        pi_spa_fin_044_1; id=2 carrito_id=2 tarjeta procesando Q350.00 externo
+        pi_spa_fin_044_2
+      approved_refunds: "0.00"
+      approved_net: "0.00"
+      processing_total: "700.00"
+      processing_from_c1: "350.00"
+      processing_from_c2: "350.00"
+      total_active_exposure: "700.00"
+      maximum_legitimate_exposure: "350.00"
+      financial_violation: true
+    stripe_evidence:
+      mode: FULL_LOCAL_MOCK
+      real_calls: 0
+      payment_intent_count: 2
+      first: >-
+        pi_spa_fin_044_1; requires_payment_method; 35000 minor units; Q350.00;
+        metadata pago_id=1,carrito_id=1,tipo_pago=total
+      second: >-
+        pi_spa_fin_044_2; requires_payment_method; 35000 minor units; Q350.00;
+        metadata pago_id=2,carrito_id=2,tipo_pago=total
+      retrieve_calls: 0
+      cancel_calls: 0
+      refund_calls: 0
+      webhook_calls: 0
+    suspected_execution_path: >-
+      POST /api/carritos/{C2}/items entra por carritoItem.service.create y
+      resolveBienestar. Tras validar ownership y estado, resolveBienestar llama
+      hasCartReferenceApprovedPayment, que consulta únicamente dinero neto
+      aprobado de los carritos históricos y no considera el Pago procesando de
+      C1. Por eso persiste el item duplicado. POST /api/pagos para C2 calcula la
+      exposición por carrito_id=2, sin agregar C1 para CitaBienestar.id=1, y
+      persiste P2 antes de crear PI2.
+    root_cause: >-
+      resolveBienestar protegía la disponibilidad financiera únicamente con
+      hasCartReferenceApprovedPayment. Esa guarda recorría los carritos
+      históricos de la cita, pero omitía sus pagos en estado procesando, por lo
+      que la expiración de C1 ocultaba P1 al intentar agregar la cita a C2.
+    fix: >-
+      resolveBienestar reutiliza hasCartReferenceActiveFinancialCommitment para
+      rechazar el segundo ADD cuando cualquier carrito histórico de la cita
+      conserva dinero aprobado neto o un pago procesando.
+    validation_layer: "POST /api/carritos/{carritoId}/items; carritoItem.service.resolveBienestar"
+    financial_commitment_helper: hasCartReferenceActiveFinancialCommitment
+    historical_carts_included: true
+    approved_included: true
+    processing_included: true
+    refund_semantics: >-
+      Los reembolsos aprobados se descuentan del dinero aprobado mediante
+      approvedAmount; los estados rechazado, fallido y cancelado no crean
+      compromiso activo, preservando la semántica existente del helper.
+    second_add_result: "HTTP 409; CART_REFERENCE_NOT_AVAILABLE"
+    second_payment_created: false
+    paymentintent_count: 1
+    local_payment_count: 1
+    final_active_exposure: "350.00"
+    max_legitimate_exposure: "350.00"
+    financial_violation: false
+    regressions:
+      official_044: "PASS; 1 file passed, 1 test passed"
+      qa_cart_fin_candidate_014: "PASS; pagoCartMutationBinding.test.ts"
+      related_carts: >-
+        PASS; carritoItem.test.ts, reservaHabitacion.aggregateExposure.test.ts,
+        reservaEvento.crossCartProcessing.test.ts y
+        pagoActividad.crossCartProcessing.test.ts
+      related_payments: >-
+        PASS; pagoCartMutationBinding.test.ts y
+        pagoActividad.crossCartProcessing.test.ts
+      aggregate_result: "PASS; 5 files passed, 44 tests passed"
+      typecheck: pass
+    verified_at: "2026-10-25"
+    severity_recommendation: critical
+    verification:
+      database_guard_output:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] ✅ Entorno de pruebas seguro"
+      focused_red_preserved: "RED; 1 file failed, 1 test failed; 7 soft assertions"
+      focused: "GREEN; 1 file passed, 1 test passed"
+      qa_014_regression_observed: pass
+      qa_014_test_reexecuted: true
+      related_regressions: "GREEN; 5 files passed, 44 tests passed"
+      typecheck: pass
+      qa_045_investigated: false
+      qa_046_investigated: false
+      production_files_modified:
+        - backend/src/services/carrito/carritoItem.service.ts
+      migrations_modified: false
+      existing_tests_modified: false
+      verified_at: "2026-10-25"
+
+  - id: QA-TR-DATA-CANDIDATE-043
+    status: closed
+    severity: high
+    category: DATA
+    title: >-
+      Un vehículo puede reducir su capacidad por debajo del número de pasajeros
+      de una ReservaTransporte futura confirmada que ya tiene asignada
+    invariant: >-
+      Toda ReservaTransporte confirmada debe conservar un vehículo cuya capacidad
+      sea suficiente para ReservaTransporte.numero_pasajeros; Vehiculo.capacidad
+      >= ReservaTransporte.numero_pasajeros debe cumplirse siempre, incluso tras
+      modificaciones administrativas.
+    approved_product_rule:
+      future_confirmed_reservations_block_capacity_reduction: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/transporte/vehiculo.lifecycle.test.ts
+      test_name: "QA-TR-DATA-CANDIDATE-043: rechaza reducir la capacidad por debajo de pasajeros de reserva futura confirmada"
+      command: >-
+        npm --prefix backend test -- tests/transporte/vehiculo.lifecycle.test.ts
+      dynamic_scenario: "fecha y hora local + 7 días, vehículo con capacidad 4 y reserva confirmada con 4 pasajeros"
+    expected:
+      patch_http_status: 409
+      patch_error_code: VEHICLE_CAPACITY_CONFLICT
+      vehicle_capacity_after_attempt: 4
+      reservation_state_after_attempt: confirmada
+      reservation_passengers_after_attempt: 4
+      reservation_vehicle_preserved: true
+      automatic_cancellation: false
+      automatic_reassignment: false
+      passengers_exceed_capacity: false
+    actual_before_fix:
+      current_datetime: "2026-10-25T06:31:34.645Z"
+      reservation_start: "2026-11-01T06:31:00.000Z"
+      is_future: true
+      patch_http_status: 200
+      patch_error_code: null
+      vehicle_capacity_after_attempt: 1
+      reservation_state_after_attempt: confirmada
+      reservation_passengers_after_attempt: 4
+      reservation_vehicle_after: 1
+      automatic_cancellation: false
+      automatic_reassignment: false
+      passengers_exceed_vehicle_capacity: true
+      business_rule_violation: true
+    http_evidence: >-
+      Una reserva futura para 4 pasajeros con vehículo de capacidad 4 fue creada por
+      POST /api/reservas-transporte con HTTP 201 en estado confirmada y vehiculo_id=1.
+      PATCH /api/vehiculos/1 con capacidad=1 recibió HTTP 200 sin código de error,
+      en lugar de HTTP 409.
+    database_evidence: >-
+      Consultas directas de PostgreSQL confirmaron antes del PATCH vehículo con
+      capacidad=4 y reserva confirmada con numero_pasajeros=4. Después del PATCH,
+      el vehículo quedó con capacidad=1 mientras la reserva futura continuó
+      confirmada con vehiculo_id=1 y numero_pasajeros=4; no hubo cancelación ni
+      reasignación automática, quedando 4 pasajeros asignados a un vehículo de capacidad 1.
+    endpoint: PATCH /api/vehiculos/{id}
+    suspected_execution_path: >-
+      vehiculo.routes -> vehiculo.controller.update ->
+      vehiculo.service.update; el servicio obtiene el vehículo con findByPk y ejecuta
+      vehiculo.update(data) sin transacción, sin bloqueo de fila y sin consultar
+      el número de pasajeros de las reservas de transporte futuras confirmadas asignadas al vehículo.
+    red_result: >-
+      1 test failed con tres aserciones de evidencia fallidas: HTTP 200 en lugar
+      de 409, código VEHICLE_CAPACITY_CONFLICT ausente y vehículo persistido con
+      capacidad=1 en lugar de 4. La reserva permaneció confirmada con 4 pasajeros
+      asignada al vehículo con capacidad reducida a 1.
+    classification: BACKEND DEFECT
+    confidence: HIGH
+    root_cause: >-
+      vehiculo.service.update actualizaba directamente las propiedades del vehículo
+      mediante vehiculo.update(data) sin transacción, sin bloqueo FOR UPDATE y
+      sin validar si una reducción de capacidad dejaba sin capacidad suficiente
+      a reservas de transporte futuras confirmadas ya asignadas al vehículo.
+    fix: >-
+      update encapsula la mutación dentro de sequelize.transaction adquiriendo
+      bloqueo de fila SELECT FOR UPDATE sobre Vehiculo. Si data.capacidad es un
+      número menor que la capacidad actual del vehículo (proposedCapacity < currentCapacity),
+      consulta dentro de la misma transacción sobre ReservaTransporte si existe alguna
+      reserva con vehiculo_id, estado=confirmada, fecha_hora > NOW() y
+      numero_pasajeros > data.capacidad. Si se encuentra, revierte y arroja
+      AppError(409, "VEHICLE_CAPACITY_CONFLICT"). Si no existe conflicto o no se
+      reduce la capacidad, permite vehiculo.update(data, { transaction }) y hace commit.
+    validation_layer: service
+    proposed_capacity_strategy: >-
+      Evalúa únicamente reducciones efectivas de capacidad (typeof data.capacidad === 'number'
+      && data.capacidad < vehiculo.capacidad); no bloquea modificaciones que no alteran
+      capacidad ni aumentos de capacidad.
+    future_reservation_definition: fecha_hora > NOW() (Op.gt new Date()) en reservas_transporte
+    blocking_state: estado = confirmada
+    transaction_scope: >-
+      sequelize.transaction alrededor de SELECT FOR UPDATE de Vehiculo, consulta
+      de ReservaTransporte conflictiva y vehiculo.update
+    locking_strategy: SELECT ... FOR UPDATE sobre la fila del Vehiculo en actualización
+    automatic_cancellation: false
+    automatic_reassignment: false
+    final_verification:
+      database: hotel_test_db
+      db_guard: green
+      focused: "1 file passed, 1 test passed"
+      patch_http_status: 409
+      patch_error_code: VEHICLE_CAPACITY_CONFLICT
+      vehicle_capacity_after_attempt: 4
+      reservation_state_after_attempt: confirmada
+      reservation_passengers_after_attempt: 4
+      reservation_vehicle_preserved: true
+      passengers_exceed_capacity: false
+      business_rule_violation: false
+      041_regression: "1 file passed, 1 test passed; DRIVER_OVERLAP_COUNT=1, VEHICLE_OVERLAP_COUNT=1"
+      042_regression: "1 file passed, 1 test passed; 409 DRIVER_HAS_FUTURE_RESERVATIONS"
+      related_transport_tests: "3 files passed, 3 tests passed"
+      typecheck: pass
+      test_file_modified: false
+      migrations_modified: false
+      verified_at: "2026-10-25"
+
+  - id: QA-SPA-CONC-CANDIDATE-045
+    status: closed
+    severity: high
+    category: CONC
+    title: >-
+      CREATE concurrente confirma citas incompatibles para el mismo terapeuta
+    invariant: >-
+      Para el mismo terapeuta puede existir como máximo una CitaBienestar en
+      estado confirmada dentro de una ventana incompatible según la semántica
+      productiva: hora_inicio existente < fin nuevo + 15 minutos y hora_fin
+      existente > inicio nuevo - 15 minutos. Cancelada y completada no bloquean.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.concurrency.test.ts
+      test_name: "QA-SPA-CONC-CANDIDATE-045: CREATE concurrente no confirma citas incompatibles para el mismo terapeuta"
+      endpoint: POST /api/citas-spa
+      command: >-
+        npm --prefix backend test --
+        tests/bienestar/citaSpa.concurrency.test.ts
+      requests: 20
+      runs_executed: 1
+      synchronization: "Promise.all natural, sin sleeps, barriers ni hooks artificiales"
+      buffer_minutes: 15
+    expected:
+      confirmed_overlap_count_max: 1
+      unexpected_500: false
+    actual:
+      therapist_id: 1
+      service_id: 1
+      service_duration_minutes: 60
+      service_price: "350.00"
+      target_date: "2026-12-09"
+      target_start: "10:00:00"
+      target_end: "11:00:00"
+      blocked_window_start: "09:45:00"
+      blocked_window_end: "11:15:00"
+      http_distribution:
+        "201:NO_CODE": 20
+      confirmed_overlap_count: 20
+      overlapping_ids:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 19
+        - 20
+      postgres_error_code: NONE
+      deadlock: false
+      serialization_error: false
+      timeout: false
+      unexpected_500: false
+      double_booking: true
+    http_evidence: >-
+      Los 20 POST simultáneos a /api/citas-spa recibieron HTTP 201 sin código de
+      error y respondieron con citas en estado confirmada. No hubo HTTP 409,
+      otros estados ni HTTP 500.
+    database_evidence: >-
+      Una consulta directa posterior sobre citas_bienestar, usando exactamente
+      terapeuta_id=1, fecha=2026-12-09, estado=confirmada, hora_inicio <
+      11:15:00 y hora_fin > 09:45:00, encontró 20 filas incompatibles con IDs
+      1 a 20. Todas tenían inicio 10:00:00, fin 11:00:00, servicio_id=1 y
+      usuario_id=2; el máximo permitido era 1.
+    suspected_execution_path: >-
+      POST /api/citas-spa atraviesa auth y validación, citaSpa.controller.create
+      y citaSpa.service.create. El servicio ejecuta CitaBienestar.findOne para
+      detectar solape confirmado y después CitaBienestar.create sin una
+      transacción serializadora, bloqueo compartido por terapeuta/fecha ni
+      constraint temporal PostgreSQL. Las 20 solicitudes pueden observar la
+      ausencia inicial de citas y luego insertar independientemente.
+    red_result: >-
+      CONFIRMED en la primera ejecución: 1 archivo falló y 1 test falló porque
+      CONFIRMED_OVERLAP_COUNT fue 20 y la aserción segura exigía <= 1.
+    root_cause: >-
+      La validación de solape confirmado y el INSERT se ejecutaban sin una
+      transacción ni un recurso común bloqueado. Las solicitudes concurrentes
+      podían observar simultáneamente que no existía solape y después insertar
+      citas incompatibles para el mismo terapeuta.
+    fix: >-
+      citaSpa.service.create ahora usa una transacción administrada, bloquea la
+      fila del terapeuta objetivo mediante SELECT FOR UPDATE antes de validar su
+      estado, y ejecuta dentro de esa misma transacción la carga del servicio,
+      el cálculo y consulta de solape, y el INSERT confirmado.
+    serialization_resource: >-
+      Fila de terapeutas identificada por terapeuta_id, adquirida con SELECT FOR UPDATE
+    transaction_scope: >-
+      BEGIN -> lock Terapeuta target -> validar existencia y activo -> cargar
+      ServicioBienestar -> calcular duración y buffer -> consultar solapes
+      confirmados -> INSERT CitaBienestar confirmada -> COMMIT; cualquier
+      AppError revierte la transacción.
+    lock_order_before: >-
+      Sin transacción ni locks explícitos: SELECT Terapeuta -> SELECT
+      ServicioBienestar -> SELECT solape CitaBienestar -> INSERT CitaBienestar.
+    lock_order_after: >-
+      SELECT Terapeuta FOR UPDATE -> SELECT ServicioBienestar -> SELECT solape
+      CitaBienestar confirmada -> INSERT CitaBienestar, todo dentro de una sola
+      transacción.
+    buffer_preserved: true
+    blocking_state: confirmada
+    http_distribution_after:
+      "201:NO_CODE": 1
+      "409:THERAPIST_BUSY_OR_BUFFER": 19
+    repeat_runs: "10/10 PASS después del primer GREEN oficial"
+    max_confirmed_overlap_observed: 1
+    deadlock_observed: false
+    timeout_observed: false
+    unexpected_500: false
+    044_regression:
+      status: pass
+      response: "409 CART_REFERENCE_NOT_AVAILABLE"
+      active_exposure: "Q350.00"
+    verified_at: "2026-10-25"

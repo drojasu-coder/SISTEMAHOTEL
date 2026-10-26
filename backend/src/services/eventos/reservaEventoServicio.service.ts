@@ -94,6 +94,57 @@ const validateEditableReservation = (
   }
 };
 
+export const calculateReservationAmounts =
+  async (
+    salon: any,
+    transaction: any,
+    reservaId?: number
+  ) => {
+    const servicios =
+      reservaId === undefined
+        ? []
+        : await ReservaEventoServicio.findAll({
+            where: {
+              reserva_evento_id:
+                reservaId,
+            },
+
+            transaction,
+          });
+
+    const serviciosTotal =
+      servicios.reduce(
+        (
+          total: number,
+          item: any
+        ) =>
+          total +
+          Number(item.subtotal),
+        0
+      );
+
+    const total = roundMoney(
+      Number(
+        salon.tarifa_base
+      ) +
+        serviciosTotal
+    );
+
+    const anticipo =
+      roundMoney(
+        total *
+          (
+            env.EVENT_DEPOSIT_PERCENTAGE /
+            100
+          )
+      );
+
+    return {
+      total,
+      anticipo,
+    };
+  };
+
 const recalculateReservation = async (
   reserva: any,
   transaction: any
@@ -114,41 +165,14 @@ const recalculateReservation = async (
     );
   }
 
-  const servicios =
-    await ReservaEventoServicio.findAll({
-      where: {
-        reserva_evento_id:
-          reserva.id,
-      },
-
+  const {
+    total,
+    anticipo,
+  } =
+    await calculateReservationAmounts(
+      salon,
       transaction,
-    });
-
-  const serviciosTotal =
-    servicios.reduce(
-      (
-        total: number,
-        item: any
-      ) =>
-        total +
-        Number(item.subtotal),
-      0
-    );
-
-  const total = roundMoney(
-    Number(
-      salon.tarifa_base
-    ) +
-      serviciosTotal
-  );
-
-  const anticipo =
-    roundMoney(
-      total *
-        (
-          env.EVENT_DEPOSIT_PERCENTAGE /
-          100
-        )
+      reserva.id
     );
 
   await reserva.update(

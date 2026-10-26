@@ -1,9 +1,12 @@
+import { Op } from "sequelize";
+
 import { AppError }
   from "../../utils/AppError";
 
 const db = require("../../models");
 
 const {
+  sequelize,
   Vehiculo,
   ReservaTransporte,
 } = db;
@@ -75,20 +78,67 @@ export const update = async (
   id: number,
   data: UpdateVehiculoData
 ) => {
-  const vehiculo =
-    await Vehiculo.findByPk(id);
+  return sequelize.transaction(
+    async (transaction: any) => {
+      const vehiculo =
+        await Vehiculo.findByPk(id, {
+          transaction,
+          lock:
+            transaction.LOCK.UPDATE,
+        });
 
-  if (!vehiculo) {
-    throw new AppError(
-      404,
-      "VEHICLE_NOT_FOUND",
-      "El vehículo solicitado no existe"
-    );
-  }
+      if (!vehiculo) {
+        throw new AppError(
+          404,
+          "VEHICLE_NOT_FOUND",
+          "El vehículo solicitado no existe"
+        );
+      }
 
-  await vehiculo.update(data);
+      if (
+        typeof data.capacidad ===
+          "number" &&
+        data.capacidad <
+          vehiculo.capacidad
+      ) {
+        const conflictingReservation =
+          await ReservaTransporte.findOne({
+            attributes: [
+              "id",
+              "numero_pasajeros",
+            ],
+            where: {
+              vehiculo_id: id,
+              estado:
+                "confirmada",
+              fecha_hora: {
+                [Op.gt]:
+                  new Date(),
+              },
+              numero_pasajeros: {
+                [Op.gt]:
+                  data.capacidad,
+              },
+            },
+            transaction,
+          });
 
-  return vehiculo;
+        if (conflictingReservation) {
+          throw new AppError(
+            409,
+            "VEHICLE_CAPACITY_CONFLICT",
+            "No se puede reducir la capacidad del vehículo porque tiene reservas futuras confirmadas que superan la nueva capacidad"
+          );
+        }
+      }
+
+      await vehiculo.update(data, {
+        transaction,
+      });
+
+      return vehiculo;
+    }
+  );
 };
 
 export const remove = async (

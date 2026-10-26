@@ -318,6 +318,30 @@ const getBlockedResourceIds =
     return null;
   }
 
+  /*
+   * La disponibilidad inicial puede quedar obsoleta mientras esperamos
+   * seleccionar los recursos. Los locks de Vehiculo y Chofer serializan
+   * todas las asignaciones; por eso la decisión final se toma con una nueva
+   * lectura, dentro de la misma transacción y después de adquirir ambos.
+   */
+  const revalidatedBlockedResources =
+    await getBlockedResourceIds(
+      fechaHora,
+      transaction,
+      excludeReservationId
+    );
+
+  if (
+    revalidatedBlockedResources
+      .vehiculoIds
+      .includes(vehiculo.id) ||
+    revalidatedBlockedResources
+      .choferIds
+      .includes(chofer.id)
+  ) {
+    return null;
+  }
+
   return {
     chofer_id:
       chofer.id,

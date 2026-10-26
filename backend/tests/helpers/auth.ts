@@ -1,6 +1,7 @@
 import request from "supertest";
 
 import app from "../../src/app";
+import { resetAuthRateLimitersForTests } from "../../src/routes/auth.routes";
 
 import {
   Role,
@@ -29,6 +30,8 @@ export const createAuthenticatedUser =
       await createTestUser(
         options
       );
+
+    resetAuthRateLimitersForTests();
 
     const response =
       await request(app)

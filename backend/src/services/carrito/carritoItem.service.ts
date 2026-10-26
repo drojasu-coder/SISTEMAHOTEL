@@ -13,6 +13,7 @@ import {
   isReservationFullyPaid,
   hasCartReferenceApprovedPayment,
   hasCartReferenceActiveFinancialCommitment,
+  eventFinancialExposure,
 } from "../pago.service";
 
 const db = require("../../models");
@@ -397,12 +398,18 @@ const resolveEvento =
  * carrito original y se produciría riesgo
  * de doble cobro.
  */
+const exposure = await eventFinancialExposure(
+  reserva.id,
+  transaction
+);
 if (
-  await hasCartReferenceActiveFinancialCommitment(
+  exposure.approved > 0 ||
+  exposure.total >= normalizePrice(reserva.total) ||
+  (await hasCartReferenceActiveFinancialCommitment(
     "evento",
     reserva.id,
     transaction
-  )
+  ))
 ) {
   throw new AppError(
     409,
@@ -608,13 +615,10 @@ const resolveBienestar =
     );
 
     /**
- * Una cita de bienestar que ya tenga
- * cualquier monto neto aprobado mediante
- * un carrito anterior no puede volver
- * a agregarse a otro carrito.
+ * Una cita de bienestar que ya tenga exposición financiera activa mediante
+ * un carrito anterior no puede volver a agregarse a otro carrito.
  *
- * Esto evita cobrar nuevamente una cita
- * que ya posee pagos asociados.
+ * Esto incluye dinero aprobado neto de reembolsos y pagos procesando.
  */
 if (
   await hasCartReferenceActiveFinancialCommitment(

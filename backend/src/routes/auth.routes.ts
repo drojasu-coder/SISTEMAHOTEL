@@ -3,12 +3,28 @@ import {Router} from "express";
 import * as authController from "../controllers/auth.controller";
 import {validateBody} from "../middlewares/validate.middleware";
 import {authMiddleware} from "../middlewares/auth.middleware";
+import { createRateLimiter } from "../middlewares/rateLimit.middleware";
 import {
     loginSchema,
     registerSchema,
 } from "../validators/auth.validator";
 
 const router = Router();
+
+const loginRateLimiter = createRateLimiter({
+    max: 10,
+    windowMs: 15 * 60 * 1000,
+});
+
+const registerRateLimiter = createRateLimiter({
+    max: 5,
+    windowMs: 30 * 60 * 1000,
+});
+
+export const resetAuthRateLimitersForTests = () => {
+    loginRateLimiter.reset();
+    registerRateLimiter.reset();
+};
 
 /**
  * @openapi
@@ -47,6 +63,7 @@ const router = Router();
  */
 router.post(
     "/register",
+    registerRateLimiter.middleware,
     validateBody(registerSchema),
     authController.register
 );
@@ -94,6 +111,7 @@ router.post(
  */
 router.post(
     "/login",
+    loginRateLimiter.middleware,
     validateBody(loginSchema),
     authController.login
 );
