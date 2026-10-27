@@ -49,6 +49,14 @@ interface UpdateHabitacionData {
   estado?: "disponible" | "ocupada" | "mantenimiento" | "limpieza";
 }
 
+interface DisponibilidadHabitacionQuery {
+  sucursal_id: number;
+  fecha_entrada: string;
+  fecha_salida: string;
+  numero_huespedes: number;
+  tipo_habitacion_id?: number;
+}
+
 export const getAllHabitaciones = async () => {
   return await Habitacion.findAll({
     order: [["id", "ASC"]],
@@ -69,6 +77,173 @@ export const getHabitacionById = async (
   }
 
   return habitacion;
+};
+
+export const getHabitacionesDisponibles = async (
+  query: DisponibilidadHabitacionQuery
+) => {
+  if (
+    query.fecha_salida <=
+    query.fecha_entrada
+  ) {
+    throw new AppError(
+      422,
+      "FECHAS_INVALIDAS",
+      "La fecha de salida debe ser posterior a la fecha de entrada"
+    );
+  }
+
+  if (
+    query.fecha_entrada <
+    getTodayDate()
+  ) {
+    throw new AppError(
+      422,
+      "ROOM_RESERVATION_DATE_IN_PAST",
+      "La fecha de entrada no puede estar en el pasado"
+    );
+  }
+
+  const sucursal =
+    await Sucursal.findByPk(
+      query.sucursal_id
+    );
+
+  if (!sucursal) {
+    throw new AppError(
+      404,
+      "SUCURSAL_NOT_FOUND",
+      "La sucursal no fue encontrada"
+    );
+  }
+
+  const noches = Math.round(
+    (
+      Date.parse(
+        `${query.fecha_salida}T00:00:00Z`
+      ) -
+      Date.parse(
+        `${query.fecha_entrada}T00:00:00Z`
+      )
+    ) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  const habitaciones =
+    await Habitacion.findAll({
+      where: {
+        sucursal_id:
+          query.sucursal_id,
+        estado: {
+          [Op.ne]:
+            "mantenimiento",
+        },
+        ...(query.tipo_habitacion_id !==
+        undefined
+          ? {
+              tipo_habitacion_id:
+                query.tipo_habitacion_id,
+            }
+          : {}),
+      },
+      include: [
+        {
+          model: TipoHabitacion,
+          required: true,
+          where: {
+            capacidad_maxima: {
+              [Op.gte]:
+                query.numero_huespedes,
+            },
+          },
+        },
+        {
+          model: Sucursal,
+          attributes: [
+            "id",
+            "nombre",
+            "direccion",
+            "ciudad",
+            "activa",
+          ],
+        },
+      ],
+      order: [["id", "ASC"]],
+    });
+
+  if (habitaciones.length === 0) {
+    return [];
+  }
+
+  const reservasBloqueantes =
+    await ReservaHabitacion.findAll({
+      attributes: [
+        "habitacion_id",
+      ],
+      where: {
+        habitacion_id: {
+          [Op.in]:
+            habitaciones.map(
+              (habitacion: any) =>
+                habitacion.id
+            ),
+        },
+        estado: {
+          [Op.in]: [
+            "pendiente",
+            "confirmada",
+          ],
+        },
+        fecha_entrada: {
+          [Op.lt]:
+            query.fecha_salida,
+        },
+        fecha_salida: {
+          [Op.gt]:
+            query.fecha_entrada,
+        },
+      },
+    });
+
+  const habitacionesBloqueadas =
+    new Set(
+      reservasBloqueantes.map(
+        (reserva: any) =>
+          reserva.habitacion_id
+      )
+    );
+
+  return habitaciones
+    .filter(
+      (habitacion: any) =>
+        !habitacionesBloqueadas.has(
+          habitacion.id
+        )
+    )
+    .map((habitacion: any) => {
+      const data =
+        habitacion.toJSON();
+      const tarifaNoche =
+        Number(
+          data.TipoHabitacion
+            .tarifa_noche
+        );
+
+      return {
+        ...data,
+        noches,
+        tarifa_noche:
+          tarifaNoche.toFixed(2),
+        total_estimado:
+          (
+            Math.round(
+              tarifaNoche *
+                noches *
+                100
+            ) / 100
+          ).toFixed(2),
+      };
+    });
 };
 
 export const createHabitacion = async (

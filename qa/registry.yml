@@ -7306,3 +7306,784 @@ findings:
       response: "409 CART_REFERENCE_NOT_AVAILABLE"
       active_exposure: "Q350.00"
     verified_at: "2026-10-25"
+
+  - id: QA-ADMIN-REST-FUNC-001
+    status: closed
+    severity: medium
+    category: FUNC
+    invariant: >-
+      Los GET administrativos de reservas de mesa, tanto coleccion como detalle,
+      deben incluir en Mesa el sucursal_id persistido y la asociacion Sucursal
+      con su nombre, ademas de conservar los campos existentes de reserva,
+      usuario y mesa requeridos por el contrato administrativo.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/restaurante/reservaMesa.test.ts
+      test_name: "QA-ADMIN-REST-FUNC-001: GET administrativo de coleccion y detalle incluye la sede de la mesa"
+      command: >-
+        npm --prefix backend test -- tests/restaurante/reservaMesa.test.ts -t
+        "QA-ADMIN-REST-FUNC-001: GET administrativo de coleccion y detalle incluye la sede de la mesa"
+      endpoints:
+        - GET /api/reservas-mesa
+        - GET /api/reservas-mesa/{id}
+    expected:
+      collection_http_status: 200
+      detail_http_status: 200
+      mesa_sucursal_id: persisted_sucursal_id
+      mesa_sucursal_nombre: persisted_sucursal_nombre
+      existing_contract_fields: preserved
+    actual_before_fix:
+      collection_http_status: 200
+      collection_mesa_sucursal_id: absent
+      collection_mesa_sucursal: absent
+      detail_not_reached_after_collection_assertion_failure: true
+      shared_include_implies_detail_omission: true
+      red_result: "1 failed, 34 skipped"
+    root_cause: >-
+      reservaMesaInclude cargaba Mesa con atributos id, zona, capacidad y estado,
+      pero excluia sucursal_id y no declaraba el include anidado de Sucursal.
+      getAll y getById reutilizan ese mismo include incompleto, aunque el modelo
+      Mesa ya pertenece a Sucursal mediante la clave foranea sucursal_id.
+    correction: >-
+      reservaMesaInclude conserva id, zona, capacidad y estado de Mesa, agrega
+      sucursal_id e incluye en la misma consulta la asociacion Sucursal limitada
+      a id y nombre. No se modificaron controladores, rutas, modelos ni reglas.
+    concurrency: >-
+      Es una correccion de proyeccion de lectura compartida por dos GET; no agrega
+      escrituras, transacciones, locks ni ventanas check-then-write.
+    regression_test:
+      test_file: backend/tests/restaurante/reservaMesa.test.ts
+      test_modified_by_fixer: true
+    verification:
+      database_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] \u2705 Entorno de pruebas seguro"
+      red: "1 failed, 34 skipped; Mesa.sucursal_id y Mesa.Sucursal ausentes"
+      focused_green: "1 passed, 34 skipped"
+      module: "35 passed"
+      frontend_restaurante: "3 files passed, 14 tests passed"
+      frontend_backend_real_integration: not_run
+      typecheck: "green; npm exec tsc -- --noEmit desde backend"
+      full_backend: not_run_not_requested
+      regression: green
+      new_failures: none
+      verified_at: "2026-10-26"
+
+  - id: QA-REST-FUNC-052
+    status: corrected
+    manual_revalidation: pending
+    severity: high
+    category: FUNC
+    invariant: >-
+      Un cliente autenticado debe listar y consultar únicamente sus reservas de
+      mesa usando la identidad del JWT; una reserva ajena debe responder 404 y
+      los GET globales deben continuar reservados al administrador.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/restaurante/reservaMesa.customerRead.test.ts
+      endpoint: GET /api/reservas-mesa/mis-reservas[/{id}]
+    expected: "200 propio; 404 ajeno; 401 sin JWT; GET global cliente 403"
+    actual_before_fix: "colección 403 al colisionar con /:id; detalle propio 404 ROUTE_NOT_FOUND"
+    root_cause: >-
+      No existían rutas ni consultas privadas; mis-reservas era interpretado por
+      la ruta administrativa /:id.
+    correction: >-
+      Se agregaron rutas literales antes de /:id, controlador con req.user.id y
+      consultas where { usuario_id } / where { id, usuario_id }, reutilizando las
+      asociaciones Mesa y Sucursal. La sede incluye también su dirección.
+    regression_test:
+      authored_by: qa-test-author
+      production_test_unchanged_by_fixer: true
+    verification:
+      focused: "5 passed"
+      related_backend: "12 files passed, 190 tests passed"
+      related_frontend: "6 files passed, 29 tests passed"
+      backend_typecheck: green
+      frontend_typecheck: green
+      frontend_build: green
+      full_frontend: "73 files passed, 1 skipped; 457 passed, 19 skipped"
+      full_backend: "447 passed; 1 setup-hook timeout; affected file rerun 40/40 passed"
+      database_guard: hotel_test_db_confirmed
+      manual_target: "Restaurante reserva #9 con el cliente propietario"
+      verified_at: "2026-10-26"
+
+  - id: QA-RAME-FUNC-053
+    status: corrected
+    manual_revalidation: pending
+    severity: high
+    category: FUNC
+    invariant: >-
+      El recorrido cliente de Amenidades debe usar endpoints privados para
+      colección y detalle, filtrar por el usuario del JWT y ocultar IDs ajenos
+      con 404, sin cambiar los contratos administrativos.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/amenidades/reservaAmenidad.customerRead.test.ts
+      endpoint: GET /api/reservas-amenidad/mis-reservas[/{id}]
+    expected: "200 propio con Amenidad/Sucursal; 404 ajeno; 401 sin JWT"
+    actual_before_fix: >-
+      El frontend cliente consultaba GET /reservas-amenidad y /{id}, ambos
+      administrativos; la nueva ruta aún inexistente daba 403/404.
+    root_cause: >-
+      API y hooks de cliente reutilizaban métodos administrativos y el backend no
+      ofrecía rutas privadas por propietario.
+    correction: >-
+      Se agregaron getMine/getMineById en backend, rutas privadas con req.user.id
+      y métodos frontend exclusivos; los hooks cliente cambiaron a esas rutas y
+      los hooks admin conservaron getAll/getById.
+    regression_test:
+      backend: backend/tests/amenidades/reservaAmenidad.customerRead.test.ts
+      frontend: Frontend/src/features/amenidades/MisReservasAmenidades.test.tsx
+      authored_by: qa-test-author
+    verification:
+      focused: "5 backend passed; 4 frontend passed"
+      related_backend: "12 files passed, 190 tests passed"
+      related_frontend: "6 files passed, 29 tests passed"
+      typecheck_and_build: green
+      full_frontend: "457 passed, 19 skipped"
+      full_backend: "447 passed; transient setup timeout; isolated affected file 40/40 passed"
+      database_guard: hotel_test_db_confirmed
+      manual_target: "Amenidad reserva #3, listado y detalle con cliente propietario"
+      verified_at: "2026-10-26"
+
+  - id: QA-RACT-FUNC-054
+    status: corrected
+    manual_revalidation: pending
+    severity: high
+    category: FUNC
+    invariant: >-
+      Un cliente debe recuperar exclusivamente sus reservas de actividad, con
+      RecursoActividad, Sucursal e Instructor, y no debe poder inferir una
+      reserva ajena mediante el detalle.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/actividades/reservaActividad.customerRead.test.ts
+      endpoint: GET /api/reservas-actividad/mis-reservas[/{id}]
+    expected: "200 propio; 404 ajeno; 400 ID inválido; 401 sin JWT"
+    actual_before_fix: "colección 403 por /:id administrativo; detalle propio 404"
+    root_cause: "No existían rutas ni consultas privadas para reservas de actividad."
+    correction: >-
+      Se agregaron rutas privadas antes de /:id y consultas compuestas por
+      usuario_id derivado de req.user.id, conservando total y todas las
+      asociaciones del contrato administrativo.
+    regression_test:
+      test_file: backend/tests/actividades/reservaActividad.customerRead.test.ts
+      authored_by: qa-test-author
+    verification:
+      focused: "5 passed"
+      related_backend: "12 files passed, 190 tests passed"
+      related_frontend: "6 files passed, 29 tests passed"
+      typecheck_and_build: green
+      full_frontend: "457 passed, 19 skipped"
+      full_backend: "447 passed; transient setup timeout; isolated affected file 40/40 passed"
+      database_guard: hotel_test_db_confirmed
+      manual_target: "Actividad reserva #18 y monto Q20.00 con cliente propietario"
+      verified_at: "2026-10-26"
+
+  - id: QA-SPA-FUNC-055
+    status: corrected
+    manual_revalidation: pending
+    severity: high
+    category: FUNC
+    invariant: >-
+      Mis citas Spa debe listar y detallar solo las citas del cliente autenticado,
+      normalizando ServicioBienestar y Terapeuta y devolviendo 404 para IDs ajenos.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.customerRead.test.ts
+      endpoint: GET /api/citas-spa/mis-reservas[/{id}]
+    expected: "200 propio; 404 ajeno; asociaciones contractuales; 401 sin JWT"
+    actual_before_fix: "colección 403 por /:id administrativo; detalle propio 404"
+    root_cause: "No existían rutas ni consultas privadas para citas de bienestar."
+    correction: >-
+      Se añadieron consultas por id+usuario_id desde req.user.id y se reutilizó
+      la proyección administrativa, incluida la normalización segura de
+      Terapeutum a Terapeuta.
+    regression_test:
+      test_file: backend/tests/bienestar/citaSpa.customerRead.test.ts
+      authored_by: qa-test-author
+    verification:
+      focused: "5 passed"
+      admin_detail_and_list: "7 passed"
+      related_backend: "12 files passed, 190 tests passed"
+      related_frontend: "6 files passed, 29 tests passed"
+      typecheck_and_build: green
+      full_frontend: "457 passed, 19 skipped"
+      full_backend: "447 passed; transient setup timeout; isolated affected file 40/40 passed"
+      database_guard: hotel_test_db_confirmed
+      manual_target: "Mis citas Spa del cliente correspondiente"
+      verified_at: "2026-10-26"
+
+  - id: QA-RH-FUNC-056
+    status: corrected
+    manual_revalidation: pending
+    severity: high
+    category: FUNC
+    invariant: >-
+      La búsqueda informativa de habitaciones debe validar sede, fechas y
+      capacidad, excluir mantenimiento y traslapes pendientes/confirmados,
+      permitir límites contiguos y obtener tarifas y totales del backend; CREATE
+      debe continuar revalidando con bloqueo transaccional.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/habitaciones/habitacion.availability.test.ts
+      endpoint: GET /api/habitaciones/disponibles
+    expected: "200 filtrado; 400 formato; 422 fechas; 404 sede; 401 sin JWT"
+    actual_before_fix: >-
+      La ruta no existía y disponibles era validado como /:id, devolviendo 400.
+    root_cause: "Faltaban ruta, validador de query, controlador y servicio informativo."
+    correction: >-
+      Se agregó la ruta antes de /:id, validación estructural, reglas semánticas
+      422, comprobación de sede y consulta de capacidad/estado/traslape. Ocupada
+      y limpieza siguen siendo reservables a futuro como CREATE; mantenimiento
+      se excluye. El cálculo devuelve noches, tarifa y total estimado confiables.
+    concurrency: >-
+      La consulta es informativa. No se modificó CREATE: sigue bloqueando la fila
+      de Habitación y vuelve a validar estado, capacidad y traslape en transacción.
+    regression_test:
+      test_file: backend/tests/habitaciones/habitacion.availability.test.ts
+      authored_by: qa-test-author
+    verification:
+      focused: "3 passed"
+      related_backend: "12 files passed, 190 tests passed"
+      related_frontend: "CrearReservaPage 9 passed"
+      typecheck_and_build: green
+      full_frontend: "457 passed, 19 skipped"
+      full_backend: "447 passed; transient setup timeout; isolated affected file 40/40 passed"
+      database_guard: hotel_test_db_confirmed
+      manual_target: "Búsqueda real y CREATE que revalida una habitación seleccionada"
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-EVENT-SAL-FUNC-006
+    status: corrected
+    manual_revalidation: pending
+    severity: high
+    category: FUNC
+    invariant: >-
+      La administración de salones debe mostrar la sede serializada por el
+      backend como Sucursal y crear o editar usando exclusivamente un
+      sucursal_id elegido por nombre desde el catálogo real de GET /sucursales.
+      La creación no puede asignar silenciosamente el ID 1, la primera sede ni
+      ningún otro valor cuando no hay selección o el catálogo no está disponible.
+    reproduction:
+      phase: RED
+      test_file: Frontend/src/features/eventos/AdminSalones.test.tsx
+      test_names:
+        - "muestra el nombre real de la sede recibido en la propiedad HTTP Sucursal"
+        - "consulta las sedes, exige elegir una por nombre y crea con el sucursal_id seleccionado"
+        - "precarga por nombre la sede persistida y PATCH envía el ID elegido al editar"
+        - "si falla GET /sucursales informa el problema, no asigna un ID y bloquea el envío"
+      command: >-
+        npm --prefix Frontend test -- src/features/eventos/AdminSalones.test.tsx
+      endpoints:
+        - GET /api/salones
+        - GET /api/sucursales
+        - POST /api/salones
+        - PATCH /api/salones/{id}
+    expected:
+      branch_contract_property: Sucursal
+      create_initial_selection: none
+      branch_options: "nombres con IDs persistidos"
+      mutation_sucursal_id: "Number del ID explícitamente seleccionado"
+      unavailable_catalog: "Alert visible y submit deshabilitado"
+      existing_validation: preserved
+    actual_before_fix:
+      branch_name_property_read: sucursal
+      branch_catalog_requested: false
+      branch_control: "input numérico"
+      create_default_sucursal_id: 1
+      catalog_failure_handling: absent
+      red_result: "4 failed, 1 passed en el bloque 006; suite total 11 failed, 2 passed"
+    root_cause: >-
+      El tipo y el listado solo contemplaban la propiedad heredada sucursal en
+      minúscula aunque Sequelize entrega Sucursal. El formulario no consumía el
+      catálogo de sedes y reemplazaba la ausencia de sucursal_id por el valor 1
+      tanto al crear como al reinicializar, permitiendo asignación silenciosa.
+    correction: >-
+      El contrato Salon ahora representa Sucursal con id, nombre, ciudad y
+      activa, conservando sucursal opcional por compatibilidad. El listado toma
+      Sucursal y solo recurre a sucursal si existe. El formulario usa
+      useSedesQuery y un select accesible sin selección inicial, precarga el ID
+      persistido en edición, convierte la selección a Number y bloquea el envío
+      durante carga, catálogo vacío o error, sin cambiar backend ni validaciones.
+    concurrency: >-
+      El cambio de catálogo y contrato es de lectura y preparación de payload;
+      no añade escrituras, transacciones, locks ni ventanas check-then-write. La
+      validación de existencia y actividad de la sede permanece en el backend.
+    regression_test:
+      test_file: Frontend/src/features/eventos/AdminSalones.test.tsx
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      red: "4 failed, 1 passed en 006"
+      focused_green: "2 passed, 11 skipped para los dos casos restantes tras el ajuste"
+      module: "1 file passed, 13 tests passed"
+      backend_contract: "1 file passed, 5 tests passed; guard hotel_test_db confirmado"
+      frontend_eventos: "4 files passed, 20 tests passed"
+      backend_eventos: "8 files passed, 89 tests passed; guard hotel_test_db confirmado"
+      frontend_typecheck: green
+      backend_typecheck: "green con --project backend/tsconfig.json"
+      regression: green
+      new_failures: none
+      manual_revalidation_target: >-
+        Crear y editar un salón eligiendo sedes por nombre; comprobar que la
+        creación inicia sin sede y que fallo o catálogo vacío bloquean Guardar.
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-EVENT-SAL-UX-007
+    status: corrected
+    manual_revalidation: pending
+    severity: medium
+    category: UX
+    invariant: >-
+      El formulario de salón debe ser un diálogo modal accesible con telón
+      difuminado, semántica role dialog y aria-modal, foco atrapado, cierre por
+      Escape, Cancelar y X, y retorno de foco al control que lo abrió.
+    reproduction:
+      phase: RED
+      test_file: Frontend/src/features/eventos/AdminSalones.test.tsx
+      test_names:
+        - "presenta un dialog con telón difuminado y foco dentro del modal"
+        - "cierra con Escape y devuelve el foco al botón que abrió el modal"
+      command: >-
+        npm --prefix Frontend test -- src/features/eventos/AdminSalones.test.tsx
+    expected:
+      backdrop_class: backdrop-blur-sm
+      focus_trap: true
+      escape_closes: true
+      opener_focus_restored: true
+      cancel_and_close_buttons: preserved
+    actual_before_fix:
+      backdrop_blur: absent
+      focus_management: absent
+      escape_closes: false
+      opener_focus_restored: false
+      red_result: "2 failed, 1 passed en el bloque 007; suite total 11 failed, 2 passed"
+    root_cause: >-
+      SalonFormModal implementaba manualmente un contenedor fijo con role dialog,
+      pero no reutilizaba el componente Modal común que administra telón, foco,
+      teclado, atributos ARIA y retorno de foco.
+    correction: >-
+      SalonFormModal se compone ahora con @/components/ui/Modal y conserva el
+      formulario, las mutaciones, Cancelar y el botón X. Modal aporta el telón
+      backdrop-blur-sm, z-index, ARIA, focus trap, Escape y retorno de foco.
+    concurrency: >-
+      Es un cambio de interacción y accesibilidad sin escrituras adicionales;
+      no modifica concurrencia, transacciones ni reglas de negocio.
+    regression_test:
+      test_file: Frontend/src/features/eventos/AdminSalones.test.tsx
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      red: "2 failed, 1 passed en 007"
+      module: "1 file passed, 13 tests passed"
+      frontend_eventos: "4 files passed, 20 tests passed"
+      backend_eventos: "8 files passed, 89 tests passed; guard hotel_test_db confirmado"
+      frontend_typecheck: green
+      backend_typecheck: green
+      regression: green
+      new_failures: none
+      manual_revalidation_target: >-
+        Verificar visualmente el blur y recorrer el modal solo con teclado,
+        incluyendo Tab/Shift+Tab, Escape y retorno de foco a Nuevo salón.
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-EVENT-SAL-UX-008
+    status: corrected
+    manual_revalidation: pending
+    severity: medium
+    category: UX
+    invariant: >-
+      Eliminar un salón debe requerir un diálogo propio que identifique el salón,
+      permita cancelar sin DELETE, ejecute una sola solicitud al confirmar,
+      impida cierre o doble envío mientras está pendiente y mantenga el diálogo
+      y la lista ante 409 o 5xx con mensajes seguros y comprensibles.
+    reproduction:
+      phase: RED
+      test_file: Frontend/src/features/eventos/AdminSalones.test.tsx
+      test_names:
+        - "reemplaza window.confirm por el diálogo con título, texto y acciones exactas"
+        - "Cancelar cierra el diálogo sin hacer DELETE"
+        - "hace un solo DELETE tras confirmar, bloquea duplicados y refresca la lista al completar"
+        - "un 409 explica que el salón está en uso y conserva todos los elementos"
+        - "un 500 muestra un mensaje genérico y conserva la lista"
+      command: >-
+        npm --prefix Frontend test -- src/features/eventos/AdminSalones.test.tsx
+      endpoint: DELETE /api/salones/{id}
+    expected:
+      native_confirm_calls: 0
+      dialog_title: "Eliminar salón"
+      selected_room_preserved: true
+      duplicate_delete_calls: 0
+      conflict_message: "mensaje 409 del backend dentro del diálogo"
+      server_error_message: "mensaje genérico de getApiErrorMessage"
+    actual_before_fix:
+      confirmation: window.confirm
+      selected_room_state: absent
+      in_dialog_error: absent
+      accessible_modal: absent
+      red_result: "5 failed, 0 passed en el bloque 008; suite total 11 failed, 2 passed"
+    root_cause: >-
+      AdminSalonesList ejecutaba DELETE tras window.confirm y enviaba los errores
+      a una alerta global. No existía estado del salón seleccionado ni un ciclo
+      modal capaz de conservar contexto, bloquear duplicados o presentar 409 y
+      5xx sin abandonar la confirmación.
+    correction: >-
+      Se añadió SalonDeleteConfirmModal sobre el Modal común y el listado conserva
+      el salón seleccionado y el error de la operación. Cancelar y X no ejecutan
+      DELETE; mientras la mutación está pendiente se bloquean confirmación,
+      cancelación y cierre. El éxito cierra tras una única solicitud y conserva
+      la invalidación existente; 409 muestra el mensaje controlado y 5xx pasa por
+      getApiErrorMessage sin quitar elementos de la lista.
+    concurrency: >-
+      La interfaz comprueba isPending antes de mutar y deshabilita las acciones,
+      evitando doble DELETE desde el mismo diálogo. Esto no pretende sustituir
+      la autorización ni la protección EVENT_ROOM_IN_USE del backend; no se
+      alteraron transacciones, constraints ni el servicio de eliminación.
+    regression_test:
+      test_file: Frontend/src/features/eventos/AdminSalones.test.tsx
+      backend_test_file: backend/tests/eventos/salon.admin.test.ts
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      red: "5 failed, 0 passed en 008"
+      module: "1 file passed, 13 tests passed"
+      backend_contract: "1 file passed, 5 tests passed; DELETE 204/409 y persistencia verificados"
+      frontend_eventos: "4 files passed, 20 tests passed"
+      backend_eventos: "8 files passed, 89 tests passed; guard hotel_test_db confirmado"
+      frontend_typecheck: green
+      backend_typecheck: green
+      regression: green
+      new_failures: none
+      manual_revalidation_target: >-
+        Cancelar, confirmar una eliminación permitida y forzar respuestas 409 y
+        5xx; verificar foco, bloqueo durante espera, mensajes y lista intacta.
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-RAME-FUNC-002
+    status: corrected
+    manual_revalidation: pending
+    severity: medium
+    category: FUNC
+    invariant: >-
+      Los GET administrativos de reservas de amenidad, tanto coleccion como
+      detalle, deben incluir en Amenidad el sucursal_id persistido y la
+      asociacion Sucursal limitada a id y nombre, conservando los campos
+      existentes de reserva, Usuario y Amenidad. La coleccion debe ordenarse
+      por fecha DESC, franja_horaria ASC e id ASC como desempate determinista.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/amenidades/reservaAmenidad.test.ts
+      test_names:
+        - "QA-ADMIN-RAME-FUNC-002 A1: GET administrativo de coleccion incluye la sede persistida de la amenidad"
+        - "QA-ADMIN-RAME-FUNC-002 A2: GET administrativo de detalle incluye la sede persistida de la amenidad"
+        - "QA-ADMIN-RAME-FUNC-002 B: GET administrativo ordena por fecha DESC, franja ASC e id ASC"
+      command: >-
+        npm --prefix backend test -- tests/amenidades/reservaAmenidad.test.ts -t
+        "QA-ADMIN-RAME-FUNC-002"
+      endpoints:
+        - GET /api/reservas-amenidad
+        - GET /api/reservas-amenidad/{id}
+    expected:
+      amenidad_sucursal_id: persisted_sucursal_id
+      amenidad_sucursal: persisted_id_and_nombre
+      existing_contract_fields: preserved
+      collection_order:
+        - "fecha DESC"
+        - "franja_horaria ASC"
+        - "id ASC"
+    actual_before_fix:
+      collection_http_status: 200
+      detail_http_status: 200
+      amenidad_sucursal_id: absent
+      amenidad_sucursal: absent
+      observed_collection_order:
+        - "fecha DESC"
+        - "franja_horaria ASC"
+      red_result: "3 failed, 38 skipped"
+    root_cause: >-
+      reservaAmenidadInclude proyectaba Amenidad con id, nombre y aforo_maximo,
+      pero omitia sucursal_id y el include anidado de Sucursal. Ademas, getAll
+      solo declaraba fecha DESC y franja_horaria ASC, por lo que no garantizaba
+      un desempate estable entre reservas con esos dos valores iguales.
+    correction: >-
+      El include compartido por getAll y getById conserva los atributos previos
+      de Amenidad, agrega sucursal_id e incluye Sucursal con solo id y nombre en
+      la misma consulta. getAll agrega id ASC como tercer criterio de orden.
+    concurrency: >-
+      La correccion solo modifica proyeccion y orden de consultas de lectura;
+      no agrega escrituras, transacciones, locks ni ventanas check-then-write,
+      y no altera las reglas concurrentes de aforo o transicion de estado.
+    regression_test:
+      test_file: backend/tests/amenidades/reservaAmenidad.test.ts
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      database_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] \u2705 Entorno de pruebas seguro"
+      red: "3 failed, 38 skipped"
+      focused_green: "3 passed, 38 skipped"
+      module: "41 passed"
+      frontend_amenidades: "4 files passed, 25 tests passed"
+      frontend_backend_real_integration: not_run
+      backend_typecheck: green
+      full_backend: not_run_not_requested
+      regression: green
+      new_failures: none
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-RACT-FUNC-003
+    status: corrected
+    manual_revalidation: pending
+    severity: medium
+    category: FUNC
+    invariant: >-
+      Los GET administrativos de reservas de actividad, tanto coleccion como
+      detalle, deben incluir en RecursoActividad el sucursal_id persistido y la
+      asociacion Sucursal limitada a id, nombre y direccion, conservando los
+      campos existentes de reserva, Usuario, Instructor y RecursoActividad.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/actividades/reservaActividad.test.ts
+      test_names:
+        - "QA-ADMIN-RACT-FUNC-003 A1: GET administrativo de coleccion incluye la sede persistida del recurso de actividad"
+        - "QA-ADMIN-RACT-FUNC-003 A2: GET administrativo de detalle incluye la sede persistida del recurso de actividad"
+      command: >-
+        npm --prefix backend test -- tests/actividades/reservaActividad.test.ts -t
+        "QA-ADMIN-RACT-FUNC-003"
+      endpoints:
+        - GET /api/reservas-actividad
+        - GET /api/reservas-actividad/{id}
+    expected:
+      recurso_sucursal_id: persisted_sucursal_id
+      recurso_sucursal: persisted_id_nombre_direccion
+      existing_contract_fields: preserved
+    actual_before_fix:
+      collection_http_status: 200
+      detail_http_status: 200
+      recurso_sucursal_id: absent
+      recurso_sucursal: absent
+      existing_contract_fields: preserved
+      red_result: "2 failed, 45 skipped"
+    root_cause: >-
+      reservaActividadInclude proyectaba RecursoActividad con id, tipo y nombre,
+      pero omitia sucursal_id y el include anidado de Sucursal. getAll y getById
+      reutilizan ese mismo include incompleto, aunque RecursoActividad pertenece
+      a Sucursal mediante la clave foranea sucursal_id.
+    correction: >-
+      El include compartido por getAll y getById conserva id, tipo y nombre de
+      RecursoActividad, agrega sucursal_id e incluye en la misma consulta la
+      asociacion Sucursal limitada a id, nombre y direccion. No se modificaron
+      reglas de creacion, precios, estados, disponibilidad, pagos ni permisos.
+    concurrency: >-
+      La correccion solo amplia la proyeccion de consultas de lectura existentes;
+      no agrega escrituras, consultas separadas, transacciones, locks ni ventanas
+      check-then-write, y no altera el orden de locks del modulo.
+    regression_test:
+      test_file: backend/tests/actividades/reservaActividad.test.ts
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      database_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] \u2705 Entorno de pruebas seguro"
+      red: "2 failed, 45 skipped"
+      focused_green: "2 passed, 45 skipped"
+      module: "47 passed"
+      related_backend_activities: "4 files passed, 7 tests passed"
+      frontend_activities: "5 files passed, 19 tests passed"
+      frontend_backend_real_integration: not_run
+      backend_typecheck: "green; npx tsc --noEmit desde backend"
+      full_backend: not_run_not_requested
+      regression: green
+      new_failures: none
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-SPA-CITA-FUNC-004
+    status: corrected
+    manual_revalidation: passed
+    severity: medium
+    category: FUNC
+    invariant: >-
+      El GET administrativo de detalle de una cita de Spa debe incluir las
+      asociaciones persistidas Usuario, ServicioBienestar y Terapeuta con las
+      proyecciones contractuales exactas, conservando los identificadores,
+      fecha, horas y estado de la cita. La coleccion debe conservar su
+      proyeccion y orden existentes.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.adminDetail.test.ts
+      test_names:
+        - "QA-ADMIN-SPA-CITA-FUNC-004 A1: detalle admin incluye asociaciones persistidas y la coleccion conserva su proyeccion"
+        - "QA-ADMIN-SPA-CITA-FUNC-004 A2: detalle admin inexistente mantiene 404 y contrato de error"
+        - "QA-ADMIN-SPA-CITA-FUNC-004 A3: cliente no accede al detalle global ni recibe asociaciones sensibles"
+      command: >-
+        npm --prefix backend test -- tests/bienestar/citaSpa.adminDetail.test.ts -t
+        "QA-ADMIN-SPA-CITA-FUNC-004"
+      endpoint: GET /api/citas-spa/{id}
+    expected:
+      detail_http_status: 200
+      usuario_attributes:
+        - nombre
+        - email
+      servicio_bienestar_attributes:
+        - nombre
+        - duracion_minutos
+        - precio
+      terapeuta_property: Terapeuta
+      terapeuta_attributes:
+        - nombre
+        - activo
+      nonexistent_detail: "404 APPOINTMENT_NOT_FOUND without data"
+      client_access: "403 INSUFFICIENT_PERMISSIONS without related data"
+    actual_before_fix:
+      detail_http_status: 200
+      base_appointment_fields: preserved
+      usuario: absent
+      servicio_bienestar: absent
+      terapeuta: absent
+      collection_associations: present
+      inferred_therapist_alias_in_collection: Terapeutum
+      persisted_service_price_read_only: "487.65"
+      red_result: "1 failed, 2 passed"
+    root_cause: >-
+      getById consultaba CitaBienestar por clave primaria sin los includes que
+      getAll ya usaba, por lo que el detalle no cargaba ninguna asociacion.
+      Ademas, Sequelize infiere para el modelo Terapeuta el alias Terapeutum,
+      mientras el contrato consumido por el detalle administrativo espera la
+      propiedad Terapeuta.
+    correction: >-
+      Se extrajo el include compartido con las proyecciones existentes y se
+      reutilizo en getAll y getById. Solo en el resultado del detalle se
+      normaliza explicitamente Terapeutum a Terapeuta y se elimina la clave
+      interna, sin consultas adicionales ni cambios al shape observable de la
+      coleccion. El 404 y el orden fecha DESC, hora_inicio DESC se preservan.
+    concurrency: >-
+      La correccion solo modifica una consulta de lectura y su serializacion;
+      no agrega escrituras, transacciones, locks, restricciones ni ventanas
+      check-then-write, y no altera reglas concurrentes o financieras.
+    regression_test:
+      test_file: backend/tests/bienestar/citaSpa.adminDetail.test.ts
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      database_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] \u2705 Entorno de pruebas seguro"
+      red: "1 failed, 2 passed"
+      focused_green: "3 passed"
+      module: "1 file passed, 3 tests passed"
+      related_backend_cita_spa: "8 files passed, 10 tests passed"
+      frontend_bienestar: "3 files passed, 7 tests passed"
+      frontend_detail_specific_test: not_present
+      frontend_backend_real_integration: not_run
+      backend_typecheck: "green; npx tsc --noEmit desde backend"
+      full_backend: not_run_not_requested
+      regression: green
+      new_failures: none
+      manual_revalidation_target: "cita #5"
+      manual_revalidation_evidence: >-
+        Detalle de cita #5 verificado con Cliente Dos, Masaje QA Temporal,
+        Terapeuta Ana López activo y tarifa Q250.50.
+      manual_revalidated_at: "2026-10-26"
+      verified_at: "2026-10-26"
+
+  - id: QA-ADMIN-SPA-CITA-FUNC-005
+    status: corrected
+    manual_revalidation: pending
+    severity: medium
+    category: FUNC
+    invariant: >-
+      El GET administrativo de la coleccion de citas de Spa debe exponer para
+      cada cita la asociacion contractual Terapeuta, limitada a nombre y activo,
+      y no la clave interna Terapeutum. Cuando terapeuta_id sea null debe exponer
+      Terapeuta: null. Listado y detalle deben representar igual la asociacion,
+      sin alterar las asociaciones Usuario y ServicioBienestar ni el orden fecha
+      DESC, hora_inicio DESC.
+    reproduction:
+      phase: RED
+      database: hotel_test_db
+      test_file: backend/tests/bienestar/citaSpa.adminList.test.ts
+      test_names:
+        - "QA-ADMIN-SPA-CITA-FUNC-005 A1: listado admin normaliza cada terapeuta y coincide con PostgreSQL y detalle"
+        - "QA-ADMIN-SPA-CITA-FUNC-005 A2: listado admin conserva fecha DESC y hora_inicio DESC"
+        - "QA-ADMIN-SPA-CITA-FUNC-005 A3: listado admin serializa Terapeuta null cuando la FK nullable no tiene asignacion"
+        - "QA-ADMIN-SPA-CITA-FUNC-005 A4: cliente no puede listar citas globales ni recibe datos"
+      command: >-
+        npm --prefix backend test -- tests/bienestar/citaSpa.adminList.test.ts -t
+        "QA-ADMIN-SPA-CITA-FUNC-005" --reporter=verbose
+      endpoint: GET /api/citas-spa
+    expected:
+      collection_http_status: 200
+      therapist_property: Terapeuta
+      therapist_attributes:
+        - nombre
+        - activo
+      internal_property_Terapeutum: absent
+      nullable_therapist: "Terapeuta: null"
+      detail_consistency: preserved
+      collection_order:
+        - "fecha DESC"
+        - "hora_inicio DESC"
+      client_access: "403 INSUFFICIENT_PERMISSIONS without data"
+    actual_before_fix:
+      collection_http_status: 200
+      assigned_therapist_property: Terapeutum
+      expected_property_Terapeuta: absent
+      nullable_therapist: "Terapeutum: null"
+      usuario_and_servicio_bienestar: correct
+      detail_therapist_property: Terapeuta
+      collection_order: correct
+      client_access: "403 INSUFFICIENT_PERMISSIONS without data"
+      red_result: "2 failed, 2 passed"
+    root_cause: >-
+      Sequelize infiere Terapeutum como nombre de la asociacion belongsTo con el
+      modelo Terapeuta. getById ya serializaba y renombraba esa clave, pero
+      getAll devolvia directamente las instancias de findAll, por lo que el
+      contrato variaba entre coleccion y detalle, incluido el caso nullable.
+    correction: >-
+      Se extrajo una normalizacion compartida que serializa cada instancia,
+      publica Terapeuta con el valor de Terapeutum o null y elimina la clave
+      interna. getAll mantiene una sola llamada findAll con el include y orden
+      existentes y aplica la normalizacion en memoria; getById reutiliza la
+      misma funcion. No se ampliaron las proyecciones ni se agregaron consultas.
+    concurrency: >-
+      Es una correccion de serializacion posterior a consultas de lectura; no
+      agrega escrituras, transacciones, locks, restricciones, N+1 ni ventanas
+      check-then-write, y no modifica reglas concurrentes o financieras.
+    regression_test:
+      test_file: backend/tests/bienestar/citaSpa.adminList.test.ts
+      authored_by: qa-test-author
+      modified_by_fixer: false
+    verification:
+      database_guard:
+        - "[QA DB GUARD] Base de datos detectada: hotel_test_db"
+        - "[QA DB GUARD] \u2705 Entorno de pruebas seguro"
+      red: "2 failed, 2 passed"
+      focused_green: "4 passed"
+      module: "1 file passed, 4 tests passed"
+      detail_regression: "1 file passed, 3 tests passed"
+      related_backend_cita_spa: "7 files passed, 7 tests passed"
+      frontend_bienestar: "3 files passed, 7 tests passed"
+      frontend_detail_specific_test: not_present
+      frontend_backend_real_integration: not_run
+      stripe_real_calls: 0
+      backend_typecheck: "green; npm exec tsc -- --noEmit desde backend"
+      full_backend: not_run_not_requested
+      regression: green
+      new_failures: none
+      manual_revalidation_target: >-
+        Listado administrativo: cita #5 debe mostrar Terapeuta Ana López activo,
+        sin propiedad Terapeutum y conservando Cliente Dos, Masaje QA Temporal y
+        tarifa Q250.50.
+      verified_at: "2026-10-26"

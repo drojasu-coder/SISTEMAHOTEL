@@ -48,6 +48,30 @@ export const getHabitacionById = async (
   }
 };
 
+export const getHabitacionesDisponibles = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const habitaciones =
+      await habitacionService
+        .getHabitacionesDisponibles(
+          req.query as any
+        );
+
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message:
+        "Habitaciones disponibles obtenidas correctamente",
+      data: habitaciones,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const createHabitacion = async (
   req: Request,
   res: Response,

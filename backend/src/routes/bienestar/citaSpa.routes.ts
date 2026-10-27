@@ -88,6 +88,14 @@ router.post(
  *       403:
  *         description: Solo administradores
  */
+router.get("/mis-reservas", requireRole(ROLES.CLIENTE), controller.getMine);
+router.get(
+  "/mis-reservas/:id",
+  requireRole(ROLES.CLIENTE),
+  validateParams(idParamSchema),
+  controller.getMineById
+);
+
 router.get("/", requireRole(ROLES.ADMIN), controller.getAll);
 /**
  * @openapi

@@ -15,6 +15,20 @@ export const getById = async (req: Request, res: Response, next: NextFunction) =
   } catch (error) { next(error); }
 };
 
+export const getMine = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await service.getMine(req.user!.id);
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
+};
+
+export const getMineById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await service.getMineById(req.user!.id, Number(req.params.id));
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
+};
+
 export const create = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as any).user?.id;

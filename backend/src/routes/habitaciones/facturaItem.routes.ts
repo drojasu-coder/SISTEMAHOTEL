@@ -35,7 +35,7 @@ const rolesGestionFacturas = [
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/", authMiddleware, facturaItemController.getAllFacturaItems);
+router.get("/", authMiddleware, requireRole(...rolesGestionFacturas, ROLES.CLIENTE), facturaItemController.getAllFacturaItems);
 
 /**
  * @openapi
@@ -70,6 +70,7 @@ router.get("/", authMiddleware, facturaItemController.getAllFacturaItems);
 router.get(
   "/:id",
   authMiddleware,
+  requireRole(...rolesGestionFacturas, ROLES.CLIENTE),
   validateParams(facturaItemIdSchema),
   facturaItemController.getFacturaItemById
 );

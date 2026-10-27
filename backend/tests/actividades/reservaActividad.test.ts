@@ -25,6 +25,10 @@ import {
     createReservaActividadFixture,
 } from "../fixtures/actividades";
 
+import {
+  createSucursal,
+} from "../fixtures/hotel";
+
 describe(
   "Reservas de actividad",
   () => {
@@ -1401,6 +1405,563 @@ it(
     ).toBe(
       created.body.data.id
     );
+  }
+);
+
+it(
+  "QA-ADMIN-RACT-FUNC-003 A1: GET administrativo de coleccion incluye la sede persistida del recurso de actividad",
+  async () => {
+    const db =
+      require("../../src/models");
+
+    const {
+      ReservaActividad,
+      RecursoActividad,
+      Sucursal,
+    } = db;
+
+    const sucursalAlterna =
+      await createSucursal({
+        nombre:
+          "Hotel QA Actividades Norte",
+        direccion:
+          "Avenida Norte 101",
+      });
+
+    const sucursalEsperada =
+      await createSucursal({
+        nombre:
+          "Hotel QA Actividades Central",
+        direccion:
+          "Avenida Central 202",
+      });
+
+    const recursoAlterno =
+      await createRecursoActividad({
+        sucursal_id:
+          sucursalAlterna.id,
+        tipo:
+          "cancha",
+        nombre:
+          "Cancha QA Norte",
+      });
+
+    const recurso =
+      await createRecursoActividad({
+        sucursal_id:
+          sucursalEsperada.id,
+        tipo:
+          "piscina",
+        nombre:
+          "Piscina QA Central",
+      });
+
+    const cliente =
+      await createAuthenticatedUser({
+        rol:
+          ROLES.CLIENTE,
+      });
+
+    const admin =
+      await createAuthenticatedUser({
+        rol:
+          ROLES.ADMIN,
+      });
+
+    const reserva =
+      await createReservaActividadFixture({
+        usuario_id:
+          cliente.usuario.id,
+        recurso_id:
+          recurso.id,
+        fecha:
+          "2027-09-22",
+        hora_inicio:
+          "09:00:00",
+        hora_fin:
+          "10:00:00",
+        con_equipo:
+          true,
+      });
+
+    await reserva.update({
+      total:
+        "187.50",
+    });
+
+    const recursoPersistido =
+      await RecursoActividad.findByPk(
+        recurso.id,
+        {
+          raw: true,
+        }
+      );
+
+    const recursoAlternoPersistido =
+      await RecursoActividad.findByPk(
+        recursoAlterno.id,
+        {
+          raw: true,
+        }
+      );
+
+    const sucursalPersistida =
+      await Sucursal.findByPk(
+        sucursalEsperada.id,
+        {
+          raw: true,
+        }
+      );
+
+    const sucursalAlternaPersistida =
+      await Sucursal.findByPk(
+        sucursalAlterna.id,
+        {
+          raw: true,
+        }
+      );
+
+    const reservaPersistida =
+      await ReservaActividad.findByPk(
+        reserva.id,
+        {
+          raw: true,
+        }
+      );
+
+    expect(
+      recursoPersistido
+    ).toMatchObject({
+      id:
+        recurso.id,
+      sucursal_id:
+        sucursalPersistida.id,
+      tipo:
+        "piscina",
+      nombre:
+        "Piscina QA Central",
+    });
+
+    expect(
+      recursoAlternoPersistido
+    ).toMatchObject({
+      id:
+        recursoAlterno.id,
+      sucursal_id:
+        sucursalAlternaPersistida.id,
+    });
+
+    expect(
+      sucursalPersistida
+    ).toMatchObject({
+      id:
+        sucursalEsperada.id,
+      nombre:
+        "Hotel QA Actividades Central",
+      direccion:
+        "Avenida Central 202",
+    });
+
+    expect(
+      sucursalAlternaPersistida
+    ).toMatchObject({
+      id:
+        sucursalAlterna.id,
+      nombre:
+        "Hotel QA Actividades Norte",
+      direccion:
+        "Avenida Norte 101",
+    });
+
+    const response =
+      await request(app)
+        .get(
+          "/api/reservas-actividad"
+        )
+        .set(
+          "Authorization",
+          `Bearer ${admin.token}`
+        );
+
+    expect(
+      response.status
+    ).toBe(200);
+
+    expect(
+      response.body.status
+    ).toBe("success");
+
+    const collectionItem =
+      response.body.data.find(
+        (item: any) =>
+          item.id ===
+          reserva.id
+      );
+
+    expect(
+      collectionItem
+    ).toBeDefined();
+
+    expect(
+      collectionItem
+    ).toMatchObject({
+      id:
+        reservaPersistida.id,
+      usuario_id:
+        reservaPersistida.usuario_id,
+      recurso_id:
+        reservaPersistida.recurso_id,
+      instructor_id:
+        reservaPersistida.instructor_id,
+      fecha:
+        reservaPersistida.fecha,
+      hora_inicio:
+        reservaPersistida.hora_inicio,
+      hora_fin:
+        reservaPersistida.hora_fin,
+      con_equipo:
+        reservaPersistida.con_equipo,
+      total:
+        reservaPersistida.total,
+      estado:
+        reservaPersistida.estado,
+      Usuario: {
+        id:
+          cliente.usuario.id,
+        nombre:
+          cliente.usuario.nombre,
+        email:
+          cliente.usuario.email,
+      },
+      RecursoActividad: {
+        id:
+          recursoPersistido.id,
+        tipo:
+          recursoPersistido.tipo,
+        nombre:
+          recursoPersistido.nombre,
+      },
+    });
+
+    console.log(
+      "[QA-ADMIN-RACT-FUNC-003 A1]",
+      {
+        expected: {
+          sucursal_id:
+            recursoPersistido.sucursal_id,
+          Sucursal: {
+            id:
+              sucursalPersistida.id,
+            nombre:
+              sucursalPersistida.nombre,
+            direccion:
+              sucursalPersistida.direccion,
+          },
+        },
+        actual:
+          collectionItem.RecursoActividad,
+      }
+    );
+
+    expect(
+      collectionItem.RecursoActividad
+    ).toMatchObject({
+      sucursal_id:
+        recursoPersistido.sucursal_id,
+      Sucursal: {
+        id:
+          sucursalPersistida.id,
+        nombre:
+          sucursalPersistida.nombre,
+        direccion:
+          sucursalPersistida.direccion,
+      },
+    });
+  }
+);
+
+it(
+  "QA-ADMIN-RACT-FUNC-003 A2: GET administrativo de detalle incluye la sede persistida del recurso de actividad",
+  async () => {
+    const db =
+      require("../../src/models");
+
+    const {
+      ReservaActividad,
+      RecursoActividad,
+      Sucursal,
+    } = db;
+
+    const sucursalAlterna =
+      await createSucursal({
+        nombre:
+          "Hotel QA Actividades Pacifico",
+        direccion:
+          "Boulevard Pacifico 303",
+      });
+
+    const sucursalEsperada =
+      await createSucursal({
+        nombre:
+          "Hotel QA Actividades Antigua",
+        direccion:
+          "Calle Antigua 404",
+      });
+
+    const recursoAlterno =
+      await createRecursoActividad({
+        sucursal_id:
+          sucursalAlterna.id,
+        tipo:
+          "gimnasio",
+        nombre:
+          "Gimnasio QA Pacifico",
+      });
+
+    const recurso =
+      await createRecursoActividad({
+        sucursal_id:
+          sucursalEsperada.id,
+        tipo:
+          "salon",
+        nombre:
+          "Salon QA Antigua",
+      });
+
+    const instructor =
+      await createInstructor({
+        nombre:
+          "Instructor QA Antigua",
+        especialidad:
+          "Yoga",
+        activo:
+          true,
+      });
+
+    const cliente =
+      await createAuthenticatedUser({
+        rol:
+          ROLES.CLIENTE,
+      });
+
+    const admin =
+      await createAuthenticatedUser({
+        rol:
+          ROLES.ADMIN,
+      });
+
+    const reserva =
+      await createReservaActividadFixture({
+        usuario_id:
+          cliente.usuario.id,
+        recurso_id:
+          recurso.id,
+        instructor_id:
+          instructor.id,
+        fecha:
+          "2027-09-23",
+        hora_inicio:
+          "15:00:00",
+        hora_fin:
+          "16:30:00",
+        con_equipo:
+          false,
+      });
+
+    await reserva.update({
+      total:
+        "263.75",
+    });
+
+    const recursoPersistido =
+      await RecursoActividad.findByPk(
+        recurso.id,
+        {
+          raw: true,
+        }
+      );
+
+    const recursoAlternoPersistido =
+      await RecursoActividad.findByPk(
+        recursoAlterno.id,
+        {
+          raw: true,
+        }
+      );
+
+    const sucursalPersistida =
+      await Sucursal.findByPk(
+        sucursalEsperada.id,
+        {
+          raw: true,
+        }
+      );
+
+    const sucursalAlternaPersistida =
+      await Sucursal.findByPk(
+        sucursalAlterna.id,
+        {
+          raw: true,
+        }
+      );
+
+    const reservaPersistida =
+      await ReservaActividad.findByPk(
+        reserva.id,
+        {
+          raw: true,
+        }
+      );
+
+    expect(
+      recursoPersistido
+    ).toMatchObject({
+      id:
+        recurso.id,
+      sucursal_id:
+        sucursalPersistida.id,
+      tipo:
+        "salon",
+      nombre:
+        "Salon QA Antigua",
+    });
+
+    expect(
+      recursoAlternoPersistido
+    ).toMatchObject({
+      id:
+        recursoAlterno.id,
+      sucursal_id:
+        sucursalAlternaPersistida.id,
+    });
+
+    expect(
+      sucursalPersistida
+    ).toMatchObject({
+      id:
+        sucursalEsperada.id,
+      nombre:
+        "Hotel QA Actividades Antigua",
+      direccion:
+        "Calle Antigua 404",
+    });
+
+    expect(
+      sucursalAlternaPersistida
+    ).toMatchObject({
+      id:
+        sucursalAlterna.id,
+      nombre:
+        "Hotel QA Actividades Pacifico",
+      direccion:
+        "Boulevard Pacifico 303",
+    });
+
+    const response =
+      await request(app)
+        .get(
+          `/api/reservas-actividad/${reserva.id}`
+        )
+        .set(
+          "Authorization",
+          `Bearer ${admin.token}`
+        );
+
+    expect(
+      response.status
+    ).toBe(200);
+
+    expect(
+      response.body.status
+    ).toBe("success");
+
+    expect(
+      response.body.data
+    ).toMatchObject({
+      id:
+        reservaPersistida.id,
+      usuario_id:
+        reservaPersistida.usuario_id,
+      recurso_id:
+        reservaPersistida.recurso_id,
+      instructor_id:
+        reservaPersistida.instructor_id,
+      fecha:
+        reservaPersistida.fecha,
+      hora_inicio:
+        reservaPersistida.hora_inicio,
+      hora_fin:
+        reservaPersistida.hora_fin,
+      con_equipo:
+        reservaPersistida.con_equipo,
+      total:
+        reservaPersistida.total,
+      estado:
+        reservaPersistida.estado,
+      Usuario: {
+        id:
+          cliente.usuario.id,
+        nombre:
+          cliente.usuario.nombre,
+        email:
+          cliente.usuario.email,
+      },
+      Instructor: {
+        id:
+          instructor.id,
+        nombre:
+          "Instructor QA Antigua",
+        especialidad:
+          "Yoga",
+        activo:
+          true,
+      },
+      RecursoActividad: {
+        id:
+          recursoPersistido.id,
+        tipo:
+          recursoPersistido.tipo,
+        nombre:
+          recursoPersistido.nombre,
+      },
+    });
+
+    console.log(
+      "[QA-ADMIN-RACT-FUNC-003 A2]",
+      {
+        expected: {
+          sucursal_id:
+            recursoPersistido.sucursal_id,
+          Sucursal: {
+            id:
+              sucursalPersistida.id,
+            nombre:
+              sucursalPersistida.nombre,
+            direccion:
+              sucursalPersistida.direccion,
+          },
+        },
+        actual:
+          response.body.data
+            .RecursoActividad,
+      }
+    );
+
+    expect(
+      response.body.data
+        .RecursoActividad
+    ).toMatchObject({
+      sucursal_id:
+        recursoPersistido.sucursal_id,
+      Sucursal: {
+        id:
+          sucursalPersistida.id,
+        nombre:
+          sucursalPersistida.nombre,
+        direccion:
+          sucursalPersistida.direccion,
+      },
+    });
   }
 );
 

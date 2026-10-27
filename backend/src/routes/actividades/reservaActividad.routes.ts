@@ -122,6 +122,25 @@ router.post(
  */
 // Solo el administrador puede consultar todas las reservas.
 router.get(
+  "/mis-reservas",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  reservaActividadController.getMine
+);
+
+router.get(
+  "/mis-reservas/:id",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  reservaActividadController.getMineById
+);
+
+router.get(
   "/",
   requireRole(
     ROLES.ADMIN

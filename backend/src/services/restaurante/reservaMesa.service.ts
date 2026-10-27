@@ -8,6 +8,7 @@ const {
   ReservaMesa,
   Mesa,
   Usuario,
+  Sucursal,
 } = db;
 
 interface CreateReservaMesaData {
@@ -30,6 +31,17 @@ const reservaMesaInclude = [
       "zona",
       "capacidad",
       "estado",
+      "sucursal_id",
+    ],
+    include: [
+      {
+        model: Sucursal,
+        attributes: [
+          "id",
+          "nombre",
+          "direccion",
+        ],
+      },
     ],
   },
   {
@@ -330,6 +342,45 @@ export const getById =
 
     return reserva;
   };
+
+export const getMine = async (
+  usuarioId: number
+) => {
+  return ReservaMesa.findAll({
+    where: {
+      usuario_id: usuarioId,
+    },
+    include: reservaMesaInclude,
+    order: [
+      ["fecha", "DESC"],
+      ["hora", "DESC"],
+    ],
+  });
+};
+
+export const getMineById = async (
+  usuarioId: number,
+  id: number
+) => {
+  const reserva =
+    await ReservaMesa.findOne({
+      where: {
+        id,
+        usuario_id: usuarioId,
+      },
+      include: reservaMesaInclude,
+    });
+
+  if (!reserva) {
+    throw new AppError(
+      404,
+      "TABLE_RESERVATION_NOT_FOUND",
+      "La reserva de mesa solicitada no existe"
+    );
+  }
+
+  return reserva;
+};
 
 export const create =
   async (

@@ -11,42 +11,55 @@ const {
   Usuario,
 } = db;
 
+const citaSpaInclude = [
+  {
+    model: Terapeuta,
+    attributes: [
+      "nombre",
+      "activo",
+    ],
+  },
+  {
+    model: ServicioBienestar,
+    attributes: [
+      "nombre",
+      "duracion_minutos",
+      "precio",
+    ],
+  },
+  {
+    model: Usuario,
+    attributes: [
+      "nombre",
+      "email",
+    ],
+  },
+];
+
+const normalizeCitaSpa = (cita: any) => {
+  const citaData = cita.toJSON();
+
+  citaData.Terapeuta = citaData.Terapeutum ?? null;
+  delete citaData.Terapeutum;
+
+  return citaData;
+};
+
 // ======================================================
 // OBTENER TODAS LAS CITAS
 // ======================================================
 
 export const getAll = async () => {
-  return CitaBienestar.findAll({
-    include: [
-      {
-        model: Terapeuta,
-        attributes: [
-          "nombre",
-          "activo",
-        ],
-      },
-      {
-        model: ServicioBienestar,
-        attributes: [
-          "nombre",
-          "duracion_minutos",
-          "precio",
-        ],
-      },
-      {
-        model: Usuario,
-        attributes: [
-          "nombre",
-          "email",
-        ],
-      },
-    ],
+  const citas = await CitaBienestar.findAll({
+    include: citaSpaInclude,
 
     order: [
       ["fecha", "DESC"],
       ["hora_inicio", "DESC"],
     ],
   });
+
+  return citas.map(normalizeCitaSpa);
 };
 
 // ======================================================
@@ -58,7 +71,10 @@ export const getById = async (
 ) => {
   const cita =
     await CitaBienestar.findByPk(
-      id
+      id,
+      {
+        include: citaSpaInclude,
+      }
     );
 
   if (!cita) {
@@ -69,7 +85,49 @@ export const getById = async (
     );
   }
 
-  return cita;
+  return normalizeCitaSpa(cita);
+};
+
+export const getMine = async (
+  usuarioId: number
+) => {
+  const citas =
+    await CitaBienestar.findAll({
+      where: {
+        usuario_id: usuarioId,
+      },
+      include: citaSpaInclude,
+      order: [
+        ["fecha", "DESC"],
+        ["hora_inicio", "DESC"],
+      ],
+    });
+
+  return citas.map(normalizeCitaSpa);
+};
+
+export const getMineById = async (
+  usuarioId: number,
+  id: number
+) => {
+  const cita =
+    await CitaBienestar.findOne({
+      where: {
+        id,
+        usuario_id: usuarioId,
+      },
+      include: citaSpaInclude,
+    });
+
+  if (!cita) {
+    throw new AppError(
+      404,
+      "APPOINTMENT_NOT_FOUND",
+      "La cita de bienestar no existe"
+    );
+  }
+
+  return normalizeCitaSpa(cita);
 };
 
 // ======================================================

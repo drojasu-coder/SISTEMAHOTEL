@@ -7,6 +7,7 @@ const {
   sequelize,
   ReservaActividad,
   RecursoActividad,
+  Sucursal,
   Instructor,
   Usuario,
 } = db;
@@ -36,8 +37,19 @@ const reservaActividadInclude = [
     model: RecursoActividad,
     attributes: [
       "id",
+      "sucursal_id",
       "tipo",
       "nombre",
+    ],
+    include: [
+      {
+        model: Sucursal,
+        attributes: [
+          "id",
+          "nombre",
+          "direccion",
+        ],
+      },
     ],
   },
   {
@@ -532,6 +544,45 @@ export const getById =
 
     return reserva;
   };
+
+export const getMine = async (
+  usuarioId: number
+) => {
+  return ReservaActividad.findAll({
+    where: {
+      usuario_id: usuarioId,
+    },
+    include: reservaActividadInclude,
+    order: [
+      ["fecha", "DESC"],
+      ["hora_inicio", "DESC"],
+    ],
+  });
+};
+
+export const getMineById = async (
+  usuarioId: number,
+  id: number
+) => {
+  const reserva =
+    await ReservaActividad.findOne({
+      where: {
+        id,
+        usuario_id: usuarioId,
+      },
+      include: reservaActividadInclude,
+    });
+
+  if (!reserva) {
+    throw new AppError(
+      404,
+      "RESERVATION_NOT_FOUND",
+      "La reserva solicitada no existe"
+    );
+  }
+
+  return reserva;
+};
 
 export const create =
   async (

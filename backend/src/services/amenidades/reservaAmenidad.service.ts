@@ -14,6 +14,7 @@ const {
   ReservaAmenidad,
   Amenidad,
   Usuario,
+  Sucursal,
 } = db;
 
 interface CreateReservaAmenidadData {
@@ -41,6 +42,16 @@ const reservaAmenidadInclude = [
       "id",
       "nombre",
       "aforo_maximo",
+      "sucursal_id",
+    ],
+    include: [
+      {
+        model: Sucursal,
+        attributes: [
+          "id",
+          "nombre",
+        ],
+      },
     ],
   },
   {
@@ -418,6 +429,10 @@ export const getAll =
             "franja_horaria",
             "ASC",
           ],
+          [
+            "id",
+            "ASC",
+          ],
         ],
       }
     );
@@ -446,6 +461,46 @@ export const getById =
 
     return reserva;
   };
+
+export const getMine = async (
+  usuarioId: number
+) => {
+  return ReservaAmenidad.findAll({
+    where: {
+      usuario_id: usuarioId,
+    },
+    include: reservaAmenidadInclude,
+    order: [
+      ["fecha", "DESC"],
+      ["franja_horaria", "ASC"],
+      ["id", "ASC"],
+    ],
+  });
+};
+
+export const getMineById = async (
+  usuarioId: number,
+  id: number
+) => {
+  const reserva =
+    await ReservaAmenidad.findOne({
+      where: {
+        id,
+        usuario_id: usuarioId,
+      },
+      include: reservaAmenidadInclude,
+    });
+
+  if (!reserva) {
+    throw new AppError(
+      404,
+      "AMENITY_RESERVATION_NOT_FOUND",
+      "La reserva de amenidad solicitada no existe"
+    );
+  }
+
+  return reserva;
+};
 
 export const create =
   async (

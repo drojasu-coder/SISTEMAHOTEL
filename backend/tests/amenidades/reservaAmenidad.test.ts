@@ -2,6 +2,7 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
 
 import request
@@ -22,6 +23,10 @@ import {
   createAmenidad,
   createReservaAmenidadFixture,
 } from "../fixtures/amenidades";
+
+import {
+  createSucursal,
+} from "../fixtures/hotel";
 
 describe(
   "Reservas de amenidad",
@@ -1143,6 +1148,553 @@ describe(
         ).toBe(
           created.body.data.id
         );
+      }
+    );
+
+    it(
+      "QA-ADMIN-RAME-FUNC-002 A1: GET administrativo de coleccion incluye la sede persistida de la amenidad",
+      async () => {
+        const db =
+          require("../../src/models");
+
+        const {
+          Amenidad,
+          Sucursal,
+        } = db;
+
+        const sucursalEsperada =
+          await createSucursal({
+            nombre:
+              "Hotel QA Amenidades Central",
+          });
+
+        await createSucursal({
+          nombre:
+            "Hotel QA Amenidades Norte",
+        });
+
+        const amenidad =
+          await createAmenidad({
+            sucursal_id:
+              sucursalEsperada.id,
+            nombre:
+              "Piscina QA Central",
+            aforo_maximo:
+              12,
+          });
+
+        const cliente =
+          await createAuthenticatedUser();
+
+        const admin =
+          await createAuthenticatedUser({
+            rol:
+              ROLES.ADMIN,
+          });
+
+        const reserva =
+          await createReservaAmenidadFixture({
+            usuario_id:
+              cliente.usuario.id,
+            amenidad_id:
+              amenidad.id,
+            fecha:
+              "2027-09-20",
+            franja_horaria:
+              "10:00-11:00",
+            mobiliario:
+              "sillas",
+            codigo_qr:
+              "QA-RAME-SEDE-COLLECTION",
+          });
+
+        const amenidadPersistida =
+          await Amenidad.findByPk(
+            amenidad.id,
+            {
+              raw: true,
+            }
+          );
+
+        const sucursalPersistida =
+          await Sucursal.findByPk(
+            sucursalEsperada.id,
+            {
+              raw: true,
+            }
+          );
+
+        expect(
+          amenidadPersistida
+        ).toMatchObject({
+          id:
+            amenidad.id,
+          sucursal_id:
+            sucursalEsperada.id,
+        });
+
+        expect(
+          sucursalPersistida
+        ).toMatchObject({
+          id:
+            sucursalEsperada.id,
+          nombre:
+            "Hotel QA Amenidades Central",
+        });
+
+        const response =
+          await request(app)
+            .get(
+              "/api/reservas-amenidad"
+            )
+            .set(
+              "Authorization",
+              `Bearer ${admin.token}`
+            );
+
+        expect(
+          response.status
+        ).toBe(200);
+
+        const collectionItem =
+          response.body.data.find(
+            (item: any) =>
+              item.id ===
+              reserva.id
+          );
+
+        expect(
+          collectionItem
+        ).toBeDefined();
+
+        expect(
+          collectionItem
+        ).toMatchObject({
+          id:
+            reserva.id,
+          usuario_id:
+            cliente.usuario.id,
+          amenidad_id:
+            amenidad.id,
+          fecha:
+            "2027-09-20",
+          franja_horaria:
+            "10:00-11:00",
+          mobiliario:
+            "sillas",
+          codigo_qr:
+            "QA-RAME-SEDE-COLLECTION",
+          estado:
+            "confirmada",
+          Usuario: {
+            id:
+              cliente.usuario.id,
+            nombre:
+              cliente.usuario.nombre,
+            email:
+              cliente.usuario.email,
+          },
+          Amenidad: {
+            id:
+              amenidadPersistida.id,
+            nombre:
+              amenidadPersistida.nombre,
+            aforo_maximo:
+              amenidadPersistida.aforo_maximo,
+            sucursal_id:
+              amenidadPersistida.sucursal_id,
+            Sucursal: {
+              id:
+                sucursalPersistida.id,
+              nombre:
+                sucursalPersistida.nombre,
+            },
+          },
+        });
+      }
+    );
+
+    it(
+      "QA-ADMIN-RAME-FUNC-002 A2: GET administrativo de detalle incluye la sede persistida de la amenidad",
+      async () => {
+        const db =
+          require("../../src/models");
+
+        const {
+          Amenidad,
+          Sucursal,
+        } = db;
+
+        await createSucursal({
+          nombre:
+            "Hotel QA Amenidades Sur",
+        });
+
+        const sucursalEsperada =
+          await createSucursal({
+            nombre:
+              "Hotel QA Amenidades Antigua",
+          });
+
+        const amenidad =
+          await createAmenidad({
+            sucursal_id:
+              sucursalEsperada.id,
+            nombre:
+              "Sauna QA Antigua",
+            aforo_maximo:
+              8,
+          });
+
+        const cliente =
+          await createAuthenticatedUser();
+
+        const admin =
+          await createAuthenticatedUser({
+            rol:
+              ROLES.ADMIN,
+          });
+
+        const reserva =
+          await createReservaAmenidadFixture({
+            usuario_id:
+              cliente.usuario.id,
+            amenidad_id:
+              amenidad.id,
+            fecha:
+              "2027-09-21",
+            franja_horaria:
+              "15:00-16:00",
+            mobiliario:
+              "ninguno",
+            codigo_qr:
+              "QA-RAME-SEDE-DETAIL",
+          });
+
+        const amenidadPersistida =
+          await Amenidad.findByPk(
+            amenidad.id,
+            {
+              raw: true,
+            }
+          );
+
+        const sucursalPersistida =
+          await Sucursal.findByPk(
+            sucursalEsperada.id,
+            {
+              raw: true,
+            }
+          );
+
+        expect(
+          amenidadPersistida
+        ).toMatchObject({
+          id:
+            amenidad.id,
+          sucursal_id:
+            sucursalEsperada.id,
+        });
+
+        expect(
+          sucursalPersistida
+        ).toMatchObject({
+          id:
+            sucursalEsperada.id,
+          nombre:
+            "Hotel QA Amenidades Antigua",
+        });
+
+        const response =
+          await request(app)
+            .get(
+              `/api/reservas-amenidad/${reserva.id}`
+            )
+            .set(
+              "Authorization",
+              `Bearer ${admin.token}`
+            );
+
+        expect(
+          response.status
+        ).toBe(200);
+
+        expect(
+          response.body.data
+        ).toMatchObject({
+          id:
+            reserva.id,
+          usuario_id:
+            cliente.usuario.id,
+          amenidad_id:
+            amenidad.id,
+          fecha:
+            "2027-09-21",
+          franja_horaria:
+            "15:00-16:00",
+          mobiliario:
+            "ninguno",
+          codigo_qr:
+            "QA-RAME-SEDE-DETAIL",
+          estado:
+            "confirmada",
+          Usuario: {
+            id:
+              cliente.usuario.id,
+            nombre:
+              cliente.usuario.nombre,
+            email:
+              cliente.usuario.email,
+          },
+          Amenidad: {
+            id:
+              amenidadPersistida.id,
+            nombre:
+              amenidadPersistida.nombre,
+            aforo_maximo:
+              amenidadPersistida.aforo_maximo,
+            sucursal_id:
+              amenidadPersistida.sucursal_id,
+            Sucursal: {
+              id:
+                sucursalPersistida.id,
+              nombre:
+                sucursalPersistida.nombre,
+            },
+          },
+        });
+      }
+    );
+
+    it(
+      "QA-ADMIN-RAME-FUNC-002 B: GET administrativo ordena por fecha DESC, franja ASC e id ASC",
+      async () => {
+        const db =
+          require("../../src/models");
+
+        const {
+          ReservaAmenidad,
+        } = db;
+
+        const amenidad =
+          await createAmenidad();
+
+        const cliente =
+          await createAuthenticatedUser();
+
+        const admin =
+          await createAuthenticatedUser({
+            rol:
+              ROLES.ADMIN,
+          });
+
+        const masReciente =
+          await createReservaAmenidadFixture({
+            usuario_id:
+              cliente.usuario.id,
+            amenidad_id:
+              amenidad.id,
+            fecha:
+              "2027-11-02",
+            franja_horaria:
+              "18:00-19:00",
+          });
+
+        const empateIdMenor =
+          await createReservaAmenidadFixture({
+            usuario_id:
+              cliente.usuario.id,
+            amenidad_id:
+              amenidad.id,
+            fecha:
+              "2027-11-01",
+            franja_horaria:
+              "10:00-11:00",
+          });
+
+        const empateIdMayor =
+          await createReservaAmenidadFixture({
+            usuario_id:
+              cliente.usuario.id,
+            amenidad_id:
+              amenidad.id,
+            fecha:
+              "2027-11-01",
+            franja_horaria:
+              "10:00-11:00",
+          });
+
+        const franjaPosterior =
+          await createReservaAmenidadFixture({
+            usuario_id:
+              cliente.usuario.id,
+            amenidad_id:
+              amenidad.id,
+            fecha:
+              "2027-11-01",
+            franja_horaria:
+              "12:00-13:00",
+          });
+
+        expect(
+          empateIdMenor.id
+        ).toBeLessThan(
+          empateIdMayor.id
+        );
+
+        const persistedRows =
+          await ReservaAmenidad.findAll({
+            where: {
+              id: [
+                masReciente.id,
+                empateIdMenor.id,
+                empateIdMayor.id,
+                franjaPosterior.id,
+              ],
+            },
+            attributes: [
+              "id",
+              "fecha",
+              "franja_horaria",
+            ],
+            order: [
+              [
+                "id",
+                "ASC",
+              ],
+            ],
+            raw: true,
+          });
+
+        expect(
+          persistedRows.map(
+            (row: any) => ({
+              id:
+                row.id,
+              fecha:
+                row.fecha,
+              franja_horaria:
+                row.franja_horaria,
+            })
+          )
+        ).toEqual([
+          {
+            id:
+              masReciente.id,
+            fecha:
+              "2027-11-02",
+            franja_horaria:
+              "18:00-19:00",
+          },
+          {
+            id:
+              empateIdMenor.id,
+            fecha:
+              "2027-11-01",
+            franja_horaria:
+              "10:00-11:00",
+          },
+          {
+            id:
+              empateIdMayor.id,
+            fecha:
+              "2027-11-01",
+            franja_horaria:
+              "10:00-11:00",
+          },
+          {
+            id:
+              franjaPosterior.id,
+            fecha:
+              "2027-11-01",
+            franja_horaria:
+              "12:00-13:00",
+          },
+        ]);
+
+        const findAllSpy =
+          vi.spyOn(
+            ReservaAmenidad,
+            "findAll"
+          );
+
+        let response: any;
+        let observedOrder: any;
+
+        try {
+          response =
+            await request(app)
+              .get(
+                "/api/reservas-amenidad"
+              )
+              .set(
+                "Authorization",
+                `Bearer ${admin.token}`
+              );
+
+          observedOrder =
+            findAllSpy.mock.calls[0]?.[0]
+              ?.order;
+        } finally {
+          findAllSpy.mockRestore();
+        }
+
+        expect(
+          response.status
+        ).toBe(200);
+
+        const returnedIds =
+          response.body.data.map(
+            (item: any) =>
+              item.id
+          );
+
+        expect(
+          returnedIds
+        ).toHaveLength(4);
+
+        expect(
+          returnedIds[0]
+        ).toBe(
+          masReciente.id
+        );
+
+        expect(
+          returnedIds.indexOf(
+            empateIdMenor.id
+          )
+        ).toBeLessThan(
+          returnedIds.indexOf(
+            franjaPosterior.id
+          )
+        );
+
+        expect(
+          returnedIds.indexOf(
+            empateIdMayor.id
+          )
+        ).toBeLessThan(
+          returnedIds.indexOf(
+            franjaPosterior.id
+          )
+        );
+
+        expect(
+          observedOrder
+        ).toEqual([
+          [
+            "fecha",
+            "DESC",
+          ],
+          [
+            "franja_horaria",
+            "ASC",
+          ],
+          [
+            "id",
+            "ASC",
+          ],
+        ]);
       }
     );
 

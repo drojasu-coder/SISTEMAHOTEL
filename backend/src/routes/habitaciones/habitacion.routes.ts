@@ -5,6 +5,7 @@ import { requireRole } from "../../middlewares/role.middleware";
 import {
   validateBody,
   validateParams,
+  validateQuery,
 } from "../../middlewares/validate.middleware";
 
 import { ROLES } from "../../constants/roles";
@@ -16,6 +17,10 @@ import {
   updateHabitacionSchema,
   habitacionIdSchema,
 } from "../../validators/habitaciones/habitacion.validator";
+
+import {
+  disponibilidadHabitacionSchema,
+} from "../../validators/habitaciones/disponibilidadHabitacion.validator";
 
 const router = Router();
 
@@ -140,6 +145,18 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+router.get(
+  "/disponibles",
+  authMiddleware,
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  validateQuery(
+    disponibilidadHabitacionSchema
+  ),
+  habitacionController.getHabitacionesDisponibles
+);
+
 router.get(
   "/:id",
   authMiddleware,

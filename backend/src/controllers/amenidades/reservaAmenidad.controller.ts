@@ -55,6 +55,53 @@ export const getById = async (
   }
 };
 
+export const getMine = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const data =
+      await reservaAmenidadService
+        .getMine(req.user!.id);
+
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message:
+        "Reservas de amenidad obtenidas correctamente",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMineById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const data =
+      await reservaAmenidadService
+        .getMineById(
+          req.user!.id,
+          Number(req.params.id)
+        );
+
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message:
+        "Reserva de amenidad obtenida correctamente",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const create = async (
   req: Request,
   res: Response,

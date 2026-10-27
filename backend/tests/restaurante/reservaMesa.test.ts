@@ -23,6 +23,10 @@ import {
     createReservaMesaFixture,
 } from "../fixtures/restaurante";
 
+import {
+  createSucursal,
+} from "../fixtures/hotel";
+
 describe(
   "Reservas de mesa",
   () => {
@@ -948,6 +952,188 @@ describe(
         ).toBe(
           created.body.data.id
         );
+      }
+    );
+
+    it(
+      "QA-ADMIN-REST-FUNC-001: GET administrativo de coleccion y detalle incluye la sede de la mesa",
+      async () => {
+        const sucursal =
+          await createSucursal({
+            nombre:
+              "Hotel QA Restaurante Central",
+          });
+
+        const mesa =
+          await createMesa({
+            sucursal_id:
+              sucursal.id,
+            zona:
+              "Terraza QA",
+            capacidad:
+              6,
+            estado:
+              "disponible",
+          });
+
+        const cliente =
+          await createAuthenticatedUser({
+            rol:
+              ROLES.CLIENTE,
+          });
+
+        const admin =
+          await createAuthenticatedUser({
+            rol:
+              ROLES.ADMIN,
+          });
+
+        const reserva =
+          await createReservaMesaFixture({
+            usuario_id:
+              cliente.usuario.id,
+            mesa_id:
+              mesa.id,
+            fecha:
+              "2027-09-15",
+            hora:
+              "19:30:00",
+            numero_comensales:
+              4,
+          });
+
+        const collectionResponse =
+          await request(app)
+            .get(
+              "/api/reservas-mesa"
+            )
+            .set(
+              "Authorization",
+              `Bearer ${admin.token}`
+            );
+
+        expect(
+          collectionResponse.status
+        ).toBe(200);
+
+        expect(
+          collectionResponse.body.status
+        ).toBe("success");
+
+        const collectionItem =
+          collectionResponse.body.data.find(
+            (item: any) =>
+              item.id ===
+              reserva.id
+          );
+
+        expect(
+          collectionItem
+        ).toBeDefined();
+
+        expect(
+          collectionItem
+        ).toMatchObject({
+          id:
+            reserva.id,
+          usuario_id:
+            cliente.usuario.id,
+          mesa_id:
+            mesa.id,
+          fecha:
+            "2027-09-15",
+          hora:
+            "19:30:00",
+          numero_comensales:
+            4,
+          estado:
+            "confirmada",
+          Usuario: {
+            id:
+              cliente.usuario.id,
+            nombre:
+              cliente.usuario.nombre,
+            email:
+              cliente.usuario.email,
+          },
+          Mesa: {
+            id:
+              mesa.id,
+            zona:
+              "Terraza QA",
+            capacidad:
+              6,
+            estado:
+              "disponible",
+            sucursal_id:
+              sucursal.id,
+            Sucursal: {
+              nombre:
+                "Hotel QA Restaurante Central",
+            },
+          },
+        });
+
+        const detailResponse =
+          await request(app)
+            .get(
+              `/api/reservas-mesa/${reserva.id}`
+            )
+            .set(
+              "Authorization",
+              `Bearer ${admin.token}`
+            );
+
+        expect(
+          detailResponse.status
+        ).toBe(200);
+
+        expect(
+          detailResponse.body.status
+        ).toBe("success");
+
+        expect(
+          detailResponse.body.data
+        ).toMatchObject({
+          id:
+            reserva.id,
+          usuario_id:
+            cliente.usuario.id,
+          mesa_id:
+            mesa.id,
+          fecha:
+            "2027-09-15",
+          hora:
+            "19:30:00",
+          numero_comensales:
+            4,
+          estado:
+            "confirmada",
+          Usuario: {
+            id:
+              cliente.usuario.id,
+            nombre:
+              cliente.usuario.nombre,
+            email:
+              cliente.usuario.email,
+          },
+          Mesa: {
+            id:
+              mesa.id,
+            zona:
+              "Terraza QA",
+            capacidad:
+              6,
+            estado:
+              "disponible",
+            sucursal_id:
+              sucursal.id,
+            Sucursal: {
+              nombre:
+                "Hotel QA Restaurante Central",
+            },
+          },
+        });
       }
     );
 

@@ -1,0 +1,17 @@
+Frontend/src/pages/HomePage.tsx
+Frontend/src/pages/AccountPage.tsx
+Frontend/src/pages/FacturacionPage.tsx
+Frontend/src/pages/PagosAdminPage.tsx
+Frontend/src/pages/PersonalPage.tsx
+Frontend/src/features/operaciones/operacionesApi.ts
+Frontend/src/features/operaciones/OperationsUI.tsx
+Frontend/src/features/operaciones/operacionesPages.test.tsx
+Frontend/src/components/shared/Navbar.tsx
+Frontend/src/components/ui/Drawer.tsx
+Frontend/src/app/router/AppRouter.tsx
+backend/src/routes/habitaciones/factura.routes.ts
+backend/src/routes/habitaciones/facturaItem.routes.ts
+backend/tests/auth/facturaOtherRolesAccess.test.ts
+qa/release/validar-entrega.ps1
+qa/release/validar-estatico.js
+AUDITORIA_ENTREGA_2026-10-26.md

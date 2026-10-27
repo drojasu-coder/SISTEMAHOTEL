@@ -48,6 +48,47 @@ export const getById =
     }
   };
 
+export const getMine = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const reservas =
+      await reservaActividadService.getMine(
+        req.user!.id
+      );
+
+    res.status(200).json({
+      status: "success",
+      data: reservas,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMineById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const reserva =
+      await reservaActividadService.getMineById(
+        req.user!.id,
+        Number(req.params.id)
+      );
+
+    res.status(200).json({
+      status: "success",
+      data: reserva,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const create =
   async (
     req: Request,

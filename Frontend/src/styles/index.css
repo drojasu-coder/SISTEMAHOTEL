@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base y componentes adaptados de la guía visual (MATERIAL-HOTEL/guia-componentes). */
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  * {
+    @apply border-neutro-300;
+  }
+
+  body {
+    @apply m-0 min-h-screen bg-neutro-50 font-sans text-sm text-neutro-900 antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button:not(:disabled),
+  summary,
+  select {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-4 outline-bronce-600;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-serif font-semibold;
+  }
+
+  h1 {
+    @apply text-[2.5rem] leading-[2.875rem] md:text-[3.5rem] md:leading-[3.875rem];
+  }
+
+  h2 {
+    @apply text-[2rem] leading-[2.375rem] md:text-[2.5rem] md:leading-[3rem];
+  }
+
+  h3 {
+    @apply text-[1.625rem] leading-[2.125rem] md:text-[1.875rem] md:leading-[2.375rem];
+  }
+
+  ::selection {
+    @apply bg-bronce-200;
+  }
+
+  html {
+    scroll-padding-top: 100px;
+  }
+}
+
+@layer components {
+  .field-control {
+    @apply min-h-11 w-full rounded-md border border-neutro-500 bg-white px-3 py-2 text-sm text-neutro-900 transition-colors placeholder:text-neutro-500 hover:border-bronce-600 focus-visible:border-bronce-600 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:border-neutro-300 disabled:bg-neutro-100 disabled:text-neutro-500 aria-[invalid=true]:border-error-600 aria-[invalid=true]:bg-error-50/40;
+  }
+
+  .surface {
+    @apply rounded-xl border border-neutro-200 bg-white shadow-soft;
+  }
+
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-widest text-neutro-600;
+  }
+
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-bronce-700 focus:shadow-soft;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
