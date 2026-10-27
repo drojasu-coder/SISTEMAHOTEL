@@ -272,7 +272,7 @@ describe('Checkout (CheckoutPage)', () => {
     await screen.findByTestId('payment-element');
     await user.click(
       screen.getByRole('button', {
-        name: textosCheckout.pago.confirmar,
+        name: 'Confirmar pago · Q600.00 (GTQ)',
       }),
     );
 
@@ -343,7 +343,7 @@ describe('Checkout (CheckoutPage)', () => {
 
     await user.click(
       await screen.findByRole('button', {
-        name: textosCheckout.pago.confirmar,
+        name: 'Confirmar pago · Q600.00 (GTQ)',
       }),
     );
 
@@ -452,7 +452,7 @@ describe('Checkout (CheckoutPage)', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: textosCheckout.pago.confirmar,
+        name: 'Confirmar pago · Q600.00 (GTQ)',
       }),
     ).toBeInTheDocument();
     expect(postsPago(calls)).toHaveLength(0);
@@ -809,7 +809,7 @@ describe('Checkout (CheckoutPage)', () => {
 
     await user.click(
       await screen.findByRole('button', {
-        name: textosCheckout.pago.confirmar,
+        name: 'Confirmar pago · Q600.00 (GTQ)',
       }),
     );
 
@@ -818,7 +818,7 @@ describe('Checkout (CheckoutPage)', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: textosCheckout.pago.confirmar,
+        name: 'Confirmar pago · Q600.00 (GTQ)',
       }),
     ).toBeInTheDocument();
     expect(stripeMocks.confirmPayment).toHaveBeenCalledTimes(1);

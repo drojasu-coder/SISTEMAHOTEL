@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/lib/cn';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'text';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
@@ -12,6 +12,7 @@ const variants = {
   secondary: 'border-transparent bg-selva-600 text-white hover:bg-selva-700 active:bg-selva-800',
   ghost:
     'border-neutro-300 bg-transparent text-neutro-700 hover:bg-neutro-100 active:bg-neutro-200',
+  text: 'border-transparent bg-transparent text-bronce-700 hover:underline active:text-bronce-900',
   danger: 'border-transparent bg-error-600 text-white hover:bg-error-700 active:bg-error-700',
 } as const;
 
@@ -52,7 +53,7 @@ export function buttonStyles({
   );
 }
 
-export const Button: React.FC<ButtonProps> = ({
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   children,
   variant = 'primary',
   size = 'md',
@@ -61,8 +62,9 @@ export const Button: React.FC<ButtonProps> = ({
   className,
   type = 'button',
   ...props
-}) => (
+}, ref) => (
   <button
+    ref={ref}
     {...props}
     type={type}
     disabled={disabled || isLoading}
@@ -72,4 +74,5 @@ export const Button: React.FC<ButtonProps> = ({
     {isLoading && <Spinner />}
     {children}
   </button>
-);
+));
+Button.displayName = 'Button';

@@ -10,6 +10,10 @@ export interface DataStateProps {
   status?: DataStatus;
   onRetry?: () => void;
   children?: React.ReactNode;
+  loadingLabel?: string;
+  loadingContent?: React.ReactNode;
+  emptyContent?: React.ReactNode;
+  errorContent?: React.ReactNode;
 }
 
 /**
@@ -21,18 +25,23 @@ export const DataState: React.FC<DataStateProps> = ({
   status = 'success',
   onRetry = () => {},
   children,
+  loadingLabel = es.comunes.cargando,
+  loadingContent,
+  emptyContent,
+  errorContent,
 }) => {
   if (status === 'loading') {
+    if (loadingContent) return <div role="status" aria-busy="true" aria-label={loadingLabel}><span className="sr-only">{loadingLabel}</span>{loadingContent}</div>;
     return (
-      <div role="status" className="flex flex-col gap-4 p-4" aria-label={es.comunes.cargando}>
-        <span className="sr-only">{es.comunes.cargando}</span>
+      <div role="status" className="flex flex-col gap-4 p-4" aria-label={loadingLabel}>
+        <span className="sr-only">{loadingLabel}</span>
         <Skeleton className="w-2/3" />
         <Skeleton />
         <Skeleton className="h-16" />
       </div>
     );
   }
-  if (status === 'empty') return <EmptyState />;
-  if (status === 'error') return <ErrorState onRetry={onRetry} />;
+  if (status === 'empty') return <>{emptyContent ?? <EmptyState />}</>;
+  if (status === 'error') return <>{errorContent ?? <ErrorState onRetry={onRetry} />}</>;
   return <>{children}</>;
 };

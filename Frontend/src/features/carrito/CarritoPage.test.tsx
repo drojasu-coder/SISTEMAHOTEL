@@ -1,3 +1,4 @@
+import { formatReferenceMoney } from '@/lib/money';
 import React from 'react';
 import {
   afterEach,
@@ -108,7 +109,7 @@ describe('Carrito (CarritoPage)', () => {
     expect(screen.getByText('Evento')).toBeInTheDocument();
     expect(screen.getByText('Q625.50')).toBeInTheDocument();
     expect(screen.getByText('Q300.00')).toBeInTheDocument();
-    expect(screen.getByText('Q999.99')).toBeInTheDocument();
+    expect(screen.getByText(formatReferenceMoney(999.99, 'es')!)).toBeInTheDocument();
     expect(
       screen.getByText(textosCarrito.notaTotal),
     ).toBeInTheDocument();
@@ -160,7 +161,7 @@ describe('Carrito (CarritoPage)', () => {
     expect(enlacesReservar.length).toBeGreaterThan(0);
     expect(
       enlacesReservar.every(
-        (enlace) => enlace.getAttribute('href') === '/reservar',
+        (enlace) => enlace.getAttribute('href') === '/habitaciones',
       ),
     ).toBe(true);
 
@@ -356,7 +357,7 @@ describe('Carrito (CarritoPage)', () => {
         screen.queryByText(DESCRIPCION_INICIAL),
       ).not.toBeInTheDocument(),
     );
-    expect(await screen.findByText('Q777.77')).toBeInTheDocument();
+    expect(await screen.findByText(formatReferenceMoney(777.77, 'es')!)).toBeInTheDocument();
     await waitFor(() =>
       expect(
         llamadas(calls, 'GET', itemsUrl(10)).length,

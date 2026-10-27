@@ -1,7 +1,9 @@
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { usePublicTexts } from '@/i18n/public';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import type { ResumenPagoData } from '../types';
-import { formatearGTQ, textosCheckout } from '../textos';
+import { formatearGTQ } from '../textos';
 
 interface ResumenCheckoutProps {
   resumen: ResumenPagoData;
@@ -15,7 +17,7 @@ interface ResumenCheckoutProps {
 export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
   resumen,
   cantidadArticulos,
-}) => (
+}) => { const textosCheckout = usePublicTexts('checkout'); return (
   <Card className="flex flex-col gap-4 bg-bronce-50 lg:sticky lg:top-6">
     <div className="flex flex-col gap-1">
       <p className="eyebrow">{textosCheckout.resumen.titulo}</p>
@@ -28,7 +30,7 @@ export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
       <div className="flex items-baseline justify-between gap-3">
         <dt className="text-neutro-700">{textosCheckout.resumen.total}</dt>
         <dd className="font-semibold text-neutro-900">
-          {formatearGTQ(resumen.total)}
+          <MoneyReference amount={resumen.total} />
         </dd>
       </div>
 
@@ -57,7 +59,7 @@ export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
           {textosCheckout.resumen.saldo}
         </dt>
         <dd className="font-serif text-2xl font-semibold leading-tight text-neutro-900">
-          {formatearGTQ(resumen.saldo)}
+          <MoneyReference amount={resumen.saldo} />
         </dd>
       </div>
     </dl>
@@ -69,4 +71,4 @@ export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
       {textosCheckout.resumen.notaSaldo}
     </p>
   </Card>
-);
+); };

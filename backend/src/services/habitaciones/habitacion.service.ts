@@ -1,8 +1,10 @@
 import { Op } from "sequelize";
+import crypto from "crypto";
 import { validateDates, validateNotPast, getNights, calculateTotal } from "./reservaHabitacion.service";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
 import * as s3Service from "../storage/s3.service";
+import * as mediaUploadService from "../storage/mediaUpload.service";
 import { getAssetCredits } from "../storage/credits";
 
 const db = require("../../models");
@@ -53,10 +55,33 @@ interface UpdateHabitacionData {
   imagen_key?: string | null;
 }
 
+export function resolveHabitacionEffectiveKey(h: any): string | null {
+  if (h.imagen_key) return h.imagen_key;
+  const tipoKey = h.TipoHabitacion?.imagen_key;
+  if (!tipoKey) return null;
+
+  const sucursalId = h.sucursal_id || h.Sucursal?.id;
+  const expectedSlug = mediaUploadService.resolveStorageSlug(sucursalId);
+
+  // Si la clave del tipo de habitación contiene un slug de sede específico (ej. hotel-hunahpu-atitlan),
+  // solo se puede heredar si la habitación pertenece a esa misma sede.
+  const hasSpecificSedeSlug = Object.values(mediaUploadService.SEDE_ID_TO_SLUG).some((slug) =>
+    tipoKey.includes(`/${slug}/`)
+  );
+
+  if (hasSpecificSedeSlug && !tipoKey.includes(`/${expectedSlug}/`)) {
+    // Es de una sede distinta (ej. foto de Atitlán en habitación de Antigua/Xela/Capital).
+    // No hereda; retorna null para que muestre el estado visual neutro.
+    return null;
+  }
+
+  return tipoKey;
+}
+
 export async function serializeHabitacion(h: any): Promise<any> {
   if (!h) return null;
   const plain = typeof h.get === "function" ? h.get({ plain: true }) : { ...h };
-  const effectiveKey = plain.imagen_key || plain.TipoHabitacion?.imagen_key || null;
+  const effectiveKey = resolveHabitacionEffectiveKey(plain);
   const mediaResult = await s3Service.resolveMediaUrlWithExpiry(effectiveKey);
   plain.imagen_url = mediaResult.url;
   plain.imagen_expires_at = mediaResult.expiresAt;
@@ -461,7 +486,7 @@ export const getHabitacionesDisponibles = async (
         h.TipoHabitacion.tarifa_noche
       );
 
-      const effectiveKey = h.imagen_key || h.TipoHabitacion?.imagen_key || null;
+      const effectiveKey = resolveHabitacionEffectiveKey(h);
       const mediaResult = await s3Service.resolveMediaUrlWithExpiry(effectiveKey);
       const tipoMediaResult = await s3Service.resolveMediaUrlWithExpiry(h.TipoHabitacion?.imagen_key);
 
@@ -499,4 +524,68 @@ export const getHabitacionesDisponibles = async (
       };
     })
   );
+};
+
+export const requestImageUpload = async (
+  id: number,
+  userId: number,
+  contentType: string
+) => {
+  const habitacion = await Habitacion.findByPk(id);
+  if (!habitacion) {
+    throw new AppError(404, "HABITACION_NOT_FOUND", "La habitación no fue encontrada");
+  }
+  return mediaUploadService.presignEntityUpload({
+    entityType: "habitacion",
+    entityId: id,
+    contentType,
+    userId,
+  });
+};
+
+export const confirmImageUpload = async (
+  id: number,
+  userId: number,
+  uploadToken: string,
+  tempKey: string
+) => {
+  return mediaUploadService.confirmEntityUpload({
+    entityType: "habitacion",
+    entityId: id,
+    userId,
+    uploadToken,
+    tempKey,
+    Model: Habitacion,
+    column: "imagen_key",
+    buildFinalKey: (hab, ext) => {
+      const rand = crypto.randomBytes(6).toString("hex");
+      return `sedes/general/habitaciones/habitacion-${hab.id}-${Date.now()}-${rand}.${ext}`;
+    },
+    serializeEntity: async (hab) => {
+      const reloaded = await Habitacion.findByPk(hab.id, {
+        include: [
+          { model: TipoHabitacion, required: false },
+          { model: Sucursal, attributes: ["id", "nombre", "activa"], required: false },
+        ],
+      });
+      return serializeHabitacion(reloaded || hab);
+    },
+  });
+};
+
+export const removeImage = async (id: number) => {
+  return mediaUploadService.removeEntityImage({
+    entityId: id,
+    Model: Habitacion,
+    column: "imagen_key",
+    serializeEntity: async (hab) => {
+      const reloaded = await Habitacion.findByPk(hab.id, {
+        include: [
+          { model: TipoHabitacion, required: false },
+          { model: Sucursal, attributes: ["id", "nombre", "activa"], required: false },
+        ],
+      });
+      return serializeHabitacion(reloaded || hab);
+    },
+  });
 };

@@ -8,6 +8,10 @@ export interface CountdownProps {
   /** Callback opcional cuando el temporizador llega a cero. */
   onExpire?: () => void;
   className?: string;
+  onResume?: () => void;
+  label?: string;
+  warningText?: string;
+  expiredText?: string;
 }
 
 /**
@@ -23,32 +27,47 @@ export function Countdown({
   expiresAt,
   onExpire,
   className,
+  onResume,
+  label = es.componentes.contador,
+  warningText = es.componentes.avisoTiempo,
+  expiredText = es.componentes.expirado,
 }: CountdownProps) {
   const deadline = new Date(expiresAt).getTime();
   const [remaining, setRemaining] = useState(() =>
     Math.max(0, Math.ceil((deadline - Date.now()) / 1000)),
   );
-  const notified = useRef(false);
+  const notifiedDeadline = useRef<number | null>(null);
+  const onResumeRef = useRef(onResume);
+  onResumeRef.current = onResume;
+  const lastResume = useRef(0);
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
 
   const tick = useCallback(() => {
     const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     setRemaining(seconds);
-    if (seconds === 0 && !notified.current) {
-      notified.current = true;
+    if (seconds === 0 && notifiedDeadline.current !== deadline) {
+      notifiedDeadline.current = deadline;
       onExpireRef.current?.();
+      return true;
     }
+    return false;
   }, [deadline]);
 
   useEffect(() => {
     tick();
     const timer = setInterval(tick, 1000);
-    const onFocus = () => tick();
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden' || Date.now() - lastResume.current < 1000) return;
+      lastResume.current = Date.now();
+      if (!tick()) onResumeRef.current?.();
+    };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
     return () => {
       clearInterval(timer);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
     };
   }, [tick]);
 
@@ -75,9 +94,9 @@ export function Countdown({
         </svg>
         <span
           role="timer"
-          aria-label={es.componentes.contador}
+          aria-label={label}
           className="tabular-nums"
-          aria-live={warning || expired ? 'polite' : 'off'}
+          aria-live="off"
         >
           {String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}
         </span>
@@ -85,9 +104,9 @@ export function Countdown({
       <span
         role="status"
         className={cn('text-xs', expired ? 'text-error-600' : warning ? 'text-advertencia-700' : 'text-neutro-600')}
-        aria-live={warning ? 'polite' : 'off'}
+        aria-live="polite"
       >
-        {expired ? es.componentes.expirado : warning ? es.componentes.avisoTiempo : ''}
+        {expired ? expiredText : warning ? warningText : ''}
       </span>
     </div>
   );

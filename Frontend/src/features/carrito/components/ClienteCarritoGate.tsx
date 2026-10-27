@@ -1,3 +1,4 @@
+import { usePublicTexts } from '@/i18n/public';
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LogIn, ShieldAlert, UserRound } from 'lucide-react';
@@ -6,7 +7,7 @@ import { LoadingNotice } from '@/components/ui/Feedback';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getHomeRouteForUser } from '@/features/auth/routing';
 import type { AuthUser } from '@/features/auth/types';
-import { textosCarrito } from '../textos';
+
 
 interface AccessLayoutProps {
   icon: React.ReactNode;
@@ -20,7 +21,7 @@ const AccessLayout: React.FC<AccessLayoutProps> = ({
   title,
   description,
   children,
-}) => (
+}) => { const textosCarrito = usePublicTexts('carrito'); return (
   <section className="mx-auto flex min-h-[60vh] w-full max-w-lg flex-col items-center justify-center gap-6 px-4 py-14 text-center">
     <span className="rounded-full bg-bronce-50 p-4 text-bronce-700">
       {icon}
@@ -36,7 +37,7 @@ const AccessLayout: React.FC<AccessLayoutProps> = ({
     </div>
     {children}
   </section>
-);
+); };
 
 interface ClienteCarritoGateProps {
   children: (user: AuthUser) => React.ReactNode;
@@ -52,6 +53,7 @@ interface ClienteCarritoGateProps {
 export const ClienteCarritoGate: React.FC<ClienteCarritoGateProps> = ({
   children,
 }) => {
+  const textosCarrito = usePublicTexts('carrito');
   const { status, user, retry } = useAuth();
   const location = useLocation();
 

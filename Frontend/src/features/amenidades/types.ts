@@ -10,7 +10,7 @@ export interface AssetCreditInfo {
 export type Amenidad = components["schemas"]["Amenidad"] & {
   imagen_key?: string | null;
   imagen_url?: string | null;
-  imagen_expires_at?: number | null;
+  imagen_expires_at?: string | number | null;
   imagen_creditos?: AssetCreditInfo | null;
 };
 

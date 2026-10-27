@@ -103,35 +103,53 @@ export const AdminSalonesList: React.FC = () => {
                   key={salon.id}
                   className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 border border-neutro-200"
                 >
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-serif font-bold text-neutro-900">
-                        {salon.nombre}
-                      </h2>
-                      {salon.sucursal?.nombre && (
-                        <span className="rounded-full bg-selva-50 px-2 py-0.5 text-xs font-semibold text-selva-700">
-                          {salon.sucursal.nombre}
-                        </span>
-                      )}
-                    </div>
-                    {salon.descripcion && (
-                      <p className="text-xs text-neutro-600 line-clamp-2 max-w-2xl">
-                        {salon.descripcion}
-                      </p>
+                  <div className="flex items-start sm:items-center gap-4">
+                    {salon.imagen_url ? (
+                      <img
+                        src={salon.imagen_url}
+                        alt={salon.nombre}
+                        className="size-16 rounded-xl object-cover border border-neutro-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="flex size-16 items-center justify-center rounded-xl bg-selva-50 border border-selva-100 text-selva-700 shrink-0">
+                        <Building2 className="size-7" />
+                      </div>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-neutro-600 mt-1">
-                      <span className="inline-flex items-center gap-1">
-                        <Users className="size-3.5 text-neutro-400" />
-                        Capacidad: {salon.capacidad_maxima} personas
-                      </span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-neutro-800">
-                        <Sparkles className="size-3.5 text-bronce-500" />
-                        Tarifa base: {formatearGTQ(salon.tarifa_base)}
-                      </span>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-serif font-bold text-neutro-900">
+                          {salon.nombre}
+                        </h2>
+                        {salon.sucursal?.nombre && (
+                          <span className="rounded-full bg-selva-50 px-2 py-0.5 text-xs font-semibold text-selva-700">
+                            {salon.sucursal.nombre}
+                          </span>
+                        )}
+                      </div>
+                      {salon.descripcion && (
+                        <p className="text-xs text-neutro-600 line-clamp-2 max-w-2xl">
+                          {salon.descripcion}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-neutro-600 mt-1">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="size-3.5 text-neutro-400" />
+                          Capacidad: {salon.capacidad_maxima} personas
+                        </span>
+                        <span className="inline-flex items-center gap-1 font-semibold text-neutro-800">
+                          <Sparkles className="size-3.5 text-bronce-500" />
+                          Tarifa base: {formatearGTQ(salon.tarifa_base)}
+                        </span>
+                        {salon.imagen_creditos?.autor && (
+                          <span className="text-[10px] text-neutro-400">
+                            Foto: {salon.imagen_creditos.autor}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutro-100">
+                  <div className="flex items-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutro-100 shrink-0">
                     <Button
                       variant="secondary"
                       size="sm"
@@ -162,7 +180,7 @@ export const AdminSalonesList: React.FC = () => {
       {salonEnEdicion !== undefined && (
         <SalonFormModal
           salon={salonEnEdicion}
-          isOpen={salonEnEdicion !== undefined}
+          isOpen={true}
           onClose={() => setSalonEnEdicion(undefined)}
         />
       )}

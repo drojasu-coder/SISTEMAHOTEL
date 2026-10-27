@@ -63,6 +63,9 @@ const envSchema = z.object({
   AWS_REGION: z.string().min(1).default("us-east-2"),
   AWS_S3_BUCKET: z.string().min(1).default("hotel-hunahpu-media-2026"),
   AWS_PROFILE: optionalString,
+
+  // AWS CloudFront
+  CLOUDFRONT_BASE_URL: optionalString,
 });
 
 export type Env = z.infer<typeof envSchema>;

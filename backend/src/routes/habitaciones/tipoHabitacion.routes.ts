@@ -9,6 +9,7 @@ import {
 import { ROLES } from "../../constants/roles";
 import * as tipoHabitacionController
   from "../../controllers/habitaciones/tipoHabitacion.controller";
+import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 import {
   createTipoHabitacionSchema,
   updateTipoHabitacionSchema,
@@ -277,6 +278,33 @@ router.delete(
   requireRole(...rolesGestionHabitaciones),
   validateParams(tipoHabitacionIdSchema),
   tipoHabitacionController.deleteTipoHabitacion
+);
+
+
+router.post(
+  "/:id/imagen-presign",
+  authMiddleware,
+  requireRole(...rolesGestionHabitaciones),
+  validateParams(tipoHabitacionIdSchema),
+  validateBody(presignImageSchema),
+  tipoHabitacionController.presignImage
+);
+
+router.post(
+  "/:id/imagen-confirmar",
+  authMiddleware,
+  requireRole(...rolesGestionHabitaciones),
+  validateParams(tipoHabitacionIdSchema),
+  validateBody(confirmImageSchema),
+  tipoHabitacionController.confirmImage
+);
+
+router.delete(
+  "/:id/imagen",
+  authMiddleware,
+  requireRole(...rolesGestionHabitaciones),
+  validateParams(tipoHabitacionIdSchema),
+  tipoHabitacionController.deleteImage
 );
 
 export default router;

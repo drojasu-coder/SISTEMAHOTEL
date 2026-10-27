@@ -3369,24 +3369,25 @@ UpdateBoletoParqueEstadoRequest: {
               type: "string",
               format: "uri",
               example:
-                "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-logo-horizontal-color.svg",
+                "https://dy6alx8uozfo3.cloudfront.net/branding/logos/hotel-hunahpu-logo-horizontal-color.svg",
             },
             logoHorizontalBlanco: {
               type: "string",
               format: "uri",
               example:
-                "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-logo-horizontal-blanco.svg",
+                "https://dy6alx8uozfo3.cloudfront.net/branding/logos/hotel-hunahpu-logo-horizontal-blanco.svg",
             },
             isotipoColor: {
               type: "string",
               format: "uri",
               example:
-                "https://hotel-hunahpu-media-2026.s3.us-east-2.amazonaws.com/branding/logos/hotel-hunahpu-isotipo-color.svg",
+                "https://dy6alx8uozfo3.cloudfront.net/branding/logos/hotel-hunahpu-isotipo-color.svg",
             },
             expiresAt: {
               type: "string",
               format: "date-time",
-              example: "2026-10-25T12:00:00.000Z",
+              nullable: true,
+              example: null,
             },
           },
         },

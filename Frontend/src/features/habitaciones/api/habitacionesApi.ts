@@ -1,4 +1,5 @@
 import { api } from "@/api/client/http";
+import { uploadEntityImage } from "@/api/mediaUpload";
 import type {
   CreateHabitacionInput,
   Habitacion,
@@ -42,6 +43,30 @@ export const habitacionesApi = {
    */
   update: async (id: number, data: UpdateHabitacionInput): Promise<Habitacion> => {
     const response = await api.patch<HabitacionResponse>(`/habitaciones/${id}`, data);
+    return response.data;
+  },
+
+  /**
+   * Sube una imagen para la habitación directamente a S3 con validación.
+   */
+  uploadImage: async (
+    id: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<Habitacion> => {
+    return uploadEntityImage<Habitacion>({
+      presignEndpoint: `/habitaciones/${id}/imagen-presign`,
+      confirmEndpoint: `/habitaciones/${id}/imagen-confirmar`,
+      file,
+      onProgress,
+    });
+  },
+
+  /**
+   * Quita la imagen de la habitación.
+   */
+  removeImage: async (id: number): Promise<Habitacion> => {
+    const response = await api.delete<HabitacionResponse>(`/habitaciones/${id}/imagen`);
     return response.data;
   },
 

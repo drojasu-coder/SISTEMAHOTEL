@@ -62,7 +62,7 @@ export const textosCarrito = {
   notaTotal:
     'Importe calculado por el hotel. No representa un pago realizado.',
   notaHabitacion: 'Retirar del carrito no cancela la reserva.',
-  notaCarrito: 'Este carrito no procesa pagos.',
+  notaCarrito: 'Puede continuar al checkout para pagar con Stripe.',
 
   retirar: 'Retirar',
   retirarArticulo: (id: number | string) => `Retirar artículo #${id}`,
@@ -70,7 +70,7 @@ export const textosCarrito = {
   confirmarDescripcion: (descripcion: string) =>
     `¿Desea retirar "${descripcion}" del carrito?`,
   confirmarHabitacion:
-    'Retirar esta habitación del carrito no cancela su reserva. La reserva continuará pendiente en su cuenta.',
+    'Retirar esta habitación del carrito no cancela su reserva. Consulte su estado en Mis reservas.',
   confirmarOtro:
     'El artículo se quitará únicamente de este carrito. No se elimina el registro asociado en su cuenta.',
   cancelar: 'Cancelar',

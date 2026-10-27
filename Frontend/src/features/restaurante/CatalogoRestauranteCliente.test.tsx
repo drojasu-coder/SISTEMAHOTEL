@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
-  renderWithProviders,
+  renderPublicWithProviders as renderWithProviders,
   jsonResponse,
   meResponse,
   errorResponse,
@@ -69,6 +69,7 @@ const mockMesas: MesaConSucursal[] = [
 describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () => {
   beforeEach(() => {
     tokenStorage.clear();
+    window.localStorage.removeItem('hunahpu.public-site.v1');
     vi.restoreAllMocks();
   });
 
@@ -125,9 +126,9 @@ describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () 
     renderWithProviders(<CatalogoRestaurantePage />);
 
     expect(await screen.findByText(/Restaurante/i)).toBeInTheDocument();
-    expect(await screen.findByText(/Mesa #101/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mesa #102/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mesa #201/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Mesa · Terraza/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mesa · Salón Principal/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mesa · Jardín/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Terraza/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Salón Principal/i).length).toBeGreaterThanOrEqual(1);
   });
@@ -137,20 +138,20 @@ describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () 
     setupFetchMock();
     renderWithProviders(<CatalogoRestaurantePage />);
 
-    await screen.findByText(/Mesa #101/i);
+    await screen.findByText(/Mesa · Terraza/i);
 
-    const sedeSelect = screen.getByLabelText(/Sede del hotel/i);
+    const sedeSelect = screen.getByLabelText(/^Sede$/i);
     await user.selectOptions(sedeSelect, "1");
 
-    expect(screen.getByText(/Mesa #101/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mesa #102/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Mesa #201/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Mesa · Terraza/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mesa · Salón Principal/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Mesa · Jardín/i)).not.toBeInTheDocument();
 
-    const zonaSelect = screen.getByLabelText(/Zona/i);
+    const zonaSelect = screen.getByRole('combobox', { name: /^Zona$/i });
     await user.selectOptions(zonaSelect, "Terraza");
 
-    expect(screen.getByText(/Mesa #101/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Mesa #102/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Mesa · Terraza/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Mesa · Salón Principal/i)).not.toBeInTheDocument();
   });
 
   it("muestra estado sin resultados cuando no hay mesas para un filtro", async () => {
@@ -158,15 +159,15 @@ describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () 
     setupFetchMock();
     renderWithProviders(<CatalogoRestaurantePage />);
 
-    await screen.findByText(/Mesa #101/i);
+    await screen.findByText(/Mesa · Terraza/i);
 
-    const sedeSelect = screen.getByLabelText(/Sede del hotel/i);
+    const sedeSelect = screen.getByLabelText(/^Sede$/i);
     await user.selectOptions(sedeSelect, "2");
 
-    const zonaSelect = screen.getByLabelText(/Zona/i);
+    const zonaSelect = screen.getByRole('combobox', { name: /^Zona$/i });
     await user.selectOptions(zonaSelect, "Terraza");
 
-    expect(await screen.findByText(/No se encontraron mesas/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Sin resultados con estos filtros/i)).toBeInTheDocument();
   });
 
   it("si no está autenticado, el modal solicita iniciar sesión con cuenta de cliente", async () => {

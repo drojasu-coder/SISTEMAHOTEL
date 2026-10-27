@@ -92,3 +92,23 @@
     transition: none !important;
   }
 }
+
+/* El menú público ocupa el viewport y su contenido tiene scroll propio. */
+.public-mobile-menu > div { padding: 0; }
+[aria-current="page"] { text-decoration: underline; text-underline-offset: 0.3em; }
+
+.room-calendar .rdp-root {
+  --rdp-accent-color: theme('colors.bronce.600');
+  --rdp-accent-background-color: theme('colors.bronce.50');
+  --rdp-day_button-width: 42px;
+  --rdp-day_button-height: 44px;
+}
+
+@media (max-width: 1023px) {
+  .room-detail :is(input, select, textarea, button, a) { scroll-margin-bottom: 12rem; }
+  body:has(main input:focus, main select:focus, main textarea:focus) .room-reserve-bar { display: none; }
+}
+
+@media (max-width: 380px) {
+  .room-calendar .rdp-root { --rdp-day-width: 36px; --rdp-day_button-width: 36px; }
+}

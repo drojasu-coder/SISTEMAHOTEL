@@ -1,4 +1,5 @@
 import { api } from '@/api/client/http';
+import { uploadEntityImage } from '@/api/mediaUpload';
 import type {
   RecursoActividad,
   RecursosActividadResponse,
@@ -57,6 +58,30 @@ export const actividadesApi = {
       `/recursos-actividad/${id}`,
       data
     );
+    return response.data;
+  },
+
+  /**
+   * Subida de fotografía para el recurso de actividad hacia S3.
+   */
+  uploadRecursoImage: async (
+    id: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<RecursoActividad> => {
+    return uploadEntityImage<RecursoActividad>({
+      presignEndpoint: `/recursos-actividad/${id}/imagen-presign`,
+      confirmEndpoint: `/recursos-actividad/${id}/imagen-confirmar`,
+      file,
+      onProgress,
+    });
+  },
+
+  /**
+   * Retiro de fotografía del recurso de actividad.
+   */
+  removeRecursoImage: async (id: number): Promise<RecursoActividad> => {
+    const response = await api.delete<RecursoActividadResponse>(`/recursos-actividad/${id}/imagen`);
     return response.data;
   },
 

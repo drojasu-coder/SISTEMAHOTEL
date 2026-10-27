@@ -1,6 +1,19 @@
 import type { components } from '@/api/generated/schema';
 
-export type ServicioBienestar = components['schemas']['ServicioBienestar'];
+export interface AssetCreditInfo {
+  autor?: string;
+  fuente?: string;
+  licencia?: string;
+  url?: string;
+}
+
+export type ServicioBienestar = components['schemas']['ServicioBienestar'] & {
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: string | null;
+  imagen_creditos?: AssetCreditInfo | null;
+};
+
 export type CreateServicioBienestarInput = components['schemas']['CreateServicioBienestarRequest'];
 export type UpdateServicioBienestarInput = components['schemas']['UpdateServicioBienestarRequest'];
 

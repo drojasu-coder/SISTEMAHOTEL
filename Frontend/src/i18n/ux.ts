@@ -1,0 +1,59 @@
+/** Textos de la Ficha 1. El resto de módulos conserva el diccionario es existente. */
+export const uxEs = {
+  showing: 'Mostrando:', changeSite: 'Cambiar sede',
+  cartLoading: 'Carrito: consultando artículos', cartError: 'Carrito: no se pudo consultar el contenido',
+  cartCount: 'Carrito: {count} {item}', cartItem: 'artículo', cartItems: 'artículos',
+  home: 'Inicio', rooms: 'Habitaciones', restaurant: 'Restaurante', experiences: 'Experiencias',
+  amenities: 'Amenidades', activities: 'Actividades', wellness: 'Bienestar', events: 'Eventos', sites: 'Sedes',
+  login: 'Ingresar', register: 'Crear cuenta', account: 'Mi cuenta', reservations: 'Mis reservas',
+  logout: 'Cerrar sesión', panel: 'Ir al panel', cart: 'Carrito', navigation: 'Navegación principal',
+  openMenu: 'Abrir menú de navegación', closeMenu: 'Cerrar menú de navegación', skip: 'Saltar al contenido',
+  language: 'Idioma', site: 'Sede', allSites: 'Todas las sedes', allSitesAction: 'Ver todas las sedes',
+  loadingSite: 'Cargando sede seleccionada…', loading: 'Cargando sedes…',
+  siteError: 'No se pudieron consultar las sedes. Su preferencia se conserva.', retry: 'Reintentar',
+  emptySites: 'No hay sedes disponibles en este momento.', unavailableSite: 'La sede elegida ya no está disponible. Elija otra para continuar.',
+  welcome: 'Bienvenido a Hotel Hunahpú. ¿Qué sede desea visitar?', chooseSite: 'Elegir sede',
+  invitation: 'Explore Hotel Hunahpú: elija una sede o visite todas.', close: 'Cerrar',
+  changed: 'La sede cambió. Se invalidaron los resultados y la selección anterior; sus campos compatibles se conservan.',
+  resourceSite: 'Este recurso pertenece a', exploreSite: 'Explorar esta sede',
+  footerDescription: 'Hospedaje, gastronomía y bienestar en Guatemala.', contact: 'Contacto',
+  currencyNote: 'Importes en GTQ. La referencia en USD es aproximada: 1 USD = {rate} GTQ. El cobro se mantiene en GTQ.',
+  unavailableAmount: 'Importe no disponible', taxesIncluded: 'Impuestos incluidos',
+  notFoundTitle: 'Página no encontrada', notFoundDescription: 'La dirección solicitada no está disponible.',
+  forbiddenTitle: 'Acceso no autorizado', forbiddenDescription: 'Su cuenta no tiene permiso para acceder a esta sección.',
+  mySpace: 'Ir a mi espacio', roomsAccess: 'Para consultar disponibilidad y reservar una habitación, ingrese con su cuenta de cliente.',
+  consultRooms: 'Consultar disponibilidad', arrival: 'Llegada', departure: 'Salida', guests: 'Huéspedes',
+  requiredSite: 'Seleccione una sede concreta para consultar disponibilidad.', datesRequired: 'Seleccione las fechas de entrada y salida.',
+  datesOrder: 'La fecha de salida debe ser posterior a la fecha de entrada.', photoCredit: 'Crédito fotográfico',
+  reserveSite: 'Reservar en esta sede', signInAction: 'Iniciar Sesión', guest: 'Huésped',
+} as const;
+
+export type UxKey = keyof typeof uxEs;
+export const uxEn: Partial<Record<UxKey, string>> = {
+  showing: 'Showing:', changeSite: 'Change location',
+  cartLoading: 'Cart: loading items', cartError: 'Cart: content could not be loaded',
+  cartCount: 'Cart: {count} {item}', cartItem: 'item', cartItems: 'items',
+  guest: 'Guest', signInAction: 'Sign in', home: 'Home', rooms: 'Rooms', restaurant: 'Restaurant', experiences: 'Experiences', amenities: 'Amenities',
+  activities: 'Activities', wellness: 'Wellness', events: 'Events', sites: 'Locations', login: 'Sign in', register: 'Create account',
+  account: 'My account', reservations: 'My reservations', logout: 'Sign out', panel: 'Go to dashboard', cart: 'Cart',
+  navigation: 'Main navigation', openMenu: 'Open navigation menu', closeMenu: 'Close navigation menu', skip: 'Skip to content',
+  language: 'Language', site: 'Location', allSites: 'All locations', allSitesAction: 'View all locations',
+  loadingSite: 'Loading selected location…', loading: 'Loading locations…',
+  siteError: 'Locations could not be loaded. Your preference has been kept.', retry: 'Retry',
+  emptySites: 'There are no locations available at this time.', unavailableSite: 'Your selected location is no longer available. Choose another to continue.',
+  welcome: 'Welcome to Hotel Hunahpú. Which location would you like to visit?', chooseSite: 'Choose location',
+  invitation: 'Explore Hotel Hunahpú: choose a location or visit them all.', close: 'Close',
+  changed: 'The location changed. Previous results and selections were invalidated; compatible form fields have been kept.',
+  resourceSite: 'This resource belongs to', exploreSite: 'Explore this location', footerDescription: 'Hospitality, dining and wellness in Guatemala.',
+  contact: 'Contact', currencyNote: 'Amounts in GTQ. USD values are approximate: 1 USD = {rate} GTQ. Payments remain in GTQ.',
+  unavailableAmount: 'Amount unavailable', taxesIncluded: 'Taxes included', notFoundTitle: 'Page not found',
+  notFoundDescription: 'The requested address is unavailable.', forbiddenTitle: 'Access restricted',
+  forbiddenDescription: 'Your account does not have permission to access this section.', mySpace: 'Go to my space',
+  roomsAccess: 'To check availability and reserve a room, sign in with your customer account.', consultRooms: 'Check availability',
+  arrival: 'Arrival', departure: 'Departure', guests: 'Guests', requiredSite: 'Choose a specific location to check availability.',
+  datesRequired: 'Select arrival and departure dates.', datesOrder: 'Departure must be after arrival.', photoCredit: 'Photo credit', reserveSite: 'Reserve at this location',
+};
+
+export function translateUx(locale: 'es' | 'en', key: UxKey): string {
+  return (locale === 'en' && uxEn[key]?.trim()) || uxEs[key];
+}

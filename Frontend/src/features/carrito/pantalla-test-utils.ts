@@ -33,7 +33,8 @@ export function instalarFetch(handler: FetchHandler) {
       };
       calls.push(call);
 
-      const respuesta = handler(call);
+      // Carrito sin pago previo, salvo que el escenario responda explícitamente otra cosa.
+      const respuesta = handler(call) ?? (call.method === 'GET' && /\/pagos\/intento-activo\?carrito_id=\d+$/.test(call.url) ? jsonResponse({ data: null }) : undefined);
       if (respuesta === undefined) {
         return Promise.reject(
           new Error(`Ruta no manejada en mock: ${method} ${url}`),
@@ -127,7 +128,7 @@ export function crearCarrito(
     id: 10,
     usuario_id: 3,
     estado: 'activo',
-    expira_en: '2026-10-22T18:00:00.000Z',
+    expira_en: '2030-10-22T18:00:00.000Z',
     createdAt: '2026-10-22T17:00:00.000Z',
     updatedAt: '2026-10-22T17:00:00.000Z',
     ...overrides,

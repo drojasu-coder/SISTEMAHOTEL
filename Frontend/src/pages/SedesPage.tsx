@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Search, X, Building2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Search, X, Building2, Palette, Layout } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
@@ -75,15 +76,30 @@ export const SedesPage: React.FC = () => {
         </div>
 
         {canManageSedes && (
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleOpenCreate}
-            className="self-start sm:self-center"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            <span>{es.sedes.nuevaSede}</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            <Link
+              to="/admin/configuracion/inicio"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-neutro-300 bg-white px-3 text-xs font-semibold text-neutro-700 hover:bg-neutro-50 hover:text-neutro-900 shadow-sm transition-colors"
+            >
+              <Layout className="size-4 text-bronce-600" aria-hidden="true" />
+              <span>Página de Inicio</span>
+            </Link>
+            <Link
+              to="/admin/branding"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-neutro-300 bg-white px-3 text-xs font-semibold text-neutro-700 hover:bg-neutro-50 hover:text-neutro-900 shadow-sm transition-colors"
+            >
+              <Palette className="size-4 text-bronce-600" aria-hidden="true" />
+              <span>Identidad Visual</span>
+            </Link>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleOpenCreate}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              <span>{es.sedes.nuevaSede}</span>
+            </Button>
+          </div>
         )}
       </div>
 

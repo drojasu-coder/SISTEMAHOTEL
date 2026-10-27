@@ -231,3 +231,104 @@ La guía referencia `var(--color-bronce-600)`, `var(--font-sans)` en estilos en 
 Los componentes se integran sin romper contratos existentes: `Button` conserva sus variantes `primary/secondary/ghost/danger` y `isLoading`; `Input` conserva su contrato de `forwardRef`. No se integró ninguno en páginas todavía.
 
 Espero su instrucción para iniciar el **Lote 3**.
+
+## Ficha 2 · Parte B: componentes canónicos y adopción (2026-10-26)
+
+Esta sección actualiza la auditoría histórica: la Parte B fue autorizada e implementada sobre los componentes ya presentes. Las referencias anteriores a esperar Lote 3 describen aquel punto de la auditoría; no representan un bloqueo actual. Se mantuvieron React 18, Tailwind 3 y los tokens existentes. No se copió el proyecto de referencia de `MATERIAL-HOTEL` ni se añadieron dependencias.
+
+### Componentes canónicos
+
+Rutas relativas a `Frontend/src/`:
+
+| Necesidad | Componente canónico | Decisión y responsabilidad |
+| --- | --- | --- |
+| Contenedor | `components/shared/PageContainer.tsx` | Nuevo. `variant="public"` comparte max-w-7xl, px-4/sm:px-6/lg:px-8, py-10 y gap-8; `admin` conserva ancho del padre y no migra el panel. |
+| Encabezado | `PageHeader` en el mismo archivo | Nuevo. Un h1, eyebrow/description/action/context/breadcrumbs opcionales. No añade un encabezado al hero de Inicio. |
+| Filtros | `components/shared/CatalogFilters.tsx` | Nuevo. Composición de Input/Select/Button/Modal/Pagination existentes; búsqueda visible, chips removibles, limpiar, total y enlace compartido. Solo el panel móvil monta los selects mientras está abierto. |
+| Estado de URL | `features/preferencias/useCatalogUrl.ts` | Nuevo. q, zona/tipo, page, sede; conserva parámetros ajenos y fragmento. Valores validados/defaults. Búsqueda con replace, filtros/páginas con historial; cambios locales restablecen página. |
+| Tarjeta | `components/shared/ServiceCard.tsx` | Nuevo, compuesto sobre Card. Media, nombre, sede, datos, precio y acción por slots; sin permisos ni cálculos de negocio internos. h2 por defecto, h3 en resultados bajo un h2. |
+| Imagen/crédito | `ServiceMedia` en el mismo archivo | Nuevo. URL exacta de API, dimensiones reservadas 16:9, variante panorama solo para banner de restaurante, lazy por defecto, prioridad explícita. Fallback neutro, sin reintentar infinitamente la URL fallida; acepta URL renovada de la capa existente. Créditos completos fuera de imagen. |
+| Superficie | `components/ui/Card.tsx` | Ajustado. Conserva div/padding por defecto. `as="article" padding="none"` permite composición semántica sin padding duplicado. |
+| Campos | `components/ui/Field.tsx`, `Input.tsx` | Ajustados. Field único: se retiró FieldShell tras migrar Input/PasswordInput. Etiqueta, ayuda/error y ARIA; useId incondicional; carga etiquetable y error ReactNode. Controles nativos directos reciben la asociación sin perder ref/RHF. |
+| Select/Checkbox | `components/ui/{Select,Checkbox}.tsx` | Reutilizados en filtros y formularios; sin un segundo sistema de controles. |
+| Fecha/hora | `components/ui/{DateField,TimeField}.tsx` | Ajustados para aceptar el contrato completo de Input (incluido error). Siguen siendo date/time nativos. No hay nuevo selector avanzado de Ficha 3. |
+| Botones | `components/ui/Button.tsx` y `buttonStyles` | Ajustados con forwardRef y variante `text`. Se conservan primary/secondary/danger/ghost y tamaños; enlaces usan buttonStyles, nunca un Button anidado. Tarjetas usan acción secundaria; el diálogo tiene su principal. |
+| Carga/vacío/error | `DataState`, `Skeleton`, `EmptyState`, `ErrorState` | Ajustados con slots/etiquetas, nivel de heading y mensajes/acciones propios. `shared/CatalogState` adopta esos componentes y `CatalogSkeleton` los compone en grid. No muestra errores internos ni informa cero mientras carga. |
+| Paginación | `components/ui/Pagination.tsx` | Ajustado con labels opcionales; mantiene API/default español para consumidores previos. Los cinco catálogos paginan localmente colecciones completas a 9 elementos, mostrando el total filtrado antes de paginar. |
+| Diálogo | `components/ui/Modal.tsx` | Ajustado y reutilizado. Foco inicial seguro, trap/Escape/restauración, scroll y busy. La capa visual bloquea cierre durante mutación; no promete abortar la solicitud. Mantiene su contrato div/aria-modal y opciones previas. Navbar y SitePicker delegan el scroll al Modal, evitando locks duplicados. |
+| Notificaciones | `components/ui/Toast.tsx` | Ajustado el sistema existente: máximo 3 visibles, resto en cola sin pérdida; errores/advertencias persistentes por defecto, info/éxito con 7 s mínimos y pausa por hover/foco. Posición inferior derecha; alert para error y status para los demás. Los catálogos conservan avisos inline persistentes con Alert; no se inventaron toasts de éxito. |
+| Estado | `components/ui/StatusBadge.tsx` sobre Badge | Nuevo. Mapas explícitos reservation/payment/cart/room/table/service y etiquetas ES/EN. Confirmada no significa pagada; pendiente no implica pago. Desconocido neutral traducido y diagnóstico de consola una vez por estado, sin código crudo en UI. |
+| Moneda | `components/ui/MoneyReference.tsx` | Reutilizado de Ficha 1. GTQ y USD aproximado con única configuración; ausencia distinta de cero. Sin impuestos incluidos globales ni cambios de precio/cálculo/payload. |
+| Desglose/tabla/progreso | `PriceSummary`, `Table`, `StatusTimeline`, `Stepper`, `Tabs` | Inspeccionados y conservados. Los catálogos no tienen un desglose fiscal verificado, tablas o flujo por pasos que justifique insertarlos. No se añadieron pantallas para forzar adopción. |
+
+### Ejemplos de composición
+
+```tsx
+<PageContainer>
+  <PageHeader eyebrow={t.subtitulo} title={t.catalogoTitulo}
+    description={t.catalogoDescripcion} context={<CatalogSiteNotice />} />
+  {/* CatalogFilters recibe el hook de URL y los filtros propios del catálogo. */}
+</PageContainer>
+
+<ServiceCard name={<span lang="es">{recurso.nombre}</span>}
+  media={<ServiceMedia src={recurso.imagen_url} alt={recurso.nombre}
+    credits={recurso.imagen_creditos} />}
+  price={<MoneyReference amount={recurso.precio} />}
+  action={<Button variant="secondary" onClick={abrirReserva}>{t.reservar}</Button>} />
+
+<DateField label={t.fecha} {...register('fecha')} error={errors.fecha?.message} />
+<Modal open={open} title={tituloConcreto} onClose={cerrar}
+  busy={mutation.isPending} busyLabel={p('processingRequest')}>
+  {/* Consecuencia/resumen del recurso y acción principal existente. */}
+</Modal>
+```
+
+Los nombres `recurso`, `t.reservar` y callbacks del ejemplo son ilustrativos: cada consumidor pasa los campos reales de su contrato; no constituyen un DTO nuevo. En una tarjeta sin tarifa contractual se omite el slot `price`.
+
+### Consumidores migrados
+
+- Catálogos: `CatalogoRestauranteCliente`, `CatalogoAmenidadesCliente`, `CatalogoActividadesCliente`, `CatalogoBienestarList`, `CatalogoSalonesList`.
+- Detalle público: `eventos/components/SalonDetalleCard` adopta contenedor/encabezado, breadcrumb, media y estados. Mantiene la sede real del salón y la adopción explícita de sede global.
+- Acceso a Habitaciones: `pages/PublicHabitacionesPage` adopta contenedor/encabezado; **no se creó un catálogo** (BE-015).
+- Resultados vigentes de habitaciones: `crear-reserva/components/HabitacionesDisponiblesList` adopta ServiceCard/Media y estados, conservando selección, criterios y montos estimados del servidor. `pages/CrearReservaPage` adopta encabezado/contenedor sin cambiar autorización ni búsqueda.
+- Formularios públicos de mesa, amenidad, actividad, cita y evento: controles compartidos y Modal; campos, validaciones, payloads, condiciones de sede incompatible y tratamiento de incertidumbre conservados. La etiqueta de estimación previa de actividad identifica su naturaleza; no se recalculó ni cambió el total existente.
+- Importes públicos de tarjetas, detalle de salón, formularios/resúmenes y confirmaciones de habitación/actividad/cita usan MoneyReference. Restaurante y amenidades siguen sin precios ficticios.
+- `pages/PublicSedesPage` comparte contenedor/encabezado y media con atribución fuera de imagen. Sus contactos reales y adopción de sede al reservar se conservan.
+
+### Reglas de URL, datos y exclusiones
+
+- Un enlace a un catálogo dependiente de sede incluye `sede=all` o ID real. Si difiere de la preferencia, CatalogLinkContext pide aplicarla o usar la actual, y retiene los resultados hasta esa decisión. Aplicar el enlace conserva su página/filtros. Una sede inexistente no puede aplicarse. Cambiar sede desde el control global restablece la página; limpiar filtros nunca borra la preferencia de sede.
+- Se inspeccionaron los `findAll` de mesa, amenidad, recursoActividad, servicioSpa y salón: sus lecturas actuales no usan limit/offset. Por eso el total es del arreglo completo filtrado, no el tamaño de la página visible. Una futura API paginada exige consumir su total/página del servidor; no reutilizar la cuenta local de este contrato a ciegas.
+- Bienestar no tiene relación de sede y no la inventa: comparte búsqueda/página, sin aplicar ese contexto.
+- Siguen abiertos BE-015/016/017, contenido legal aprobado y semántica fiscal de Parte A. Editorial/alt de base de datos siguen originales españoles marcados; interfaz nueva y atributos accesibles son ES/EN. Identificadores internos de mesa no se presentan como nombres comerciales; se conservan números de reserva y códigos de acceso útiles.
+- Fuera de adopción coordinada: checkout/pagos/reembolsos, facturación y panel administrativo; detalles de Mis reservas y sus confirmaciones de cancelación. No se alteraron endpoints, permisos ni reglas. No se añadió un ConfirmDialog sin consumidor público destructivo. Cuando se migren las cancelaciones privadas, usar Modal con opción segura “Conservar reserva”, acción “Cancelar reserva”, nombre/consecuencia concretos y bloqueo de doble envío.
+- PriceSummary conserva su contrato anterior para migración posterior; no se deducen impuestos para alimentar sus props. Table/StatusTimeline/Stepper/Tabs permanecen sin adopción nueva en este alcance.
+- Sin eliminación de archivos. Se retiraron los bloques duplicados al migrar sus consumidores: FieldShell, cinco encabezados/filtros/estados/grids locales, cuatro overlays manuales, y créditos superpuestos en las vistas migradas. Búsqueda `rg` en esos consumidores confirma ausencia de FieldShell, img directos, animate-pulse y role=dialog manual. La prueba de Eventos comprueba ausencia de `a button`/`button a` y conserva destinos/acciones.
+
+### Adopción posterior autorizada en Ficha 3A
+
+- `habitaciones/public/RoomCatalog` y `RoomDetail` consumen PageContainer/PageHeader, CatalogFilters, ServiceCard/ServiceMedia, estados, Modal y MoneyReference; la lectura sigue condicionada al contrato autenticado vigente (BE-015).
+- CatalogFilters añade labels por valor para tipos/orden, filtros adicionales componibles y etiquetas removibles de precio; su API previa sigue siendo compatible. `useCatalogUrl` admite updates de criterios y un alias de sede solo cuando el consumidor lo declara. No añade otra preferencia global.
+- `RoomSearchPanel` compone DateField/Input/Modal y el rango accesible de react-day-picker 9.13.0. Fechas ISO/hoy Guatemala y selección de rango independiente de inventario; 2 meses escritorio, 1 móvil. Esta dependencia está justificada por rango, teclado e idiomas, y no actualiza las versiones principales existentes. Documentación oficial en https://daypicker.dev/v9/api/interfaces/PropsBase.
+- El patrón de cancelación/resultado incierto se conserva: no se interpreta cerrar un modal como abortar un POST, ni se reenvía una creación incierta. El guard del resumen legado y el nuevo detalle bloquean duplicados, sin cambiar el contrato financiero.
+- Rutas/clientes/matriz y evidencia de 3A: `docs/mejoras-ux.md`; dependencias públicas, datos ampliados y políticas/fiscalidad: BE-015/018/019. No se declara migrado checkout ni el panel.
+
+### Ficha 3B · Acceso público y continuidad
+
+- `AuthPageLayout`: ancho único `max-w-md`, marca `Brand` ya conectada a S3/fallback, `LanguageSelector`, vuelta al sitio y aviso traducido del borrador. `GuestLayout` omite topbar, menú, primera visita y footer solo en `/login` y `/registro`; conserva los proveedores existentes.
+- `LoginForm` / `RegisterForm`: reutilizan Input, PasswordInput, Select, Button, Alert y TranslatedError. Autocompletado y pegado permitidos; contraseña literal; bloqueo de doble envío sin retry automático. Reglas reales visibles (8–72, mayúscula ASCII, minúscula ASCII, número); nombre completo Unicode sin inferir apellidos. Teléfono opcional normalizado con prefijo elegido, sin país preseleccionado; país del selector no se envía como residencia.
+- `secureReturn` + `routing`: origen comprobado con URL, lista explícita de rutas de AppRouter y permisos existentes. Rechaza rutas codificadas, normalizadas, externas, protocol-relative, controles, backslash, fragmentos y bucles de acceso. Solo parámetros permitidos; permisos de navegación no sustituyen al backend.
+- `reservationDraft` + `useAuthReturn`: una sola implementación compartida con los exports de 3A. Restaura únicamente `{version:1,path}` validado, con fechas reales, rango ordenado e identificadores/filtros válidos; no guarda identidad/precio/token/contraseña. Una entrada explícita rechazada no recupera un borrador previo al alternar pantallas.
+- Se mantiene el aborto y aislamiento de consultas de AuthContext; solo se añade el código semántico del aviso para traducirlo. No se modifica checkout ni se borran claves de idempotencia. Recuperación y políticas: BE-020 a BE-022.
+
+### Ficha 3C · Compra del cliente
+
+- `features/compra/PurchaseSteps` reutiliza Stepper: Carrito → Pago → Confirmación, `aria-current=step`, etiqueta ES/EN y regreso al carrito solo cuando no hay intento/resultado por recuperar. El paso Datos completo depende de BE-023; `AccountContact` muestra únicamente cuenta autenticada, sin formularios descartados ni cambios de perfil.
+- `CartExpiry` reutiliza Countdown con fecha autoritativa, foco/visibilidad y mensajes de umbral; el reloj no anuncia cada segundo. `verifyCartPayment` realiza solo lecturas con claves canónicas de pagos antes de reconsultar un carrito vencido. Mantiene ID de pago o estado incierto para recuperación, sin crear ni descartar operaciones.
+- `useCartPaymentLock` bloquea retiradas mientras se consulta un intento, si existe uno (incluido incompleto/sin identificador), si la consulta falla o si existe pago guardado para esa cuenta/carrito. Se conserva confirmación con nombre, DELETE 204, resultado de red incierto y no cancelación de reservas; se añade cerrojo síncrono contra doble retirada.
+- `PurchaseItemDetails` usa APIs ya existentes para habitación/evento/actividad/bienestar, valida referencia y propietario, limita a dos lecturas simultáneas y separa precios persistidos de datos descriptivos/estado operativo. No consulta disponibilidad pública ni recalcula importes. Otros tipos se muestran solo si el servidor los devuelve, sin crear nuevos flujos por un enum. `groupItems` solo agrupa presentación, sin subtotales.
+- Resúmenes de carrito/checkout y resultado usan MoneyReference para GTQ primero y USD aproximado, convirtiendo cada total completo desde configuración común. El botón de Stripe contiene el importe y moneda del intento; diferencias carrito/resumen, intento/saldo o moneda bloquean confirmación. No se toca el backend financiero.
+- `PurchaseReservations` consulta ítems del carrito DEL PAGO, incluido historial y origen directo con `carrito_id=null`, sin buscar el carrito actual para reconstruir importes. Solo el regreso desde rechazo/cancelación comprueba que el carrito vigente corresponde al mismo pago; un carrito nuevo no recibe el intento antiguo.
+- Stripe Elements/PaymentElement, confirmación explícita, 3DS/return_url, claves por usuario+carrito, recuperación, mutaciones sin retry y aprobación contra backend permanecen en el flujo existente. La revalidación de vencimiento bloquea temporalmente el botón sin desmontar Elements ni perder su entrada. Sondeo de resultado limitado a 60 segundos, con consulta manual para reanudar y lectura al volver al foco.
+- Textos públicos `carrito`, `checkout` y `pagos` se incorporan al mecanismo de claves existente (`purchase.en.ts`). Mensajes de mutación guardan claves semánticas para cambio de idioma inmediato; datos editoriales/errores desconocidos del servidor conservan su idioma. No se introduce un segundo proveedor.
+- `calendar.ts`: exportación local explícita solo para habitaciones con rango real; fechas de día completo y salida exclusiva, sin hora de check-in inventada; Unicode escapado y plegado UTF-8, pendiente como TENTATIVE. No equivale a factura ni envía correos.

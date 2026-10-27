@@ -6,6 +6,7 @@ import { es } from '@/i18n/es';
 import { useAuth } from '../AuthContext';
 import { canAccessPanel, hasPermission, type Permission } from '../permissions';
 import { isKnownRole } from '../types';
+import { ForbiddenPage } from '@/pages/ForbiddenPage';
 
 interface RequireAuthProps {
   /** Exige al menos un módulo de panel habilitado para el rol. */
@@ -60,6 +61,7 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ panel = false, permiss
     (!permission || hasPermission(user.rol, permission));
 
   if (!allowed) {
+    if (permission) return <ForbiddenPage />;
     return <Navigate to="/403" replace />;
   }
 

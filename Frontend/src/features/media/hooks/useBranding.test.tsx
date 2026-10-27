@@ -69,8 +69,9 @@ describe('useBranding Hook & Renewal Logic', () => {
       expect(delay).toBe(false);
     });
 
-    it('retorna false si no se proporciona expiresAt o la fecha es inválida', () => {
+    it('retorna false si no se proporciona expiresAt, es null (CloudFront) o la fecha es inválida', () => {
       expect(calculateRenewalDelay(undefined, false, fixedNow)).toBe(false);
+      expect(calculateRenewalDelay(null, false, fixedNow)).toBe(false);
       expect(calculateRenewalDelay('invalid-date', false, fixedNow)).toBe(false);
     });
   });

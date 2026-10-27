@@ -112,3 +112,53 @@ export const deleteTipoHabitacion = async (
     next(error);
   }
 };
+
+export const presignImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await tipoHabitacionService.requestImageUpload(
+      Number(req.params.id),
+      req.user!.id,
+      req.body.contentType
+    );
+    res.status(200).json({ status: "success", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const tipo = await tipoHabitacionService.confirmImageUpload(
+      Number(req.params.id),
+      req.user!.id,
+      req.body.uploadToken,
+      req.body.tempKey
+    );
+    res.status(200).json({ status: "success", data: tipo });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const tipo = await tipoHabitacionService.removeImage(
+      Number(req.params.id)
+    );
+    res.status(200).json({ status: "success", data: tipo });
+  } catch (error) {
+    next(error);
+  }
+};

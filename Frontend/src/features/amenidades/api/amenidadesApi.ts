@@ -1,4 +1,5 @@
 import { api } from "@/api/client/http";
+import { uploadEntityImage } from "@/api/mediaUpload";
 import type {
   Amenidad,
   AmenidadResponse,
@@ -48,6 +49,30 @@ export const amenidadesApi = {
     data: UpdateAmenidadInput
   ): Promise<Amenidad> => {
     const response = await api.patch<AmenidadResponse>(`/amenidades/${id}`, data);
+    return response.data;
+  },
+
+  /**
+   * Sube una imagen para la amenidad directamente a S3.
+   */
+  uploadImage: async (
+    id: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<Amenidad> => {
+    return uploadEntityImage<Amenidad>({
+      presignEndpoint: `/amenidades/${id}/imagen-presign`,
+      confirmEndpoint: `/amenidades/${id}/imagen-confirmar`,
+      file,
+      onProgress,
+    });
+  },
+
+  /**
+   * Quita la imagen de la amenidad.
+   */
+  removeImage: async (id: number): Promise<Amenidad> => {
+    const response = await api.delete<AmenidadResponse>(`/amenidades/${id}/imagen`);
     return response.data;
   },
 };

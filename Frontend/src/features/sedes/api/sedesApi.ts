@@ -1,4 +1,5 @@
 import { api } from '@/api/client/http';
+import { uploadEntityImage } from '@/api/mediaUpload';
 import type {
   CreateSucursalInput,
   PresignImageResponse,
@@ -44,7 +45,7 @@ export const sedesApi = {
   },
 
   /**
-   * Activación o desactivación de la sede mediante PATCH.
+   * Modificación de estado activo/inactivo (requiere rol admin).
    */
   toggleEstado: async (id: number, activa: boolean): Promise<Sucursal> => {
     const response = await api.patch<SucursalResponse>(`/sucursales/${id}`, { activa });
@@ -131,5 +132,29 @@ export const sedesApi = {
     onProgress?.(100);
 
     return updatedSede;
+  },
+
+  /**
+   * Sube la imagen del restaurante de la sede directamente a S3.
+   */
+  uploadRestauranteImage: async (
+    id: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<Sucursal> => {
+    return uploadEntityImage<Sucursal>({
+      presignEndpoint: `/sucursales/${id}/restaurante-imagen-presign`,
+      confirmEndpoint: `/sucursales/${id}/restaurante-imagen-confirmar`,
+      file,
+      onProgress,
+    });
+  },
+
+  /**
+   * Quita la imagen del restaurante de la sede.
+   */
+  removeRestauranteImage: async (id: number): Promise<Sucursal> => {
+    const response = await api.delete<SucursalResponse>(`/sucursales/${id}/restaurante-imagen`);
+    return response.data;
   },
 };

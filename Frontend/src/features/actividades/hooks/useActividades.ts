@@ -59,6 +59,40 @@ export function useUpdateRecursoMutation() {
   });
 }
 
+export function useUploadRecursoActividadImageMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => actividadesApi.uploadRecursoImage(id, file, onProgress),
+    onSuccess: (_, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: actividadesQueryKeys.recursoDetail(id) });
+      void queryClient.invalidateQueries({ queryKey: actividadesQueryKeys.recursos() });
+      void queryClient.invalidateQueries({ queryKey: actividadesQueryKeys.all });
+    },
+  });
+}
+
+export function useRemoveRecursoActividadImageMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => actividadesApi.removeRecursoImage(id),
+    onSuccess: (_, id) => {
+      void queryClient.invalidateQueries({ queryKey: actividadesQueryKeys.recursoDetail(id) });
+      void queryClient.invalidateQueries({ queryKey: actividadesQueryKeys.recursos() });
+      void queryClient.invalidateQueries({ queryKey: actividadesQueryKeys.all });
+    },
+  });
+}
+
 export function useCreateInstructorMutation() {
   const queryClient = useQueryClient();
 

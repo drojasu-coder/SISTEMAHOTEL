@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle } from "lucide-react";
@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Feedback";
+import { ImageUploader } from "@/components/ui/ImageUploader";
 import { ApiError } from "@/api/client/http";
 import { getApiErrorMessage, getFieldErrors } from "@/api/errors";
 import { textosHabitaciones } from "../textos";
@@ -17,6 +18,8 @@ import {
 import {
   useCreateHabitacionMutation,
   useUpdateHabitacionMutation,
+  useUploadHabitacionImageMutation,
+  useRemoveHabitacionImageMutation,
 } from "../hooks/useHabitaciones";
 import type { Habitacion, TipoHabitacion, EstadoHabitacion } from "../types";
 import type { Sucursal } from "@/features/sedes/types";
@@ -48,7 +51,17 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
 
   const createMutation = useCreateHabitacionMutation();
   const updateMutation = useUpdateHabitacionMutation();
+  const uploadImageMutation = useUploadHabitacionImageMutation();
+  const removeImageMutation = useRemoveHabitacionImageMutation();
   const activeMutation = isEditing ? updateMutation : createMutation;
+
+  // Manejo de imagen de la habitación
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [persistedId, setPersistedId] = useState<number | null>(null);
 
   const {
     register,
@@ -68,6 +81,13 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
 
   useEffect(() => {
     if (open) {
+      setSelectedFile(null);
+      setRemoveMarked(false);
+      setIsUploadingImage(false);
+      setUploadProgress(0);
+      setImageError(null);
+      setPersistedId(null);
+
       if (habitacion) {
         reset({
           sucursal_id: habitacion.sucursal_id,
@@ -86,25 +106,35 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
       }
       createMutation.reset();
       updateMutation.reset();
+      uploadImageMutation.reset();
+      removeImageMutation.reset();
     }
   }, [open, habitacion, sedes, tiposHabitacion, reset]);
 
   const onSubmit = async (data: HabitacionFormData) => {
+    setImageError(null);
     const payload = sanitizeHabitacionPayload(data);
+
+    let targetId: number;
     try {
       if (isEditing && habitacion) {
+        targetId = habitacion.id;
         await updateMutation.mutateAsync({
           id: habitacion.id,
           data: payload,
         });
-        onSuccess(textosHabitaciones.actualizadaExito);
+      } else if (persistedId) {
+        targetId = persistedId;
+        await updateMutation.mutateAsync({
+          id: persistedId,
+          data: payload,
+        });
       } else {
-        await createMutation.mutateAsync(payload);
-        onSuccess(textosHabitaciones.creadaExito);
+        const created = await createMutation.mutateAsync(payload);
+        targetId = created.id;
+        setPersistedId(created.id);
       }
-      onClose();
     } catch (err: unknown) {
-      // Manejo de errores específicos del backend conservando valores en el formulario
       if (err instanceof ApiError) {
         if (err.status === 400) {
           const fieldErrors = getFieldErrors(err);
@@ -121,10 +151,53 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
           }
         }
       }
+      return;
     }
+
+    // Retiro de imagen si fue marcada
+    if (removeMarked && (habitacion?.id || persistedId)) {
+      try {
+        await removeImageMutation.mutateAsync(targetId);
+      } catch (err: any) {
+        setImageError("No fue posible retirar la imagen actual.");
+        return;
+      }
+    }
+
+    // Subida de nueva imagen
+    if (selectedFile) {
+      setIsUploadingImage(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetId,
+          file: selectedFile,
+          onProgress: (pct) => setUploadProgress(pct),
+        });
+      } catch (err: any) {
+        setIsUploadingImage(false);
+        setImageError(
+          err?.message ||
+            "Error al subir la fotografía de la habitación. Los datos fueron guardados; puede reintentar.",
+        );
+        return;
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
+    onSuccess(
+      isEditing ? textosHabitaciones.actualizadaExito : textosHabitaciones.creadaExito
+    );
+    onClose();
   };
 
-  const isPending = activeMutation.isPending || isSubmitting;
+  const isPending =
+    activeMutation.isPending ||
+    uploadImageMutation.isPending ||
+    removeImageMutation.isPending ||
+    isUploadingImage ||
+    isSubmitting;
 
   return (
     <Modal open={open} onClose={onClose} title={title} description={description}>
@@ -238,6 +311,22 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
             </p>
           )}
         </div>
+
+        {/* Fotografía específica de la habitación */}
+        <ImageUploader
+          label="Fotografía específica de la habitación"
+          helpText="Archivos JPEG, PNG o WebP de hasta 5 MiB"
+          currentImageUrl={habitacion?.imagen_url}
+          currentImageLabel="Fotografía de la habitación"
+          selectedFile={selectedFile}
+          removeMarked={removeMarked}
+          onFileSelect={setSelectedFile}
+          onRemoveCurrent={() => setRemoveMarked((prev) => !prev)}
+          disabled={isPending}
+          isUploading={isUploadingImage}
+          uploadProgress={uploadProgress}
+          error={imageError}
+        />
 
         {/* Botones de acción */}
         <div className="mt-2 flex items-center justify-end gap-3 border-t border-neutro-200 pt-4">

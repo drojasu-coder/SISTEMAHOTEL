@@ -14358,7 +14358,7 @@ export interface components {
              * Format: date-time
              * @example 2026-10-25T12:00:00.000Z
              */
-            expiresAt: string;
+            expiresAt: string | null;
         };
         BrandingResponse: {
             /** @example success */

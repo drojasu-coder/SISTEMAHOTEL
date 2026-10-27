@@ -1,3 +1,4 @@
+import { usePublicInterface } from '@/i18n/public';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Check } from 'lucide-react';
@@ -18,6 +19,7 @@ export interface BotonAnadirAlCarritoProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   onSuccess?: () => void;
+  publicInterface?: boolean;
 }
 
 /** Estados terminales según backend que no pueden agregarse a un carrito */
@@ -53,7 +55,9 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
   size = 'md',
   className,
   onSuccess,
+  publicInterface = false,
 }) => {
+  const { p } = usePublicInterface();
   const { user } = useAuth();
   const { anadirAlCarrito, isLoading, feedback, limpiarFeedback } =
     useAddReservaToCarrito({
@@ -86,13 +90,13 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
           isLoading={isLoading}
           disabled={isLoading || esTerminal}
           className={className}
-          aria-label={textosCarrito.anadirAlCarrito}
+          aria-label={(publicInterface ? p('addCart') : textosCarrito.anadirAlCarrito)}
         >
           <ShoppingCart className="size-4" aria-hidden="true" />
           <span>
             {isLoading
-              ? textosCarrito.anadiendoAlCarrito
-              : textosCarrito.anadirAlCarrito}
+              ? (publicInterface ? p('addingCart') : textosCarrito.anadiendoAlCarrito)
+              : (publicInterface ? p('addCart') : textosCarrito.anadirAlCarrito)}
           </span>
         </Button>
 
@@ -102,14 +106,14 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
             className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-bronce-300 bg-white px-3 py-2 text-xs font-semibold text-bronce-700 transition-colors hover:bg-bronce-50"
           >
             <Check className="size-3.5" aria-hidden="true" />
-            <span>{textosCarrito.verCarrito}</span>
+            <span>{(publicInterface ? p('viewCart') : textosCarrito.verCarrito)}</span>
           </Link>
         )}
       </div>
 
       {esTerminal && (
         <p className="text-xs text-neutro-500">
-          {textosCarrito.noElegibleEstado}
+          {(publicInterface ? p('ineligibleCart') : textosCarrito.noElegibleEstado)}
         </p>
       )}
 
@@ -117,10 +121,10 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
         <div className="flex flex-col gap-1.5 pt-1">
           <Alert tone={feedback.tono}>
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium">{feedback.texto}</p>
+              <p className="text-xs font-medium">{publicInterface && feedback.tono === 'success' ? p('addedCart') : <span lang="es">{feedback.texto}</span>}</p>
               {feedback.tono === 'success' && (
                 <p className="text-[0.6875rem] text-neutro-500">
-                  {textosCarrito.anadirExitoNota}
+                  {(publicInterface ? p('addedCartNote') : textosCarrito.anadirExitoNota)}
                 </p>
               )}
             </div>
@@ -132,14 +136,14 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
                 to={CARRITO_ROUTES.CARRITO}
                 className="text-xs font-semibold text-bronce-700 underline hover:text-bronce-800"
               >
-                {textosCarrito.verCarrito}
+                {(publicInterface ? p('viewCart') : textosCarrito.verCarrito)}
               </Link>
               <button
                 type="button"
                 onClick={limpiarFeedback}
                 className="text-xs text-neutro-500 hover:text-neutro-700"
               >
-                {textosCarrito.descartar}
+                {(publicInterface ? p('dismiss') : textosCarrito.descartar)}
               </button>
             </div>
           )}

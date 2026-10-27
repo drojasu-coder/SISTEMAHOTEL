@@ -39,3 +39,31 @@ export function useUpdateAmenidadMutation() {
     },
   });
 }
+
+export function useUploadAmenidadImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => amenidadesApi.uploadImage(id, file, onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: AMENIDADES_QUERY_KEY });
+    },
+  });
+}
+
+export function useRemoveAmenidadImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => amenidadesApi.removeImage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: AMENIDADES_QUERY_KEY });
+    },
+  });
+}

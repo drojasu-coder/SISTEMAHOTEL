@@ -15,7 +15,7 @@ export const RENEWAL_LEAD_TIME_MS = 5 * 60 * 1000;
  * Retorna false si hay un error, no hay sedes o no hay URLs con expiración.
  */
 export function calculateSedesRenewalDelay(
-  sedes: Sucursal[] | undefined,
+  sedes: readonly Pick<Sucursal, 'imagen_url' | 'imagen_expires_at'>[] | undefined,
   isError: boolean,
   now: number = Date.now(),
 ): number | false {
@@ -77,6 +77,14 @@ export function useSedesQuery(options?: UseSedesQueryOptions) {
   });
 }
 
+export function useSedeQuery(id: number) {
+  return useQuery({
+    queryKey: [...SEDES_QUERY_KEY, id] as const,
+    queryFn: () => sedesApi.getById(id),
+    enabled: Boolean(id),
+  });
+}
+
 export function useCreateSedeMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -131,6 +139,34 @@ export function useRemoveSedeImageMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => sedesApi.removeImage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SEDES_QUERY_KEY });
+    },
+  });
+}
+
+export function useUploadRestauranteImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => sedesApi.uploadRestauranteImage(id, file, onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SEDES_QUERY_KEY });
+    },
+  });
+}
+
+export function useRemoveRestauranteImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => sedesApi.removeRestauranteImage(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: SEDES_QUERY_KEY });
     },

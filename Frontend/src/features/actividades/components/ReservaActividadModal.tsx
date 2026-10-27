@@ -1,6 +1,16 @@
+import { DateField } from '@/components/ui/DateField';
+import { TimeField } from '@/components/ui/TimeField';
+import { Select } from '@/components/ui/Select';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { Modal } from '@/components/ui/Modal';
+import { TranslatedError, type LocalizedError } from '@/i18n/public';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
+import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
 import React, { useMemo, useState } from 'react';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, CheckCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
 import { ApiError } from '@/api/client/http';
@@ -11,7 +21,7 @@ import type { RecursoActividad, ReservaActividad } from '../types';
 import { useInstructoresQuery } from '../hooks/useActividades';
 import { useCreateReservaActividadMutation } from '../hooks/useReservasActividad';
 import { ACTIVIDADES_ROUTES } from '../constants/routes';
-import { formatearGTQ, textosActividades } from '../textos';
+
 
 interface ReservaActividadModalProps {
   isOpen: boolean;
@@ -29,7 +39,10 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
   onClose,
   recurso,
 }) => {
+  const textosActividades = usePublicTexts('actividades');
+  const { p, date: calendarDate } = usePublicInterface();
   const navigate = useNavigate();
+  const siteBlocked = useDraftSiteGuard(recurso?.id, recurso?.sucursal_id);
   const { user } = useAuth();
   const isCliente = user?.rol === 'cliente';
 
@@ -40,7 +53,7 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
   const [instructorId, setInstructorId] = useState<string>('');
   const [conEquipo, setConEquipo] = useState<boolean>(false);
 
-  const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [errorLocal, setErrorLocal] = useState<LocalizedError | null>(null);
   const [falloIncierto, setFalloIncierto] = useState<boolean>(false);
   const [reservaCreada, setReservaCreada] = useState<ReservaActividad | null>(null);
 
@@ -71,12 +84,12 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
     setFalloIncierto(false);
 
     if (!isCliente) {
-      setErrorLocal('Debe iniciar sesión como cliente para reservar una actividad recreativa.');
+      setErrorLocal({ section: 'extra', key: 'activityLogin' });
       return;
     }
 
     if (!fecha) {
-      setErrorLocal('La fecha es obligatoria.');
+      setErrorLocal({ section: 'extra', key: 'requiredDate' });
       return;
     }
 
@@ -85,12 +98,12 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
     const duracionMin = minFin - minInicio;
 
     if (minInicio >= minFin) {
-      setErrorLocal(textosActividades.errorRangoInvalido);
+      setErrorLocal({ section: 'actividades', key: 'errorRangoInvalido' });
       return;
     }
 
     if (duracionMin < 30 || duracionMin > 120) {
-      setErrorLocal(textosActividades.errorDuracionInvalida);
+      setErrorLocal({ section: 'actividades', key: 'errorDuracionInvalida' });
       return;
     }
 
@@ -118,48 +131,49 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
         msgLower.includes('traslape') ||
         msg.includes('RESOURCE_OVERLAP')
       ) {
-        setErrorLocal(textosActividades.errorRecursoOcupado);
+        setErrorLocal({ section: 'actividades', key: 'errorRecursoOcupado' });
       } else if (
         code === 'INSTRUCTOR_OVERLAP' ||
         (msgLower.includes('instructor') && (msgLower.includes('ocupad') || msgLower.includes('clase'))) ||
         msg.includes('INSTRUCTOR_OVERLAP')
       ) {
-        setErrorLocal(textosActividades.errorInstructorOcupado);
+        setErrorLocal({ section: 'actividades', key: 'errorInstructorOcupado' });
       } else if (
         code === 'INSTRUCTOR_INACTIVE' ||
         msgLower.includes('inactivo') ||
         msg.includes('INSTRUCTOR_INACTIVE')
       ) {
-        setErrorLocal(textosActividades.errorInstructorInactivo);
+        setErrorLocal({ section: 'actividades', key: 'errorInstructorInactivo' });
       } else if (
         code === 'INVALID_ACTIVITY_DURATION' ||
         msgLower.includes('duración') ||
         msgLower.includes('30 minutos') ||
         msg.includes('INVALID_ACTIVITY_DURATION')
       ) {
-        setErrorLocal(textosActividades.errorDuracionInvalida);
+        setErrorLocal({ section: 'actividades', key: 'errorDuracionInvalida' });
       } else if (
         code === 'PAST_DATE_TIME' ||
         msgLower.includes('pasado') ||
         msgLower.includes('pasada') ||
         msg.includes('PAST_DATE_TIME')
       ) {
-        setErrorLocal(textosActividades.errorFechaPasada);
+        setErrorLocal({ section: 'actividades', key: 'errorFechaPasada' });
       } else if (
         msgLower.includes('red') ||
         msgLower.includes('conexión') ||
         msgLower.includes('fetch') ||
         msgLower.includes('timeout')
       ) {
-        setErrorLocal(textosActividades.errorInciertoRed);
+        setErrorLocal({ section: 'actividades', key: 'errorInciertoRed' });
         setFalloIncierto(true);
       } else {
-        setErrorLocal(msg || textosActividades.errorGenericoCreacion);
+        setErrorLocal(msg ? { server: msg } : { section: 'actividades', key: 'errorGenericoCreacion' });
       }
     }
   };
 
   const handleResetAndClose = () => {
+    if (createMutation.isPending) return;
     setReservaCreada(null);
     setErrorLocal(null);
     setFalloIncierto(false);
@@ -167,37 +181,14 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-actividad-titulo"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutro-900/50 backdrop-blur-xs"
-    >
-      <div className="surface flex w-full max-w-lg flex-col gap-5 rounded-2xl p-6 shadow-elevated max-h-[90vh] overflow-y-auto">
-        {/* Cabecera / Cierre */}
-        <div className="flex items-center justify-between border-b border-neutro-100 pb-3">
-          <span className="text-xs font-semibold text-bronce-700 tracking-wide uppercase">
-            {textosActividades.nuevaReservaTitulo}
-          </span>
-          <button
-            type="button"
-            onClick={handleResetAndClose}
-            className="rounded p-1 text-neutro-400 hover:text-neutro-600 focus:outline-none"
-            aria-label="Cerrar modal"
-          >
-            ✕
-          </button>
-        </div>
-
+    <Modal open onClose={handleResetAndClose} closeLabel={p('closeModal')} title={reservaCreada ? textosActividades.reservaExitosaTitulo : recurso.nombre ?? p('facility')} busy={createMutation.isPending} busyLabel={p('processingRequest')}>
         {reservaCreada ? (
           <div className="flex flex-col items-center text-center gap-4 py-2">
             <div className="flex size-14 items-center justify-center rounded-full bg-verde-100 text-verde-600">
               <CheckCircle className="size-8" aria-hidden="true" />
             </div>
 
-            <h2 id="modal-actividad-titulo" className="text-xl font-semibold text-neutro-900">
-              {textosActividades.reservaExitosaTitulo}
-            </h2>
+
 
             <p className="text-sm text-neutro-600 max-w-sm">
               {textosActividades.reservaExitosaDesc}
@@ -205,30 +196,28 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
 
             <div className="w-full rounded-lg bg-neutro-50 p-4 text-left border border-neutro-200 space-y-2 text-sm text-neutro-800">
               <div className="flex justify-between">
-                <span className="text-neutro-500">Reserva:</span>
+                <span className="text-neutro-500">{p('reservation')}</span>
                 <span className="font-semibold text-neutro-900">#{reservaCreada.id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-500">Instalación:</span>
-                <span className="font-medium text-neutro-900">{recurso.nombre}</span>
+                <span className="text-neutro-500">{p('facility')}</span>
+                <span className="font-medium text-neutro-900"><span lang="es">{recurso.nombre}</span></span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-500">Fecha y horario:</span>
+                <span className="text-neutro-500">{p('dateTime')}</span>
                 <span className="font-medium text-neutro-900">
-                  {reservaCreada.fecha} ({reservaCreada.hora_inicio?.slice(0, 5)} - {reservaCreada.hora_fin?.slice(0, 5)})
+                  {calendarDate(reservaCreada.fecha)} ({reservaCreada.hora_inicio?.slice(0, 5)} - {reservaCreada.hora_fin?.slice(0, 5)})
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-500">Total calculado:</span>
+                <span className="text-neutro-500">{p('totalCalculated')}</span>
                 <span className="font-semibold text-bronce-700">
-                  {formatearGTQ(reservaCreada.total)}
+                  <MoneyReference amount={reservaCreada.total} />
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-500">Estado:</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-verde-100 text-verde-800">
-                  {textosActividades.estados[reservaCreada.estado || 'confirmada']}
-                </span>
+                <span className="text-neutro-500">{p('state')}</span>
+                <StatusBadge domain="reservation" value={reservaCreada.estado} />
               </div>
             </div>
 
@@ -236,6 +225,7 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
               {/* Botón de añadir al carrito activo para proceder al pago */}
               <div className="flex-1">
                 <BotonAnadirAlCarrito
+          publicInterface
                   reservaId={reservaCreada.id!}
                   reservaEstado={reservaCreada.estado || 'confirmada'}
                   tipo_item="actividad"
@@ -259,15 +249,14 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <form onSubmit={(event) => { if (siteBlocked || createMutation.isPending) { event.preventDefault(); return; } void handleSubmit(event); }} className="flex flex-col gap-5">
+              <DraftSiteNotice blocked={siteBlocked} /><fieldset disabled={siteBlocked || createMutation.isPending} className="contents">
             <div>
               <p className="eyebrow text-bronce-700 font-semibold">{textosActividades.subtitulo}</p>
-              <h2 id="modal-actividad-titulo" className="text-xl font-semibold text-neutro-900 mt-1">
-                {recurso.nombre}
-              </h2>
+
               <p className="text-xs text-neutro-500 mt-0.5">
-                {recurso.Sucursal?.nombre ? `Sede: ${recurso.Sucursal.nombre} · ` : ''}
-                Tipo: {recurso.tipo}
+                {recurso.Sucursal?.nombre && <>{p('siteLabel')} <span lang="es">{recurso.Sucursal.nombre}</span> · </>}
+                {' '}{p('type')}{' '}<span lang="es">{recurso.tipo}</span>
               </p>
             </div>
 
@@ -275,139 +264,55 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
             <div className="rounded-lg bg-neutro-50 p-3.5 border border-neutro-200 text-xs text-neutro-700 space-y-1.5">
               <div className="flex justify-between">
                 <span>{textosActividades.precioPorHora}</span>
-                <span className="font-semibold text-neutro-900">{formatearGTQ(recurso.precio_hora)}</span>
+                <span className="font-semibold text-neutro-900"><MoneyReference amount={recurso.precio_hora} /></span>
               </div>
               <div className="pt-1.5 border-t border-neutro-200 flex justify-between font-medium text-neutro-900">
-                <span>{textosActividades.totalCalculado}:</span>
-                <span className="text-bronce-700 font-semibold">{formatearGTQ(totalEstimado)}</span>
+                <span>{p('estimatedTotal')}:</span>
+                <span className="text-bronce-700 font-semibold"><MoneyReference amount={totalEstimado} /></span>
               </div>
             </div>
 
             {/* Advertencia si no está autenticado como cliente */}
             {!isCliente && (
-              <Alert tone="warning" title="Acceso exclusivo para clientes">
-                Para solicitar una reserva recreativa, debe{' '}
+              <Alert tone="warning" title={p('customerAccess')}>
+                {' '}{p('activityLoginPrefix')}{' '}
                 <Link to="/login" className="font-semibold underline">
-                  iniciar sesión
-                </Link>{' '}
-                con su cuenta de cliente.
-              </Alert>
+                  {' '}{p('signIn')}{' '}</Link>{' '}
+                {' '}{p('customerAccountSuffix')}{' '}</Alert>
             )}
 
             {errorLocal && (
               <Alert tone="error">
-                <p className="text-xs">{errorLocal}</p>
+                <p className="text-xs"><TranslatedError error={errorLocal} /></p>
                 {falloIncierto && (
                   <div className="mt-2">
                     <Link
                       to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
                       className="text-xs font-semibold text-rojo-700 underline"
                     >
-                      Consultar mis actividades
-                    </Link>
+                      {' '}{p('myActivities')}{' '}</Link>
                   </div>
                 )}
               </Alert>
             )}
 
             <div className="space-y-4">
-              <div>
-                <label htmlFor="fecha" className="block text-xs font-medium text-neutro-700 mb-1">
-                  {textosActividades.campoFecha}
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    id="fecha"
-                    min={hoy}
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                    className="w-full rounded-md border border-neutro-300 py-2 pl-3 pr-8 text-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
-                    required
-                  />
-                  <Calendar className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" />
-                </div>
+              <DateField label={textosActividades.campoFecha} id="fecha" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} required />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <TimeField label={textosActividades.campoHoraInicio} id="hora_inicio" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} required />
+                <TimeField label={textosActividades.campoHoraFin} id="hora_fin" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} required />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="hora_inicio" className="block text-xs font-medium text-neutro-700 mb-1">
-                    {textosActividades.campoHoraInicio}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="time"
-                      id="hora_inicio"
-                      value={horaInicio}
-                      onChange={(e) => setHoraInicio(e.target.value)}
-                      className="w-full rounded-md border border-neutro-300 py-2 pl-3 pr-8 text-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
-                      required
-                    />
-                    <Clock className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="hora_fin" className="block text-xs font-medium text-neutro-700 mb-1">
-                    {textosActividades.campoHoraFin}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="time"
-                      id="hora_fin"
-                      value={horaFin}
-                      onChange={(e) => setHoraFin(e.target.value)}
-                      className="w-full rounded-md border border-neutro-300 py-2 pl-3 pr-8 text-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
-                      required
-                    />
-                    <Clock className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" />
-                  </div>
-                </div>
-              </div>
-              <p className="text-[11px] text-neutro-500">{textosActividades.duracionRegla}</p>
-
-              {/* Selector opcional de Instructor */}
-              <div>
-                <label htmlFor="instructor_id" className="block text-xs font-medium text-neutro-700 mb-1">
-                  {textosActividades.campoInstructor}
-                </label>
-                <div className="relative">
-                  <select
-                    id="instructor_id"
-                    value={instructorId}
-                    onChange={(e) => setInstructorId(e.target.value)}
-                    className="w-full rounded-md border border-neutro-300 py-2 pl-3 pr-8 text-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 bg-white"
-                  >
-                    <option value="">{textosActividades.seleccionarInstructor}</option>
-                    {instructoresActivos.map((inst) => (
-                      <option key={inst.id} value={inst.id}>
-                        {inst.nombre} {inst.especialidad ? `(${inst.especialidad})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <User className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" />
-                </div>
-              </div>
-
-              {/* Opción de equipamiento */}
-              <div className="flex items-start gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="con_equipo"
-                  checked={conEquipo}
-                  onChange={(e) => setConEquipo(e.target.checked)}
-                  className="mt-0.5 size-4 rounded border-neutro-300 text-bronce-600 focus:ring-bronce-500"
-                />
-                <label htmlFor="con_equipo" className="text-xs text-neutro-700 cursor-pointer">
-                  {textosActividades.campoEquipo}
-                </label>
-              </div>
+              <p className="text-xs text-neutro-600">{textosActividades.duracionRegla}</p>
+              <Select label={textosActividades.campoInstructor} id="instructor_id" value={instructorId} onChange={(e) => setInstructorId(e.target.value)}>
+                <option value="">{textosActividades.seleccionarInstructor}</option>
+                {instructoresActivos.map((inst) => <option lang="es" key={inst.id} value={inst.id}>{inst.nombre} {inst.especialidad ? `(${inst.especialidad})` : ''}</option>)}
+              </Select>
+              <Checkbox label={textosActividades.campoEquipo} id="con_equipo" checked={conEquipo} onChange={(e) => setConEquipo(e.target.checked)} />
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-neutro-100">
               <Button type="button" variant="ghost" onClick={handleResetAndClose}>
-                Cancelar
-              </Button>
+                {' '}{p('cancel')}{' '}</Button>
               <Button
                 type="submit"
                 variant="primary"
@@ -419,9 +324,8 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
                   : textosActividades.confirmarReserva}
               </Button>
             </div>
-          </form>
+          </fieldset></form>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };

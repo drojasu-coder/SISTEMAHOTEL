@@ -21,18 +21,46 @@ export interface Habitacion {
   tipo_habitacion_id: number;
   numero: string;
   estado: EstadoHabitacion;
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: string | null;
+  imagen_creditos?: {
+    autor?: string;
+    fuente?: string;
+    licencia?: string;
+    url?: string;
+  } | null;
   createdAt?: string;
   updatedAt?: string;
   Sucursal?: {
     id: number;
     nombre: string;
     activa?: boolean;
+    direccion?: string;
+    ciudad?: string;
+  };
+  sucursal?: {
+    id: number;
+    nombre: string;
+    activa?: boolean;
+    direccion?: string;
+    ciudad?: string;
   };
   TipoHabitacion?: {
     id: number;
     nombre: string;
     capacidad_maxima?: number;
     tarifa_noche?: string | number;
+    descripcion?: string | null;
+    imagen_url?: string | null;
+  };
+  tipo_habitacion?: {
+    id: number;
+    nombre: string;
+    capacidad_maxima?: number;
+    tarifa_noche?: string | number;
+    descripcion?: string | null;
+    imagen_url?: string | null;
   };
 }
 
@@ -42,6 +70,15 @@ export interface TipoHabitacion {
   capacidad_maxima: number;
   tarifa_noche: string | number;
   descripcion: string | null;
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: string | null;
+  imagen_creditos?: {
+    autor?: string;
+    fuente?: string;
+    licencia?: string;
+    url?: string;
+  } | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -72,6 +109,7 @@ export interface CreateHabitacionInput {
   tipo_habitacion_id: number;
   numero: string;
   estado?: EstadoHabitacion;
+  imagen_key?: string | null;
 }
 
 export interface UpdateHabitacionInput {
@@ -79,6 +117,7 @@ export interface UpdateHabitacionInput {
   tipo_habitacion_id?: number;
   numero?: string;
   estado?: EstadoHabitacion;
+  imagen_key?: string | null;
 }
 
 export interface HabitacionesFiltersState {

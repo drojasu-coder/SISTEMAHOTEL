@@ -134,8 +134,8 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
 
     expect(await screen.findByText('Cancha de Tenis Central')).toBeInTheDocument();
     expect(screen.getByText('Kayaks de Lago')).toBeInTheDocument();
-    expect(screen.getByText('Q75.00')).toBeInTheDocument();
-    expect(screen.getByText('Q50.00')).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*75\.00.*US\$/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*50\.00.*US\$/)).toBeInTheDocument();
   });
 
   it('2. Filtra actividades por término de búsqueda', async () => {
@@ -183,7 +183,7 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
     await waitFor(() => {
       expect(screen.getByText(/¡Reserva confirmada exitosamente!/i)).toBeInTheDocument();
       expect(screen.getByText(/#301/i)).toBeInTheDocument();
-      expect(screen.getByText(/Q130.00/i)).toBeInTheDocument();
+      expect(screen.getByText(/Q\s*130\.00.*US\$/i)).toBeInTheDocument();
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/App';
 import { tokenStorage } from '@/api/session';
@@ -48,20 +48,19 @@ describe('Registro de clientes (fetch simulado)', () => {
     await fillForm({ password: 'corta' });
 
     expect(await screen.findByText(/al menos 8 caracteres/i)).toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.some(([url]) => /\/auth\/(register|login)$/.test(String(url)))).toBe(false);
   });
 
   it('envía solo los campos permitidos (sin rol) y luego inicia sesión', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(created)
-      .mockResolvedValueOnce(loginResponse('cliente'));
+    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(
+      url.endsWith('/auth/register') ? created : url.endsWith('/auth/login') ? loginResponse('cliente') : jsonResponse({ status: 'success', data: [] }),
+    ));
     render(<App />);
 
     await fillForm();
 
     await waitFor(() => expect(tokenStorage.get()).toBe('jwt-de-prueba'));
-    const [registerUrl, registerConfig] = (global.fetch as any).mock.calls[0];
+    const [registerUrl, registerConfig] = (global.fetch as any).mock.calls.find(([url]: [string]) => url.endsWith('/auth/register'));
     expect(registerUrl).toMatch(/\/auth\/register$/);
     expect(JSON.parse(registerConfig.body)).toEqual({
       nombre: 'Persona Prueba',
@@ -86,10 +85,10 @@ describe('Registro de clientes (fetch simulado)', () => {
   });
 
   it('si la cuenta se crea pero falla el inicio de sesión, lo indica sin duplicar el registro', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(created)
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.endsWith('/auth/login')) return Promise.reject(new TypeError('Failed to fetch'));
+      return Promise.resolve(url.endsWith('/auth/register') ? created : jsonResponse({ status: 'success', data: [] }));
+    });
     render(<App />);
 
     await fillForm();
@@ -97,5 +96,21 @@ describe('Registro de clientes (fetch simulado)', () => {
     expect(await screen.findByText(/Su cuenta fue creada/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Inicie sesión/i })).toHaveAttribute('href', '/login');
     expect(tokenStorage.get()).toBeNull();
+    expect(screen.getByRole('button', { name: /Crear cuenta/ })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('button', { name: /Crear cuenta/ }).closest('form')!);
+    expect((global.fetch as any).mock.calls.filter(([url]: [string]) => url.endsWith('/auth/register'))).toHaveLength(1);
+    expect(screen.getByLabelText(/^Contraseña$/i)).toHaveValue('');
+  });
+
+  it('preserva nombres Unicode y contraseña literal; normaliza teléfono con un prefijo elegido sin persistir país', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(url.endsWith('/auth/register') ? created : url.endsWith('/auth/login') ? loginResponse('cliente') : jsonResponse({ data: [] })));
+    render(<App />);
+    expect(screen.getByRole('combobox', { name: 'País del teléfono' })).toHaveValue('');
+    expect(screen.getByText(/De 8 a 72 caracteres/)).toBeInTheDocument();
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'País del teléfono' }), '+34');
+    await fillForm({ nombre: '李 María O’Connor', telefono: '612 345 678', password: '  Clave1234  ' });
+    await waitFor(() => expect(tokenStorage.get()).toBe('jwt-de-prueba'));
+    const registerCall = (global.fetch as any).mock.calls.find(([url]: [string]) => url.endsWith('/auth/register'));
+    expect(JSON.parse(registerCall[1].body)).toEqual({ nombre: '李 María O’Connor', email: 'persona@ejemplo.com', telefono: '+34612345678', password: '  Clave1234  ' });
   });
 });

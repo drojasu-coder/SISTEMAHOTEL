@@ -105,8 +105,8 @@ describe('Catálogo de Bienestar y Spa (CatalogoBienestarPage)', () => {
 
     expect(await screen.findByText('Masaje Relajante con Aromaterapia')).toBeInTheDocument();
     expect(screen.getByText('Tratamiento Facial Rejuvenecedor')).toBeInTheDocument();
-    expect(screen.getByText('Q350.00')).toBeInTheDocument();
-    expect(screen.getByText('Q280.00')).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*350\.00.*US\$/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*280\.00.*US\$/)).toBeInTheDocument();
     expect(screen.getByText(/60 minutos de sesión/)).toBeInTheDocument();
   });
 

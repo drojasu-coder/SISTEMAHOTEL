@@ -1,3 +1,4 @@
+import * as mediaUploadService from "../../services/storage/mediaUpload.service";
 import * as crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { AppError } from "../../utils/AppError";
@@ -480,4 +481,53 @@ export const removeImage = async (sedeId: number): Promise<any> => {
   }
 
   return serializeSucursal(updatedSucursal);
+};
+
+export const requestRestauranteImageUpload = async (
+  sedeId: number,
+  userId: number,
+  contentType: string
+) => {
+  const sucursal = await Sucursal.findByPk(sedeId);
+  if (!sucursal) {
+    throw new AppError(404, "BRANCH_NOT_FOUND", "La sucursal solicitada no existe");
+  }
+  return mediaUploadService.presignEntityUpload({
+    entityType: "sucursal-restaurante",
+    entityId: sedeId,
+    contentType,
+    userId,
+  });
+};
+
+export const confirmRestauranteImageUpload = async (
+  sedeId: number,
+  userId: number,
+  uploadToken: string,
+  tempKey: string
+) => {
+  return mediaUploadService.confirmEntityUpload({
+    entityType: "sucursal-restaurante",
+    entityId: sedeId,
+    userId,
+    uploadToken,
+    tempKey,
+    Model: Sucursal,
+    column: "restaurante_imagen_key",
+    buildFinalKey: (sucursal, ext) => {
+      const storageSlug = getSedeStorageSlug(sucursal);
+      const rand = crypto.randomBytes(6).toString("hex");
+      return `sedes/${storageSlug}/restaurante/restaurante-${Date.now()}-${rand}.${ext}`;
+    },
+    serializeEntity: serializeSucursal,
+  });
+};
+
+export const removeRestauranteImage = async (sedeId: number) => {
+  return mediaUploadService.removeEntityImage({
+    entityId: sedeId,
+    Model: Sucursal,
+    column: "restaurante_imagen_key",
+    serializeEntity: serializeSucursal,
+  });
 };

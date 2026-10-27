@@ -6,6 +6,7 @@ import { requireRole } from "../../middlewares/role.middleware";
 import { ROLES } from "../../constants/roles";
 import { createAmenidadSchema, updateAmenidadSchema } from "../../validators/amenidades/amenidad.validator";
 import { idParamSchema } from "../../validators/common.validator";
+import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 
 const router = Router();
 
@@ -162,5 +163,32 @@ router.patch("/:id", validateParams(idParamSchema), validateBody(updateAmenidadS
  *         description: La amenidad tiene reservas asociadas
  */
 router.delete("/:id", validateParams(idParamSchema), amenidadController.remove);
+
+
+router.post(
+  "/:id/imagen-presign",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(presignImageSchema),
+  amenidadController.presignImage
+);
+
+router.post(
+  "/:id/imagen-confirmar",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(confirmImageSchema),
+  amenidadController.confirmImage
+);
+
+router.delete(
+  "/:id/imagen",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  amenidadController.deleteImage
+);
 
 export default router;

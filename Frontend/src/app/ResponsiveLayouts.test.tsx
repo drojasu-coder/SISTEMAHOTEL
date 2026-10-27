@@ -15,7 +15,7 @@ describe('Navegación pública', () => {
     tokenStorage.clear();
   });
 
-  it('visitante: ofrece ingresar y crear cuenta, sin sede ni enlaces de panel', () => {
+  it('visitante: ofrece ingresar y crear cuenta sin enlaces de panel', () => {
     renderWithProviders(<Navbar />);
 
     expect(screen.getByRole('link', { name: /Ingresar/i })).toHaveAttribute('href', '/login');
@@ -29,6 +29,7 @@ describe('Navegación pública', () => {
     global.fetch = vi.fn().mockResolvedValue(meResponse('cliente'));
     renderWithProviders(<Navbar />);
 
+    await userEvent.setup().click(await screen.findByText('Persona Prueba'));
     expect(await screen.findByRole('link', { name: /Mi cuenta/i })).toHaveAttribute('href', '/cuenta');
     expect(screen.getByRole('button', { name: /Cerrar sesión/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Panel$/i })).not.toBeInTheDocument();
@@ -39,7 +40,8 @@ describe('Navegación pública', () => {
     global.fetch = vi.fn().mockResolvedValue(meResponse('recepcionista'));
     renderWithProviders(<Navbar />);
 
-    expect(await screen.findByRole('link', { name: /^Panel$/i })).toHaveAttribute('href', '/admin');
+    await userEvent.setup().click(await screen.findByText('Persona Prueba'));
+    expect(await screen.findByRole('link', { name: /Ir al panel/i })).toHaveAttribute('href', '/admin');
   });
 
   it('cerrar sesión borra el token y vuelve a ofrecer ingresar', async () => {
@@ -47,6 +49,7 @@ describe('Navegación pública', () => {
     global.fetch = vi.fn().mockResolvedValue(meResponse('cliente'));
     renderWithProviders(<Navbar />);
 
+    await userEvent.setup().click(await screen.findByText('Persona Prueba'));
     await userEvent.setup().click(await screen.findByRole('button', { name: /Cerrar sesión/i }));
 
     expect(await screen.findByRole('link', { name: /Ingresar/i })).toBeInTheDocument();

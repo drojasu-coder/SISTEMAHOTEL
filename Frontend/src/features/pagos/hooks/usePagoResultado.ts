@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/features/auth/AuthContext';
 import { pagosApi } from '../api/pagosApi';
@@ -11,8 +11,19 @@ export function usePagoResultado(pagoId: number) {
   const queryClient = useQueryClient();
 
   const isCliente = status === 'authenticated' && user?.rol === 'cliente';
-  const isValidId = Number.isInteger(pagoId) && pagoId > 0;
+  const isValidId = Number.isSafeInteger(pagoId) && pagoId > 0;
   const isEnabled = isCliente && Boolean(user?.id) && isValidId;
+
+  const pollingDeadline = useRef(Date.now() + 60000);
+  const [pollingPaused, setPollingPaused] = useState(false);
+  const [pollWindow, setPollWindow] = useState(0);
+  useEffect(() => {
+    pollingDeadline.current = Date.now() + 60000;
+    setPollingPaused(false);
+    if (!isEnabled) return;
+    const deadline = setTimeout(() => setPollingPaused(true), 60000);
+    return () => clearTimeout(deadline);
+  }, [isEnabled, pagoId, user?.id, pollWindow]);
 
   const queryKey = pagosQueryKeys.detail(pagoId, user?.id);
 
@@ -22,7 +33,7 @@ export function usePagoResultado(pagoId: number) {
     enabled: isEnabled,
     refetchInterval: (q) => {
       // Bloquear polling si el usuario no es cliente o la consulta está inhabilitada
-      if (!isEnabled) return false;
+      if (!isEnabled || pollingPaused || Date.now() >= pollingDeadline.current) return false;
       const data = q.state.data;
       if (!data) return false;
       // Mantener sondeo activo únicamente en estados no terminales
@@ -32,6 +43,8 @@ export function usePagoResultado(pagoId: number) {
       return false;
     },
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    retry: false,
   });
 
   const pago = query.data;
@@ -99,6 +112,8 @@ export function usePagoResultado(pagoId: number) {
 
   return {
     ...query,
+    refetch: () => { pollingDeadline.current = Date.now() + 60000; setPollWindow((value) => value + 1); return query.refetch(); },
+    pollingPaused,
     pago,
     isCliente,
     isAuthLoading: status === 'loading',

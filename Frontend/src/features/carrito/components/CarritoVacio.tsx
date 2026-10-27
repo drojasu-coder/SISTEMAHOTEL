@@ -1,10 +1,11 @@
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Plus, RefreshCw, ShoppingCart } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { RESERVAS_ROUTES } from '@/features/reservas';
-import { textosCarrito } from '../textos';
+
 
 interface CarritoVacioProps {
   titulo: string;
@@ -22,7 +23,7 @@ export const CarritoVacio: React.FC<CarritoVacioProps> = ({
   descripcion,
   onActualizar,
   actualizando,
-}) => (
+}) => { const textosCarrito = usePublicTexts('carrito'); const { p } = usePublicInterface(); return (
   <Card className="flex flex-col items-center justify-center gap-4 py-12 text-center">
     <ShoppingCart
       className="size-12 text-neutro-400"
@@ -37,7 +38,7 @@ export const CarritoVacio: React.FC<CarritoVacioProps> = ({
 
     <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
       <Link
-        to={RESERVAS_ROUTES.NUEVA}
+        to="/habitaciones"
         className={buttonStyles({ className: 'w-full sm:w-auto' })}
       >
         <Plus className="size-4" aria-hidden="true" />
@@ -55,6 +56,7 @@ export const CarritoVacio: React.FC<CarritoVacioProps> = ({
       </Link>
     </div>
 
+    <Link to="/actividades" className="inline-flex min-h-11 items-center text-sm font-semibold text-bronce-700 underline">{p('purchaseExperiences')}</Link>
     <Button
       type="button"
       variant="ghost"
@@ -67,4 +69,4 @@ export const CarritoVacio: React.FC<CarritoVacioProps> = ({
       {textosCarrito.actualizar}
     </Button>
   </Card>
-);
+); };

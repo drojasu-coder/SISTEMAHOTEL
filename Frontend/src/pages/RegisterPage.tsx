@@ -1,15 +1,17 @@
 import React from 'react';
-import { Link, Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { AuthPageLayout } from '@/components/shared/AuthPageLayout';
 import { RegisterForm } from '@/features/auth/components/RegisterForm';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getPostLoginRoute } from '@/features/auth/routing';
-import { es } from '@/i18n/es';
+import { useAuthReturn } from '@/features/auth/useAuthReturn';
+import { usePublicTexts } from '@/i18n/public';
 
 export const RegisterPage: React.FC = () => {
+  const auth = usePublicTexts('auth');
   const { status, user } = useAuth();
-  const location = useLocation();
-  const from = (location.state as { from?: unknown } | null)?.from;
+  const context = useAuthReturn();
+  const { from } = context;
 
   if (status === 'authenticated' && user) {
     return <Navigate to={getPostLoginRoute(user, from)} replace />;
@@ -17,17 +19,18 @@ export const RegisterPage: React.FC = () => {
 
   return (
     <AuthPageLayout
-      title={es.auth.registroTitulo}
-      description={es.auth.registroDescripcion}
+      draft={Boolean(context.draft)}
+      title={auth.registroTitulo}
+      description={auth.registroDescripcion}
       footer={
         <>
-          {es.auth.conCuenta}{' '}
+          {auth.conCuenta}{' '}
           <Link
             to="/login"
-            state={location.state}
+            state={context.state}
             className="inline-flex min-h-11 items-center font-semibold text-bronce-700 underline-offset-2 hover:underline"
           >
-            {es.auth.loginTitulo}
+            {auth.loginTitulo}
           </Link>
         </>
       }

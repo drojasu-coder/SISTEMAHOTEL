@@ -1,5 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { PageContainer, PageHeader } from '@/components/shared/PageContainer';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ShieldAlert, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
@@ -7,25 +9,19 @@ import { useTiposHabitacionQuery } from '@/features/tipos-habitacion/hooks/useTi
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
-import { getApiErrorMessage } from '@/api/errors';
+import { TranslatedError } from '@/i18n/public';
 import { ApiError } from '@/api/client/http';
+import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
+import { CatalogSiteNotice } from '@/features/preferencias/SiteContextNotice';
 
-import {
-  textosCrearReserva,
-  useDisponibilidadQuery,
-  useCreateReservaMutation,
-  CriteriosBusquedaForm,
-  HabitacionesDisponiblesList,
-  ResumenReservaModal,
-  ReservaConfirmadaCard,
-  type DisponibilidadHabitacionQuery,
-  type HabitacionDisponible,
-  type ReservaHabitacion,
-  type CreateReservaHabitacionInput,
-} from '@/features/crear-reserva';
+import { useDisponibilidadQuery, useCreateReservaMutation, CriteriosBusquedaForm, HabitacionesDisponiblesList, ResumenReservaModal, ReservaConfirmadaCard, type DisponibilidadHabitacionQuery, type HabitacionDisponible, type ReservaHabitacion, type CreateReservaHabitacionInput } from '@/features/crear-reserva';
 
 export const CrearReservaPage: React.FC = () => {
+  const creationLock = useRef(false);
+  const textosCrearReserva = usePublicTexts('crearReserva');
+  const { p } = usePublicInterface();
   const { user, status } = useAuth();
+  const scope = usePublicPreferences();
 
   // 1. Estado de autenticación y permisos exclusivos para rol cliente
   const isAuthLoading = status === 'loading';
@@ -35,7 +31,7 @@ export const CrearReservaPage: React.FC = () => {
   const sedesQuery = useSedesQuery();
   const tiposQuery = useTiposHabitacionQuery();
 
-  const sedes = useMemo(() => sedesQuery.data ?? [], [sedesQuery.data]);
+  const sedes = useMemo(() => scope.managed ? scope.sites : sedesQuery.data ?? [], [scope.managed, scope.sites, sedesQuery.data]);
   const tipos = useMemo(() => tiposQuery.data ?? [], [tiposQuery.data]);
 
   // 3. Estado de búsqueda y selección
@@ -47,11 +43,42 @@ export const CrearReservaPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [createdReserva, setCreatedReserva] =
     useState<ReservaHabitacion | null>(null);
+  const [searchParams] = useSearchParams();
+  const [paramQueryApplied, setParamQueryApplied] = useState(false);
+
+  const incompatibleSite = scope.managed && submittedQuery !== null &&
+    (scope.selected !== submittedQuery.sucursal_id || scope.status !== 'ready');
+  useEffect(() => {
+    if (incompatibleSite) setCriteriaChanged(true);
+  }, [incompatibleSite]);
+
+  useEffect(() => {
+    if (paramQueryApplied) return;
+    const sucursalIdParam = searchParams.get('sucursal_id');
+    const fechaEntradaParam = searchParams.get('fecha_entrada');
+    const fechaSalidaParam = searchParams.get('fecha_salida');
+    const huespedesParam = searchParams.get('numero_huespedes');
+
+    if (sucursalIdParam) {
+      if (scope.managed && scope.status !== 'ready') return;
+      if (scope.managed && !scope.sites.some((s) => s.id === Number(sucursalIdParam))) return;
+      if (scope.managed) scope.choose(Number(sucursalIdParam));
+      if (fechaEntradaParam && fechaSalidaParam && huespedesParam) {
+        setSubmittedQuery({
+          sucursal_id: Number(sucursalIdParam),
+          fecha_entrada: fechaEntradaParam,
+          fecha_salida: fechaSalidaParam,
+          numero_huespedes: Number(huespedesParam),
+        });
+      }
+      setParamQueryApplied(true);
+    }
+  }, [searchParams, paramQueryApplied, scope]);
 
   // 4. Consulta de disponibilidad y mutación de creación
   const disponibilidadQuery = useDisponibilidadQuery(
     submittedQuery,
-    isCliente && !criteriaChanged
+    isCliente && !criteriaChanged && !incompatibleSite
   );
   const createMutation = useCreateReservaMutation();
 
@@ -87,7 +114,9 @@ export const CrearReservaPage: React.FC = () => {
 
   // Confirmar y crear la reserva con el payload exacto
   const handleConfirmReserva = async () => {
-    if (!selectedHabitacion || !submittedQuery) return;
+    if (!selectedHabitacion || !submittedQuery || incompatibleSite || criteriaChanged || creationLock.current || createMutation.isPending) return;
+    if (createMutation.error && (!(createMutation.error instanceof ApiError) || createMutation.error.status === 0 || createMutation.error.status >= 500)) return;
+    creationLock.current = true;
 
     const payload: CreateReservaHabitacionInput = {
       habitacion_id: selectedHabitacion.id,
@@ -107,6 +136,8 @@ export const CrearReservaPage: React.FC = () => {
         // En caso de conflicto, se conserva el submittedQuery para poder actualizar disponibilidad
         void disponibilidadQuery.refetch();
       }
+    } finally {
+      creationLock.current = false;
     }
   };
 
@@ -122,7 +153,7 @@ export const CrearReservaPage: React.FC = () => {
   if (isAuthLoading) {
     return (
       <div className="mx-auto flex max-w-5xl items-center justify-center px-4 py-16">
-        <LoadingNotice label="Verificando sesión..." />
+        <LoadingNotice label={p('sessionChecking')} />
       </div>
     );
   }
@@ -159,16 +190,8 @@ export const CrearReservaPage: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6">
-      {/* Encabezado */}
-      <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-3xl font-bold text-neutro-900">
-          {textosCrearReserva.tituloPagina}
-        </h1>
-        <p className="text-sm text-neutro-600">
-          {textosCrearReserva.subtituloPagina}
-        </p>
-      </header>
+    <PageContainer>
+      <PageHeader title={textosCrearReserva.tituloPagina} description={textosCrearReserva.subtituloPagina} />
 
       {/* Manejo de fallos en catálogos auxiliares */}
       {sedesQuery.isError && (
@@ -218,6 +241,8 @@ export const CrearReservaPage: React.FC = () => {
         <>
           {/* Formulario de búsqueda de disponibilidad */}
           <CriteriosBusquedaForm
+            publicSite={scope.managed ? scope.selected : undefined}
+            onSiteChange={scope.choose}
             sedes={sedes}
             tiposHabitacion={tipos}
             isSearching={disponibilidadQuery.isFetching}
@@ -235,15 +260,24 @@ export const CrearReservaPage: React.FC = () => {
                         ? String(submittedQuery.tipo_habitacion_id)
                         : '',
                   }
+                : searchParams.get('sucursal_id')
+                ? {
+                    sucursal_id: searchParams.get('sucursal_id') || '',
+                    fecha_entrada: searchParams.get('fecha_entrada') || '',
+                    fecha_salida: searchParams.get('fecha_salida') || '',
+                    numero_huespedes: searchParams.get('numero_huespedes') || '1',
+                  }
                 : undefined
             }
           />
+
+          <CatalogSiteNotice />
 
           {/* Error en la consulta de disponibilidad */}
           {disponibilidadQuery.isError && (
             <Alert tone="error">
               <div className="flex items-center justify-between">
-                <span>{getApiErrorMessage(disponibilidadQuery.error)}</span>
+                <span><TranslatedError error={{ api: disponibilidadQuery.error }} /></span>
                 <Button
                   type="button"
                   variant="ghost"
@@ -262,7 +296,7 @@ export const CrearReservaPage: React.FC = () => {
             <HabitacionesDisponiblesList
               habitaciones={disponibilidadQuery.data ?? []}
               isLoading={disponibilidadQuery.isLoading}
-              criteriaChanged={criteriaChanged}
+              criteriaChanged={criteriaChanged || incompatibleSite}
               selectedHabitacionId={selectedHabitacion?.id}
               onSelectHabitacion={handleSelectHabitacion}
             />
@@ -280,12 +314,13 @@ export const CrearReservaPage: React.FC = () => {
             criterios={submittedQuery}
             sedeNombre={sedeSeleccionada?.nombre}
             isSubmitting={createMutation.isPending}
+            invalidated={incompatibleSite || criteriaChanged}
             error={createMutation.error}
             onConfirm={handleConfirmReserva}
             onActualizarDisponibilidad={handleActualizarDisponibilidad}
           />
         </>
       )}
-    </div>
+    </PageContainer>
   );
 };

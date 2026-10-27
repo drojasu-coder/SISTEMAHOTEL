@@ -1,21 +1,23 @@
+import { extraEs, type ExtraKey } from '@/i18n/publicExtra';
 import { z } from 'zod';
 
-export const reservaCitaSchema = z.object({
+export const createReservaCitaSchema = (message: (key: ExtraKey) => string = (key) => extraEs[key]) => z.object({
   servicio_bienestar_id: z.number({
-    required_error: 'Debe seleccionar un servicio',
-    invalid_type_error: 'Servicio inválido',
-  }).int().positive('Debe seleccionar un servicio válido'),
+    required_error: message('requiredService'),
+    invalid_type_error: message('invalidService'),
+  }).int().positive(message('validService')),
   terapeuta_id: z.number({
-    required_error: 'Debe seleccionar un terapeuta',
-    invalid_type_error: 'Terapeuta inválido',
-  }).int().positive('Debe seleccionar un terapeuta válido'),
+    required_error: message('requiredTherapist'),
+    invalid_type_error: message('invalidTherapist'),
+  }).int().positive(message('validTherapist')),
   fecha: z.string({
-    required_error: 'La fecha es obligatoria',
-  }).regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato YYYY-MM-DD'),
+    required_error: message('requiredDateSchema'),
+  }).regex(/^\d{4}-\d{2}-\d{2}$/, message('dateFormat')),
   hora_inicio: z.string({
-    required_error: 'La hora de inicio es obligatoria',
-  }).regex(/^\d{2}:\d{2}(:\d{2})?$/, 'La hora debe tener formato HH:MM (ej. 10:00)'),
+    required_error: message('requiredStart'),
+  }).regex(/^\d{2}:\d{2}(:\d{2})?$/, message('timeFormat')),
 });
+export const reservaCitaSchema = createReservaCitaSchema();
 
 export type ReservaCitaFormValues = z.infer<typeof reservaCitaSchema>;
 

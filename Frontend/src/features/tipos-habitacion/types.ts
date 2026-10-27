@@ -14,7 +14,7 @@ export interface TipoHabitacion {
   descripcion: string | null;
   imagen_key?: string | null;
   imagen_url?: string | null;
-  imagen_expires_at?: number | null;
+  imagen_expires_at?: string | number | null;
   imagen_creditos?: {
     autor?: string;
     fuente?: string;

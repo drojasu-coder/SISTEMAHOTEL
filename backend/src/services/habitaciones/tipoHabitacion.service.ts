@@ -1,3 +1,5 @@
+import crypto from "crypto";
+import * as mediaUploadService from "../storage/mediaUpload.service";
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { getTodayDate } from "./reservaHabitacion.service";
@@ -167,4 +169,52 @@ export const deleteTipoHabitacion = async (id: number) => {
   await tipoHabitacion.destroy();
 
   return tipoHabitacion;
+};
+
+export const requestImageUpload = async (
+  id: number,
+  userId: number,
+  contentType: string
+) => {
+  const tipo = await TipoHabitacion.findByPk(id);
+  if (!tipo) {
+    throw new AppError(404, "TIPO_HABITACION_NOT_FOUND", "El tipo de habitación no fue encontrado");
+  }
+  return mediaUploadService.presignEntityUpload({
+    entityType: "tipo-habitacion",
+    entityId: id,
+    contentType,
+    userId,
+  });
+};
+
+export const confirmImageUpload = async (
+  id: number,
+  userId: number,
+  uploadToken: string,
+  tempKey: string
+) => {
+  return mediaUploadService.confirmEntityUpload({
+    entityType: "tipo-habitacion",
+    entityId: id,
+    userId,
+    uploadToken,
+    tempKey,
+    Model: TipoHabitacion,
+    column: "imagen_key",
+    buildFinalKey: (tipo, ext) => {
+      const rand = crypto.randomBytes(6).toString("hex");
+      return `sedes/general/tipos-habitacion/tipo-${tipo.id}-${Date.now()}-${rand}.${ext}`;
+    },
+    serializeEntity: serializeTipoHabitacion,
+  });
+};
+
+export const removeImage = async (id: number) => {
+  return mediaUploadService.removeEntityImage({
+    entityId: id,
+    Model: TipoHabitacion,
+    column: "imagen_key",
+    serializeEntity: serializeTipoHabitacion,
+  });
 };

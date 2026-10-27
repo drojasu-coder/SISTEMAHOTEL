@@ -62,7 +62,7 @@ export const AdminLayout: React.FC = () => {
   );
 
   return (
-    <div className="flex min-h-screen bg-neutro-50 text-neutro-900">
+    <div lang="es" className="flex min-h-screen bg-neutro-50 text-neutro-900">
       <a href="#contenido" className="skip-link">
         {es.comunes.saltarAlContenido}
       </a>

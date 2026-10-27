@@ -1,8 +1,8 @@
-import { forwardRef, type InputHTMLAttributes } from 'react';
-import { Input } from './Input';
+import { forwardRef } from 'react';
+import { Input, type InputProps } from './Input';
 
 export interface TimeFieldProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'label'> {
+  extends Omit<InputProps, 'type' | 'label'> {
   label: string;
   hint?: string;
 }

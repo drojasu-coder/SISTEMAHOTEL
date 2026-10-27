@@ -1,17 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
+import { ImageUploader } from '@/components/ui/ImageUploader';
 import { getApiErrorMessage } from '@/api/errors';
 import type { Sucursal } from '@/features/sedes/types';
 import type { RecursoActividad } from '../types';
-import { useCreateRecursoMutation, useUpdateRecursoMutation } from '../hooks/useActividades';
+import {
+  useCreateRecursoMutation,
+  useUpdateRecursoMutation,
+  useUploadRecursoActividadImageMutation,
+  useRemoveRecursoActividadImageMutation,
+} from '../hooks/useActividades';
 import { textosActividades } from '../textos';
 
-interface RecursoActividadFormModalProps {
+export interface RecursoActividadFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   recurso: RecursoActividad | null; // null => creating, non-null => editing
-  sedes: Sucursal[];
+  sedes?: Sucursal[];
   onSuccess: (mensaje: string) => void;
 }
 
@@ -19,7 +25,7 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
   isOpen,
   onClose,
   recurso,
-  sedes,
+  sedes = [],
   onSuccess,
 }) => {
   const isEditing = Boolean(recurso);
@@ -32,9 +38,16 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
   const [precioInstructorHora, setPrecioInstructorHora] = useState<string>('0');
 
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   const createMutation = useCreateRecursoMutation();
   const updateMutation = useUpdateRecursoMutation();
+  const uploadImageMutation = useUploadRecursoActividadImageMutation();
+  const removeImageMutation = useRemoveRecursoActividadImageMutation();
 
   useEffect(() => {
     if (recurso) {
@@ -57,6 +70,11 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
       setPrecioInstructorHora('0');
     }
     setErrorLocal(null);
+    setImageError(null);
+    setSelectedFile(null);
+    setRemoveMarked(false);
+    setUploadProgress(0);
+    setIsUploading(false);
   }, [recurso, sedes, isOpen]);
 
   if (!isOpen) return null;
@@ -64,6 +82,7 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorLocal(null);
+    setImageError(null);
 
     const tipoTrim = tipo.trim().toLowerCase();
     const nombreTrim = nombre.trim();
@@ -86,8 +105,11 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
       return;
     }
 
+    let targetId: number;
+
     try {
       if (isEditing && recurso?.id) {
+        targetId = recurso.id;
         await updateMutation.mutateAsync({
           id: recurso.id,
           data: {
@@ -98,8 +120,6 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
             precio_instructor_hora: numInst,
           },
         });
-        onSuccess(textosActividades.recursoGuardadoExito);
-        onClose();
       } else {
         const sucursalNum = parseInt(sucursalId, 10);
         if (!sucursalNum || sucursalNum <= 0) {
@@ -107,7 +127,7 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
           return;
         }
 
-        await createMutation.mutateAsync({
+        const created = await createMutation.mutateAsync({
           sucursal_id: sucursalNum,
           tipo: tipoTrim,
           nombre: nombreTrim,
@@ -115,15 +135,49 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
           precio_equipo: numEquipo,
           precio_instructor_hora: numInst,
         });
-        onSuccess(textosActividades.recursoGuardadoExito);
-        onClose();
+        targetId = Number(created.id);
       }
     } catch (err: unknown) {
       setErrorLocal(getApiErrorMessage(err));
+      return;
     }
+
+    if (removeMarked && targetId) {
+      try {
+        await removeImageMutation.mutateAsync(targetId);
+      } catch (_err: any) {
+        setImageError('Se guardó el recurso pero ocurrió un error al retirar la imagen.');
+        return;
+      }
+    }
+
+    if (selectedFile && targetId) {
+      setIsUploading(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetId,
+          file: selectedFile,
+          onProgress: (pct: number) => setUploadProgress(pct),
+        });
+      } catch (uploadErr: any) {
+        setImageError(
+          uploadErr?.message ||
+            'Se guardó el recurso pero falló la subida de la imagen a S3.',
+        );
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    onSuccess(textosActividades.recursoGuardadoExito);
+    onClose();
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending =
+    createMutation.isPending || updateMutation.isPending || isUploading;
 
   return (
     <div
@@ -132,7 +186,7 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
       aria-labelledby="modal-recurso-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutro-900/50 backdrop-blur-xs"
     >
-      <div className="surface flex w-full max-w-lg flex-col gap-5 rounded-2xl p-6 shadow-elevated">
+      <div className="surface flex w-full max-w-lg flex-col gap-5 rounded-2xl p-6 shadow-elevated max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-neutro-100 pb-3">
           <h2 id="modal-recurso-title" className="font-serif text-xl font-bold text-neutro-900">
             {isEditing
@@ -152,6 +206,12 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
         {errorLocal && (
           <Alert tone="error">
             <p className="text-xs">{errorLocal}</p>
+          </Alert>
+        )}
+
+        {imageError && (
+          <Alert tone="warning">
+            <p className="text-xs">{imageError}</p>
           </Alert>
         )}
 
@@ -275,6 +335,28 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
             <p className="text-[11px] text-neutro-500 leading-tight">
               {textosActividades.notaTarifasRecurso}
             </p>
+          </div>
+
+          {/* Fotografía principal en AWS S3 */}
+          <div className="border-t border-neutro-200 pt-3">
+            <ImageUploader
+              label="Fotografía de la actividad"
+              helpText="Formatos WebP, JPEG o PNG (hasta 5MB)"
+              currentImageUrl={recurso?.imagen_url}
+              selectedFile={selectedFile}
+              removeMarked={removeMarked}
+              onFileSelect={(file) => {
+                setSelectedFile(file);
+                if (file) setRemoveMarked(false);
+              }}
+              onRemoveCurrent={() => {
+                setRemoveMarked(true);
+                setSelectedFile(null);
+              }}
+              uploadProgress={uploadProgress}
+              isUploading={isUploading}
+              error={imageError}
+            />
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutro-100">

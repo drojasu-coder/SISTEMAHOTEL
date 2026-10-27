@@ -79,3 +79,37 @@ export const removeImage = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 };
+
+export const presignRestauranteImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sedeId = Number(req.params.id);
+    const userId = (req as any).user.id;
+    const { contentType } = req.body;
+    const result = await sucursalService.requestRestauranteImageUpload(sedeId, userId, contentType);
+    res.status(200).json({ status: "success", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmRestauranteImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sedeId = Number(req.params.id);
+    const userId = (req as any).user.id;
+    const { uploadToken, tempKey } = req.body;
+    const sucursal = await sucursalService.confirmRestauranteImageUpload(sedeId, userId, uploadToken, tempKey);
+    res.status(200).json({ status: "success", data: sucursal });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeRestauranteImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sedeId = Number(req.params.id);
+    const sucursal = await sucursalService.removeRestauranteImage(sedeId);
+    res.status(200).json({ status: "success", data: sucursal });
+  } catch (error) {
+    next(error);
+  }
+};

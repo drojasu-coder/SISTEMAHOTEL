@@ -37,6 +37,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   /** Motivo por el que el servidor invalidó la sesión, para mostrarlo al iniciar sesión. */
   notice: string | null;
+  noticeReason: SessionInvalidReason | null;
   login: (credentials: LoginRequest) => Promise<AuthUser>;
   logout: () => void;
   retry: () => void;
@@ -53,6 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     tokenStorage.get() ? 'loading' : 'anonymous',
   );
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeReason, setNoticeReason] = useState<SessionInvalidReason | null>(null);
   const [attempt, setAttempt] = useState(0);
   const queryClient = useQueryClient();
 
@@ -72,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tokenStorage.clear();
       discardPrivateData();
       setUser(null);
+      setNoticeReason(reason ?? null);
       setNotice(reason ? NOTICES[reason] : null);
       setStatus('anonymous');
     },
@@ -127,6 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tokenStorage.set(accessToken);
       setUser(usuario);
       setNotice(null);
+      setNoticeReason(null);
       setStatus('authenticated');
       return usuario;
     },
@@ -137,8 +141,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, notice, login, logout, retry }),
-    [status, user, notice, login, logout, retry],
+    () => ({ status, user, notice, noticeReason, login, logout, retry }),
+    [status, user, notice, noticeReason, login, logout, retry],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

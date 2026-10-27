@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
-  renderWithProviders,
+  renderPublicWithProviders as renderWithProviders,
   jsonResponse,
   meResponse,
   errorResponse,
@@ -55,6 +55,7 @@ const mockAmenidades: Amenidad[] = [
 describe("Catálogo de Amenidades para Clientes (CatalogoAmenidadesPage)", () => {
   beforeEach(() => {
     tokenStorage.clear();
+    window.localStorage.removeItem('hunahpu.public-site.v1');
     vi.restoreAllMocks();
   });
 
@@ -143,7 +144,7 @@ describe("Catálogo de Amenidades para Clientes (CatalogoAmenidadesPage)", () =>
     await user.clear(searchInput);
     expect(screen.getByText("Piscina Climatizada")).toBeInTheDocument();
 
-    const sedeSelect = screen.getByLabelText(/Filtrar por sede/i);
+    const sedeSelect = screen.getByLabelText(/^Sede$/i);
     await user.selectOptions(sedeSelect, "1");
 
     expect(screen.getByText("Piscina Climatizada")).toBeInTheDocument();
@@ -162,7 +163,7 @@ describe("Catálogo de Amenidades para Clientes (CatalogoAmenidadesPage)", () =>
 
     // Modal abierto con formulario de reserva
     expect(await screen.findByRole("dialog", { name: /Reservar acceso a amenidad/i })).toBeInTheDocument();
-    expect(screen.getByText(/Piscina Climatizada • Aforo máximo: 25 personas/i)).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveTextContent(/Piscina Climatizada • Aforo máximo: 25 personas/i);
 
     // Llenar formulario
     const fechaInput = screen.getByLabelText(/Fecha de reserva/i);

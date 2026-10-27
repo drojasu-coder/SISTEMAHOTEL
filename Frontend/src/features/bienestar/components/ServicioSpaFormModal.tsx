@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useCreateServicioSpaMutation, useUpdateServicioSpaMutation } from '../hooks/useBienestar';
+import { ImageUploader } from '@/components/ui/ImageUploader';
+import {
+  useCreateServicioSpaMutation,
+  useUpdateServicioSpaMutation,
+  useUploadServicioSpaImageMutation,
+  useRemoveServicioSpaImageMutation,
+} from '../hooks/useBienestar';
 import { servicioSpaSchema, type ServicioSpaFormValues } from '../schemas/bienestar.schemas';
 import { textosBienestar } from '../textos';
 import { ApiError } from '@/api/client/http';
@@ -21,27 +27,56 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
   onSuccess,
 }) => {
   const isEditing = Boolean(servicio);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [persistedId, setPersistedId] = useState<number | null>(null);
+
   const createMutation = useCreateServicioSpaMutation();
   const updateMutation = useUpdateServicioSpaMutation();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const uploadImageMutation = useUploadServicioSpaImageMutation();
+  const removeImageMutation = useRemoveServicioSpaImageMutation();
 
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<ServicioSpaFormValues>({
     resolver: zodResolver(servicioSpaSchema),
     defaultValues: {
       nombre: servicio?.nombre ?? '',
       duracion_minutos: servicio?.duracion_minutos ?? 60,
-      precio: servicio?.precio !== undefined ? Number(servicio.precio) : 350,
+      precio: servicio?.precio ? Number(servicio.precio) : 350,
     },
   });
 
+  useEffect(() => {
+    reset({
+      nombre: servicio?.nombre ?? '',
+      duracion_minutos: servicio?.duracion_minutos ?? 60,
+      precio: servicio?.precio ? Number(servicio.precio) : 350,
+    });
+    setErrorMessage(null);
+    setImageError(null);
+    setSelectedFile(null);
+    setRemoveMarked(false);
+    setUploadProgress(0);
+    setIsUploading(false);
+    setPersistedId(servicio?.id ?? null);
+  }, [servicio, reset]);
+
   const onSubmit = async (values: ServicioSpaFormValues) => {
     setErrorMessage(null);
+    setImageError(null);
+
+    let targetId: number;
     try {
       if (isEditing && servicio?.id) {
+        targetId = servicio.id;
         await updateMutation.mutateAsync({
           id: servicio.id,
           data: {
@@ -50,23 +85,69 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
             precio: values.precio,
           },
         });
+      } else if (persistedId) {
+        targetId = persistedId;
+        await updateMutation.mutateAsync({
+          id: persistedId,
+          data: {
+            nombre: values.nombre,
+            duracion_minutos: values.duracion_minutos,
+            precio: values.precio,
+          },
+        });
       } else {
-        await createMutation.mutateAsync({
+        const created = await createMutation.mutateAsync({
           nombre: values.nombre,
           duracion_minutos: values.duracion_minutos,
           precio: values.precio,
         });
+        targetId = Number(created.id);
+        setPersistedId(Number(created.id));
       }
-      onSuccess?.();
-      onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setErrorMessage(err.message || 'Error al guardar el servicio de bienestar.');
       } else {
         setErrorMessage('Ocurrió un error inesperado al guardar el servicio.');
       }
+      return;
     }
+
+    if (removeMarked && (servicio?.id || persistedId)) {
+      try {
+        await removeImageMutation.mutateAsync(targetId);
+      } catch (_err: any) {
+        setImageError('No fue posible retirar la imagen actual.');
+        return;
+      }
+    }
+
+    if (selectedFile) {
+      setIsUploading(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetId,
+          file: selectedFile,
+          onProgress: (pct: number) => setUploadProgress(pct),
+        });
+      } catch (uploadErr: any) {
+        setImageError(
+          uploadErr?.message ||
+            'Se guardó el servicio pero ocurrió un error al subir la fotografía a S3.',
+        );
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    onSuccess?.();
+    onClose();
   };
+
+  const isPending = isSubmitting || isUploading;
 
   return (
     <div
@@ -100,15 +181,23 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
             </div>
           )}
 
+          {imageError && (
+            <div className="rounded-md bg-dorado-50 p-3 border border-dorado-200 flex items-start gap-2.5 text-xs text-dorado-800">
+              <AlertCircle className="size-4 shrink-0 mt-0.5" />
+              <span>{imageError}</span>
+            </div>
+          )}
+
           {/* Nombre */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="nombre-servicio" className="text-xs font-semibold text-neutro-700">
-              {textosBienestar.campoNombreServicio}
+              {textosBienestar.campoNombreServicio} *
             </label>
             <input
               id="nombre-servicio"
               type="text"
               placeholder="Ej. Masaje con piedras calientes"
+              disabled={isPending}
               {...register('nombre')}
               className="w-full rounded-md border border-neutro-300 bg-white px-3 py-2 text-sm text-neutro-900 shadow-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
             />
@@ -120,13 +209,15 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
           {/* Duración */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="duracion-servicio" className="text-xs font-semibold text-neutro-700">
-              {textosBienestar.campoDuracionMinutos}
+              {textosBienestar.campoDuracionMinutos} *
             </label>
             <input
               id="duracion-servicio"
               type="number"
-              min={1}
-              step={1}
+              min={15}
+              max={240}
+              step={15}
+              disabled={isPending}
               {...register('duracion_minutos', { valueAsNumber: true })}
               className="w-full rounded-md border border-neutro-300 bg-white px-3 py-2 text-sm text-neutro-900 shadow-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
             />
@@ -138,13 +229,14 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
           {/* Precio */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="precio-servicio" className="text-xs font-semibold text-neutro-700">
-              {textosBienestar.campoPrecio}
+              {textosBienestar.campoPrecio} *
             </label>
             <input
               id="precio-servicio"
               type="number"
-              min={0}
+              min={0.01}
               step="0.01"
+              disabled={isPending}
               {...register('precio', { valueAsNumber: true })}
               className="w-full rounded-md border border-neutro-300 bg-white px-3 py-2 text-sm text-neutro-900 shadow-sm focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
             />
@@ -153,12 +245,39 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
             )}
           </div>
 
+          {/* Fotografía principal en AWS S3 */}
+          <div className="border-t border-neutro-200 pt-3">
+            <ImageUploader
+              label="Fotografía del tratamiento"
+              helpText="Formatos WebP, JPEG o PNG (hasta 5MB)"
+              currentImageUrl={servicio?.imagen_url}
+              selectedFile={selectedFile}
+              removeMarked={removeMarked}
+              onFileSelect={(file) => {
+                setSelectedFile(file);
+                if (file) setRemoveMarked(false);
+              }}
+              onRemoveCurrent={() => {
+                setRemoveMarked(true);
+                setSelectedFile(null);
+              }}
+              disabled={isPending}
+              uploadProgress={uploadProgress}
+              isUploading={isUploading}
+              error={imageError}
+            />
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
               {textosBienestar.cancelar}
             </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmitting}>
-              {textosBienestar.guardar}
+            <Button type="submit" variant="primary" disabled={isPending} isLoading={isPending}>
+              {isPending
+                ? isUploading
+                  ? 'Subiendo a S3...'
+                  : 'Guardando...'
+                : textosBienestar.guardar}
             </Button>
           </div>
         </form>

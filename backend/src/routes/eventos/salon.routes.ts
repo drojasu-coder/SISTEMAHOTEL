@@ -1,3 +1,4 @@
+import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 import { Router } from "express";
 
 import * as salonController
@@ -306,6 +307,32 @@ router.delete(
   requireRole(ROLES.ADMIN),
   validateParams(idParamSchema),
   salonController.remove
+);
+
+router.post(
+  "/:id/imagen-presign",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(presignImageSchema),
+  salonController.presignImage
+);
+
+router.post(
+  "/:id/imagen-confirmar",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(confirmImageSchema),
+  salonController.confirmImage
+);
+
+router.delete(
+  "/:id/imagen",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  salonController.deleteImage
 );
 
 export default router;

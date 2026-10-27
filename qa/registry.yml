@@ -7111,3 +7111,115 @@ findings:
       response: "409 CART_REFERENCE_NOT_AVAILABLE"
       active_exposure: "Q350.00"
     verified_at: "2026-10-25"
+
+  - id: QA-AUTH-SEC-001
+    status: closed
+    severity: medium
+    category: SEC
+    invariant: >-
+      El retorno posterior al login solo admite rutas internas conocidas y
+      autorizadas para el rol, sin bucles de acceso ni parámetros sensibles.
+    reproduction:
+      test_file: Frontend/src/features/auth/secureReturn.test.ts
+      test_name: "Retorno de autenticación"
+      command: npm --prefix Frontend test -- src/features/auth/secureReturn.test.ts
+    expected:
+      navigation: "Respaldo seguro para destinos externos, codificados, desconocidos o no autorizados"
+      query: "Solo filtros permitidos, sin password ni client_secret"
+    actual_before_fix:
+      isolated: "11 failed, 3 passed"
+      navigation: "Aceptaba backslash, rutas codificadas, login con fragmento, rutas desconocidas y checkout para personal"
+      query: "Conservaba parámetros arbitrarios en el destino"
+    root_cause: >-
+      getPostLoginRoute comprobaba solo prefijos, excluía parcialmente login y
+      registro y consideraba accesible cualquier ruta ajena al prefijo admin.
+    correction: >-
+      Una utilidad de retorno comprueba origen URL, forma canónica y lista de
+      rutas reales; routing aplica permisos existentes y ámbito cliente. Se
+      filtran parámetros y se valida el borrador mínimo al restaurar.
+    regression_test:
+      test_file: Frontend/src/features/auth/secureReturn.test.ts
+      test_name: "Retorno de autenticación"
+    final_verification:
+      database: "No utilizada; frontend y HTTP simulado, sin escrituras"
+      focused: "14 passed"
+      related: "142 passed (auth, habitaciones públicas y pagos)"
+      typecheck: green
+      build: green
+      full_frontend: "585 passed, 19 pre-existing skipped; complete inventory across 3 Vitest shards"
+      regression: green
+      new_failures: none
+
+  - id: QA-CART-A11Y-001
+    status: closed
+    severity: low
+    category: A11Y
+    invariant: >-
+      El temporizador de carrito no anuncia cada segundo y debe notificar una
+      sola vez el cero de cada vencimiento autoritativo distinto.
+    reproduction:
+      test_file: Frontend/src/components/ui/Countdown.test.tsx
+      test_name: "silencia los segundos; nuevo vencimiento autoritativo"
+      command: npm --prefix Frontend test -- src/components/ui/Countdown.test.tsx
+    expected:
+      timer_aria_live: off
+      callbacks_for_two_deadlines: 2
+    actual_before_fix:
+      timer_aria_live: polite
+      callbacks_for_two_deadlines: 1
+      isolated: "2 failed"
+    root_cause: >-
+      El reloj cambiaba texto cada segundo dentro de aria-live polite durante
+      la advertencia; notified era un booleano que no distinguía vencimientos.
+    correction: >-
+      El reloj permanece silencioso y el status anuncia solo umbral/cero.
+      La referencia de notificación identifica el deadline ya notificado.
+    regression_test:
+      test_file: Frontend/src/components/ui/Countdown.test.tsx
+      test_name: "Countdown"
+    final_verification:
+      database: "No utilizada; solo frontend con reloj simulado"
+      focused: "7 passed"
+      related: "112 final affected tests passed; earlier auth/rooms/purchase regression 200 passed"
+      typecheck: green
+      build: green
+      full_frontend: "602 passed, 19 pre-existing skipped; complete inventory across 3 shards"
+      regression: green
+      new_failures: none
+
+  - id: QA-PAY-FIN-001
+    status: closed
+    severity: medium
+    category: FIN
+    invariant: >-
+      La interfaz no debe crear ni confirmar un intento si el total del
+      carrito y el resumen financiero autorizado discrepan.
+    reproduction:
+      test_file: Frontend/src/features/compra/checkoutSafety.test.tsx
+      test_name: "bloquea un nuevo intento si el total del carrito y el resumen financiero difieren"
+      command: npm --prefix Frontend test -- src/features/compra/checkoutSafety.test.tsx
+    expected:
+      create_payment_calls: 0
+    actual_before_fix:
+      cart_total: 601
+      financial_summary_total: 600
+      create_payment_calls: 1
+      isolated: "1 failed"
+    root_cause: >-
+      Checkout cotejaba el monto de un intento con el saldo pero no cotejaba
+      el total devuelto por los artículos con el total del resumen financiero.
+    correction: >-
+      Bloqueo visible de preparación y confirmación ante desacuerdo, sin
+      recalcular ninguno de los importes ni modificar reglas del servidor.
+    regression_test:
+      test_file: Frontend/src/features/compra/checkoutSafety.test.tsx
+      test_name: "bloquea un nuevo intento si el total del carrito y el resumen financiero difieren"
+    final_verification:
+      database: "No utilizada; API simulada, sin cargo real ni defecto backend atribuido"
+      focused: "1 passed"
+      related: "112 final affected tests passed; earlier auth/rooms/purchase regression 200 passed"
+      typecheck: green
+      build: green
+      full_frontend: "602 passed, 19 pre-existing skipped; complete inventory across 3 shards"
+      regression: green
+      new_failures: none

@@ -1,3 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { verifyCartPayment } from '@/features/compra/verifyCartPayment';
+import { PurchaseSteps } from '@/features/compra/PurchaseSteps';
+import { AccountContact } from '@/features/compra/AccountContact';
+import { CartExpiry } from '@/features/compra/CartExpiry';
+import { usePublicTexts, TranslatedError, usePublicInterface } from '@/i18n/public';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -8,7 +14,7 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { ApiError } from '@/api/client/http';
-import { getApiErrorMessage } from '@/api/errors';
+
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
@@ -29,7 +35,7 @@ import {
   useResumenCheckoutQuery,
 } from '@/features/pagos/hooks/useCheckoutQueries';
 import { useCrearIntentoPago } from '@/features/pagos/hooks/useCrearIntentoPago';
-import { formatearGTQ, textosCheckout } from '@/features/pagos/textos';
+import { formatearGTQ } from '@/features/pagos/textos';
 import {
   clearCheckoutIdempotencyKey,
   getOrCreateCheckoutIdempotencyKey,
@@ -79,11 +85,17 @@ function esErrorCarritoNoDisponible(error: unknown): boolean {
   );
 }
 
+function checkoutCopy(dictionary: object, key: string): string {
+  const value = key.split('.').reduce<unknown>((node, part) => node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined, dictionary);
+  return typeof value === 'string' ? value : '';
+}
+
 interface MensajeCheckout {
   tono: 'success' | 'info' | 'warning' | 'error';
   texto: string;
   titulo?: string;
   comprobar?: boolean;
+  apiError?: unknown;
 }
 
 interface IntentoCreado {
@@ -91,6 +103,7 @@ interface IntentoCreado {
   pagoId: number;
   clientSecret: string;
   monto: number;
+  moneda: string;
 }
 
 interface BloqueoMonto {
@@ -99,7 +112,7 @@ interface BloqueoMonto {
 }
 
 const SinCarrito: React.FC<{ onActualizar: () => void; actualizando: boolean }> =
-  ({ onActualizar, actualizando }) => (
+  ({ onActualizar, actualizando }) => { const textosCheckout = usePublicTexts('checkout'); return (
     <Card className="flex flex-col items-center justify-center gap-4 py-12 text-center">
       <ShoppingCart className="size-12 text-neutro-400" aria-hidden="true" />
       <div className="flex max-w-md flex-col gap-1">
@@ -141,12 +154,12 @@ const SinCarrito: React.FC<{ onActualizar: () => void; actualizando: boolean }> 
         {textosCheckout.actualizar}
       </Button>
     </Card>
-  );
+  ); };
 
 const CarritoVacioCheckout: React.FC<{
   onActualizar: () => void;
   actualizando: boolean;
-}> = ({ onActualizar, actualizando }) => (
+}> = ({ onActualizar, actualizando }) => { const textosCheckout = usePublicTexts('checkout'); return (
   <Card className="flex flex-col items-center justify-center gap-4 py-12 text-center">
     <ShoppingCart className="size-12 text-neutro-400" aria-hidden="true" />
     <div className="flex max-w-md flex-col gap-1">
@@ -189,14 +202,14 @@ const CarritoVacioCheckout: React.FC<{
       {textosCheckout.actualizar}
     </Button>
   </Card>
-);
+); };
 
 const PanelError: React.FC<{
   titulo: string;
-  descripcion: string;
+  descripcion: React.ReactNode;
   onReintentar?: () => void;
   reintentando?: boolean;
-}> = ({ titulo, descripcion, onReintentar, reintentando = false }) => (
+}> = ({ titulo, descripcion, onReintentar, reintentando = false }) => { const textosCheckout = usePublicTexts('checkout'); return (
   <Card className="flex flex-col items-start gap-4">
     <Alert tone="error" title={titulo}>
       <p>{descripcion}</p>
@@ -225,9 +238,12 @@ const PanelError: React.FC<{
       </Link>
     </div>
   </Card>
-);
+); };
 
 const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
+  const textosCheckout = usePublicTexts('checkout');
+  const { p } = usePublicInterface();
+  const queryClient = useQueryClient();
   const carritoQuery = useCarritoActualQuery(userId);
   const carrito = carritoQuery.data;
   const carritoValido =
@@ -254,6 +270,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   );
   const resumen = resumenQuery.data;
   const resumenListo = Boolean(resumenQuery.isSuccess && resumen);
+  const cartSummaryMismatch = Boolean(resumen && itemsQuery.data && !montosCoinciden(itemsQuery.data.total, resumen.total));
 
   const intentoQuery = useIntentoActivoQuery(
     carritoValido?.id ?? null,
@@ -273,6 +290,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   const [preparandoStripe, setPreparandoStripe] = useState(false);
   const ultimoCarrito = useRef<number | null>(null);
   const preparandoRef = useRef(false);
+  const expiryCheckRef = useRef(false);
+  const [expiryChecking, setExpiryChecking] = useState(false);
 
   const crearIntento = useCrearIntentoPago(userId);
 
@@ -328,6 +347,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   // El servidor es la fuente de verdad del intento recuperado.
   useEffect(() => {
     if (intentoQuery.data) {
+      setPagoCreadoId(intentoQuery.data.pago_id);
       setIntentoCreado(null);
       setBloqueoMonto(null);
       setMensaje((actual) => (actual?.comprobar ? null : actual));
@@ -379,7 +399,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
     }
   }, [resumenQuery.isError, resumenQuery.error, carritoQuery]);
 
-  const consultarEstado = async () => {
+  const consultarEstado = async (skipPaymentReads = false) => {
     setMensaje(null);
 
     // Siempre se reconsulta el carrito, incluso cuando la consulta anterior
@@ -396,11 +416,11 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
         tareas.push(resumenQuery.refetch());
       }
 
-      if (resumenListo) {
+      if (resumenListo && !skipPaymentReads) {
         tareas.push(intentoQuery.refetch());
       }
 
-      if (pagoId !== null && Number.isSafeInteger(pagoId) && pagoId > 0) {
+      if (!skipPaymentReads && pagoId !== null && Number.isSafeInteger(pagoId) && pagoId > 0) {
         tareas.push(pagoQuery.refetch());
       }
     }
@@ -413,6 +433,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   const prepararPago = async () => {
     if (
       !carritoValido ||
+      expiryCheckRef.current ||
+      cartSummaryMismatch ||
       !resumen ||
       resumen.saldo <= 0 ||
       intentoServidor ||
@@ -440,7 +462,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
       if (!Number.isFinite(montoActual) || montoActual <= 0) {
         setMensaje({
           tono: 'warning',
-          texto: textosCheckout.errores.crear,
+          texto: 'errores.crear',
           comprobar: true,
         });
         return;
@@ -452,7 +474,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
       if (!stripe) {
         setMensaje({
           tono: 'warning',
-          texto: textosCheckout.pago.tarjetaNoDisponible,
+          texto: 'pago.tarjetaNoDisponible',
         });
         return;
       }
@@ -484,8 +506,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
             if (data.estado !== 'procesando' || !data.client_secret) {
               setMensaje({
                 tono: 'warning',
-                titulo: textosCheckout.pago.titulo,
-                texto: textosCheckout.pago.intentoSinDatos,
+                titulo: 'pago.titulo',
+                texto: 'pago.intentoSinDatos',
                 comprobar: true,
               });
               void intentoQuery.refetch();
@@ -497,6 +519,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
               pagoId: data.pago_id,
               clientSecret: data.client_secret,
               monto: Number(data.monto),
+              moneda: data.moneda,
             });
             setConfirmacionEnviada(false);
             setConflictoCarrera(false);
@@ -530,8 +553,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
             ) {
               setMensaje({
                 tono: 'warning',
-                titulo: textosCheckout.errores.idempotenciaTitulo,
-                texto: textosCheckout.errores.idempotenciaDescripcion,
+                titulo: 'errores.idempotenciaTitulo',
+                texto: 'errores.idempotenciaDescripcion',
                 comprobar: true,
               });
               return;
@@ -543,7 +566,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
             ) {
               setMensaje({
                 tono: 'warning',
-                texto: textosCheckout.carritoNoDisponibleDescripcion,
+                texto: 'carritoNoDisponibleDescripcion',
                 comprobar: true,
               });
               void carritoQuery.refetch();
@@ -554,7 +577,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
             if (error instanceof ApiError && error.status === 0) {
               setMensaje({
                 tono: 'warning',
-                texto: textosCheckout.errores.crearRed,
+                texto: 'errores.crearRed',
                 comprobar: true,
               });
               return;
@@ -563,7 +586,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
             if (error instanceof ApiError && error.status >= 500) {
               setMensaje({
                 tono: 'warning',
-                texto: textosCheckout.errores.crear,
+                texto: 'errores.crear',
                 comprobar: true,
               });
               void resumenQuery.refetch();
@@ -572,7 +595,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
 
             setMensaje({
               tono: 'warning',
-              texto: getApiErrorMessage(error),
+              texto: 'errores.crear',
+              apiError: error,
               comprobar: true,
             });
             void resumenQuery.refetch();
@@ -582,7 +606,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
     } catch {
       setMensaje({
         tono: 'warning',
-        texto: textosCheckout.errores.crear,
+        texto: 'errores.crear',
         comprobar: true,
       });
     } finally {
@@ -596,7 +620,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
     setEstadoIncierto(false);
     setMensaje({
       tono: 'info',
-      texto: textosCheckout.estados.confirmacionEnviada,
+      texto: 'estados.confirmacionEnviada',
     });
     void intentoQuery.refetch();
     void resumenQuery.refetch();
@@ -617,17 +641,17 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   const errorCarrito = carritoQuery.isError
     ? esErrorHttp(carritoQuery.error, 403)
       ? textosCheckout.errores.acceso
-      : getApiErrorMessage(carritoQuery.error)
+      : <TranslatedError error={{ api: carritoQuery.error }} />
     : null;
   const errorArticulos = itemsQuery.isError
     ? esErrorHttp(itemsQuery.error, 403)
       ? textosCheckout.errores.acceso
-      : getApiErrorMessage(itemsQuery.error)
+      : <TranslatedError error={{ api: itemsQuery.error }} />
     : null;
   const errorResumen = resumenQuery.isError
     ? esErrorHttp(resumenQuery.error, 403)
       ? textosCheckout.errores.acceso
-      : getApiErrorMessage(resumenQuery.error)
+      : <TranslatedError error={{ api: resumenQuery.error }} />
     : null;
 
   const pagoDelCarrito =
@@ -651,6 +675,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
           pagoId: intentoServidor.pago_id,
           clientSecret: intentoServidor.client_secret,
           monto: Number(intentoServidor.monto),
+          moneda: intentoServidor.moneda,
           puedeConfirmar: intentoServidor.puede_confirmar,
         }
       : intentoCreadoValido && !intentoServidor
@@ -658,6 +683,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
             pagoId: intentoCreadoValido.pagoId,
             clientSecret: intentoCreadoValido.clientSecret,
             monto: intentoCreadoValido.monto,
+            moneda: intentoCreadoValido.moneda,
             puedeConfirmar: true,
           }
         : null;
@@ -671,6 +697,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   const mostrarFormulario = Boolean(
     intentoParaFormulario &&
       !montoDifiere &&
+      !cartSummaryMismatch &&
+      intentoParaFormulario.moneda === 'GTQ' &&
       intentoParaFormulario.puedeConfirmar &&
       intentoParaFormulario.clientSecret &&
       !confirmacionEnviada &&
@@ -722,6 +750,9 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
     (consultaIntentoEnCurso || consultaPagoEnCurso);
 
   const mostrarCta =
+    !cartSummaryMismatch &&
+    !expiryChecking &&
+    !pagoIdValido &&
     !intentoServidor &&
     !intentoCreadoValido &&
     !conflictoCarrera &&
@@ -737,11 +768,25 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
 
   const sinSaldoPendiente = Boolean(resumen && resumen.saldo <= 0);
 
+  const checkExpiry = async () => {
+    const cart = carritoId ?? ultimoCarrito.current;
+    if (cart === null || expiryCheckRef.current) return;
+    expiryCheckRef.current = true;
+    setExpiryChecking(true);
+    try {
+      const verification = await verifyCartPayment(queryClient, userId, cart, pagoIdValido ? pagoId : null);
+      if (verification.paymentId !== null) setPagoCreadoId(verification.paymentId);
+      await consultarEstado(true);
+      setEstadoIncierto(verification.uncertain);
+    } finally { expiryCheckRef.current = false; setExpiryChecking(false); }
+  };
+
   return (
     <section
       aria-labelledby="titulo-checkout"
       className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8"
     >
+      <PurchaseSteps current={1} allowCartReturn={!intentoServidor && !intentoCreadoValido && !pagoIdValido && !estadoIncierto} />
       <div className="flex flex-col gap-1.5">
         <p className="eyebrow">{textosCheckout.subtitulo}</p>
         <h1
@@ -760,6 +805,9 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
         )}
       </div>
 
+      {carritoValido && <CartExpiry expiresAt={carritoValido.expira_en} onCheck={() => { void checkExpiry(); }} />}
+      {cartSummaryMismatch && <Alert tone="error">{p('purchaseTotalsMismatch')}</Alert>}
+      {intentoParaFormulario && intentoParaFormulario.moneda !== 'GTQ' && <Alert tone="error">{p('purchaseCurrencyMismatch')}</Alert>}
       {carritoQuery.isPending && (
         <div className="flex justify-center py-12">
           <LoadingNotice label={textosCheckout.cargandoCarrito} />
@@ -768,7 +816,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
 
       {carritoQuery.isError &&
         (esErrorHttp(carritoQuery.error, 404) ? (
-          <SinCarrito
+          (pagoIdValido || estadoIncierto) ? <Card className="flex flex-col gap-4"><Alert tone="info">{p('purchaseExpiredPayment')}</Alert><Button variant="ghost" onClick={() => { void checkExpiry(); }}>{textosCheckout.comprobarEstado}</Button>{pagoIdValido && <Link className={buttonStyles()} to={PAGOS_ROUTES.RESULTADO(pagoId!)}>{textosCheckout.verResultado}</Link>}</Card> : <SinCarrito
             onActualizar={comprobarEstado}
             actualizando={carritoQuery.isFetching}
           />
@@ -852,7 +900,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
         resumenListo &&
         resumen && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-            <ListaArticulosCheckout items={items} />
+            <div className="flex min-w-0 flex-col gap-6"><AccountContact /><ListaArticulosCheckout items={items} /></div>
 
             <div className="flex flex-col gap-6">
               <ResumenCheckout
@@ -872,9 +920,9 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                   <div className="flex flex-col items-start gap-3">
                     <Alert
                       tone={mensaje.tono}
-                      title={mensaje.titulo}
+                      title={mensaje.titulo ? checkoutCopy(textosCheckout, mensaje.titulo) : undefined}
                     >
-                      {mensaje.texto}
+                      {mensaje.apiError ? <TranslatedError error={{ api: mensaje.apiError }} /> : checkoutCopy(textosCheckout, mensaje.texto)}
                     </Alert>
                     <div className="flex flex-wrap gap-2">
                       {mensaje.comprobar && (
@@ -1282,8 +1330,10 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                 {mostrarFormulario && intentoParaFormulario && (
                   <div className="flex flex-col gap-3">
                     <StripePaymentForm
+                      blocked={expiryChecking}
                       clientSecret={intentoParaFormulario.clientSecret}
                       monto={intentoParaFormulario.monto}
+                      moneda={intentoParaFormulario.moneda}
                       pagoId={intentoParaFormulario.pagoId}
                       onConfirmacionEnviada={confirmacionEnviadaAlServidor}
                       onEstadoIncierto={estadoConfirmacionIncierto}

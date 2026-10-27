@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle } from "lucide-react";
@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Feedback";
+import { ImageUploader } from "@/components/ui/ImageUploader";
 import { ApiError } from "@/api/client/http";
 import { getApiErrorMessage, getFieldErrors } from "@/api/errors";
 import { es } from "@/i18n/es";
@@ -19,6 +20,8 @@ import {
 import {
   useCreateTipoHabitacionMutation,
   useUpdateTipoHabitacionMutation,
+  useUploadTipoHabitacionImageMutation,
+  useRemoveTipoHabitacionImageMutation,
 } from "../hooks/useTiposHabitacion";
 import type { TipoHabitacion } from "../types";
 
@@ -45,7 +48,17 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
 
   const createMutation = useCreateTipoHabitacionMutation();
   const updateMutation = useUpdateTipoHabitacionMutation();
+  const uploadImageMutation = useUploadTipoHabitacionImageMutation();
+  const removeImageMutation = useRemoveTipoHabitacionImageMutation();
   const activeMutation = isEditing ? updateMutation : createMutation;
+
+  // Estado para la imagen del tipo de habitación
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [persistedId, setPersistedId] = useState<number | null>(null);
 
   const {
     register,
@@ -65,6 +78,13 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
 
   useEffect(() => {
     if (open) {
+      setSelectedFile(null);
+      setRemoveMarked(false);
+      setIsUploadingImage(false);
+      setUploadProgress(0);
+      setImageError(null);
+      setPersistedId(null);
+
       if (tipo) {
         reset({
           nombre: tipo.nombre ?? "",
@@ -88,24 +108,36 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
       }
       createMutation.reset();
       updateMutation.reset();
+      uploadImageMutation.reset();
+      removeImageMutation.reset();
     }
   }, [open, tipo, reset]);
 
   const onSubmit = async (data: TipoHabitacionFormData) => {
+    setImageError(null);
+    let targetId: number;
+
     try {
       if (isEditing && tipo) {
+        targetId = tipo.id;
         const payload = sanitizeUpdateTipoHabitacion(data);
         await updateMutation.mutateAsync({
           id: tipo.id,
           data: payload,
         });
-        onSuccess(textosTiposHabitacion.actualizadoExito);
+      } else if (persistedId) {
+        targetId = persistedId;
+        const payload = sanitizeUpdateTipoHabitacion(data);
+        await updateMutation.mutateAsync({
+          id: persistedId,
+          data: payload,
+        });
       } else {
         const payload = sanitizeCreateTipoHabitacion(data);
-        await createMutation.mutateAsync(payload);
-        onSuccess(textosTiposHabitacion.creadoExito);
+        const created = await createMutation.mutateAsync(payload);
+        targetId = created.id;
+        setPersistedId(created.id);
       }
-      onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 400) {
@@ -119,10 +151,53 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
           setError("capacidad_maxima", { message: err.message });
         }
       }
+      return;
     }
+
+    if (removeMarked && (tipo?.id || persistedId)) {
+      try {
+        await removeImageMutation.mutateAsync(targetId);
+      } catch (err: any) {
+        setImageError("No fue posible retirar la imagen actual.");
+        return;
+      }
+    }
+
+    if (selectedFile) {
+      setIsUploadingImage(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetId,
+          file: selectedFile,
+          onProgress: (pct) => setUploadProgress(pct),
+        });
+      } catch (err: any) {
+        setIsUploadingImage(false);
+        setImageError(
+          err?.message ||
+            "Error al subir la imagen del tipo de habitación. Los datos fueron guardados; puede reintentar.",
+        );
+        return;
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
+    onSuccess(
+      isEditing
+        ? textosTiposHabitacion.actualizadoExito
+        : textosTiposHabitacion.creadoExito
+    );
+    onClose();
   };
 
-  const isPending = activeMutation.isPending || isSubmitting;
+  const isPending =
+    activeMutation.isPending ||
+    uploadImageMutation.isPending ||
+    removeImageMutation.isPending ||
+    isUploadingImage ||
+    isSubmitting;
 
   return (
     <Modal open={open} onClose={onClose} title={title} description={description}>
@@ -192,6 +267,21 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
             </p>
           )}
         </div>
+
+        <ImageUploader
+          label="Fotografía representativa del tipo de habitación"
+          helpText="Archivos JPEG, PNG o WebP de hasta 5 MiB"
+          currentImageUrl={tipo?.imagen_url}
+          currentImageLabel="Fotografía del tipo de habitación"
+          selectedFile={selectedFile}
+          removeMarked={removeMarked}
+          onFileSelect={setSelectedFile}
+          onRemoveCurrent={() => setRemoveMarked((prev) => !prev)}
+          disabled={isPending}
+          isUploading={isUploadingImage}
+          uploadProgress={uploadProgress}
+          error={imageError}
+        />
 
         <div className="mt-2 flex items-center justify-end gap-3 border-t border-neutro-200 pt-4">
           <Button

@@ -1,6 +1,17 @@
 import type { components } from '@/api/generated/schema';
 
+export interface AssetCreditInfo {
+  autor?: string;
+  fuente?: string;
+  licencia?: string;
+  url?: string;
+}
+
 export type Salon = components['schemas']['Salon'] & {
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: string | null;
+  imagen_creditos?: AssetCreditInfo | null;
   sucursal?: {
     id?: number;
     nombre?: string;
@@ -14,6 +25,7 @@ export type CreateSalonInput = {
   capacidad_maxima: number;
   tarifa_base: number;
   descripcion?: string | null;
+  imagen_key?: string | null;
 };
 
 export type UpdateSalonInput = Partial<CreateSalonInput>;

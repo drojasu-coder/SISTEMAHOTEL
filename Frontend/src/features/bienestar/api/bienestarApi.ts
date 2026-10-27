@@ -1,4 +1,5 @@
 import { api } from '@/api/client/http';
+import { uploadEntityImage } from '@/api/mediaUpload';
 import type {
   ServicioBienestar,
   ServiciosBienestarResponse,
@@ -46,6 +47,24 @@ export const bienestarApi = {
     await api.delete(`/servicios-spa/${id}`);
   },
 
+  uploadServicioImage: async (
+    id: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<ServicioBienestar> => {
+    return uploadEntityImage<ServicioBienestar>({
+      presignEndpoint: `/servicios-spa/${id}/imagen-presign`,
+      confirmEndpoint: `/servicios-spa/${id}/imagen-confirmar`,
+      file,
+      onProgress,
+    });
+  },
+
+  removeServicioImage: async (id: number): Promise<ServicioBienestar> => {
+    const response = await api.delete<ServicioBienestarResponse>(`/servicios-spa/${id}/imagen`);
+    return response.data;
+  },
+
   // Terapeutas
   getTerapeutas: async (): Promise<Terapeuta[]> => {
     const response = await api.get<TerapeutasResponse>('/terapeutas');
@@ -66,7 +85,10 @@ export const bienestarApi = {
     id: number,
     data: UpdateTerapeutaInput
   ): Promise<Terapeuta> => {
-    const response = await api.patch<TerapeutaResponse>(`/terapeutas/${id}`, data);
+    const response = await api.patch<TerapeutaResponse>(
+      `/terapeutas/${id}`,
+      data
+    );
     return response.data;
   },
 

@@ -26,24 +26,26 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: false,
       },
-
       precio_hora: {
-  type: DataTypes.DECIMAL(10, 2),
-  allowNull: false,
-  defaultValue: 0,
-},
-
-precio_equipo: {
-  type: DataTypes.DECIMAL(10, 2),
-  allowNull: false,
-  defaultValue: 0,
-},
-
-precio_instructor_hora: {
-  type: DataTypes.DECIMAL(10, 2),
-  allowNull: false,
-  defaultValue: 0,
-},
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
+      precio_equipo: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
+      precio_instructor_hora: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        defaultValue: 0,
+      },
+      imagen_key: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

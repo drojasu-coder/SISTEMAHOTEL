@@ -1,6 +1,17 @@
 import type { components } from '@/api/generated/schema';
 
+export interface AssetCreditInfo {
+  autor?: string;
+  fuente?: string;
+  licencia?: string;
+  url?: string;
+}
+
 export type RecursoActividad = components['schemas']['RecursoActividad'] & {
+  imagen_key?: string | null;
+  imagen_url?: string | null;
+  imagen_expires_at?: string | null;
+  imagen_creditos?: AssetCreditInfo | null;
   Sucursal?: {
     id?: number;
     nombre?: string;

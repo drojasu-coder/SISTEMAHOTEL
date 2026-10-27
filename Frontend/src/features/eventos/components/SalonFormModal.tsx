@@ -1,13 +1,43 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { X } from 'lucide-react';
+import { z } from 'zod';
+import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
-import { useCreateSalonMutation, useUpdateSalonMutation } from '../hooks/useEventos';
-import { salonFormSchema, type SalonFormData } from '../schemas/evento.schemas';
+import { ImageUploader } from '@/components/ui/ImageUploader';
+import {
+  useCreateSalonMutation,
+  useUpdateSalonMutation,
+  useUploadSalonImageMutation,
+  useRemoveSalonImageMutation,
+} from '../hooks/useEventos';
+import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import type { Salon } from '../types';
 import { getApiErrorMessage } from '@/api/errors';
+
+const salonSchema = z.object({
+  sucursal_id: z.string().min(1, 'Debe seleccionar una sede'),
+  nombre: z
+    .string()
+    .min(3, 'El nombre debe tener al menos 3 caracteres')
+    .max(100, 'El nombre no puede exceder 100 caracteres'),
+  capacidad_maxima: z
+    .string()
+    .min(1, 'Ingrese la capacidad')
+    .refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+      message: 'La capacidad debe ser un número mayor a 0',
+    }),
+  tarifa_base: z
+    .string()
+    .min(1, 'Ingrese la tarifa base')
+    .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
+      message: 'La tarifa base debe ser un valor mayor o igual a 0',
+    }),
+  descripcion: z.string().optional(),
+});
+
+type SalonFormData = z.infer<typeof salonSchema>;
 
 interface SalonFormModalProps {
   salon?: Salon | null;
@@ -15,59 +45,67 @@ interface SalonFormModalProps {
   onClose: () => void;
 }
 
-export const SalonFormModal: React.FC<SalonFormModalProps> = ({
-  salon,
-  isOpen,
-  onClose,
-}) => {
+export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, onClose }) => {
   const isEditing = Boolean(salon?.id);
+  const sedesQuery = useSedesQuery();
+  const sedes = sedesQuery.data ?? [];
+
   const createMutation = useCreateSalonMutation();
   const updateMutation = useUpdateSalonMutation();
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const uploadImageMutation = useUploadSalonImageMutation();
+  const removeImageMutation = useRemoveSalonImageMutation();
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [persistedId, setPersistedId] = useState<number | null>(null);
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
     reset,
+    formState: { errors, isSubmitting },
   } = useForm<SalonFormData>({
-    resolver: zodResolver(salonFormSchema),
+    resolver: zodResolver(salonSchema),
     defaultValues: {
-      sucursal_id: salon?.sucursal_id ?? 1,
+      sucursal_id: salon?.sucursal_id ? String(salon.sucursal_id) : '',
       nombre: salon?.nombre ?? '',
-      capacidad_maxima: salon?.capacidad_maxima ?? 100,
-      tarifa_base: Number(salon?.tarifa_base ?? 2000),
+      capacidad_maxima: salon?.capacidad_maxima ? String(salon.capacidad_maxima) : '',
+      tarifa_base: salon?.tarifa_base !== undefined ? String(salon.tarifa_base) : '',
       descripcion: salon?.descripcion ?? '',
     },
   });
 
   useEffect(() => {
-    if (salon) {
+    if (isOpen) {
+      setErrorMessage(null);
+      setImageError(null);
+      setSelectedFile(null);
+      setRemoveMarked(false);
+      setUploadProgress(0);
+      setIsUploading(false);
+      setPersistedId(salon?.id ?? null);
       reset({
-        sucursal_id: salon.sucursal_id ?? 1,
-        nombre: salon.nombre ?? '',
-        capacidad_maxima: salon.capacidad_maxima ?? 100,
-        tarifa_base: Number(salon.tarifa_base ?? 2000),
-        descripcion: salon.descripcion ?? '',
-      });
-    } else {
-      reset({
-        sucursal_id: 1,
-        nombre: '',
-        capacidad_maxima: 100,
-        tarifa_base: 2000,
-        descripcion: '',
+        sucursal_id: salon?.sucursal_id ? String(salon.sucursal_id) : '',
+        nombre: salon?.nombre ?? '',
+        capacidad_maxima: salon?.capacidad_maxima ? String(salon.capacidad_maxima) : '',
+        tarifa_base: salon?.tarifa_base !== undefined ? String(salon.tarifa_base) : '',
+        descripcion: salon?.descripcion ?? '',
       });
     }
-    setErrorMessage(null);
-  }, [salon, reset]);
-
-  if (!isOpen) return null;
+  }, [isOpen, salon, reset]);
 
   const onSubmit = async (data: SalonFormData) => {
     setErrorMessage(null);
+    setImageError(null);
+
+    let targetId: number;
     try {
       if (isEditing && salon?.id) {
+        targetId = salon.id;
         await updateMutation.mutateAsync({
           id: salon.id,
           data: {
@@ -78,151 +116,231 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({
             descripcion: data.descripcion,
           },
         });
+      } else if (persistedId) {
+        targetId = persistedId;
+        await updateMutation.mutateAsync({
+          id: persistedId,
+          data: {
+            sucursal_id: Number(data.sucursal_id),
+            nombre: data.nombre,
+            capacidad_maxima: Number(data.capacidad_maxima),
+            tarifa_base: Number(data.tarifa_base),
+            descripcion: data.descripcion,
+          },
+        });
       } else {
-        await createMutation.mutateAsync({
+        const created = await createMutation.mutateAsync({
           sucursal_id: Number(data.sucursal_id),
           nombre: data.nombre,
           capacidad_maxima: Number(data.capacidad_maxima),
           tarifa_base: Number(data.tarifa_base),
           descripcion: data.descripcion,
         });
+        targetId = Number(created.id);
+        setPersistedId(Number(created.id));
       }
-      onClose();
     } catch (err: unknown) {
       setErrorMessage(getApiErrorMessage(err));
+      return;
     }
+
+    if (removeMarked && (salon?.id || persistedId)) {
+      try {
+        await removeImageMutation.mutateAsync(targetId);
+      } catch (_err: any) {
+        setImageError('Se guardó el salón pero falló el retiro de la imagen.');
+        return;
+      }
+    }
+
+    if (selectedFile) {
+      setIsUploading(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetId,
+          file: selectedFile,
+          onProgress: (pct) => setUploadProgress(pct),
+        });
+      } catch (uploadErr: any) {
+        setImageError(
+          uploadErr?.message ||
+            'Se guardaron los datos del salón, pero ocurrió un error al subir la fotografía a S3.',
+        );
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    onClose();
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending || isSubmitting;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutro-950/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-salon-titulo"
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title={isEditing ? 'Editar Salón' : 'Nuevo Salón de Eventos'}
+      closeLabel="Cerrar modal"
+      className="max-w-lg"
     >
-      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-full p-2 text-neutro-400 hover:bg-neutro-100 hover:text-neutro-700 transition-colors"
-          aria-label="Cerrar modal"
-        >
-          <X className="size-5" aria-hidden="true" />
-        </button>
-
-        <div className="flex flex-col gap-1.5 mb-4">
-          <h2 id="modal-salon-titulo" className="text-xl font-serif font-bold text-neutro-900">
-            {isEditing ? 'Editar Salón' : 'Nuevo Salón de Eventos'}
-          </h2>
-          <p className="text-xs text-neutro-600">
-            Configure los datos de capacidad y tarifa base del salón en quetzales.
-          </p>
-        </div>
-
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {errorMessage && (
-          <div className="mb-4">
-            <Alert tone="error" title="Error al guardar salón">
-              {errorMessage}
-            </Alert>
-          </div>
+          <Alert tone="error">
+            <span className="text-xs">{errorMessage}</span>
+          </Alert>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 text-sm">
+        {imageError && (
+          <Alert tone="warning">
+            <span className="text-xs">{imageError}</span>
+          </Alert>
+        )}
+
+        {/* Sede */}
+        <div>
+          <label htmlFor="salon-sucursal" className="field-label">
+            Sede del hotel *
+          </label>
+          <select
+            id="salon-sucursal"
+            {...register('sucursal_id')}
+            disabled={isSubmitting || isUploading}
+            className="field-control"
+          >
+            <option value="">Seleccione una sede...</option>
+            {sedes.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre}
+              </option>
+            ))}
+          </select>
+          {errors.sucursal_id && (
+            <p className="mt-1 text-xs text-rojo-600">{errors.sucursal_id.message}</p>
+          )}
+        </div>
+
+        {/* Nombre */}
+        <div>
+          <label htmlFor="salon-nombre" className="field-label">
+            Nombre del salón *
+          </label>
+          <input
+            id="salon-nombre"
+            type="text"
+            placeholder="Ej. Salón Atitlán Real"
+            {...register('nombre')}
+            disabled={isSubmitting || isUploading}
+            className="field-control"
+          />
+          {errors.nombre && (
+            <p className="mt-1 text-xs text-rojo-600">{errors.nombre.message}</p>
+          )}
+        </div>
+
+        {/* Capacidad y Tarifa Base */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="sucursal_id" className="block text-xs font-semibold text-neutro-700 mb-1">
-              ID Sede / Sucursal
+            <label htmlFor="salon-capacidad" className="field-label">
+              Capacidad máxima *
             </label>
             <input
+              id="salon-capacidad"
               type="number"
-              id="sucursal_id"
-              min={1}
-              {...register('sucursal_id', { valueAsNumber: true })}
-              className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-neutro-900 shadow-sm focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
+              min="1"
+              placeholder="Ej. 150"
+              {...register('capacidad_maxima')}
+              disabled={isSubmitting || isUploading}
+              className="field-control"
             />
-            {errors.sucursal_id && (
-              <p className="mt-1 text-xs text-error-600">{errors.sucursal_id.message}</p>
+            {errors.capacidad_maxima && (
+              <p className="mt-1 text-xs text-rojo-600">{errors.capacidad_maxima.message}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="nombre" className="block text-xs font-semibold text-neutro-700 mb-1">
-              Nombre del salón
+            <label htmlFor="salon-tarifa" className="field-label">
+              Tarifa base (GTQ) *
             </label>
             <input
-              type="text"
-              id="nombre"
-              {...register('nombre')}
-              placeholder="Ej. Gran Salón Ceiba"
-              className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-neutro-900 shadow-sm focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
+              id="salon-tarifa"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Ej. 1500.00"
+              {...register('tarifa_base')}
+              disabled={isSubmitting || isUploading}
+              className="field-control"
             />
-            {errors.nombre && (
-              <p className="mt-1 text-xs text-error-600">{errors.nombre.message}</p>
+            {errors.tarifa_base && (
+              <p className="mt-1 text-xs text-rojo-600">{errors.tarifa_base.message}</p>
             )}
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="capacidad_maxima" className="block text-xs font-semibold text-neutro-700 mb-1">
-                Capacidad máxima
-              </label>
-              <input
-                type="number"
-                id="capacidad_maxima"
-                min={1}
-                {...register('capacidad_maxima', { valueAsNumber: true })}
-                className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-neutro-900 shadow-sm focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
-              />
-              {errors.capacidad_maxima && (
-                <p className="mt-1 text-xs text-error-600">{errors.capacidad_maxima.message}</p>
-              )}
-            </div>
+        {/* Descripción */}
+        <div>
+          <label htmlFor="salon-descripcion" className="field-label">
+            Descripción y especificaciones (opcional)
+          </label>
+          <textarea
+            id="salon-descripcion"
+            rows={3}
+            placeholder="Acondicionamiento, iluminación, áreas anexas..."
+            {...register('descripcion')}
+            disabled={isSubmitting || isUploading}
+            className="field-control resize-none"
+          />
+        </div>
 
-            <div>
-              <label htmlFor="tarifa_base" className="block text-xs font-semibold text-neutro-700 mb-1">
-                Tarifa base (GTQ)
-              </label>
-              <input
-                type="number"
-                id="tarifa_base"
-                step="0.01"
-                min={0}
-                {...register('tarifa_base', { valueAsNumber: true })}
-                className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-neutro-900 shadow-sm focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
-              />
-              {errors.tarifa_base && (
-                <p className="mt-1 text-xs text-error-600">{errors.tarifa_base.message}</p>
-              )}
-            </div>
-          </div>
+        {/* Fotografía principal en AWS S3 */}
+        <div className="border-t border-neutro-200 pt-4">
+          <ImageUploader
+            label="Fotografía del salón"
+            helpText="Formatos WebP, JPEG o PNG (hasta 5MB)"
+            currentImageUrl={salon?.imagen_url}
+            selectedFile={selectedFile}
+            removeMarked={removeMarked}
+            onFileSelect={(file) => {
+              setSelectedFile(file);
+              if (file) setRemoveMarked(false);
+            }}
+            onRemoveCurrent={() => {
+              setRemoveMarked(true);
+              setSelectedFile(null);
+            }}
+            uploadProgress={uploadProgress}
+            isUploading={isUploading}
+            error={imageError}
+          />
+        </div>
 
-          <div>
-            <label htmlFor="descripcion" className="block text-xs font-semibold text-neutro-700 mb-1">
-              Descripción detallada
-            </label>
-            <textarea
-              id="descripcion"
-              rows={3}
-              {...register('descripcion')}
-              placeholder="Características, vistas, equipamiento..."
-              className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-neutro-900 shadow-sm focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
-            />
-            {errors.descripcion && (
-              <p className="mt-1 text-xs text-error-600">{errors.descripcion.message}</p>
-            )}
-          </div>
-
-          <div className="mt-4 flex justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="primary" disabled={isPending}>
-              {isPending ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear salón'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Acciones */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-neutro-100">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+            disabled={isSubmitting || isUploading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={isSubmitting || isUploading}
+          >
+            {isSubmitting || isUploading
+              ? isUploading
+                ? 'Subiendo imagen a S3...'
+                : 'Guardando datos...'
+              : isEditing
+                ? 'Guardar cambios'
+                : 'Crear salón'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 };

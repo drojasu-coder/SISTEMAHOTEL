@@ -14,6 +14,9 @@ export interface ModalProps {
   children: React.ReactNode;
   className?: string;
   closeLabel?: string;
+  busy?: boolean;
+  busyLabel?: string;
+  initialFocusRef?: React.RefObject<HTMLElement>;
 }
 
 /**
@@ -31,10 +34,13 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   className,
   closeLabel = es.comunes.cerrar,
+  busy = false,
+  busyLabel,
+  initialFocusRef,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  onCloseRef.current = () => { if (!busy) onClose(); };
 
   const titleId = React.useId();
   const descId = React.useId();
@@ -46,7 +52,7 @@ export const Modal: React.FC<ModalProps> = ({
     const dialog = dialogRef.current;
 
     const timer = setTimeout(() => {
-      dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      (initialFocusRef?.current ?? dialog?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     }, 10);
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -61,7 +67,10 @@ export const Modal: React.FC<ModalProps> = ({
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!dialog.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -76,6 +85,13 @@ export const Modal: React.FC<ModalProps> = ({
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus?.();
     };
+  }, [open, initialFocusRef]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
   }, [open]);
 
   if (!open) return null;
@@ -84,13 +100,14 @@ export const Modal: React.FC<ModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div
         className="fixed inset-0 bg-neutro-900/50 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
+        onClick={() => onCloseRef.current()}
         aria-hidden="true"
       />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-busy={busy || undefined}
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         className={cn(
@@ -111,15 +128,16 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => onCloseRef.current()}
+            disabled={busy}
             aria-label={closeLabel}
-            className="flex size-10 shrink-0 items-center justify-center rounded-md text-neutro-600 hover:bg-neutro-100 hover:text-neutro-900"
+            className="flex size-11 shrink-0 items-center justify-center rounded-md text-neutro-600 hover:bg-neutro-100 hover:text-neutro-900 disabled:opacity-45"
           >
             <X className="size-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">{busy && busyLabel && <p role="status" className="mb-4 text-sm text-neutro-700">{busyLabel}</p>}{children}</div>
       </div>
     </div>
   );

@@ -1,17 +1,17 @@
 import React from 'react';
 import { cn } from '@/lib/cn';
 
-export type CardProps = React.HTMLAttributes<HTMLDivElement>;
+export type CardProps = React.HTMLAttributes<HTMLDivElement> & { as?: 'div' | 'article'; padding?: 'default' | 'none' };
 
 /**
  * Superficie base de la guía (`surface`): borde suave, fondo blanco y sombra ligera.
  * Contrato conservado: sigue siendo un `<div>` con las mismas clases base.
  * CardHeader / CardContent / CardFooter son subcomponentes opcionales.
  */
-export const Card: React.FC<CardProps> = ({ children, className, ...props }) => (
-  <div className={cn('surface p-4 sm:p-6', className)} {...props}>
+export const Card: React.FC<CardProps> = ({ children, className, as: Element = 'div', padding = 'default', ...props }) => (
+  <Element className={cn('surface', padding === 'default' && 'p-4 sm:p-6', className)} {...props}>
     {children}
-  </div>
+  </Element>
 );
 
 export interface CardHeaderProps {

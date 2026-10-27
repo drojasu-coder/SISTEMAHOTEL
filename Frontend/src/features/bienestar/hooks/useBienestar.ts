@@ -108,6 +108,36 @@ export function useUpdateServicioSpaMutation() {
   });
 }
 
+export function useUploadServicioSpaImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => bienestarApi.uploadServicioImage(id, file, onProgress),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: bienestarQueryKeys.servicios });
+      void queryClient.invalidateQueries({ queryKey: bienestarQueryKeys.servicio(variables.id) });
+    },
+  });
+}
+
+export function useRemoveServicioSpaImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => bienestarApi.removeServicioImage(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: bienestarQueryKeys.servicios });
+      void queryClient.invalidateQueries({ queryKey: bienestarQueryKeys.servicio(id) });
+    },
+  });
+}
+
 export function useCreateTerapeutaMutation() {
   const queryClient = useQueryClient();
   return useMutation({

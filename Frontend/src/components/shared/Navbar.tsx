@@ -1,201 +1,66 @@
-import React from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, User, ShoppingCart } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import { Brand } from '@/components/shared/Brand';
+import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/features/auth/AuthContext';
 import { canAccessPanel } from '@/features/auth/permissions';
-import { cn } from '@/lib/cn';
-import { es } from '@/i18n/es';
-import { RESERVAS_ROUTES } from '@/features/reservas';
-import { CARRITO_ROUTES } from '@/features/carrito';
-import { AMENIDADES_ROUTES } from '@/features/amenidades';
-import { RESTAURANTE_ROUTES } from '@/features/restaurante';
-import { ACTIVIDADES_ROUTES } from '@/features/actividades';
-import { BIENESTAR_ROUTES } from '@/features/bienestar';
-import { EVENTOS_ROUTES } from '@/features/eventos';
+import { useLocale } from '@/i18n/LocaleContext';
+import { PublicCartLink } from './PublicCartLink';
+import { primaryLinks, sectionActive } from './publicNavigation';
+import { PublicDropdown } from './PublicDropdown';
 
-const actionClass =
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-transparent px-3 text-sm font-semibold transition-colors';
-
+const itemClass = 'flex min-h-11 items-center rounded-md px-2 text-xs font-semibold hover:bg-bronce-50 hover:text-bronce-700';
 export const Navbar: React.FC = () => {
-  const navigate = useNavigate();
   const { status, user, logout } = useAuth();
-  const hasPanel = user ? canAccessPanel(user.rol) : false;
-
-  const handleLogout = () => {
-    logout();
-    navigate('/', { replace: true });
-  };
-
-  return (
-    <header className="sticky top-0 z-40 border-b bg-white">
-      <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="rounded-md" aria-label={`${es.marca.nombre} — ${es.navegacion.inicio}`}>
-          <Brand />
-        </Link>
-
-        <nav className="flex items-center gap-6" aria-label={es.navegacion.principal}>
-          <NavLink
-            to="/"
-            end
-            className={({ isActive }) =>
-              cn(
-                'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                isActive ? 'text-bronce-700' : 'text-neutro-700',
-              )
-            }
-          >
-            {es.navegacion.inicio}
-          </NavLink>
-          {(!hasPanel || user?.rol === 'cliente') && (
-            <>
-              <NavLink
-                to={RESERVAS_ROUTES.NUEVA}
-                className={({ isActive }) =>
-                  cn(
-                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                    isActive ? 'text-bronce-700' : 'text-neutro-700',
-                  )
-                }
-              >
-                {es.navegacion.reservar}
-              </NavLink>
-              <NavLink
-                to={RESTAURANTE_ROUTES.CATALOGO}
-                className={({ isActive }) =>
-                  cn(
-                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                    isActive ? 'text-bronce-700' : 'text-neutro-700',
-                  )
-                }
-              >
-                {es.navegacion.restaurante}
-              </NavLink>
-              <NavLink
-                to={AMENIDADES_ROUTES.CATALOGO}
-                className={({ isActive }) =>
-                  cn(
-                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                    isActive ? 'text-bronce-700' : 'text-neutro-700',
-                  )
-                }
-              >
-                {es.amenidades.titulo}
-              </NavLink>
-              <NavLink
-                to={ACTIVIDADES_ROUTES.CATALOGO}
-                className={({ isActive }) =>
-                  cn(
-                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                    isActive ? 'text-bronce-700' : 'text-neutro-700',
-                  )
-                }
-              >
-                {es.navegacion.actividades}
-              </NavLink>
-              <NavLink
-                to={BIENESTAR_ROUTES.CATALOGO}
-                className={({ isActive }) =>
-                  cn(
-                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                    isActive ? 'text-bronce-700' : 'text-neutro-700',
-                  )
-                }
-              >
-                Bienestar
-              </NavLink>
-              <NavLink
-                to={EVENTOS_ROUTES.CATALOGO}
-                className={({ isActive }) =>
-                  cn(
-                    'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                    isActive ? 'text-bronce-700' : 'text-neutro-700',
-                  )
-                }
-              >
-                Eventos
-              </NavLink>
-              {status === 'authenticated' && user?.rol === 'cliente' && (
-                <>
-                  <NavLink
-                    to={RESERVAS_ROUTES.MIS_RESERVAS}
-                    className={({ isActive }) =>
-                      cn(
-                        'inline-flex min-h-11 items-center text-sm font-medium hover:text-bronce-700',
-                        isActive ? 'text-bronce-700' : 'text-neutro-700',
-                      )
-                    }
-                  >
-                    {es.navegacion.misReservas}
-                  </NavLink>
-                  <NavLink
-                    to={CARRITO_ROUTES.CARRITO}
-                    className={({ isActive }) =>
-                      cn(
-                        'inline-flex min-h-11 items-center gap-1.5 text-sm font-medium hover:text-bronce-700',
-                        isActive ? 'text-bronce-700' : 'text-neutro-700',
-                      )
-                    }
-                  >
-                    <ShoppingCart className="size-4" aria-hidden="true" />
-                    <span>{es.navegacion.carrito}</span>
-                  </NavLink>
-                </>
-              )}
-            </>
-          )}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          {status === 'authenticated' && user ? (
-            <>
-              <span className="hidden max-w-[10rem] truncate text-xs font-medium text-neutro-600 lg:inline">
-                {user.nombre}
-              </span>
-              <Link
-                to={hasPanel ? '/admin' : '/cuenta'}
-                aria-label={hasPanel ? es.navegacion.panel : es.navegacion.miCuenta}
-                className={cn(actionClass, 'bg-bronce-600 text-white hover:bg-bronce-700')}
-              >
-                {hasPanel ? (
-                  <LayoutDashboard className="size-4" aria-hidden="true" />
-                ) : (
-                  <User className="size-4" aria-hidden="true" />
-                )}
-                <span className="hidden sm:inline">
-                  {hasPanel ? es.navegacion.panel : es.navegacion.miCuenta}
-                </span>
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                aria-label={es.navegacion.cerrarSesion}
-                className={cn(actionClass, 'border-neutro-300 text-neutro-700 hover:bg-neutro-100')}
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-                <span className="hidden sm:inline">{es.navegacion.cerrarSesion}</span>
-              </button>
-            </>
-          ) : status === 'loading' ? (
-            <span className="text-xs text-neutro-400">{es.comunes.cargando}</span>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className={cn(actionClass, 'border-neutro-300 text-neutro-700 hover:bg-neutro-100')}
-              >
-                {es.navegacion.ingresar}
-              </Link>
-              <Link
-                to="/registro"
-                className={cn(actionClass, 'bg-bronce-600 text-white hover:bg-bronce-700')}
-              >
-                {es.navegacion.crearCuenta}
-              </Link>
-            </>
-          )}
+  const { t, locale } = useLocale();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [mobile, setMobile] = useState(false);
+  const mobileTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setMobile(false); }, [location]);
+  useEffect(() => {
+    if (!mobile) return;
+    const root = document.getElementById('root');
+    const inert = root?.inert;
+    if (root) root.inert = true;
+    const media = window.matchMedia?.('(min-width: 1280px)');
+    const close = () => { if (media?.matches) setMobile(false); };
+    media?.addEventListener('change', close);
+    return () => {
+      if (root) root.inert = inert ?? false;
+      media?.removeEventListener('change', close);
+      mobileTrigger.current?.focus({ preventScroll: true });
+    };
+  }, [mobile]);
+  const account = status === 'authenticated' && user ? <>
+    {user.rol === 'cliente' && <Link className={itemClass} to="/mis-reservas">{t('reservations')}</Link>}
+    <Link className={itemClass} to="/cuenta">{t('account')}</Link>
+    {canAccessPanel(user.rol) && <Link className={itemClass} to="/admin">{t('panel')}</Link>}
+    <button type="button" className={itemClass} onClick={() => { logout(); setMobile(false); navigate('/', { replace: true }); }}>{t('logout')}</button>
+  </> : status === 'anonymous' ? <><Link className={itemClass} to="/login">{t('login')}</Link><Link className={`${itemClass} bg-bronce-600 text-white`} to="/registro">{t('register')}</Link></> : null;
+  const cart = <PublicCartLink />;
+  const links = (phone = false) => primaryLinks.map((link) => link.children ? phone ? <details key={link.label}>
+    <summary className={itemClass}>{t(link.label)}</summary><div className="ml-4">{link.children.map((child) => navLink(child))}</div>
+  </details> : <PublicDropdown key={link.label} label={t(link.label)} active={link.children.some((c) => sectionActive(location.pathname, c.to))}>{link.children.map((child) => navLink(child))}</PublicDropdown> : navLink(link));
+  const navLink = (link: { to: string; label: Parameters<typeof t>[0] }) => <Link key={link.label} className={itemClass} aria-current={sectionActive(location.pathname, link.to) ? 'page' : undefined} to={link.to}>{t(link.label)}</Link>;
+  return <>
+    <header lang={locale} className="sticky top-0 z-40 border-b bg-white">
+      <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="min-w-0 shrink-0 rounded-md" aria-label={`HOTEL HUNAHPÚ · ${t('home')}`}><Brand className="max-w-[135px] [&>span:first-child]:text-sm sm:max-w-[170px] sm:[&>span:first-child]:text-base" /></Link>
+        <nav className="hidden items-center gap-1 xl:flex" aria-label={t('navigation')}>{links()}</nav>
+        <div className="ml-auto flex items-center gap-2">{cart}<div className="hidden items-center gap-2 xl:flex">
+          {status === 'authenticated' && user ? <PublicDropdown label={user.nombre}>{account}</PublicDropdown> : account}
         </div>
+        <button ref={mobileTrigger} type="button" aria-label={t('openMenu')} aria-expanded={mobile} aria-haspopup="dialog" className="flex size-11 shrink-0 items-center justify-center rounded-md border xl:hidden" onClick={() => {
+          if (!document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]')) setMobile(true);
+        }}><Menu aria-hidden="true" /></button></div>
       </div>
     </header>
-  );
+    {mobile && createPortal(<div lang={locale} className="public-mobile-menu"><Modal open={mobile} title={t('navigation')} closeLabel={t('closeMenu')} onClose={() => setMobile(false)} className="h-[100dvh] !max-h-none !max-w-none !rounded-none">
+      <nav className="mt-5 flex flex-col gap-1" aria-label={t('navigation')}>{links(true)}</nav>
+      <div className="mt-5 border-t pt-3">{user && <p className="px-2 font-semibold">{user.nombre}</p>}{account}</div>
+    </Modal></div>, document.body)}
+  </>;
 };

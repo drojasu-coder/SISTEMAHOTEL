@@ -7,6 +7,7 @@ export interface StepperProps {
   onChange?: (step: number) => void;
   error?: boolean;
   className?: string;
+  ariaLabel?: string;
 }
 
 /**
@@ -21,10 +22,11 @@ export function Stepper({
   onChange,
   error,
   className,
+  ariaLabel = es.componentes.cronologia,
 }: StepperProps) {
   return (
     <ol
-      aria-label={es.componentes.cronologia}
+      aria-label={ariaLabel}
       className={cn('flex flex-wrap gap-4', className)}
     >
       {steps.map((label, i) => {
@@ -62,6 +64,7 @@ export function Stepper({
         return (
           <li key={label} className="flex flex-1 items-center gap-3">
             <button
+              type="button"
               aria-current={isCurrent ? 'step' : undefined}
               disabled={disabled}
               onClick={!disabled && onChange ? () => onChange(i) : undefined}

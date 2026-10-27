@@ -1,15 +1,22 @@
+import { DateField } from '@/components/ui/DateField';
+import { TimeField } from '@/components/ui/TimeField';
+import { Select } from '@/components/ui/Select';
+import { TranslatedError, type LocalizedError } from '@/i18n/public';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
+import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "@/components/ui/Modal";
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useCreateReservaMesaMutation } from "../hooks/useReservasMesa";
-import { textosRestaurante } from "../textos";
+
 import { RESTAURANTE_ROUTES } from "../constants/routes";
 import type { MesaConSucursal, ReservaMesa } from "../types";
 import { ApiError } from "@/api/client/http";
-import { CheckCircle2, Calendar, Clock, Users, ArrowRight } from "lucide-react";
+import { CheckCircle2, ArrowRight } from "lucide-react";
 
 interface ReservaMesaModalProps {
   isOpen: boolean;
@@ -30,6 +37,9 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
   onClose,
   mesa,
 }) => {
+  const textosRestaurante = usePublicTexts('restaurante');
+  const { p , date: calendarDate } = usePublicInterface();
+  const siteBlocked = useDraftSiteGuard(mesa?.id, mesa?.sucursal_id);
   const { status, user } = useAuth();
   const navigate = useNavigate();
   const createMutation = useCreateReservaMesaMutation();
@@ -40,10 +50,11 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
   const [fecha, setFecha] = useState<string>(getTodayDateString());
   const [hora, setHora] = useState<string>("13:00");
   const [comensales, setComensales] = useState<number>(2);
-  const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [errorLocal, setErrorLocal] = useState<LocalizedError | null>(null);
   const [reservaConfirmada, setReservaConfirmada] = useState<ReservaMesa | null>(null);
 
   const handleClose = () => {
+    if (createMutation.isPending) return;
     setErrorLocal(null);
     setReservaConfirmada(null);
     onClose();
@@ -55,17 +66,17 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isCliente) return;
+    if (!isCliente || createMutation.isPending) return;
 
     setErrorLocal(null);
 
     if (comensales > capacidadMaxima) {
-      setErrorLocal(t.errorCapacidad);
+      setErrorLocal({ section: 'restaurante', key: 'errorCapacidad' });
       return;
     }
 
     if (comensales < 1) {
-      setErrorLocal("El número de comensales debe ser de al menos 1 persona.");
+      setErrorLocal({ section: 'extra', key: 'minimumDiners' });
       return;
     }
 
@@ -82,28 +93,31 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.code === "TABLE_UNAVAILABLE") {
-          setErrorLocal(t.errorMesaOcupada);
+          setErrorLocal({ section: 'restaurante', key: 'errorMesaOcupada' });
         } else if (err.code === "TABLE_IN_MAINTENANCE") {
-          setErrorLocal(t.errorMesaMantenimiento);
+          setErrorLocal({ section: 'restaurante', key: 'errorMesaMantenimiento' });
         } else if (err.code === "TABLE_CAPACITY_EXCEEDED") {
-          setErrorLocal(t.errorCapacidad);
+          setErrorLocal({ section: 'restaurante', key: 'errorCapacidad' });
         } else if (err.code === "TABLE_RESERVATION_DATE_IN_PAST") {
-          setErrorLocal(t.errorFechaPasada);
+          setErrorLocal({ section: 'restaurante', key: 'errorFechaPasada' });
         } else if (err.code === "TABLE_RESERVATION_TIME_IN_PAST") {
-          setErrorLocal(t.errorHoraPasada);
+          setErrorLocal({ section: 'restaurante', key: 'errorHoraPasada' });
         } else {
-          setErrorLocal(err.message || "Error al registrar la reserva.");
+          setErrorLocal({ api: err });
         }
       } else {
-        setErrorLocal(t.falloConexionIncierto);
+        setErrorLocal({ section: 'restaurante', key: 'falloConexionIncierto' });
       }
     }
   };
 
   return (
     <Modal
+      busy={createMutation.isPending}
+      busyLabel={p('processingRequest')}
       open={isOpen}
       onClose={handleClose}
+      closeLabel={t.cerrar}
       title={reservaConfirmada ? t.reservaExitosaTitulo : t.reservaModalTitulo}
       description={reservaConfirmada ? t.reservaExitosaDesc : t.reservaModalDesc}
     >
@@ -127,18 +141,18 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
               <div className="flex justify-between">
                 <span className="text-neutro-600">{t.cliente.sede}:</span>
                 <span className="font-medium text-neutro-900">
-                  {mesa.Sucursal?.nombre || `Sede #${mesa.sucursal_id}`}
+                  <span lang="es">{mesa.Sucursal?.nombre || p('siteName')}</span>
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-neutro-600">{t.cliente.mesa}:</span>
                 <span className="font-medium text-neutro-900">
-                  Mesa #{mesa.id} ({mesa.zona})
+                  {p('table')} #{mesa.id} (<span lang="es">{mesa.zona}</span>)
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-600">{t.cliente.fecha}:</span>
-                <span className="font-medium text-neutro-900">{reservaConfirmada.fecha}</span>
+                <span className="text-neutro-600">{calendarDate(t.cliente.fecha)}:</span>
+                <span className="font-medium text-neutro-900">{calendarDate(reservaConfirmada.fecha)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-neutro-600">{t.cliente.hora}:</span>
@@ -152,9 +166,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-neutro-600">{t.cliente.estado}:</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-verde-100 text-verde-800">
-                  {t.cliente.estados.confirmada}
-                </span>
+                <StatusBadge domain="reservation" value={reservaConfirmada.estado} />
               </div>
             </div>
 
@@ -206,10 +218,11 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(event) => { if (siteBlocked) { event.preventDefault(); return; } void handleSubmit(event); }} className="space-y-4">
+              <DraftSiteNotice blocked={siteBlocked} /><fieldset disabled={siteBlocked} className="contents">
             {errorLocal && (
               <Alert tone="error">
-                <span className="text-sm">{errorLocal}</span>
+                <span className="text-sm"><TranslatedError error={errorLocal} /></span>
               </Alert>
             )}
 
@@ -219,96 +232,28 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide">
+                <p className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide">
                   {t.sedeLabel}
-                </label>
+                </p>
                 <div className="mt-1 flex items-center gap-2 rounded-md border border-neutro-200 bg-neutro-100 px-3 py-2 text-sm text-neutro-900">
-                  <span>{mesa.Sucursal?.nombre || `Sede #${mesa.sucursal_id}`}</span>
+                  <span><span lang="es">{mesa.Sucursal?.nombre || p('siteName')}</span></span>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide">
+                <p className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide">
                   {t.mesaLabel}
-                </label>
+                </p>
                 <div className="mt-1 flex items-center gap-2 rounded-md border border-neutro-200 bg-neutro-100 px-3 py-2 text-sm text-neutro-900">
-                  <span>Mesa #{mesa.id} — {mesa.zona} ({t.comensalesMax(capacidadMaxima)})</span>
+                  <span>{p('table')} — <span lang="es">{mesa.zona}</span> ({t.comensalesMax(capacidadMaxima)})</span>
                 </div>
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="reserva-fecha"
-                className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide"
-              >
-                {t.fechaLabel}
-              </label>
-              <div className="relative mt-1">
-                <input
-                  id="reserva-fecha"
-                  type="date"
-                  min={getTodayDateString()}
-                  value={fecha}
-                  onChange={(e) => setFecha(e.target.value)}
-                  required
-                  disabled={createMutation.isPending}
-                  className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500"
-                />
-                <Calendar className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="reserva-hora"
-                className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide"
-              >
-                {t.horaLabel}
-              </label>
-              <div className="relative mt-1">
-                <input
-                  id="reserva-hora"
-                  type="time"
-                  value={hora}
-                  onChange={(e) => setHora(e.target.value)}
-                  required
-                  disabled={createMutation.isPending}
-                  className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 bg-blanco"
-                />
-                <Clock className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center">
-                <label
-                  htmlFor="reserva-comensales"
-                  className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide"
-                >
-                  {t.comensalesLabel}
-                </label>
-                <span className="text-xs text-neutro-500">
-                  {t.comensalesMax(capacidadMaxima)}
-                </span>
-              </div>
-              <div className="relative mt-1">
-                <select
-                  id="reserva-comensales"
-                  value={comensales}
-                  onChange={(e) => setComensales(Number(e.target.value))}
-                  required
-                  disabled={createMutation.isPending}
-                  className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 bg-blanco"
-                >
-                  {Array.from({ length: capacidadMaxima }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {t.capacidadPersonas(n)}
-                    </option>
-                  ))}
-                </select>
-                <Users className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
-              </div>
-            </div>
+            <DateField label={t.fechaLabel} id="reserva-fecha" min={getTodayDateString()} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={createMutation.isPending} />
+            <TimeField label={t.horaLabel} id="reserva-hora" value={hora} onChange={(e) => setHora(e.target.value)} required disabled={createMutation.isPending} />
+            <Select label={t.comensalesLabel} hint={t.comensalesMax(capacidadMaxima)} id="reserva-comensales" value={comensales} onChange={(e) => setComensales(Number(e.target.value))} required disabled={createMutation.isPending}>
+              {Array.from({ length: capacidadMaxima }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{t.capacidadPersonas(n)}</option>)}
+            </Select>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-neutro-200">
               <Button
@@ -327,7 +272,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                 {createMutation.isPending ? t.confirmando : t.confirmarReserva}
               </Button>
             </div>
-          </form>
+          </fieldset></form>
         )}
       </div>
     </Modal>

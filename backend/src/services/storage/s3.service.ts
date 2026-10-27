@@ -10,6 +10,16 @@ import { AppError } from "../../utils/AppError";
 
 export const ALLOWED_STORAGE_PREFIXES = ["branding/", "sedes/"] as const;
 
+export const CLOUDFRONT_PUBLIC_PREFIXES = [
+  "branding/logos/",
+  "branding/inicio/",
+  "sedes/hotel-hunahpu-antigua/",
+  "sedes/hotel-hunahpu-atitlan/",
+  "sedes/hotel-hunahpu-xela/",
+  "sedes/hotel-hunahpu-capital/",
+  "sedes/general/",
+] as const;
+
 export const BRANDING_KEYS = {
   logoHorizontalColor: "branding/logos/hotel-hunahpu-logo-horizontal-color.svg",
   logoHorizontalBlanco: "branding/logos/hotel-hunahpu-logo-horizontal-blanco.svg",
@@ -22,7 +32,7 @@ export interface BrandingUrls {
   logoHorizontalColor: string;
   logoHorizontalBlanco: string;
   isotipoColor: string;
-  expiresAt: string;
+  expiresAt: string | null;
 }
 
 /**
@@ -40,6 +50,31 @@ export function isAllowedKey(key: string): boolean {
     return false;
   }
   return ALLOWED_STORAGE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+/**
+ * Determina si una clave S3 es apta para lectura pública mediante CloudFront.
+ * Cumple estrictamente con la política de lectura de la distribución CloudFront para evitar
+ * exponer carpetas temporales (sedes/temp, branding/temp) o archivos privados.
+ */
+export function isCloudFrontEligibleKey(key: string): boolean {
+  if (!isAllowedKey(key)) return false;
+  const normalized = key.trim();
+  return CLOUDFRONT_PUBLIC_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+/**
+ * Construye la URL pública de CloudFront a partir de la URL base y la clave S3,
+ * codificando cada segmento de la ruta.
+ */
+export function buildCloudFrontUrl(baseUrl: string, key: string): string {
+  const cleanBase = baseUrl.trim().replace(/\/+$/, "");
+  const cleanKey = key.trim().replace(/^\/+/, "");
+  const encodedPath = cleanKey
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${cleanBase}/${encodedPath}`;
 }
 
 // Configuración opcional del perfil local para la cadena de credenciales del SDK
@@ -142,7 +177,7 @@ export async function getStorageObject(
 }
 
 /**
- * Publica un objeto de almacenamiento validado en S3.
+ * Publica un objeto de almacenamiento validado en S3 con cabecera Cache-Control inmutable.
  */
 export async function putStorageObject(
   key: string,
@@ -193,21 +228,29 @@ export async function deleteStorageObject(
 }
 
 /**
- * Resuelve la URL de lectura y su fecha de expiración ISO para un objeto de almacenamiento.
- * Soporta CloudFront (expiresAt = null) y URLs prefirmadas de S3.
+ * Resuelve la URL de lectura y su fecha de expiración ISO para un objeto de almacenamiento público.
+ * - Solo procesa claves públicas autorizadas (CLOUDFRONT_PUBLIC_PREFIXES).
+ * - Claves temporales (branding/temp, sedes/temp) o no elegibles nunca se entregan como URLs públicas (devuelve null).
+ * - Si CloudFront está configurado: genera la URL de CloudFront (expiresAt = null).
+ * - Si CloudFront no está configurado (fallback): genera URL prefirmada de S3 con fecha de expiración.
  */
 export async function resolveMediaUrlWithExpiry(
   key: string | null | undefined,
   expiresInSeconds = 3600,
   client: S3Client = getS3Client(),
 ): Promise<{ url: string | null; expiresAt: string | null }> {
-  if (!key) return { url: null, expiresAt: null };
-  const cloudfrontBase = process.env.CLOUDFRONT_BASE_URL || (env as any).CLOUDFRONT_BASE_URL;
-  if (cloudfrontBase) {
-    const cleanBase = cloudfrontBase.replace(/\/+$/, "");
-    const cleanKey = key.replace(/^\/+/, "");
-    return { url: `${cleanBase}/${cleanKey}`, expiresAt: null };
+  if (!key || !isCloudFrontEligibleKey(key)) {
+    return { url: null, expiresAt: null };
   }
+
+  const cloudfrontBase = env.CLOUDFRONT_BASE_URL || process.env.CLOUDFRONT_BASE_URL;
+  if (cloudfrontBase) {
+    return {
+      url: buildCloudFrontUrl(cloudfrontBase, key),
+      expiresAt: null,
+    };
+  }
+
   const url = await getPresignedReadUrl(key, expiresInSeconds, client);
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
   return { url, expiresAt };
@@ -215,8 +258,8 @@ export async function resolveMediaUrlWithExpiry(
 
 /**
  * Resuelve la URL de lectura para un objeto de almacenamiento.
- * Soporta CloudFront futuro mediante variable de entorno CLOUDFRONT_BASE_URL.
- * Si CloudFront no está configurado, resuelve mediante URL prefirmada de S3.
+ * Usa CloudFront si está configurado y la clave es pública; en caso contrario,
+ * resuelve mediante URL prefirmada de S3.
  */
 export async function resolveMediaUrl(
   key: string | null | undefined,
@@ -228,25 +271,44 @@ export async function resolveMediaUrl(
 }
 
 /**
- * Obtiene el mapa completo de URLs prefirmadas de lectura para la identidad visual del hotel.
+ * Obtiene el mapa completo de URLs de lectura para la identidad visual del hotel.
+ * Utiliza CloudFront (expiresAt = null) si está configurado, o URLs prefirmadas de S3.
  */
 export async function getBrandingUrls(
   expiresInSeconds = 3600,
   client: S3Client = getS3Client(),
 ): Promise<BrandingUrls> {
+  let activeKeys = {
+    logoHorizontalColor: BRANDING_KEYS.logoHorizontalColor as string,
+    logoHorizontalBlanco: BRANDING_KEYS.logoHorizontalBlanco as string,
+    isotipoColor: BRANDING_KEYS.isotipoColor as string,
+  };
+
+  try {
+    const db = require("../../models");
+    if (db.PaginaInicio) {
+      const record = await db.PaginaInicio.findByPk(1);
+      if (record) {
+        if (record.logo_horizontal_color_key) activeKeys.logoHorizontalColor = record.logo_horizontal_color_key;
+        if (record.logo_horizontal_blanco_key) activeKeys.logoHorizontalBlanco = record.logo_horizontal_blanco_key;
+        if (record.isotipo_color_key) activeKeys.isotipoColor = record.isotipo_color_key;
+      }
+    }
+  } catch {
+    // Si la BD no está disponible o las columnas no existen, se usan los BRANDING_KEYS por defecto
+  }
+
   const [logoHorizontalColor, logoHorizontalBlanco, isotipoColor] =
     await Promise.all([
-      getPresignedReadUrl(BRANDING_KEYS.logoHorizontalColor, expiresInSeconds, client),
-      getPresignedReadUrl(BRANDING_KEYS.logoHorizontalBlanco, expiresInSeconds, client),
-      getPresignedReadUrl(BRANDING_KEYS.isotipoColor, expiresInSeconds, client),
+      resolveMediaUrlWithExpiry(activeKeys.logoHorizontalColor, expiresInSeconds, client),
+      resolveMediaUrlWithExpiry(activeKeys.logoHorizontalBlanco, expiresInSeconds, client),
+      resolveMediaUrlWithExpiry(activeKeys.isotipoColor, expiresInSeconds, client),
     ]);
 
-  const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
-
   return {
-    logoHorizontalColor,
-    logoHorizontalBlanco,
-    isotipoColor,
-    expiresAt,
+    logoHorizontalColor: logoHorizontalColor.url || "",
+    logoHorizontalBlanco: logoHorizontalBlanco.url || "",
+    isotipoColor: isotipoColor.url || "",
+    expiresAt: logoHorizontalColor.expiresAt,
   };
 }

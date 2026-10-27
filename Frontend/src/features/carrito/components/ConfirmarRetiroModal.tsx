@@ -1,12 +1,11 @@
+import { usePublicTexts } from '@/i18n/public';
 import React from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Feedback';
 import type { CarritoItem } from '../types';
 import {
-  descripcionItem,
   esItemHabitacion,
-  textosCarrito,
 } from '../textos';
 
 interface ConfirmarRetiroModalProps {
@@ -27,14 +26,14 @@ export const ConfirmarRetiroModal: React.FC<ConfirmarRetiroModalProps> = ({
   pendiente,
   onCancelar,
   onConfirmar,
-}) => (
+}) => { const textosCarrito = usePublicTexts('carrito'); return (
   <Modal
     open={item !== null}
     onClose={onCancelar}
     title={textosCarrito.confirmarTitulo}
     description={
       item
-        ? textosCarrito.confirmarDescripcion(descripcionItem(item))
+        ? textosCarrito.confirmarDescripcion(item.descripcion?.trim() || textosCarrito.sinDescripcion(item.id))
         : undefined
     }
   >
@@ -66,4 +65,4 @@ export const ConfirmarRetiroModal: React.FC<ConfirmarRetiroModalProps> = ({
       </div>
     </div>
   </Modal>
-);
+); };

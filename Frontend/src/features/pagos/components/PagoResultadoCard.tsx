@@ -1,3 +1,8 @@
+import { useState } from 'react';
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { usePublicInterface } from '@/i18n/public';
+import { Button } from '@/components/ui/Button';
+import { usePublicTexts } from '@/i18n/public';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -16,14 +21,19 @@ import { Alert } from '@/components/ui/Feedback';
 import { Spinner } from '@/components/ui/Button';
 import { RESERVAS_ROUTES } from '@/features/reservas/constants/routes';
 import { PAGOS_ROUTES } from '../constants/routes';
-import { textosPagos, formatGTQ } from '../textos';
+
 import type { Pago } from '../types';
 
 export interface PagoResultadoCardProps {
   pago: Pago;
+  allowReturnCheckout?: boolean;
+  pollingPaused?: boolean;
 }
 
-export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) => {
+export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago, allowReturnCheckout = false, pollingPaused = false }) => {
+  const { p, locale } = usePublicInterface();
+  const [copied, setCopied] = useState<'success' | 'error' | null>(null);
+  const textosPagos = usePublicTexts('pagos');
   const isAprobado = pago.estado === 'aprobado';
   const isProcesando = pago.estado === 'procesando' || pago.estado === 'pendiente';
   const isRechazado = pago.estado === 'rechazado';
@@ -41,7 +51,7 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
           </div>
         )}
 
-        {isProcesando && (
+        {isProcesando && !pollingPaused && (
           <div className="flex size-16 items-center justify-center rounded-full bg-selva-50 text-selva-600">
             <Spinner className="size-10 text-selva-600" />
           </div>
@@ -65,9 +75,9 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
           </div>
         )}
 
-        <h1 className="mt-4 font-serif text-2xl font-bold text-neutro-900 sm:text-3xl">
-          {textosPagos.estados[pago.estado] ?? pago.estado}
-        </h1>
+        <h2 className="mt-4 font-serif text-2xl font-bold text-neutro-900 sm:text-3xl">
+          {textosPagos.estados[pago.estado] ?? p('purchaseUnknown')}
+        </h2>
 
         <p className="mt-1.5 max-w-lg text-sm text-neutro-600">
           {isAprobado && textosPagos.mensajeAprobado}
@@ -77,7 +87,7 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
           {isReembolsado && textosPagos.mensajeReembolsado}
         </p>
 
-        {isProcesando && (
+        {isProcesando && !pollingPaused && (
           <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-selva-50 px-3 py-1 text-xs font-medium text-selva-700">
             <RefreshCw className="size-3 animate-spin" aria-hidden="true" />
             <span>{textosPagos.avisoPollingActivo}</span>
@@ -88,11 +98,13 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
       {/* Mensaje de error para pagos rechazados */}
       {isRechazado && pago.mensaje_error && (
         <Alert tone="error">
-          <p className="text-xs">{pago.mensaje_error}</p>
+          <p lang="es" className="text-xs">{pago.mensaje_error}</p>
         </Alert>
       )}
 
-      {/* Desglose de la transacción */}
+      {pollingPaused && isProcesando && <Alert tone="warning">{p('purchasePollingPaused')}</Alert>}
+      <div><Button variant="ghost" onClick={() => { void (async () => { try { await navigator.clipboard.writeText(`${locale === 'en' ? 'Payment' : 'Pago'} #${pago.id}`); setCopied('success'); } catch { setCopied('error'); } })(); }}>{p('purchaseCopy')}</Button>{copied && <p role="status" className="text-xs">{p(copied === 'success' ? 'purchaseCopied' : 'purchaseCopyError')}</p>}</div>
+      {/* Datos históricos del pago; no se reconstruyen con catálogo actual. */}
       <div className="rounded-xl border border-neutro-200 bg-neutro-50 p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-neutro-500">
           {textosPagos.detalleTitulo}
@@ -107,29 +119,29 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
           </div>
 
           <div>
-            <span className="text-xs text-neutro-500">{textosPagos.monto}</span>
+            <span className="text-xs text-neutro-500">{isAprobado ? p('purchaseChargedAmount') : p('purchaseRecordedAmount')}</span>
             <p className="font-serif text-lg font-bold text-selva-700">
-              {formatGTQ(pago.monto)}
+              {pago.moneda === 'GTQ' ? <MoneyReference amount={pago.monto} /> : `${pago.moneda} ${pago.monto}`} <small>{pago.moneda}</small>
             </p>
           </div>
 
           <div>
             <span className="text-xs text-neutro-500">{textosPagos.metodo}</span>
             <p className="text-sm font-semibold capitalize text-neutro-800">
-              {pago.metodo}
+              {locale === 'es' ? pago.metodo : ({ tarjeta: 'Card', efectivo: 'Cash', transferencia: 'Bank transfer' }[pago.metodo] ?? pago.metodo)}
             </p>
           </div>
 
           <div>
             <span className="text-xs text-neutro-500">{textosPagos.estado}</span>
             <p className="text-sm font-semibold capitalize text-neutro-800">
-              {pago.estado}
+              {locale === 'es' ? pago.estado : textosPagos.estados[pago.estado] ?? p('purchaseUnknown')}
             </p>
           </div>
 
           {pago.carrito_id !== null && (
             <div>
-              <span className="text-xs text-neutro-500">Origen de compra:</span>
+              <span className="text-xs text-neutro-500">{p('purchaseCart')}</span>
               <p className="flex items-center gap-1.5 text-xs font-medium text-neutro-800">
                 <ShoppingBag className="size-3.5 text-neutro-500" />
                 {textosPagos.origenCarrito(pago.carrito_id)}
@@ -139,7 +151,7 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
 
           {pago.reserva_habitacion_id !== null && (
             <div>
-              <span className="text-xs text-neutro-500">Origen de reserva:</span>
+              <span className="text-xs text-neutro-500">{p('purchaseView')}</span>
               <p className="flex items-center gap-1.5 text-xs font-medium text-neutro-800">
                 <Calendar className="size-3.5 text-neutro-500" />
                 {textosPagos.origenReserva(pago.reserva_habitacion_id)}
@@ -170,7 +182,7 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
       {/* Botones de acción y navegación */}
       <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-end">
         {/* Desde pago rechazado o cancelado: regresar al checkout para consultar el estado real */}
-        {(isRechazado || isCancelado) && (
+        {allowReturnCheckout && (isRechazado || isCancelado) && (
           <Link
             to={PAGOS_ROUTES.CHECKOUT}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-selva-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-selva-700"
@@ -201,6 +213,8 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago }) =>
             </Link>
           </div>
         )}
+
+        {(isProcesando || isRechazado || isCancelado || !textosPagos.estados[pago.estado]) && <Link to={RESERVAS_ROUTES.MIS_RESERVAS} className="inline-flex min-h-11 items-center font-semibold text-bronce-700 underline">{textosPagos.botonMisReservas}</Link>}
 
         {/* Desde reembolsado */}
         {isReembolsado && (

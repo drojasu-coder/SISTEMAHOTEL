@@ -1,3 +1,6 @@
+import { useLocale } from '@/i18n/LocaleContext';
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { usePublicTexts } from '@/i18n/public';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Elements,
@@ -9,10 +12,12 @@ import { Button } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { PAGOS_ROUTES } from '../constants/routes';
 import { getStripe } from '../utils/stripe';
-import { formatearGTQ, textosCheckout } from '../textos';
+import { formatearGTQ } from '../textos';
 
 interface FormularioTarjetaProps {
   monto: number;
+  moneda?: string;
+  blocked?: boolean;
   pagoId: number;
   onConfirmacionEnviada: () => void;
   onEstadoIncierto: () => void;
@@ -27,23 +32,26 @@ interface FormularioTarjetaProps {
  */
 const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
   monto,
+  moneda = 'GTQ',
+  blocked = false,
   pagoId,
   onConfirmacionEnviada,
   onEstadoIncierto,
 }) => {
+  const textosCheckout = usePublicTexts('checkout');
   const stripe = useStripe();
   const elements = useElements();
   const [confirmando, setConfirmando] = useState(false);
-  const [errorTarjeta, setErrorTarjeta] = useState<string | null>(null);
+  const [errorTarjeta, setErrorTarjeta] = useState(false);
   const confirmandoRef = useRef(false);
 
   const confirmar = async () => {
-    if (!stripe || !elements || confirmandoRef.current) return;
+    if (!stripe || !elements || blocked || moneda !== 'GTQ' || confirmandoRef.current) return;
 
     // El ref bloquea un segundo clic antes de que React vuelva a renderizar.
     confirmandoRef.current = true;
     setConfirmando(true);
-    setErrorTarjeta(null);
+    setErrorTarjeta(false);
 
     try {
       const resultado = await stripe.confirmPayment({
@@ -59,7 +67,7 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
           resultado.error.type === 'card_error' ||
           resultado.error.type === 'validation_error'
         ) {
-          setErrorTarjeta(textosCheckout.errores.tarjetaRechazada);
+          setErrorTarjeta(true);
         } else {
           // Fallo de red, API o estado incierto: no afirmamos que el pago
           // fracasó ni permitimos repetirlo automáticamente.
@@ -82,13 +90,13 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
       <div className="flex flex-col gap-1 rounded-lg border border-neutro-200 bg-neutro-50 p-3">
         <p className="eyebrow">{textosCheckout.pago.importe}</p>
         <p className="font-serif text-xl font-semibold text-neutro-900">
-          {formatearGTQ(monto)}
+          {moneda === 'GTQ' ? <MoneyReference amount={monto} /> : `${moneda} ${monto}`}
         </p>
       </div>
 
       {errorTarjeta && (
         <Alert tone="error" title={textosCheckout.estados.rechazadoTitulo}>
-          {errorTarjeta}
+          {textosCheckout.errores.tarjetaRechazada}
         </Alert>
       )}
 
@@ -99,14 +107,14 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
         size="lg"
         className="w-full"
         isLoading={confirmando}
-        disabled={!stripe || !elements || confirmando}
+        disabled={!stripe || !elements || confirmando || blocked || moneda !== 'GTQ'}
         onClick={() => {
           void confirmar();
         }}
       >
         {confirmando
           ? textosCheckout.pago.confirmando
-          : textosCheckout.pago.confirmar}
+          : `${textosCheckout.pago.confirmar} · ${formatearGTQ(monto)} (${moneda})`}
       </Button>
 
       <p className="text-xs text-neutro-600">
@@ -119,6 +127,8 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
 interface StripePaymentFormProps {
   clientSecret: string;
   monto: number;
+  moneda?: string;
+  blocked?: boolean;
   pagoId: number;
   onConfirmacionEnviada: () => void;
   onEstadoIncierto: () => void;
@@ -132,10 +142,14 @@ interface StripePaymentFormProps {
 export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
   clientSecret,
   monto,
+  moneda = 'GTQ',
+  blocked = false,
   pagoId,
   onConfirmacionEnviada,
   onEstadoIncierto,
 }) => {
+  const textosCheckout = usePublicTexts('checkout');
+  const { locale } = useLocale();
   const stripePromise = useMemo(() => getStripe(), []);
   const [disponible, setDisponible] = useState<
     'cargando' | 'disponible' | 'no-disponible'
@@ -174,10 +188,12 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
   return (
     <Elements
       stripe={stripePromise}
-      options={{ clientSecret, locale: 'es' }}
+      options={{ clientSecret, locale }}
     >
       <FormularioTarjeta
         monto={monto}
+        moneda={moneda}
+        blocked={blocked}
         pagoId={pagoId}
         onConfirmacionEnviada={onConfirmacionEnviada}
         onEstadoIncierto={onEstadoIncierto}

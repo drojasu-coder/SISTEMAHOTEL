@@ -327,8 +327,8 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
 
     // Verificar formato GTQ y cifras exactas del servidor sin recalcular
-    expect(screen.getByText('Q1,250.00')).toBeInTheDocument();
-    expect(screen.getByText('Q2,500.00')).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*1,250\.00.*US\$/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*2,500\.00.*US\$/)).toBeInTheDocument();
     expect(screen.getAllByText('2 noches de estancia').length).toBe(2);
   });
 
@@ -428,8 +428,8 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     await waitFor(() => {
       expect(screen.getByText('¡Reserva creada exitosamente!')).toBeInTheDocument();
       expect(screen.getByText('#88')).toBeInTheDocument();
-      expect(screen.getByText('pendiente')).toBeInTheDocument();
-      expect(screen.getByText('Q2,500.00')).toBeInTheDocument();
+      expect(screen.getByText(/^pendiente$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Q\s*2,500\.00.*US\$/)).toBeInTheDocument();
       expect(screen.getByText(/Su reserva se encuentra en estado "Pendiente"/i)).toBeInTheDocument();
     });
 
@@ -537,6 +537,8 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
         '/mis-reservas'
       );
     });
+    expect(screen.getByRole('button', { name: 'Confirmar y reservar' })).toBeDisabled();
+
   });
 
   it('maneja fallo en la carga de catálogos auxiliares con botón de reintento', async () => {

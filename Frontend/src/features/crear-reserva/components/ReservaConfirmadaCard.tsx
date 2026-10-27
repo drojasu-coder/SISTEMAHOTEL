@@ -1,4 +1,7 @@
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import React from 'react';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Clock, ArrowRight, RotateCcw } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -6,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas/constants/routes';
 import { BotonAnadirAlCarrito } from '@/features/carrito';
-import { textosCrearReserva, formatGTQ } from '../textos';
+
 import type { ReservaHabitacion } from '../types';
 
 export interface ReservaConfirmadaCardProps {
@@ -18,6 +21,8 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
   reserva,
   onReset,
 }) => {
+  const textosCrearReserva = usePublicTexts('crearReserva');
+  const { p, date: calendarDate } = usePublicInterface();
   const isPendiente = reserva.estado === 'pendiente';
 
   return (
@@ -35,7 +40,7 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
       </div>
 
       {isPendiente && (
-        <Alert tone="warning" title="Estado de la reserva: Pendiente">
+        <Alert tone="warning" title={p('pendingReservation')}>
           <div className="flex items-start gap-2">
             <Clock className="mt-0.5 size-4 shrink-0 text-advertencia-700" aria-hidden="true" />
             <p className="text-xs text-advertencia-800">
@@ -62,7 +67,7 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
               {textosCrearReserva.exitoEstado}
             </span>
             <p className="text-sm font-semibold capitalize text-neutro-800">
-              {reserva.estado}
+              <StatusBadge domain="reservation" value={reserva.estado} />
             </p>
           </div>
 
@@ -71,30 +76,30 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
               {textosCrearReserva.exitoTotal}
             </span>
             <p className="font-serif text-lg font-bold text-selva-700">
-              {formatGTQ(reserva.total)}
+              <MoneyReference amount={reserva.total} />
             </p>
           </div>
 
           <div>
-            <span className="text-xs text-neutro-500">Estancia:</span>
+            <span className="text-xs text-neutro-500">{p('stay')}</span>
             <p className="text-xs font-medium text-neutro-800">
-              {reserva.fecha_entrada} al {reserva.fecha_salida}
+              {calendarDate(reserva.fecha_entrada)} {' '}{p('until')}{' '}{calendarDate(reserva.fecha_salida)}
             </p>
           </div>
 
           <div>
-            <span className="text-xs text-neutro-500">Huéspedes:</span>
+            <span className="text-xs text-neutro-500">{p('guestsLabel')}</span>
             <p className="text-xs font-medium text-neutro-800">
               {reserva.numero_huespedes}{' '}
-              {reserva.numero_huespedes === 1 ? 'huésped' : 'huéspedes'}
+              {reserva.numero_huespedes === 1 ? p('guest') : p('guests')}
             </p>
           </div>
 
           {reserva.Habitacion && (
             <div>
-              <span className="text-xs text-neutro-500">Habitación asignada:</span>
+              <span className="text-xs text-neutro-500">{p('assignedRoom')}</span>
               <p className="text-xs font-medium text-neutro-800">
-                Habitación {reserva.Habitacion.numero}
+                {' '}{p('room')}{' '}{reserva.Habitacion.numero}
                 {reserva.Habitacion.TipoHabitacion
                   ? ` · ${reserva.Habitacion.TipoHabitacion.nombre}`
                   : ''}
@@ -107,9 +112,9 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
       {/* Acción para añadir la reserva recién creada al carrito */}
       <div className="rounded-lg border border-bronce-200 bg-bronce-50/50 p-4">
         <p className="mb-3 text-xs font-medium text-neutro-700">
-          ¿Desea incluir esta reserva en su carrito de compras para tramitarla más adelante?
-        </p>
+          {' '}{p('includeCart')}{' '}</p>
         <BotonAnadirAlCarrito
+          publicInterface
           reservaId={reserva.id}
           reservaEstado={reserva.estado}
           variant="secondary"

@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import App from '@/App';
 import { api } from '@/api/client/http';
 import { tokenStorage } from '@/api/session';
+import { getOrCreateCheckoutIdempotencyKey, getStoredCheckoutAttempt } from '@/features/pagos/utils/idempotency';
 import { useAuth } from '../AuthContext';
 import {
   errorResponse,
@@ -32,13 +33,13 @@ describe('Rutas protegidas por permisos (aplicación completa, fetch simulado)',
     window.history.replaceState(null, '', '/');
   });
 
-  it('redirige a /login si no hay sesión y no llama a la API', async () => {
+  it('redirige a /login si no hay sesión y no consulta datos privados', async () => {
     global.fetch = vi.fn();
     openApp('/admin');
 
     expect(await screen.findByRole('heading', { level: 1, name: /Iniciar sesión/i })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/login');
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.every(([url]) => /\/(sucursales|inicio)$/.test(String(url)))).toBe(true);
   });
 
   it('no muestra contenido protegido mientras se restaura la sesión', async () => {
@@ -279,6 +280,7 @@ describe('Sesión: permisos, cancelación y caché privada', () => {
 
   it('al cambiar de usuario no se muestra información de la sesión anterior', async () => {
     tokenStorage.set('jwt-a');
+    const attemptA = getOrCreateCheckoutIdempotencyKey(3, 9, 400);
     let resolveStaleA: (value: Response) => void = () => {};
     let privateCalls = 0;
     global.fetch = vi.fn().mockImplementation((url: string, config: RequestInit) => {
@@ -309,5 +311,9 @@ describe('Sesión: permisos, cancelación y caché privada', () => {
     });
     await waitFor(() => expect(screen.getByTestId('dato')).toHaveTextContent('datos de Beto'));
     expect(document.body).not.toHaveTextContent('datos de Ana');
+    expect(getStoredCheckoutAttempt(3, 9)?.key).toBe(attemptA.key);
+    expect(getStoredCheckoutAttempt(7, 9)).toBeNull();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'salir' }));
+    expect(getStoredCheckoutAttempt(3, 9)?.key).toBe(attemptA.key);
   });
 });

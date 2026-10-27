@@ -1,3 +1,6 @@
+import { itemTypeLabel } from '@/features/compra/itemGroups';
+import { PurchaseItemDetails } from '@/features/compra/PurchaseItemDetails';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Trash2 } from 'lucide-react';
@@ -8,12 +11,10 @@ import { BIENESTAR_ROUTES } from '@/features/bienestar/constants/routes';
 import { EVENTOS_ROUTES } from '@/features/eventos/constants/routes';
 import type { CarritoItem } from '../types';
 import {
-  descripcionItem,
   esItemHabitacion,
   etiquetaTipoItem,
   formatearCantidad,
   formatearGTQ,
-  textosCarrito,
 } from '../textos';
 
 interface CarritoItemCardProps {
@@ -34,11 +35,13 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
   onRetirar,
   retiroBloqueado,
 }) => {
+  const textosCarrito = usePublicTexts('carrito');
+  const { locale } = usePublicInterface();
   const habitacion = esItemHabitacion(item);
   const esActividad = item.tipo_item === 'actividad';
   const esBienestar = item.tipo_item === 'bienestar';
   const esEvento = item.tipo_item === 'evento';
-  const descripcion = descripcionItem(item);
+  const descripcion = item.descripcion?.trim() || textosCarrito.sinDescripcion(item.id);
   const precio = formatearGTQ(item.precio);
   const cantidad = formatearCantidad(item.cantidad);
 
@@ -53,16 +56,16 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
                 : 'rounded-full border border-neutro-200 bg-neutro-100 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-700'
             }
           >
-            {etiquetaTipoItem(item.tipo_item)}
+            {locale === 'es' ? etiquetaTipoItem(item.tipo_item) : itemTypeLabel(item.tipo_item, locale)}
           </span>
           <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-500">
             {textosCarrito.articuloNumero(item.id)}
           </span>
         </div>
 
-        <h2 className="break-words text-lg font-serif font-semibold text-neutro-900">
+        <h3 lang={item.descripcion ? 'es' : locale} className="break-words text-lg font-serif font-semibold text-neutro-900">
           {descripcion}
-        </h2>
+        </h3>
 
         {habitacion && (
           <Link
@@ -105,6 +108,7 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
         )}
       </div>
 
+      <PurchaseItemDetails item={item} allowNewSearch={!retiroBloqueado} showLink={false} />
       <dl className="grid grid-cols-2 gap-3 border-y border-neutro-200 py-3 text-xs">
         <div className="flex flex-col gap-1">
           <dt className="eyebrow">{textosCarrito.campos.precio}</dt>

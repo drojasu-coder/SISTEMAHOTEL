@@ -1,3 +1,5 @@
+import { PublicPreferencesProvider } from '@/features/preferencias/PublicPreferences';
+import { SiteSelector } from '@/features/preferencias/SiteSelector';
 import React from 'react';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -59,3 +61,8 @@ export const loginResponse = (rol: string, nombre = 'Persona Prueba') =>
 
 export const errorResponse = (status: number, code: string, message: string) =>
   jsonResponse({ success: false, statusCode: status, code, message }, status);
+
+/** Contexto público real para pruebas de consumidores; no afecta los módulos administrativos. */
+export function renderPublicWithProviders(ui: React.ReactElement, options?: Options) {
+  return renderWithProviders(<PublicPreferencesProvider><SiteSelector />{ui}</PublicPreferencesProvider>, options);
+}

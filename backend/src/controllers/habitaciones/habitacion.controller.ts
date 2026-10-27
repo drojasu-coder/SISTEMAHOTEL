@@ -134,3 +134,53 @@ export const getHabitacionesDisponibles = async (
     next(error);
   }
 };
+
+export const presignImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await habitacionService.requestImageUpload(
+      Number(req.params.id),
+      req.user!.id,
+      req.body.contentType
+    );
+    res.status(200).json({ status: "success", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const habitacion = await habitacionService.confirmImageUpload(
+      Number(req.params.id),
+      req.user!.id,
+      req.body.uploadToken,
+      req.body.tempKey
+    );
+    res.status(200).json({ status: "success", data: habitacion });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteImage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const habitacion = await habitacionService.removeImage(
+      Number(req.params.id)
+    );
+    res.status(200).json({ status: "success", data: habitacion });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,12 +1,19 @@
+import { DateField } from '@/components/ui/DateField';
+import { TimeField } from '@/components/ui/TimeField';
+import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
+import { TranslatedError, type LocalizedError } from '@/i18n/public';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
+import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, CheckCircle, Info, X } from 'lucide-react';
+import { CheckCircle, Info } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useCreateReservaAmenidadMutation } from '../hooks/useReservasAmenidad';
 import { AMENIDADES_ROUTES } from '../constants/routes';
-import { textosAmenidades } from '../textos';
+
 import type { Amenidad, ReservaAmenidad } from '../types';
 
 interface ReservaAmenidadFormModalProps {
@@ -20,7 +27,10 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
   isOpen,
   onClose,
 }) => {
+  const textosAmenidades = usePublicTexts('amenidades');
+  const { p , date: calendarDate } = usePublicInterface();
   const navigate = useNavigate();
+  const siteBlocked = useDraftSiteGuard(amenidad?.id, amenidad?.sucursal_id);
   const { status, user } = useAuth();
   const t = textosAmenidades.cliente;
 
@@ -33,7 +43,7 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
   const [horaInicio, setHoraInicio] = useState('10:00');
   const [horaFin, setHoraFin] = useState('12:00');
   const [mobiliario, setMobiliario] = useState('');
-  const [errorLocal, setErrorLocal] = useState<string | null>(null);
+  const [errorLocal, setErrorLocal] = useState<LocalizedError | null>(null);
   const [falloIncierto, setFalloIncierto] = useState(false);
   const [reservaCreada, setReservaCreada] = useState<ReservaAmenidad | null>(null);
 
@@ -47,22 +57,22 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
     setFalloIncierto(false);
 
     if (!isCliente) {
-      setErrorLocal(t.debeIniciarSesion);
+      setErrorLocal({ section: 'amenidades', key: 'cliente.debeIniciarSesion' });
       return;
     }
 
     if (!fecha) {
-      setErrorLocal(t.fechaLabel + ' es obligatoria');
+      setErrorLocal({ section: 'extra', key: 'requiredReservationDate' });
       return;
     }
 
     if (!horaInicio || !horaFin) {
-      setErrorLocal('Debe indicar hora de inicio y de fin');
+      setErrorLocal({ section: 'extra', key: 'requiredTimeRange' });
       return;
     }
 
     if (horaInicio >= horaFin) {
-      setErrorLocal(t.horaInvalida);
+      setErrorLocal({ section: 'amenidades', key: 'cliente.horaInvalida' });
       return;
     }
 
@@ -81,24 +91,25 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
       const apiMsg = err?.message || err?.response?.data?.message;
 
       if (apiCode === 'AMENITY_CAPACITY_FULL') {
-        setErrorLocal(t.capacidadExcedida);
+        setErrorLocal({ section: 'amenidades', key: 'cliente.capacidadExcedida' });
       } else if (apiCode === 'AMENITY_RESERVATION_ALREADY_EXISTS') {
-        setErrorLocal(t.reservaDuplicada);
+        setErrorLocal({ section: 'amenidades', key: 'cliente.reservaDuplicada' });
       } else if (apiCode === 'AMENITY_DATE_IN_PAST') {
-        setErrorLocal(t.fechaEnPasado);
+        setErrorLocal({ section: 'amenidades', key: 'cliente.fechaEnPasado' });
       } else if (apiCode === 'AMENITY_TIME_SLOT_IN_PAST') {
-        setErrorLocal(t.horaEnPasado);
+        setErrorLocal({ section: 'amenidades', key: 'cliente.horaEnPasado' });
       } else if (!err?.status && !err?.response) {
         // Posible fallo de red / incertidumbre
         setFalloIncierto(true);
-        setErrorLocal(t.falloConexionIncierto);
+        setErrorLocal({ section: 'amenidades', key: 'cliente.falloConexionIncierto' });
       } else {
-        setErrorLocal(apiMsg || 'Ocurrió un error al procesar la reserva. Por favor intente nuevamente.');
+        setErrorLocal(apiMsg ? { server: apiMsg } : { section: 'extra', key: 'amenityRequestError' });
       }
     }
   };
 
   const handleCerrar = () => {
+    if (createMutation.isPending) return;
     setErrorLocal(null);
     setFalloIncierto(false);
     setReservaCreada(null);
@@ -106,50 +117,33 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-neutro-900/60 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-reserva-titulo"
-    >
-      <div className="relative w-full max-w-lg rounded-xl border border-neutro-200 bg-white p-6 shadow-xl sm:p-8">
-        <button
-          type="button"
-          onClick={handleCerrar}
-          aria-label={t.cerrar}
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-neutro-400 hover:bg-neutro-100 hover:text-neutro-700"
-        >
-          <X className="size-5" aria-hidden="true" />
-        </button>
-
+    <Modal open onClose={handleCerrar} closeLabel={t.cerrar} title={reservaCreada ? t.reservaExitosaTitulo : t.reservarModalTitulo} busy={createMutation.isPending} busyLabel={p('processingRequest')}>
         {reservaCreada ? (
           <div className="flex flex-col items-center gap-4 text-center py-4">
             <div className="flex size-14 items-center justify-center rounded-full bg-verde-100 text-verde-700">
               <CheckCircle className="size-8" aria-hidden="true" />
             </div>
-            <h2 id="modal-reserva-titulo" className="text-xl font-serif font-bold text-neutro-900">
-              {t.reservaExitosaTitulo}
-            </h2>
+
             <p className="text-sm text-neutro-600 max-w-md">
               {t.reservaExitosaDesc}
             </p>
 
             <div className="w-full rounded-lg bg-neutro-50 border border-neutro-200 p-4 text-left text-xs space-y-2 mt-2">
               <div className="flex justify-between">
-                <span className="text-neutro-500">Amenidad:</span>
-                <span className="font-semibold text-neutro-800">{amenidad.nombre}</span>
+                <span className="text-neutro-500">{p('amenity')}</span>
+                <span className="font-semibold text-neutro-800"><span lang="es">{amenidad.nombre}</span></span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-500">Fecha:</span>
-                <span className="font-semibold text-neutro-800">{reservaCreada.fecha}</span>
+                <span className="text-neutro-500">{p('date')}</span>
+                <span className="font-semibold text-neutro-800">{calendarDate(reservaCreada.fecha)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-500">Horario:</span>
+                <span className="text-neutro-500">{p('timeSlot')}</span>
                 <span className="font-semibold text-neutro-800">{reservaCreada.franja_horaria}</span>
               </div>
               {reservaCreada.codigo_qr && (
                 <div className="flex justify-between border-t border-neutro-200 pt-2">
-                  <span className="text-neutro-500">Código de acceso:</span>
+                  <span className="text-neutro-500">{p('accessCode')}</span>
                   <span className="font-mono font-bold text-neutro-900">{reservaCreada.codigo_qr}</span>
                 </div>
               )}
@@ -183,13 +177,10 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
         ) : (
           <div>
             <div className="mb-6 flex flex-col gap-1">
-              <p className="eyebrow">{amenidad.Sucursal?.nombre || 'Hotel Hunapú'}</p>
-              <h2 id="modal-reserva-titulo" className="text-xl font-serif font-bold text-neutro-900">
-                {t.reservarModalTitulo}
-              </h2>
+              <p className="eyebrow"><span lang="es">{amenidad.Sucursal?.nombre || 'Hotel Hunahpú'}</span></p>
+
               <p className="text-sm text-neutro-600">
-                {amenidad.nombre} &bull; Aforo máximo: {amenidad.aforo_maximo} personas
-              </p>
+                <span lang="es">{amenidad.nombre}</span> • {p('maxCapacity')} {amenidad.aforo_maximo} {' '}{p('people')}{' '}</p>
             </div>
 
             {!isCliente && (
@@ -215,8 +206,8 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
 
             {errorLocal && (
               <div className="mb-4">
-                <Alert tone={falloIncierto ? 'warning' : 'error'} title={falloIncierto ? 'Aviso de conexión' : 'No se pudo completar la reserva'}>
-                  <p>{errorLocal}</p>
+                <Alert tone={falloIncierto ? 'warning' : 'error'} title={falloIncierto ? p('connectionNotice') : p('reservationError')}>
+                  <p><TranslatedError error={errorLocal} /></p>
                   {falloIncierto && (
                     <div className="mt-2">
                       <Link
@@ -231,83 +222,14 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="reserva-fecha" className="block text-xs font-semibold text-neutro-700 mb-1">
-                  {t.fechaLabel}
-                </label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    id="reserva-fecha"
-                    name="fecha"
-                    min={hoy}
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                    required
-                    disabled={!isCliente || createMutation.isPending}
-                    className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 disabled:bg-neutro-100 disabled:text-neutro-500"
-                  />
-                  <Calendar className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
-                </div>
+            <form onSubmit={(event) => { if (siteBlocked || createMutation.isPending) { event.preventDefault(); return; } void handleSubmit(event); }} className="flex flex-col gap-4">
+              <DraftSiteNotice blocked={siteBlocked} /><fieldset disabled={siteBlocked} className="contents">
+              <DateField id="reserva-fecha" label={t.fechaLabel} name="fecha" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={!isCliente || createMutation.isPending} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <TimeField id="reserva-hora-inicio" label={t.horaInicioLabel} name="horaInicio" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} required disabled={!isCliente || createMutation.isPending} />
+                <TimeField id="reserva-hora-fin" label={t.horaFinLabel} name="horaFin" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} required disabled={!isCliente || createMutation.isPending} />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="reserva-hora-inicio" className="block text-xs font-semibold text-neutro-700 mb-1">
-                    {t.horaInicioLabel}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="time"
-                      id="reserva-hora-inicio"
-                      name="horaInicio"
-                      value={horaInicio}
-                      onChange={(e) => setHoraInicio(e.target.value)}
-                      required
-                      disabled={!isCliente || createMutation.isPending}
-                      className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 disabled:bg-neutro-100 disabled:text-neutro-500"
-                    />
-                    <Clock className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="reserva-hora-fin" className="block text-xs font-semibold text-neutro-700 mb-1">
-                    {t.horaFinLabel}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="time"
-                      id="reserva-hora-fin"
-                      name="horaFin"
-                      value={horaFin}
-                      onChange={(e) => setHoraFin(e.target.value)}
-                      required
-                      disabled={!isCliente || createMutation.isPending}
-                      className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 disabled:bg-neutro-100 disabled:text-neutro-500"
-                    />
-                    <Clock className="pointer-events-none absolute right-3 top-2.5 size-4 text-neutro-400" aria-hidden="true" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="reserva-mobiliario" className="block text-xs font-semibold text-neutro-700 mb-1">
-                  {t.mobiliarioLabel}
-                </label>
-                <input
-                  type="text"
-                  id="reserva-mobiliario"
-                  name="mobiliario"
-                  maxLength={30}
-                  placeholder={t.mobiliarioPlaceholder}
-                  value={mobiliario}
-                  onChange={(e) => setMobiliario(e.target.value)}
-                  disabled={!isCliente || createMutation.isPending}
-                  className="w-full rounded-md border border-neutro-300 px-3 py-2 text-sm text-neutro-900 focus:border-bronce-500 focus:outline-none focus:ring-1 focus:ring-bronce-500 disabled:bg-neutro-100 disabled:text-neutro-500"
-                />
-              </div>
+              <Input label={t.mobiliarioLabel} id="reserva-mobiliario" name="mobiliario" maxLength={30} placeholder={t.mobiliarioPlaceholder} value={mobiliario} onChange={(e) => setMobiliario(e.target.value)} disabled={!isCliente || createMutation.isPending} />
 
               <div className="mt-4 flex items-center justify-end gap-3 pt-2">
                 <Button
@@ -327,10 +249,9 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
                   {createMutation.isPending ? t.confirmando : t.confirmarReserva}
                 </Button>
               </div>
-            </form>
+            </fieldset></form>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };

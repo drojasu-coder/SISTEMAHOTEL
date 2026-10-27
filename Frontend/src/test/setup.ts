@@ -22,3 +22,6 @@ vi.mock('@/features/media/api/mediaApi', async (importOriginal) => {
     }),
   };
 });
+
+// Idioma determinista de la suite; los casos bilingües establecen su navegador explícitamente.
+Object.defineProperty(window.navigator, 'language', { configurable: true, value: 'es-GT' });

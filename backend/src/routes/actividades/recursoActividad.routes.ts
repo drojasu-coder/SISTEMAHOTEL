@@ -1,3 +1,4 @@
+import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 import { Router } from "express";
 import * as recursoController from "../../controllers/actividades/recursoActividad.controller";
 import { validateBody, validateParams } from "../../middlewares/validate.middleware";
@@ -156,5 +157,25 @@ router.patch("/:id", validateParams(idParamSchema), validateBody(updateRecursoAc
  *         description: El recurso tiene reservas asociadas
  */
 router.delete("/:id", validateParams(idParamSchema), recursoController.remove);
+
+router.post(
+  "/:id/imagen-presign",
+  validateParams(idParamSchema),
+  validateBody(presignImageSchema),
+  recursoController.presignImage
+);
+
+router.post(
+  "/:id/imagen-confirmar",
+  validateParams(idParamSchema),
+  validateBody(confirmImageSchema),
+  recursoController.confirmImage
+);
+
+router.delete(
+  "/:id/imagen",
+  validateParams(idParamSchema),
+  recursoController.deleteImage
+);
 
 export default router;

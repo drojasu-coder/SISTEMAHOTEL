@@ -1,4 +1,5 @@
 import { api } from '@/api/client/http';
+import { uploadEntityImage } from '@/api/mediaUpload';
 import type {
   Salon,
   SalonesResponse,
@@ -48,6 +49,24 @@ export const eventosApi = {
 
   deleteSalon: async (id: number): Promise<void> => {
     await api.delete(`/salones/${id}`);
+  },
+
+  uploadSalonImage: async (
+    id: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<Salon> => {
+    return uploadEntityImage<Salon>({
+      presignEndpoint: `/salones/${id}/imagen-presign`,
+      confirmEndpoint: `/salones/${id}/imagen-confirmar`,
+      file,
+      onProgress,
+    });
+  },
+
+  removeSalonImage: async (id: number): Promise<Salon> => {
+    const response = await api.delete<SalonResponse>(`/salones/${id}/imagen`);
+    return response.data;
   },
 
   // Servicios de Evento

@@ -83,3 +83,132 @@
        - Cobertura de recarga y recuperación de interfaz en `Frontend/src/features/pagos/CheckoutPage.test.tsx` (17/17 pasando).
   - **Base de datos:** Migración `20261022000000-enforce-reserva-habitacion-integrity.js` aplicada formalmente en `hotel_test_db:55432` con respaldo previo (`hotel_test_db_pre_migration_20261024_0145.dump`). `hotel_db:5432` permanece sin tocar.
 - **Estado:** resuelto.
+
+## BE-015 · Catálogo público de habitaciones
+
+- **Categoría:** capacidad pública ausente; no es un defecto de autorización.
+- **Fecha/revisión:** 2026-10-26, `refactor/backend-architecture`, HEAD `fd82605` y cambios locales existentes.
+- **Flujo:** opción pública Habitaciones de la Ficha 1 UX.
+- **Necesario:** consultar habitaciones/tipos y su sede sin sesión, mediante un contrato público explícito que no revele datos privados ni prometa disponibilidad sin fechas.
+- **Actual/evidencia:** `backend/src/routes/habitaciones/habitacion.routes.ts` y `tipoHabitacion.routes.ts` exigen `authMiddleware` en sus lecturas. `/reservar` es el formulario de cliente autenticado; no existe catálogo público de habitaciones en el router anterior.
+- **Frontend entregado:** `/habitaciones` explica el acceso al flujo existente, con ingreso o enlace a `/reservar` para clientes; no se presenta como catálogo ni se debilita autenticación. `/crear-reserva` queda como alias compatible de `/reservar`.
+- **Siguiente acción:** acordar y autorizar por separado el contrato de catálogo público. Integrarlo solo cuando exista y verificar lectura anónima, aislamiento de datos y sede estable por resultado.
+- **Estado:** pendiente de backend; criterio de catálogo público abierto.
+
+## BE-016 · Normalización persistida de nombres de sedes
+
+- **Categoría:** corrección de datos de presentación, sin migración ejecutada.
+- **Fecha/revisión:** 2026-10-26, HEAD `fd82605` y cambios locales existentes.
+- **Evidencia:** consulta GET de solo lectura a `/api/sucursales` local: ID 1 `Hotel Hunapú Antigua`, ciudad `Antigua Guatemala`; ID 2 `Hotel Hunahpú Atitlán`, ciudad `Panajachel`; ID 3 `Hotel Hunahpú Xela`, ciudad `Quetzaltenango`; ID 4 `Hotel Hunahpú Capital`, ciudad `Ciudad de Guatemala`.
+- **Cambio necesario:** ID 1, nombre `Hotel Hunahpú Antigua`. Para ID 2, la presentación requerida es `Lago de Atitlán, Panajachel`; decidir si se guarda esa descripción en `ciudad` o se añade una ubicación de presentación manteniendo la ciudad geográfica.
+- **Frontend:** `features/preferencias/sitePresentation.ts` normaliza de forma temporal solo pares ID/nombre verificados. Se conserva el ID real y no se modifican slugs, claves S3 ni datos administrativos. Registros desconocidos no se renombran por su índice.
+- **Siguiente acción:** mantenimiento de datos autorizado fuera de esta ficha, con lectura posterior que confirme el nombre; decidir la semántica de ubicación de Atitlán antes de cambiar el campo persistido. Entonces revisar/eliminar únicamente el alias temporal que ya no sea necesario.
+- **Estado:** pendiente de corrección de datos / decisión de ubicación. Normalización persistida NO completada.
+
+## BE-017 · Contenido editorial público bilingüe
+
+- **Categoría:** capacidad editorial ausente; propuesta de contrato, sin implementación ni migración en esta ficha.
+- **Fecha/revisión:** 2026-10-26, `refactor/backend-architecture`, HEAD `fd82605` y árbol local compartido.
+- **Flujos:** Inicio, sedes y descripciones de recursos públicos. La interfaz ES/EN ya puede cambiar sin recargar; el contenido comercial guardado solo tiene una versión.
+- **Evidencia:** modelos `backend/src/models/{paginainicio,sucursal,tipohabitacion,amenidad,recursoactividad,serviciobienestar,salon}.js`, rutas/servicios públicos y `Frontend/src/api/generated/schema.ts`: campos únicos de título, descripción y texto alternativo; no hay campos ingleses ni asociaciones de traducciones. `hero_cta_enlace`, `fecha_entrada` y `expira_en` no son traducciones aunque coincidan con una búsqueda `_en`.
+- **Actual:** el frontend conserva el español original con `lang="es"` dentro de páginas inglesas. Nombres propios, códigos y valores enum de solicitudes no se traducen. No se añadieron campos ficticios ni traducciones por ID.
+- **Propuesta para el responsable de backend:** mantener los campos españoles actuales como fuente compatible y añadir versiones editoriales inglesas opcionales, inicialmente en `PaginaInicio` (títulos, subtítulos, textos, etiqueta CTA y alt; no enlaces ni claves S3) y en las descripciones/alt de los recursos. Alternativa normalizada: tablas Sequelize de traducciones por entidad con FK real, `locale` restringido y unicidad `(entidad_id, locale)`. Elegir una estrategia antes de implementar, sin combinar ambas.
+- **Contrato propuesto:** DTO público con `traducciones: { en?: { descripcion?: string, ...campos editoriales permitidos } }`, conservando todos los campos actuales. No es todavía un tipo disponible. Validadores deben limitar claves, longitud y locale; textos vacíos equivalen a ausencia. El servidor entrega solo contenido aprobado. Campos operativos, precios, nombres oficiales, IDs y estados quedan fuera. Actualizar OpenAPI y regenerar tipos antes de consumir la extensión. Una migración futura debe ser reversible y no sobrescribir el español.
+- **Criterios de desbloqueo:** contrato acordado, contenido inglés revisado/aprobado, lectura pública probada para español/inglés/faltantes, ausencia de traducciones borrador, preservación de consumidores actuales y pruebas de fallback. Integrar por campo y declarar idioma efectivo sin avisos técnicos al visitante.
+- **Frontend pendiente:** consumir únicamente la extensión acordada cuando exista. No bloquea el cambio inmediato de idioma de la interfaz implementado en Ficha 2 A.
+- **Estado:** pendiente de backend y aprobación editorial.
+
+### BE-015 · Revisión para Ficha 3A (2026-10-26)
+
+La lectura de las rutas y del servicio vigentes confirma que `GET /api/habitaciones`, `GET /api/habitaciones/:id`, `GET /api/tipos-habitacion` y `GET /api/habitaciones/disponibles` siguen bajo `authMiddleware`. No se elimina middleware ni se usan credenciales administrativas. **Búsqueda/catálogo/detalle anónimos: no desbloqueados.**
+
+- **Integración disponible:** `/habitaciones` permite editar criterios públicamente; tras restaurar una sesión de cliente consulta catálogo y disponibilidad reales. `/habitaciones/:id` consulta la unidad real autenticada, conservando URL y sede real; sin sesión ofrece acceso con retorno interno y borrador mínimo. Se conservan `/reservar` y `/crear-reserva`.
+- **Modelo:** unidad `Habitacion` con `habitacion_id`, `numero`, `sucursal_id` y FK a TipoHabitacion. No existe asignación de una unidad por grupo comercial: no se agrupa el producto reservable ni se elige la primera unidad automáticamente.
+- **Contrato mínimo propuesto para José (NO implementado):** una lectura pública autorizada, por ejemplo `GET /api/public/habitaciones` y `GET /api/public/habitaciones/:id`, con DTO de unidad `{id, numero, sucursal_id, tipo_habitacion_id, Sucursal:{id,nombre}, TipoHabitacion:{id,nombre,capacidad_maxima,tarifa_noche,descripcion}, imagen_url, imagen_expires_at, imagen_creditos}`. La imagen debe mantener la identidad actual en backend y el mecanismo de resolución/renovación; no exponer claves privadas nuevas ni relaciones de reservas/usuarios. Debe acordarse si el catálogo es completo o paginado; si es paginado, incluir total y paginación explícitos para que frontend no filtre una página como catálogo completo.
+- **Disponibilidad pública propuesta:** lectura pública que reutilice validación y servicio real de disponibilidad, con sede concreta, fechas y huéspedes; mismo DTO de unidades con `noches`, `tarifa_noche`, `total_estimado`. No cambia precios, impuestos, inventario ni reglas de reserva. Mantener creación autenticada y propiedad derivada del JWT. Definir controles de abuso adecuados a esa lectura antes de autorizarla. Actualizar OpenAPI y regenerar tipos al aprobar el contrato.
+- **Todas las sedes:** el contrato actual exige sucursal_id. Frontend consulta las sedes reales con máximo dos solicitudes simultáneas, claves por usuario/criterios/sedes y errores parciales explícitos. No interpreta errores como ausencia general de inventario. Un futuro endpoint agregado solo debe sustituirlo después de documentarse.
+- **Cierre verificable:** lectura anónima real autorizada y documentada, DTO seguro, pruebas públicas de catálogo/detalle/404/disponibilidad y aislamiento de datos privados; después integración anónima sin mocks. BE-015 permanece abierto.
+
+## BE-018 · Datos ampliados de presentación y calendario de habitaciones
+
+- **Categoría:** capacidades de contrato ausentes; sin migración ni datos inventados.
+- **Fecha/revisión:** 2026-10-26, `refactor/backend-architecture`, HEAD `fd82605` y árbol local compartido.
+- **Evidencia:** `backend/src/models/{habitacion,tipohabitacion}.js`, serialización en `services/habitaciones/habitacion.service.ts` y rutas vigentes. Hay capacidad, descripción del tipo y una imagen efectiva (unidad o fallback al tipo). No hay campos estructurados de camas, vista o características, ni colección ordenada de fotos de unidad, ni endpoint de disponibilidad diaria.
+- **Frontend:** presenta solo los campos reales. Una única foto puede ampliarse con teclado/touch; no hay miniaturas falsas ni dos copias presentadas como galería. El calendario elige rangos; no pinta días ocupados a partir de una sola consulta. No se ofrecen filtros de vista ni promociones/precios tachados sin contrato.
+- **Propuesta:** definir, si producto lo autoriza, metadatos estructurados y colección de referencias de medios realmente asociadas por unidad/tipo, con orden/alt/créditos y resolución de URLs por la capa actual. No asumir que la imagen genérica del tipo es una foto adicional de la unidad. Si se requiere calendario de inventario, definir un endpoint por unidad/sede y rango con granularidad, estados y actualización explícitos; una respuesta para un único rango no lo reemplaza.
+- **Desbloqueo:** campos/relaciones reales, API/OpenAPI y contenido verificado; pruebas de asociaciones, orden, permisos y expiración. No bloquea el catálogo ni la consulta de rangos autenticados actuales.
+- **Estado:** pendiente de backend/definición de producto para las capacidades ampliadas.
+
+## BE-019 · Políticas de estancia y semántica fiscal publicables
+
+- **Categoría:** decisión contractual/configuración pendiente; no se modifica lógica financiera.
+- **Fecha/revisión:** 2026-10-26, mismo HEAD/árbol compartido.
+- **Evidencia:** modelos/configuración, validadores de disponibilidad/reserva y servicios de habitaciones inspeccionados. No se encontró configuración publicable de horarios check-in/check-out ni máximo contractual de noches. La respuesta de disponibilidad incluye tarifa/noches/total estimado, sin promociones ni desglose fiscal. Configuracion tiene porcentaje_iva, pero eso no demuestra inclusión en tarifa_noche ni en todos los importes.
+- **Necesario:** producto/backend deben definir horarios aprobados y fuente de configuración. El máximo propuesto de 30 noches **no está aprobado ni se implementa**. Si se acuerda un límite, debe validarse consistentemente en backend y documentarse, no solo restringirse en calendario.
+- **Importes:** conservar valores actuales. Para publicar impuestos incluidos o un desglose se necesita un contrato explícito con semántica de cada importe y componentes calculados por backend. No dividir totales ni añadir IVA/INGUAT desde frontend. Mantener GTQ y Stripe; no nuevos métodos de pago.
+- **Frontend:** omite horarios y políticas no aprobadas; muestra tarifa/noches/total estimado del servidor y convierte el total GTQ completo con MoneyReference. No aplica máximo nuevo ni muestra retención de 15 minutos.
+- **Desbloqueo:** decisión aprobada, configuración/DTO de lectura documentado, pruebas y valores efectivos verificados. No se aplicó migración ni escritura en ninguna base.
+- **Estado:** pendiente de decisión/contrato verificable.
+
+## BE-020 · Recuperación y restablecimiento de contraseña
+
+- **Categoría / estado:** función ausente; pendiente de backend (José).
+- **Inspección:** 2026-10-26, base `fd82605`, rama `refactor/backend-architecture`, árbol compartido con cambios locales. `backend/src/routes/auth.routes.ts`, `controllers/auth.controller.ts`, `services/auth.service.ts`, `validators/auth.validator.ts`: solo register, login y me; no hay solicitud, validación/consumo de token de restablecimiento ni entrega de correo para este flujo.
+- **Flujo afectado:** acceso público, Ficha 3B. Recuperación end-to-end **no completada**; no se muestra enlace ni formulario inoperante.
+- **Necesario:** recuperación sin enumerar cuentas, entrega efectiva y tratamiento de token inválido, usado o vencido.
+- **Propuesta para José (no implementada):** `POST /api/auth/password/forgot {email}` → 202 genérico «Si el correo existe, le enviaremos instrucciones», con respuesta indistinguible y rate limit; `POST /api/auth/password/reset {token,password}` → 200 sin JWT de sesión. Token aleatorio, hash en servidor, propósito exclusivo, vencimiento explícito, consumo único atómico; códigos documentados de inválido/usado/vencido y reglas de contraseña consistentes. Configurar proveedor de correo y URL de destino permitida, sin tokens en logs/telemetría. No aceptar destinos arbitrarios enviados por el cliente.
+- **Desbloqueo verificable:** endpoints y OpenAPI, pruebas de enumeración/rate limit/reutilización/expiración y entrega de correo real en entorno de prueba. Luego integrar solicitud y nueva contraseña. El borrador es local a la pestaña/navegador original; no se promete continuidad entre dispositivos.
+
+## BE-021 · Política de verificación de correo
+
+- **Categoría / estado:** decisión pendiente de producto/backend (José).
+- **Inspección:** misma revisión de BE-020. `models/usuario.js` no contiene correo verificado; el registro crea `cliente` activo y devuelve usuario sin token. Login separado devuelve JWT. No se encontraron endpoints de envío, reenvío o consumo de verificación.
+- **Actual:** 3B conserva registro → login real separado; checkout mantiene la política vigente. No exige verificar correo para pagar.
+- **Pendiente:** decidir si se necesita verificación y en qué operaciones. Si se aprueba, especificar estado persistido, caducidad, reenvío, entrega y autorización del servidor antes de integrar UI. No bloquea el login/registro actual.
+
+## BE-022 · Textos legales aprobados y aceptación persistida
+
+- **Categoría / estado:** decisión pendiente; capacidad de backend pendiente si se exige aceptación (José/producto).
+- **Inspección:** misma revisión de BE-020; no se encontraron textos legales aprobados/rutas públicas en el repositorio. `registerSchema.strict()` acepta únicamente nombre, email, password y teléfono opcional; Usuario y servicio no guardan aceptación ni versión de términos.
+- **Actual:** 3B no publica borradores legales, no añade enlaces rotos ni una casilla que finja persistencia.
+- **Desbloqueo:** responsables deben proporcionar textos definitivos ES/EN, URLs/versiones y política de obligatoriedad. Si se exige consentimiento, acordar contrato y evidencia persistida por el servidor (versión aceptada, fecha de servidor y usuario), con validación y pruebas; integrar la casilla inicialmente desmarcada después. No recolectar ni descartar campos de aceptación en el cliente.
+
+## BE-023 · Datos de esta compra y destinatario fiscal
+
+- **Categoría / estado:** contrato ausente; pendiente de backend (José) y decisión del responsable de facturación.
+- **Inspección:** 2026-10-26, base `fd82605`, rama `refactor/backend-architecture`, árbol compartido. `validators/pagos/pago.validator.ts` acepta origen, monto, método, tipo, moneda e idempotencia en esquema estricto. `validators/habitaciones/reservaHabitacion.validator.ts` acepta habitación, fechas y huéspedes; no destinatario ni datos de huésped. Usuario solo contiene nombre completo, email, teléfono y datos de autenticación. Factura sí tiene NIT/nombre/dirección fiscal, pero crear/modificar exige roles de facturación (`routes/habitaciones/factura.routes.ts`), sin vínculo de captura cliente para esta compra.
+- **Flujo:** Ficha 3C. Se muestra contacto de la cuenta autenticada como lectura, sin actualizar el perfil ni simular guardado para la compra. El recorrido funcional sigue Carrito → Pago → Confirmación; el paso completo «Datos» queda pendiente y no bloquea el checkout.
+- **Necesario:** acordar si la compra requiere destinatario, datos fiscales o huéspedes adicionales; definir mínimos, finalidad, propiedad, validación, almacenamiento por compra, retención de datos y distinción respecto del perfil. No solicitar documentos, NIT, residencia ni peticiones especiales sin destino persistente.
+- **Propuesta, no implementada:** contrato autorizado de datos de compra asociado al carrito/orden y snapshot histórico vinculado al pago/factura, con edición permitida solo en estados acordados por backend. El servidor debe validar propietario y estados; ningún total fiscal ni propietario debe confiarse al cliente.
+- **Desbloqueo:** contrato/OpenAPI y pruebas de persistencia, Unicode/límites, IDOR, cambio de cuenta y edición con compromiso financiero; requisitos fiscales aprobados por contabilidad. Luego integrar campos y paso Datos reales.
+
+## BE-024 · Retención temporal de inventario y vencimiento del carrito
+
+- **Categoría / estado:** comportamiento de retención ausente; pendiente de decisión/backend (José).
+- **Evidencia:** `services/carrito/carrito.service.ts` calcula `expira_en` desde `CART_EXPIRATION_MINUTES` y `expireDueCarts` cambia únicamente Carrito a expirado. `services/carrito/carritoItem.service.ts` comprueba vigencia para mutaciones. No existe en este flujo una liberación de ReservaHabitacion vinculada al vencimiento del carrito. Las reservas pendientes tienen su propio ciclo; una columna de expiración del carrito no demuestra una retención de habitaciones.
+- **Actual:** 3C muestra «Vence su carrito» desde la fecha del servidor, sin reiniciar minutos al visitar. Al cero y al volver a la pestaña realiza consultas; no cancela, borra ni libera inventario. Verifica intento/pago antes de presentar la recuperación de una compra vencida.
+- **Pendiente:** si se aprueba retención real, especificar recurso/rango/capacidad retenidos, vencimiento autoritativo, liberación transaccional y tratamiento de PaymentIntent procesando o incierto; probar carreras y reconciliación antes de integrar. No se promete un plazo fijo de 15 minutos. Máximo de noches y políticas publicables siguen en BE-019.
+
+## BE-025 · Validación del origen con identificación precisa del artículo
+
+- **Categoría / estado:** contrato incompleto; pendiente de backend (José).
+- **Evidencia:** `getResumenPago` → `validateOpenOrigin`/`cartTotals` en `services/pago.service.ts` valida propiedad/estado/exposición del origen y devuelve total/anticipo/aprobado/saldo. Errores como `CART_REFERENCE_NOT_AVAILABLE` no entregan consistentemente `carrito_item_id`, tipo y referencia fallida. `getAll` de carritoItem entrega artículos, promoción asociada y total, sin un informe de elegibilidad por artículo.
+- **Actual:** se reutilizan esas validaciones. Las lecturas autorizadas por referencia muestran estado operativo, sin usar disponibilidad pública que excluiría la propia reserva, sin marcar otros artículos como inválidos y sin quitar ninguno automáticamente. Un error global no se atribuye a un artículo por conjetura.
+- **Propuesta, no implementada:** respuesta de validación de carrito con errores tipados por ítem (ID/tipo/referencia/código/acciones permitidas) y versión/fecha de validación. Debe distinguir reserva propia, origen cancelado, cambio de importe y compromiso financiero, sin crear intentos. El cobro debe revalidar de forma transaccional aunque exista esta lectura.
+- **Desbloqueo:** contrato y pruebas mixtas, propiedad, concurrencia y reserva propia; integrar acciones por ítem solo si están autorizadas. No se requiere ni se propone una búsqueda pública como sustituto.
+
+## BE-026 · Comprobante válido, desglose histórico y correos de compra
+
+- **Categoría / estado:** contrato/servicio ausentes para este recorrido; pendiente de backend (José) y responsable de facturación.
+- **Evidencia:** `getPagoById` devuelve Pago autorizado, con monto/moneda/origen/estado, sin factura_id, desglose fiscal, documento descargable ni evidencia de entrega. Los artículos históricos se pueden leer por `/carritos/:id/items` incluso si el carrito está pagado/expirado, pero Pago no devuelve un snapshot fiscal de líneas. No se encontró descarga de recibo/factura ni servicio de entrega de correo en rutas/servicios inspeccionados. La existencia de Factura/FacturaItem o de un endpoint de lectura no demuestra emisión fiscal, descarga ni envío.
+- **Actual:** resultado directo/recarga muestra el monto histórico del Pago y artículos de SU carrito, con referencias y lecturas de estado operativo separadas. No reconstruye importes desde catálogo actual. Permite copiar el ID y exportar un calendario local de habitación con fechas verificadas (no es comprobante fiscal). No muestra descarga de comprobante, aceptación fingida ni «Se envió un correo».
+- **Pendiente fiscal:** asociación autorizada pago/orden/factura, líneas e impuestos históricos persistidos, fuente de documento válido y reglas de acceso/versionado. Reutilizar BE-019 para la semántica fiscal, sin inventar IVA/INGUAT ni cuadrar importes desde frontend. `promocion_id`/asociación Promocion en ítems no demuestra descuento aplicado: los totales actuales se leen del servidor, sin cupón, precio tachado ni segundo motor de importes.
+- **Pendiente correo:** eventos de envío idempotentes después de confirmación del servidor, evidencia de aceptación/entrega/fallo, destinatario autorizado, idioma y plantillas aprobados; pruebas de reintentos sin duplicados. Nunca enviar desde render ni suponer idioma del correo por traducir la UI.
+- **Desbloqueo:** contratos y pruebas verificables, aprobación de contabilidad y evidencia de entrega real en entorno autorizado. Descarga y confirmación de correo end-to-end siguen pendientes.
+
+## BE-027 · Cambio de fechas de habitación por cliente
+
+- **Categoría / estado:** operación cliente ausente; pendiente de backend/política (José).
+- **Evidencia:** `PATCH /api/reservas-habitacion/:id` exige `rolesGestionHabitaciones`; el cliente no está incluido. El esquema de actualización existe para personal, no autoriza una edición desde el carrito del cliente.
+- **Actual:** 3C no muestra «Cambiar fechas». Puede ofrecer «Nueva búsqueda con estas fechas», identificada como otra búsqueda que no modifica ni cancela la reserva original; no crea reservas al navegar y se oculta si la compra tiene compromiso/estado incierto.
+- **Desbloqueo:** operación autorizada que valide propietario, disponibilidad excluyendo correctamente la reserva propia, importes/exposición financiera y estado permitido, con transacción y concurrencia. Contabilidad/producto deben acordar cancelación, penalizaciones y tratamiento de pagos antes de integrar cambios. No se aplica una propuesta de 48 horas ni primera noche como política definitiva.

@@ -39,3 +39,31 @@ export function useUpdateHabitacionMutation() {
     },
   });
 }
+
+export function useUploadHabitacionImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => habitacionesApi.uploadImage(id, file, onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+    },
+  });
+}
+
+export function useRemoveHabitacionImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => habitacionesApi.removeImage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+    },
+  });
+}

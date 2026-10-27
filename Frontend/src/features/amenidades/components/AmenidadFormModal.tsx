@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle } from "lucide-react";
@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Alert } from "@/components/ui/Feedback";
+import { ImageUploader } from "@/components/ui/ImageUploader";
 import { ApiError } from "@/api/client/http";
 import { getApiErrorMessage, getFieldErrors } from "@/api/errors";
 import { textosAmenidades } from "../textos";
@@ -19,6 +20,8 @@ import {
 import {
   useCreateAmenidadMutation,
   useUpdateAmenidadMutation,
+  useUploadAmenidadImageMutation,
+  useRemoveAmenidadImageMutation,
 } from "../hooks/useAmenidades";
 import type { Amenidad } from "../types";
 import type { Sucursal } from "@/features/sedes/types";
@@ -55,7 +58,17 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
 
   const createMutation = useCreateAmenidadMutation();
   const updateMutation = useUpdateAmenidadMutation();
+  const uploadImageMutation = useUploadAmenidadImageMutation();
+  const removeImageMutation = useRemoveAmenidadImageMutation();
   const activeMutation = isEditing ? updateMutation : createMutation;
+
+  // Manejo de imagen de la amenidad
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeMarked, setRemoveMarked] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [persistedId, setPersistedId] = useState<number | null>(null);
 
   const {
     register,
@@ -74,6 +87,13 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
 
   useEffect(() => {
     if (open) {
+      setSelectedFile(null);
+      setRemoveMarked(false);
+      setIsUploadingImage(false);
+      setUploadProgress(0);
+      setImageError(null);
+      setPersistedId(null);
+
       if (amenidad) {
         reset({
           sucursal_id: String(amenidad.sucursal_id),
@@ -92,24 +112,36 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
       }
       createMutation.reset();
       updateMutation.reset();
+      uploadImageMutation.reset();
+      removeImageMutation.reset();
     }
   }, [open, amenidad, sedes, reset]);
 
   const onSubmit = async (data: AmenidadFormData) => {
+    setImageError(null);
+    let targetId: number;
+
     try {
       if (isEditing && amenidad) {
+        targetId = amenidad.id;
         const payload = sanitizeUpdateAmenidad(data);
         await updateMutation.mutateAsync({
           id: amenidad.id,
           data: payload,
         });
-        onSuccess(textosAmenidades.actualizadaExito);
+      } else if (persistedId) {
+        targetId = persistedId;
+        const payload = sanitizeUpdateAmenidad(data);
+        await updateMutation.mutateAsync({
+          id: persistedId,
+          data: payload,
+        });
       } else {
         const payload = sanitizeCreateAmenidad(data);
-        await createMutation.mutateAsync(payload);
-        onSuccess(textosAmenidades.creadaExito);
+        const created = await createMutation.mutateAsync(payload);
+        targetId = created.id;
+        setPersistedId(created.id);
       }
-      onClose();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = getFieldErrors(err);
@@ -119,10 +151,53 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
           }
         }
       }
+      return;
     }
+
+    if (removeMarked && (amenidad?.id || persistedId)) {
+      try {
+        await removeImageMutation.mutateAsync(targetId);
+      } catch (err: any) {
+        setImageError("No fue posible retirar la imagen actual.");
+        return;
+      }
+    }
+
+    if (selectedFile) {
+      setIsUploadingImage(true);
+      setUploadProgress(10);
+      try {
+        await uploadImageMutation.mutateAsync({
+          id: targetId,
+          file: selectedFile,
+          onProgress: (pct) => setUploadProgress(pct),
+        });
+      } catch (err: any) {
+        setIsUploadingImage(false);
+        setImageError(
+          err?.message ||
+            "Error al subir la imagen de la amenidad. Los datos fueron guardados; puede reintentar.",
+        );
+        return;
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
+    onSuccess(
+      isEditing
+        ? textosAmenidades.actualizadaExito
+        : textosAmenidades.creadaExito
+    );
+    onClose();
   };
 
-  const isPending = activeMutation.isPending || isSubmitting;
+  const isPending =
+    activeMutation.isPending ||
+    uploadImageMutation.isPending ||
+    removeImageMutation.isPending ||
+    isUploadingImage ||
+    isSubmitting;
 
   return (
     <Modal open={open} onClose={onClose} title={title} description={description}>
@@ -186,6 +261,22 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
           error={errors.aforo_maximo?.message}
           disabled={isPending}
           {...register("aforo_maximo")}
+        />
+
+        {/* Fotografía de la amenidad */}
+        <ImageUploader
+          label="Fotografía de la amenidad"
+          helpText="Archivos JPEG, PNG o WebP de hasta 5 MiB"
+          currentImageUrl={amenidad?.imagen_url}
+          currentImageLabel="Fotografía de la amenidad"
+          selectedFile={selectedFile}
+          removeMarked={removeMarked}
+          onFileSelect={setSelectedFile}
+          onRemoveCurrent={() => setRemoveMarked((prev) => !prev)}
+          disabled={isPending}
+          isUploading={isUploadingImage}
+          uploadProgress={uploadProgress}
+          error={imageError}
         />
 
         {/* Botones de acción */}

@@ -35,3 +35,37 @@ export const remove = async (req: Request, res: Response, next: NextFunction) =>
     res.status(204).send();
   } catch (error) { next(error); }
 };
+
+export const presignImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = Number(req.params.id);
+    const userId = (req as any).user.id;
+    const { contentType } = req.body;
+    const result = await recursoService.requestImageUpload(id, userId, contentType);
+    res.status(200).json({ status: "success", data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const confirmImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = Number(req.params.id);
+    const userId = (req as any).user.id;
+    const { uploadToken, tempKey } = req.body;
+    const recurso = await recursoService.confirmImageUpload(id, userId, uploadToken, tempKey);
+    res.status(200).json({ status: "success", data: recurso });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = Number(req.params.id);
+    const recurso = await recursoService.removeImage(id);
+    res.status(200).json({ status: "success", data: recurso });
+  } catch (error) {
+    next(error);
+  }
+};

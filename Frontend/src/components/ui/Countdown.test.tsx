@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { Countdown } from './Countdown';
 
 describe('Countdown', () => {
@@ -47,4 +47,20 @@ describe('Countdown', () => {
     // Avanzar tiempo después de desmontar no debe lanzar
     vi.advanceTimersByTime(60000);
   });
+  it('silencia los segundos y anuncia únicamente el umbral o vencimiento', () => {
+    render(<Countdown expiresAt={Date.now() + 90000} />);
+    expect(screen.getByRole('timer')).toHaveAttribute('aria-live', 'off');
+    const notice = screen.getByRole('status').textContent;
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByRole('status').textContent).toBe(notice);
+  });
+  it('un nuevo vencimiento autoritativo permite notificar su propio cero una sola vez', () => {
+    const onExpire = vi.fn();
+    const view = render(<Countdown expiresAt={Date.now() + 1000} onExpire={onExpire} />);
+    act(() => vi.advanceTimersByTime(2000));
+    view.rerender(<Countdown expiresAt={Date.now() + 1000} onExpire={onExpire} />);
+    act(() => vi.advanceTimersByTime(2000));
+    expect(onExpire).toHaveBeenCalledTimes(2);
+  });
+
 });

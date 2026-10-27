@@ -80,7 +80,7 @@ describe('Catálogo de Salones y Eventos (CatalogoEventosPage)', () => {
     expect(await screen.findByText('Gran Salón Hunahpú')).toBeInTheDocument();
     expect(screen.getByText('Salón Ejecutivo Atitlán')).toBeInTheDocument();
     expect(screen.getByText('Hasta 250 personas')).toBeInTheDocument();
-    expect(screen.getByText('Q4,500.00')).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*4,500\.00.*US\$/)).toBeInTheDocument();
   });
 
   it('permite filtrar los salones por nombre', async () => {

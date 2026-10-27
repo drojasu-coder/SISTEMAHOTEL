@@ -1,35 +1,37 @@
+import { extraEs, type ExtraKey } from '@/i18n/publicExtra';
 import { z } from 'zod';
 
 export const tipoEventoEnum = z.enum(['boda', 'cumpleanos', 'ejecutivo', 'convivio']);
 
-export const createReservaEventoFormSchema = z
+export const buildReservaEventoSchema = (message: (key: ExtraKey) => string = (key) => extraEs[key]) => z
   .object({
-    salon_id: z.number().int().positive('Debe seleccionar un salón válido'),
+    salon_id: z.number().int().positive(message('validVenue')),
     tipo_evento: tipoEventoEnum,
     fecha: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato AAAA-MM-DD')
+      .regex(/^\d{4}-\d{2}-\d{2}$/, message('eventDateFormat'))
       .refine((val) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const selected = new Date(`${val}T00:00:00`);
         return selected >= today;
-      }, 'La fecha del evento debe ser a partir de hoy'),
+      }, message('eventDatePast')),
     hora_inicio: z
       .string()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'La hora debe tener formato HH:mm'),
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, message('eventTimeFormat')),
     hora_fin: z
       .string()
-      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'La hora debe tener formato HH:mm'),
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, message('eventTimeFormat')),
     numero_invitados: z
-      .number({ invalid_type_error: 'Indique la cantidad de invitados' })
-      .int('El número de invitados debe ser un entero')
-      .positive('El número de invitados debe ser mayor que cero'),
+      .number({ invalid_type_error: message('requiredInvitees') })
+      .int(message('integerInvitees'))
+      .positive(message('positiveInvitees')),
   })
   .refine((data) => data.hora_inicio < data.hora_fin, {
-    message: 'La hora de finalización debe ser posterior a la de inicio',
+    message: message('endAfter'),
     path: ['hora_fin'],
   });
+export const createReservaEventoFormSchema = buildReservaEventoSchema();
 
 export type CreateReservaEventoFormData = z.infer<typeof createReservaEventoFormSchema>;
 

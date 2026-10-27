@@ -174,6 +174,36 @@ export function useDeleteSalonMutation() {
   });
 }
 
+export function useUploadSalonImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => eventosApi.uploadSalonImage(id, file, onProgress),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: eventosQueryKeys.allSalones });
+      void queryClient.invalidateQueries({ queryKey: eventosQueryKeys.salon(variables.id) });
+    },
+  });
+}
+
+export function useRemoveSalonImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => eventosApi.removeSalonImage(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: eventosQueryKeys.allSalones });
+      void queryClient.invalidateQueries({ queryKey: eventosQueryKeys.salon(id) });
+    },
+  });
+}
+
 export function useCreateServicioEventoMutation() {
   const queryClient = useQueryClient();
   return useMutation({

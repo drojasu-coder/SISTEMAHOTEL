@@ -14,7 +14,7 @@ export function formatGTQ(monto: number | string | null | undefined): string {
 export const textosPagos = {
   // Encabezados
   tituloPagina: 'Resultado del pago',
-  subtituloPagina: 'Comprobante y estado de la transacción en HOTEL HUNAHPÚ.',
+  subtituloPagina: 'Estado de la transacción verificado con HOTEL HUNAHPÚ.',
 
   // Estados del pago
   estados: {
@@ -30,13 +30,13 @@ export const textosPagos = {
   // Mensajes por estado
   mensajeAprobado: 'Su pago ha sido procesado y confirmado con éxito por el hotel.',
   mensajeProcesando:
-    'Estamos confirmando su transacción con la pasarela de pagos. Por favor espere, esta pantalla se actualizará automáticamente.',
+    'Estamos verificando su transacción. Esta pantalla consulta el estado durante un tiempo limitado; puede regresar para comprobarlo.',
   mensajeRechazado:
-    'La transacción fue declinada por la entidad emisora o la pasarela de pagos. No se realizó ningún cargo.',
+    'El servidor informa que el pago fue rechazado. Revise su detalle antes de intentar otro pago.',
   mensajeCancelado:
     'Este intento de pago ha sido cancelado o ha expirado sin completarse.',
   mensajeReembolsado:
-    'Este pago ha sido reembolsado a su cuenta.',
+    'El servidor registra una devolución para este pago.',
 
   // Detalles
   detalleTitulo: 'Detalle de la transacción',
@@ -67,7 +67,7 @@ export const textosPagos = {
     'Ocurrió un problema al consultar el estado de la transacción con el servidor.',
   accesoRestringidoTitulo: 'Acceso restringido',
   accesoRestringidoMensaje:
-    'Esta pantalla está reservada exclusivamente para que los clientes consulten el comprobante de sus pagos.',
+    'Esta pantalla está reservada exclusivamente para que los clientes consulten el estado de sus pagos.',
 };
 
 
@@ -144,7 +144,7 @@ export const textosCheckout = {
     confirmar: 'Confirmar pago',
     confirmando: 'Confirmando pago…',
     tarjetaNoDisponible:
-      'El pago con tarjeta no está disponible en este momento. No se ha creado ningún intento de pago.',
+      'El pago con tarjeta no está disponible en este momento. Compruebe el estado del pago antes de reintentar.',
     noSaldoTitulo: 'No tiene saldo pendiente',
     noSaldoDescripcion:
       'El servidor indica que el carrito no tiene un saldo pendiente. No es necesario realizar otro pago.',
@@ -175,7 +175,7 @@ export const textosCheckout = {
     confirmacionEnviada:
       'Recibimos la confirmación de la tarjeta. El hotel todavía debe verificar el pago; no lo consideramos aprobado hasta que el servidor lo confirme.',
     verificando:
-      'Estamos consultando el estado real del pago. No cierre esta pantalla ni intente otro cobro.',
+      'Estamos consultando el estado real del pago. Puede regresar para comprobarlo; no inicie otro cobro mientras el resultado sea incierto.',
   },
 
   errores: {
@@ -208,7 +208,7 @@ export const textosCheckout = {
     crearRed:
       'No pudimos confirmar si el intento de pago se creó. No se ha realizado ningún cobro nuevo. Compruebe el estado antes de reintentar.',
     tarjetaRechazada:
-      'No fue posible confirmar el pago con la tarjeta. Revise los datos e inténtelo de nuevo.',
+      'No fue posible confirmar el pago con la tarjeta. Revise los datos o use otra tarjeta en este mismo intento.',
     confirmacionIncierta:
       'No pudimos confirmar el resultado de la tarjeta. No repita el cobro todavía: actualice el estado para comprobar si el pago fue enviado.',
     pagoNoDisponible:

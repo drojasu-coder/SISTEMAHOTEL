@@ -1,6 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { GuestLayout } from '@/layouts/GuestLayout';
+import { PublicSedesPage } from '@/pages/PublicSedesPage';
+import { PublicHabitacionesPage } from '@/pages/PublicHabitacionesPage';
+import { RoomDetail } from '@/features/habitaciones/public/RoomDetail';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
@@ -9,6 +12,8 @@ import { AccountPage } from '@/pages/AccountPage';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { SedesPage } from '@/pages/SedesPage';
+import { BrandingPage } from '@/pages/BrandingPage';
+import { AdminInicioPage } from '@/pages/AdminInicioPage';
 import { HabitacionesPage } from '@/pages/HabitacionesPage';
 import { TiposHabitacionPage } from '@/pages/TiposHabitacionPage';
 import { MesasPage } from '@/pages/MesasPage';
@@ -75,6 +80,9 @@ export const AppRouter: React.FC = () => {
         {/* Rutas públicas y de cliente */}
         <Route element={<GuestLayout />}>
           <Route path="/" element={<HomePage />} />
+          <Route path="/sedes" element={<PublicSedesPage />} />
+          <Route path="/habitaciones" element={<PublicHabitacionesPage />} />
+          <Route path="/habitaciones/:id" element={<RoomDetail />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registro" element={<RegisterPage />} />
           <Route path="/403" element={<ForbiddenPage />} />
@@ -125,6 +133,7 @@ export const AppRouter: React.FC = () => {
 
           {/* Flujo de reservas de habitación del cliente */}
           <Route path={RESERVAS_ROUTES.NUEVA} element={<CrearReservaPage />} />
+          <Route path="/crear-reserva" element={<CrearReservaPage />} />
           <Route path={RESERVAS_ROUTES.MIS_RESERVAS} element={<MisReservasPage />} />
           <Route path="/mis-reservas/:id" element={<DetalleReservaHabitacionPage />} />
 
@@ -134,6 +143,8 @@ export const AppRouter: React.FC = () => {
         {/* Panel: exige al menos un módulo habilitado; cada módulo exige su propio permiso */}
         <Route element={<RequireAuth panel />}>
           <Route path="/admin" element={<AdminLayout />}>
+            <Route path="403" element={<ForbiddenPage />} />
+            <Route path="*" element={<NotFoundPage />} />
             <Route index element={<AdminPage />} />
             {PANEL_MODULES.map((module) => (
               <Route key={module.id} element={<RequireAuth permission={module.permission} />}>
@@ -155,9 +166,12 @@ export const AppRouter: React.FC = () => {
                 />
               </Route>
             ))}
-            {/* Alias directo para sedes */}
+            {/* Alias directo para sedes e identidad visual */}
             <Route element={<RequireAuth permission="configuracion.administrar" />}>
               <Route path="sedes" element={<SedesPage />} />
+              <Route path="branding" element={<BrandingPage />} />
+              <Route path="inicio" element={<AdminInicioPage />} />
+              <Route path="configuracion/inicio" element={<AdminInicioPage />} />
             </Route>
 
             {/* Tipos de habitación */}

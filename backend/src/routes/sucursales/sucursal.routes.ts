@@ -411,4 +411,30 @@ router.delete(
   sucursalController.removeImage
 );
 
+router.post(
+  "/:id/restaurante-imagen-presign",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(presignImageSchema),
+  sucursalController.presignRestauranteImage
+);
+
+router.post(
+  "/:id/restaurante-imagen-confirmar",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  validateBody(confirmImageSchema),
+  sucursalController.confirmRestauranteImage
+);
+
+router.delete(
+  "/:id/restaurante-imagen",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateParams(idParamSchema),
+  sucursalController.removeRestauranteImage
+);
+
 export default router;

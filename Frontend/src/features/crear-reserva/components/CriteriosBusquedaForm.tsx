@@ -1,17 +1,19 @@
+import { useRevalidateErrors, usePublicInterface, usePublicTexts } from '@/i18n/public';
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { textosCrearReserva } from '../textos';
+
 import {
-  busquedaReservaFormSchema,
+  createBusquedaReservaSchema,
   getTodayInGuatemala,
   toDisponibilidadQuery,
   type BusquedaReservaFormData,
 } from '../schemas/busquedaReservaSchema';
 import type { DisponibilidadHabitacionQuery } from '../types';
+import type { PublicSite } from '@/features/preferencias/storage';
 
 interface SedeOption {
   id: number;
@@ -33,6 +35,8 @@ export interface CriteriosBusquedaFormProps {
   onSubmitSearch: (query: DisponibilidadHabitacionQuery) => void;
   onCriteriaChange: () => void;
   initialValues?: Partial<BusquedaReservaFormData>;
+  publicSite?: PublicSite;
+  onSiteChange?: (site: PublicSite) => void;
 }
 
 export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
@@ -42,16 +46,22 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
   onSubmitSearch,
   onCriteriaChange,
   initialValues,
+  publicSite,
+  onSiteChange,
 }) => {
+  const { p, locale } = usePublicInterface();
+  const textosCrearReserva = usePublicTexts('crearReserva');
   const today = getTodayInGuatemala();
 
   const {
     register,
     handleSubmit,
+    trigger,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<BusquedaReservaFormData>({
-    resolver: zodResolver(busquedaReservaFormSchema),
+    resolver: zodResolver(createBusquedaReservaSchema(p), { errorMap: () => ({ message: p('invalidField') }) }),
     defaultValues: {
       sucursal_id: initialValues?.sucursal_id ?? '',
       fecha_entrada: initialValues?.fecha_entrada ?? '',
@@ -61,6 +71,10 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
     },
   });
 
+  useEffect(() => {
+    if (publicSite !== undefined) setValue('sucursal_id', publicSite === 'all' ? '' : String(publicSite));
+  }, [publicSite, setValue]);
+
   // Notificar cuando cualquier criterio cambie para invalidar selecciones previas
   useEffect(() => {
     const subscription = watch(() => {
@@ -68,6 +82,8 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
     });
     return () => subscription.unsubscribe();
   }, [watch, onCriteriaChange]);
+
+  useRevalidateErrors(locale, () => trigger(), Object.keys(errors).length > 0);
 
   const onFormSubmit = (data: BusquedaReservaFormData) => {
     const query = toDisponibilidadQuery(data);
@@ -110,13 +126,13 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
             }
             disabled={isSearching}
             className="field-control"
-            {...register('sucursal_id')}
+            {...register('sucursal_id', { onChange: (event) => onSiteChange?.(Number(event.target.value)) })}
           >
             <option value="" disabled>
               {textosCrearReserva.sedePlaceholder}
             </option>
             {sedes.map((sede) => (
-              <option key={sede.id} value={String(sede.id)}>
+              <option lang="es" key={sede.id} value={String(sede.id)}>
                 {sede.nombre} {sede.ciudad ? `(${sede.ciudad})` : ''}
               </option>
             ))}
@@ -267,8 +283,8 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
           >
             <option value="">{textosCrearReserva.tipoHabitacionTodos}</option>
             {tiposHabitacion.map((tipo) => (
-              <option key={tipo.id} value={String(tipo.id)}>
-                {tipo.nombre} (hasta {tipo.capacidad_maxima} personas)
+              <option lang="es" key={tipo.id} value={String(tipo.id)}>
+                {tipo.nombre} ({textosCrearReserva.capacidadPersonas(tipo.capacidad_maxima)})
               </option>
             ))}
           </select>

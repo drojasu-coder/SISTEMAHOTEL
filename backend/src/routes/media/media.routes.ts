@@ -1,5 +1,10 @@
 import { Router } from "express";
 import * as mediaController from "../../controllers/media/media.controller";
+import { authMiddleware } from "../../middlewares/auth.middleware";
+import { requireRole } from "../../middlewares/role.middleware";
+import { ROLES } from "../../constants/roles";
+import { validateBody } from "../../middlewares/validate.middleware";
+import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 
 const router = Router();
 
@@ -27,5 +32,21 @@ const router = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/branding", mediaController.getBranding);
+
+router.post(
+  "/branding/:variant/presign",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateBody(presignImageSchema),
+  mediaController.presignBranding,
+);
+
+router.post(
+  "/branding/:variant/confirmar",
+  authMiddleware,
+  requireRole(ROLES.ADMIN),
+  validateBody(confirmImageSchema),
+  mediaController.confirmBranding,
+);
 
 export default router;

@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Feedback';
+import { ImageUploader } from '@/components/ui/ImageUploader';
 import { ApiError } from '@/api/client/http';
 import { getApiErrorMessage, getFieldErrors } from '@/api/errors';
 import { es } from '@/i18n/es';
@@ -18,8 +19,9 @@ import {
   useUpdateSedeMutation,
   useUploadSedeImageMutation,
   useRemoveSedeImageMutation,
+  useUploadRestauranteImageMutation,
+  useRemoveRestauranteImageMutation,
 } from '../hooks/useSedes';
-import { SedeImageUploader } from './SedeImageUploader';
 import type { Sucursal } from '../types';
 
 interface SedeFormModalProps {
@@ -43,6 +45,8 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
   const updateMutation = useUpdateSedeMutation();
   const uploadImageMutation = useUploadSedeImageMutation();
   const removeImageMutation = useRemoveSedeImageMutation();
+  const uploadRestauranteMutation = useUploadRestauranteImageMutation();
+  const removeRestauranteMutation = useRemoveRestauranteImageMutation();
 
   const activeMutation = isEditing ? updateMutation : createMutation;
 
@@ -52,6 +56,14 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imageError, setImageError] = useState<string | null>(null);
+
+  // Estado para la fotografía de restaurante
+  const [selectedRestauranteFile, setSelectedRestauranteFile] = useState<File | null>(null);
+  const [removeRestauranteMarked, setRemoveRestauranteMarked] = useState(false);
+  const [isUploadingRestauranteImage, setIsUploadingRestauranteImage] = useState(false);
+  const [uploadRestauranteProgress, setUploadRestauranteProgress] = useState(0);
+  const [restauranteImageError, setRestauranteImageError] = useState<string | null>(null);
+
   const [persistedSedeId, setPersistedSedeId] = useState<number | null>(null);
 
   const {
@@ -77,6 +89,13 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
       setIsUploadingImage(false);
       setUploadProgress(0);
       setImageError(null);
+
+      setSelectedRestauranteFile(null);
+      setRemoveRestauranteMarked(false);
+      setIsUploadingRestauranteImage(false);
+      setUploadRestauranteProgress(0);
+      setRestauranteImageError(null);
+
       setPersistedSedeId(null);
 
       if (sede) {
@@ -98,11 +117,14 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
       updateMutation.reset();
       uploadImageMutation.reset();
       removeImageMutation.reset();
+      uploadRestauranteMutation.reset();
+      removeRestauranteMutation.reset();
     }
   }, [open, sede, reset]);
 
   const onSubmit = async (data: SedeFormData) => {
     setImageError(null);
+    setRestauranteImageError(null);
     const payload = sanitizeSedePayload(data);
 
     let targetSedeId: number;
@@ -114,14 +136,12 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
           data: payload,
         });
       } else if (persistedSedeId) {
-        // La sede ya fue creada previamente en este mismo formulario (reintento de imagen)
         targetSedeId = persistedSedeId;
         await updateMutation.mutateAsync({
           id: persistedSedeId,
           data: payload,
         });
       } else {
-        // Primera creación: obtener el ID antes de subir la imagen
         const created = await createMutation.mutateAsync(payload);
         targetSedeId = created.id;
         setPersistedSedeId(created.id);
@@ -138,17 +158,17 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
       return;
     }
 
-    // 2. Si se marcó quitar la imagen existente
+    // Retiro de portada si fue marcada
     if (removeMarked && (sede?.id || persistedSedeId)) {
       try {
         await removeImageMutation.mutateAsync(targetSedeId);
       } catch (err: any) {
-        setImageError('No fue posible retirar la imagen actual.');
+        setImageError('No fue posible retirar la imagen de portada.');
         return;
       }
     }
 
-    // 3. Si hay un nuevo archivo seleccionado, subirlo
+    // Subida de nueva portada
     if (selectedFile) {
       setIsUploadingImage(true);
       setUploadProgress(10);
@@ -162,11 +182,43 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
         setIsUploadingImage(false);
         setImageError(
           err?.message ||
-            'Error al subir la fotografía. La información de la sede fue guardada; puede reintentar la subida.',
+            'Error al subir la fotografía de portada. Los datos fueron guardados; puede reintentar.',
         );
-        return; // Permite reintentar la imagen sin duplicar la sede
+        return;
       } finally {
         setIsUploadingImage(false);
+      }
+    }
+
+    // Retiro de restaurante si fue marcado
+    if (removeRestauranteMarked && (sede?.id || persistedSedeId)) {
+      try {
+        await removeRestauranteMutation.mutateAsync(targetSedeId);
+      } catch (err: any) {
+        setRestauranteImageError('No fue posible retirar la imagen del restaurante.');
+        return;
+      }
+    }
+
+    // Subida de nuevo restaurante
+    if (selectedRestauranteFile) {
+      setIsUploadingRestauranteImage(true);
+      setUploadRestauranteProgress(10);
+      try {
+        await uploadRestauranteMutation.mutateAsync({
+          id: targetSedeId,
+          file: selectedRestauranteFile,
+          onProgress: (pct) => setUploadRestauranteProgress(pct),
+        });
+      } catch (err: any) {
+        setIsUploadingRestauranteImage(false);
+        setRestauranteImageError(
+          err?.message ||
+            'Error al subir la fotografía del restaurante. Los datos fueron guardados; puede reintentar.',
+        );
+        return;
+      } finally {
+        setIsUploadingRestauranteImage(false);
       }
     }
 
@@ -178,7 +230,10 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
     activeMutation.isPending ||
     uploadImageMutation.isPending ||
     removeImageMutation.isPending ||
+    uploadRestauranteMutation.isPending ||
+    removeRestauranteMutation.isPending ||
     isUploadingImage ||
+    isUploadingRestauranteImage ||
     isSubmitting;
 
   return (
@@ -229,20 +284,34 @@ export const SedeFormModal: React.FC<SedeFormModalProps> = ({
           {...register('telefono')}
         />
 
-        {/* Componente de carga y gestión de fotografía principal */}
-        <SedeImageUploader
+        {/* Fotografía de portada */}
+        <ImageUploader
+          label={es.sedes.fotografia}
           currentImageUrl={sede?.imagen_url}
-          onFileSelect={(file) => {
-            setSelectedFile(file);
-            setRemoveMarked(false);
-          }}
-          onRemoveCurrent={() => setRemoveMarked((prev) => !prev)}
+          currentImageLabel={es.sedes.fotografiaActual}
           selectedFile={selectedFile}
           removeMarked={removeMarked}
+          onFileSelect={setSelectedFile}
+          onRemoveCurrent={() => setRemoveMarked((prev) => !prev)}
           disabled={isPending}
           isUploading={isUploadingImage}
           uploadProgress={uploadProgress}
           error={imageError}
+        />
+
+        {/* Fotografía de restaurante */}
+        <ImageUploader
+          label="Fotografía del restaurante de la sede"
+          currentImageUrl={sede?.restaurante_imagen_url}
+          currentImageLabel="Fotografía actual del restaurante"
+          selectedFile={selectedRestauranteFile}
+          removeMarked={removeRestauranteMarked}
+          onFileSelect={setSelectedRestauranteFile}
+          onRemoveCurrent={() => setRemoveRestauranteMarked((prev) => !prev)}
+          disabled={isPending}
+          isUploading={isUploadingRestauranteImage}
+          uploadProgress={uploadRestauranteProgress}
+          error={restauranteImageError}
         />
 
         <div className="mt-2 flex items-center justify-end gap-3 border-t border-neutro-200 pt-4">

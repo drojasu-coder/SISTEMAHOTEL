@@ -2,14 +2,14 @@ import React, {
   createContext,
   useContext,
   useState,
-  useRef,
   useCallback,
   useEffect,
   type ReactNode,
 } from 'react';
 import { cn } from '@/lib/cn';
 import { X } from 'lucide-react';
-import { es } from '@/i18n/es';
+import { usePublicInterface } from '@/i18n/public';
+import { useLocale } from '@/i18n/LocaleContext';
 
 export type ToastTone = 'success' | 'error' | 'info' | 'warning';
 
@@ -25,6 +25,8 @@ export interface ToastProps {
   description?: string;
   tone?: ToastTone;
   onClose?: () => void;
+  /** null conserva el aviso; errores y advertencias son persistentes por defecto. */
+  duration?: number | null;
 }
 
 /**
@@ -32,10 +34,21 @@ export interface ToastProps {
  * resto como `role="status"`. Se cierra con el botón de cerrar o mediante el
  * autodescarte gestionado por `ToastProvider`.
  */
-export const Toast: React.FC<ToastProps> = ({ title, description, tone = 'success', onClose }) => {
+export const Toast: React.FC<ToastProps> = ({ title, description, tone = 'success', onClose, duration }) => {
+  const { t } = useLocale();
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const timeout = duration === undefined ? (tone === 'success' || tone === 'info' ? 7000 : null) : duration;
+  useEffect(() => {
+    if (!onClose || timeout === null || hovered || focused) return;
+    const timer = setTimeout(onClose, Math.max(7000, timeout));
+    return () => clearTimeout(timer);
+  }, [onClose, timeout, hovered, focused]);
   return (
     <div
       role={tone === 'error' ? 'alert' : 'status'}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
       className={cn('flex items-start gap-3 rounded-lg border p-4 shadow-soft', toneClasses[tone])}
     >
       <div className="flex-1">
@@ -46,10 +59,10 @@ export const Toast: React.FC<ToastProps> = ({ title, description, tone = 'succes
         <button
           type="button"
           onClick={onClose}
-          aria-label={es.comunes.cerrar}
+          aria-label={t('close')}
           className="-my-3 -mr-3 flex size-11 shrink-0 items-center justify-center"
         >
-          <span className="sr-only">{es.comunes.cerrar}</span>
+          <span className="sr-only">{t('close')}</span>
           <X className="size-4" aria-hidden="true" />
         </button>
       )}
@@ -57,46 +70,25 @@ export const Toast: React.FC<ToastProps> = ({ title, description, tone = 'succes
   );
 };
 
-type ToastMessage = { id: number; title: string; description?: string; tone?: ToastTone };
+type ToastMessage = Omit<ToastProps, 'onClose'> & { id: number };
 type NotifyFn = (message: Omit<ToastMessage, 'id'>) => void;
 type ToastContextValue = NotifyFn & { notify: NotifyFn };
-
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
+let nextToastId = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { p } = usePublicInterface();
   const [messages, setMessages] = useState<ToastMessage[]>([]);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const nextId = useRef(0);
-
   const notify = useCallback((message: Omit<ToastMessage, 'id'>) => {
-    const id = ++nextId.current;
-    setMessages((prev) => [...prev.slice(-3), { ...message, id }]);
-    timers.current.push(
-      setTimeout(() => setMessages((prev) => prev.filter((item) => item.id !== id)), 7000)
-    );
+    setMessages((previous) => [...previous, { ...message, id: ++nextToastId }]);
   }, []);
-
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-
   const value = Object.assign(notify, { notify });
-
-  return (
-    <ToastContext.Provider value={value}>
-      {children}
-      <div
-        className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100%-2rem)] flex-col gap-2"
-        aria-label={es.componentes.notificaciones}
-      >
-        {messages.map((item) => (
-          <Toast
-            key={item.id}
-            {...item}
-            onClose={() => setMessages((prev) => prev.filter((m) => m.id !== item.id))}
-          />
-        ))}
-      </div>
-    </ToastContext.Provider>
-  );
+  return <ToastContext.Provider value={value}>
+    {children}
+    <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100%-2rem)] flex-col gap-2" aria-label={p('notifications')}>
+      {messages.slice(0, 3).map((item) => <Toast key={item.id} {...item} onClose={() => setMessages((previous) => previous.filter((message) => message.id !== item.id))} />)}
+    </div>
+  </ToastContext.Provider>;
 }
 
 export const useToast = () => {

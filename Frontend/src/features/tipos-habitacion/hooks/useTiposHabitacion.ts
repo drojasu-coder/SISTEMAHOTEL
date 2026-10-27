@@ -33,3 +33,31 @@ export function useUpdateTipoHabitacionMutation() {
     },
   });
 }
+
+export function useUploadTipoHabitacionImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      file,
+      onProgress,
+    }: {
+      id: number;
+      file: File;
+      onProgress?: (pct: number) => void;
+    }) => tiposHabitacionApi.uploadImage(id, file, onProgress),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TIPOS_HABITACION_QUERY_KEY });
+    },
+  });
+}
+
+export function useRemoveTipoHabitacionImageMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => tiposHabitacionApi.removeImage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TIPOS_HABITACION_QUERY_KEY });
+    },
+  });
+}

@@ -1,4 +1,8 @@
+import crypto from "crypto";
 import { AppError } from "../../utils/AppError";
+import * as mediaUploadService from "../storage/mediaUpload.service";
+import * as s3Service from "../storage/s3.service";
+import { getAssetCredits } from "../storage/credits";
 
 const db = require("../../models");
 
@@ -14,6 +18,7 @@ interface CreateSalonData {
   capacidad_maxima: number;
   tarifa_base: number;
   descripcion?: string | null;
+  imagen_key?: string | null;
 }
 
 interface UpdateSalonData {
@@ -22,6 +27,17 @@ interface UpdateSalonData {
   capacidad_maxima?: number;
   tarifa_base?: number;
   descripcion?: string | null;
+  imagen_key?: string | null;
+}
+
+export async function serializeSalon(salon: any): Promise<any> {
+  if (!salon) return null;
+  const plain = typeof salon.get === "function" ? salon.get({ plain: true }) : { ...salon };
+  const mediaResult = await s3Service.resolveMediaUrlWithExpiry(plain.imagen_key);
+  plain.imagen_url = mediaResult.url;
+  plain.imagen_expires_at = mediaResult.expiresAt;
+  plain.imagen_creditos = getAssetCredits(plain.imagen_key);
+  return plain;
 }
 
 const validateSucursal = async (
@@ -51,7 +67,7 @@ const validateSucursal = async (
 };
 
 export const getAll = async () => {
-  return Salon.findAll({
+  const salones = await Salon.findAll({
     include: [
       {
         model: Sucursal,
@@ -65,6 +81,7 @@ export const getAll = async () => {
     ],
     order: [["nombre", "ASC"]],
   });
+  return Promise.all(salones.map(serializeSalon));
 };
 
 export const getById = async (
@@ -92,7 +109,7 @@ export const getById = async (
     );
   }
 
-  return salon;
+  return serializeSalon(salon);
 };
 
 export const create = async (
@@ -102,7 +119,7 @@ export const create = async (
     data.sucursal_id
   );
 
-  return Salon.create({
+  const salon = await Salon.create({
     sucursal_id: data.sucursal_id,
     nombre: data.nombre,
     capacidad_maxima:
@@ -110,7 +127,10 @@ export const create = async (
     tarifa_base: data.tarifa_base,
     descripcion:
       data.descripcion ?? null,
+    imagen_key: data.imagen_key ?? null,
   });
+
+  return getById(salon.id);
 };
 
 export const update = async (
@@ -167,5 +187,58 @@ export const remove = async (
     );
   }
 
+  const previousKey = salon.imagen_key;
   await salon.destroy();
+  if (previousKey) {
+    await mediaUploadService.cleanStorageObjectIfUnreferenced(previousKey);
+  }
+};
+
+export const requestImageUpload = async (
+  id: number,
+  userId: number,
+  contentType: string
+) => {
+  const salon = await Salon.findByPk(id);
+  if (!salon) {
+    throw new AppError(404, "EVENT_ROOM_NOT_FOUND", "El salón solicitado no existe");
+  }
+  return mediaUploadService.presignEntityUpload({
+    entityType: "salon",
+    entityId: id,
+    contentType,
+    userId,
+  });
+};
+
+export const confirmImageUpload = async (
+  id: number,
+  userId: number,
+  uploadToken: string,
+  tempKey: string
+) => {
+  return mediaUploadService.confirmEntityUpload({
+    entityType: "salon",
+    entityId: id,
+    userId,
+    uploadToken,
+    tempKey,
+    Model: Salon,
+    column: "imagen_key",
+    buildFinalKey: (salon, ext) => {
+      const storageSlug = mediaUploadService.resolveStorageSlug(salon.sucursal_id);
+      const rand = crypto.randomBytes(6).toString("hex");
+      return `sedes/${storageSlug}/eventos/salon-${salon.id}-${Date.now()}-${rand}.${ext}`;
+    },
+    serializeEntity: serializeSalon,
+  });
+};
+
+export const removeImage = async (id: number) => {
+  return mediaUploadService.removeEntityImage({
+    entityId: id,
+    Model: Salon,
+    column: "imagen_key",
+    serializeEntity: serializeSalon,
+  });
 };

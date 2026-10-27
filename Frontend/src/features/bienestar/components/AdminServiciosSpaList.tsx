@@ -101,34 +101,54 @@ export const AdminServiciosSpaList: React.FC = () => {
           {servicios.map((s) => (
             <Card
               key={s.id}
-              className="flex items-center justify-between p-5 transition-all hover:border-neutro-300"
+              className="flex overflow-hidden p-0 transition-all hover:border-neutro-300"
             >
-              <div className="space-y-1">
-                <h3 className="font-serif font-bold text-neutro-900 text-base">
-                  {s.nombre}
-                </h3>
-                <div className="flex items-center gap-3 text-xs text-neutro-600">
-                  <span className="flex items-center gap-1">
-                    <Clock className="size-3.5 text-neutro-400" />
-                    {s.duracion_minutos} {textosBienestar.minutos}
+              <div className="relative size-24 shrink-0 bg-sand-100 overflow-hidden sm:size-28">
+                {s.imagen_url ? (
+                  <img
+                    src={s.imagen_url}
+                    alt={s.nombre}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-bronce-500">
+                    <Sparkles className="size-6 text-bronce-400" aria-hidden="true" />
+                  </div>
+                )}
+                {s.imagen_creditos?.autor && (
+                  <span className="absolute bottom-1 right-1 z-10 rounded bg-black/60 px-1 py-0.5 text-[9px] text-white backdrop-blur-sm">
+                    {s.imagen_creditos.autor}
                   </span>
-                  <span>·</span>
-                  <span className="font-semibold text-bronce-700">
-                    {formatearGTQ(s.precio)}
-                  </span>
-                </div>
+                )}
               </div>
+              <div className="flex flex-1 items-center justify-between p-4 sm:p-5">
+                <div className="space-y-1">
+                  <h3 className="font-serif font-bold text-neutro-900 text-base">
+                    {s.nombre}
+                  </h3>
+                  <div className="flex items-center gap-3 text-xs text-neutro-600">
+                    <span className="flex items-center gap-1">
+                      <Clock className="size-3.5 text-neutro-400" />
+                      {s.duracion_minutos} {textosBienestar.minutos}
+                    </span>
+                    <span>·</span>
+                    <span className="font-semibold text-bronce-700">
+                      {formatearGTQ(s.precio)}
+                    </span>
+                  </div>
+                </div>
 
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setServicioEnEdicion(s)}
-                className="inline-flex items-center gap-1.5 text-xs"
-              >
-                <Edit className="size-3.5" aria-hidden="true" />
-                <span>{textosBienestar.editarServicio}</span>
-              </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setServicioEnEdicion(s)}
+                  className="inline-flex items-center gap-1.5 text-xs shrink-0"
+                >
+                  <Edit className="size-3.5" aria-hidden="true" />
+                  <span>{textosBienestar.editarServicio}</span>
+                </Button>
+              </div>
             </Card>
           ))}
         </div>

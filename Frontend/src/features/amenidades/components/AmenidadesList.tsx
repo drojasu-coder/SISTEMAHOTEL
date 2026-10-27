@@ -56,12 +56,28 @@ export const AmenidadesList: React.FC<AmenidadesListProps> = ({
                     className="transition-colors hover:bg-neutro-50/70"
                   >
                     <td className="px-5 py-4 font-semibold text-neutro-900">
-                      <div className="flex items-center gap-2.5">
-                        <Sparkles
-                          className="size-4 shrink-0 text-selva-700"
-                          aria-hidden="true"
-                        />
-                        <span>{amenidad.nombre}</span>
+                      <div className="flex items-center gap-3">
+                        {amenidad.imagen_url ? (
+                          <img
+                            src={amenidad.imagen_url}
+                            alt={amenidad.nombre}
+                            className="size-12 rounded-lg object-cover border border-neutro-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="flex size-12 items-center justify-center rounded-lg bg-selva-50 border border-selva-100 text-selva-700 shrink-0">
+                            <Sparkles className="size-5" />
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-semibold text-neutro-900 block">
+                            {amenidad.nombre}
+                          </span>
+                          {amenidad.imagen_creditos?.autor && (
+                            <span className="text-[10px] text-neutro-400 block">
+                              Foto: {amenidad.imagen_creditos.autor}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-neutro-600">
@@ -116,14 +132,28 @@ export const AmenidadesList: React.FC<AmenidadesListProps> = ({
           return (
             <Card key={amenidad.id} className="flex flex-col gap-3.5">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Sparkles
-                    className="size-4 shrink-0 text-selva-700"
-                    aria-hidden="true"
-                  />
-                  <span className="font-serif text-base font-bold text-neutro-900">
-                    {amenidad.nombre}
-                  </span>
+                <div className="flex items-center gap-3">
+                  {amenidad.imagen_url ? (
+                    <img
+                      src={amenidad.imagen_url}
+                      alt={amenidad.nombre}
+                      className="size-14 rounded-lg object-cover border border-neutro-200 shrink-0"
+                    />
+                  ) : (
+                    <div className="flex size-14 items-center justify-center rounded-lg bg-selva-50 border border-selva-100 text-selva-700 shrink-0">
+                      <Sparkles className="size-6" />
+                    </div>
+                  )}
+                  <div className="flex flex-col">
+                    <span className="font-serif text-base font-bold text-neutro-900">
+                      {amenidad.nombre}
+                    </span>
+                    {amenidad.imagen_creditos?.autor && (
+                      <span className="text-[10px] text-neutro-400">
+                        Foto: {amenidad.imagen_creditos.autor}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span className="inline-flex items-center rounded-full border border-neutro-200 bg-neutro-100 px-2.5 py-0.5 text-xs font-semibold text-neutro-700">
                   {textosAmenidades.aforoPersonas(amenidad.aforo_maximo)}
@@ -147,8 +177,8 @@ export const AmenidadesList: React.FC<AmenidadesListProps> = ({
                     className="w-full"
                     aria-label={`${textosAmenidades.editar} ${amenidad.nombre}`}
                   >
-                    <Edit2 className="size-4" aria-hidden="true" />
-                    {textosAmenidades.editar}
+                    <Edit2 className="size-4 mr-1.5" aria-hidden="true" />
+                    <span>{textosAmenidades.editar}</span>
                   </Button>
                 </div>
               )}

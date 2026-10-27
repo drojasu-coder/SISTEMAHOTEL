@@ -7,6 +7,9 @@ export interface ErrorStateProps {
   message?: string;
   onRetry: () => void;
   loading?: boolean;
+  description?: React.ReactNode;
+  retryLabel?: string;
+  loadingLabel?: string;
 }
 
 /**
@@ -17,6 +20,9 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   message = es.errores.inesperado,
   onRetry,
   loading = false,
+  description = es.errores.ayuda,
+  retryLabel = es.comunes.reintentar,
+  loadingLabel = es.comunes.cargando,
 }) => (
   <div
     role="alert"
@@ -30,9 +36,9 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
       <path d="M18.364 5.364a9 9 0 11-12.728 12.728M9.364 9.364l12.728 12.728" />
     </svg>
     <p className="font-semibold text-error-700">{message}</p>
-    <p className="text-xs text-neutro-600">{es.errores.ayuda}</p>
+    <div className="text-xs text-neutro-600">{description}</div>
     <Button variant="ghost" onClick={onRetry} isLoading={loading}>
-      {loading ? es.comunes.cargando : es.comunes.reintentar}
+      {loading ? loadingLabel : retryLabel}
     </Button>
   </div>
 );

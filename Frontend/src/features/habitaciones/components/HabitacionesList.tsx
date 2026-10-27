@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit2, Building2, Users } from "lucide-react";
+import { Edit2, Building2, Users, Bed } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { textosHabitaciones, formatGTQ } from "../textos";
@@ -78,14 +78,37 @@ export const HabitacionesList: React.FC<HabitacionesListProps> = ({
                   hab.TipoHabitacion ?? tiposMap.get(hab.tipo_habitacion_id);
                 const estadoConfig =
                   estadoBadges[hab.estado] ?? estadoBadges.disponible;
+                const photoUrl = hab.imagen_url;
 
                 return (
                   <tr
                     key={hab.id}
                     className="transition-colors hover:bg-neutro-50/70"
                   >
-                    <td className="px-5 py-4 font-mono font-semibold text-neutro-900">
-                      Habitación {hab.numero}
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        {photoUrl ? (
+                          <img
+                            src={photoUrl}
+                            alt={`Habitación ${hab.numero}`}
+                            className="size-12 rounded-lg object-cover border border-neutro-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="flex size-12 items-center justify-center rounded-lg bg-neutro-100 border border-neutro-200 text-neutro-400 shrink-0">
+                            <Bed className="size-5" />
+                          </div>
+                        )}
+                        <div>
+                          <span className="font-mono font-semibold text-neutro-900 block">
+                            Habitación {hab.numero}
+                          </span>
+                          {hab.imagen_creditos?.autor && (
+                            <span className="text-[10px] text-neutro-400 block">
+                              Foto: {hab.imagen_creditos.autor}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-col">
@@ -144,17 +167,36 @@ export const HabitacionesList: React.FC<HabitacionesListProps> = ({
             hab.TipoHabitacion ?? tiposMap.get(hab.tipo_habitacion_id);
           const estadoConfig =
             estadoBadges[hab.estado] ?? estadoBadges.disponible;
+          const photoUrl = hab.imagen_url;
 
           return (
             <Card key={hab.id} className="flex flex-col gap-3.5">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-col">
-                  <span className="font-mono text-base font-bold text-neutro-900">
-                    Habitación {hab.numero}
-                  </span>
-                  <span className="text-xs font-medium text-selva-700">
-                    {tipo?.nombre ?? textosHabitaciones.tipoNoEspecificado}
-                  </span>
+                <div className="flex items-center gap-3">
+                  {photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt={`Habitación ${hab.numero}`}
+                      className="size-14 rounded-lg object-cover border border-neutro-200 shrink-0"
+                    />
+                  ) : (
+                    <div className="flex size-14 items-center justify-center rounded-lg bg-neutro-100 border border-neutro-200 text-neutro-400 shrink-0">
+                      <Bed className="size-6" />
+                    </div>
+                  )}
+                  <div className="flex flex-col">
+                    <span className="font-mono text-base font-bold text-neutro-900">
+                      Habitación {hab.numero}
+                    </span>
+                    <span className="text-xs font-medium text-selva-700">
+                      {tipo?.nombre ?? textosHabitaciones.tipoNoEspecificado}
+                    </span>
+                    {hab.imagen_creditos?.autor && (
+                      <span className="text-[10px] text-neutro-400">
+                        Foto: {hab.imagen_creditos.autor}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span
                   className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${estadoConfig.badge}`}
@@ -200,11 +242,11 @@ export const HabitacionesList: React.FC<HabitacionesListProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEdit(hab)}
-                    className="w-full"
+                    className="w-full justify-center"
                     aria-label={`${textosHabitaciones.editar} habitación ${hab.numero}`}
                   >
-                    <Edit2 className="size-4" aria-hidden="true" />
-                    {textosHabitaciones.editar}
+                    <Edit2 className="size-4 mr-1.5" aria-hidden="true" />
+                    <span>{textosHabitaciones.editar}</span>
                   </Button>
                 </div>
               )}

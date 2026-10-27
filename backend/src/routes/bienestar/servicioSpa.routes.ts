@@ -1,3 +1,4 @@
+import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 import { Router } from "express";
 import * as controller from "../../controllers/bienestar/servicioSpa.controller";
 import { validateBody, validateParams } from "../../middlewares/validate.middleware";
@@ -153,5 +154,25 @@ router.patch("/:id", validateParams(idParamSchema), validateBody(updateServicioS
  *         description: El servicio tiene citas asociadas
  */
 router.delete("/:id", validateParams(idParamSchema), controller.remove);
+
+router.post(
+  "/:id/imagen-presign",
+  validateParams(idParamSchema),
+  validateBody(presignImageSchema),
+  controller.presignImage
+);
+
+router.post(
+  "/:id/imagen-confirmar",
+  validateParams(idParamSchema),
+  validateBody(confirmImageSchema),
+  controller.confirmImage
+);
+
+router.delete(
+  "/:id/imagen",
+  validateParams(idParamSchema),
+  controller.deleteImage
+);
 
 export default router;

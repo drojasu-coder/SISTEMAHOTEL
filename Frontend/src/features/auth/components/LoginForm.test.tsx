@@ -58,7 +58,7 @@ describe('Inicio de sesión (fetch simulado)', () => {
 
     await fillAndSubmit('persona@ejemplo.com', 'abc');
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/auth/login"), expect.anything()));
   });
 
   it('llama a /auth/login sin token y guarda la sesión', async () => {
@@ -68,7 +68,7 @@ describe('Inicio de sesión (fetch simulado)', () => {
     await fillAndSubmit('persona@ejemplo.com', 'Clave1234');
 
     await waitFor(() => expect(tokenStorage.get()).toBe('jwt-de-prueba'));
-    const [url, config] = (global.fetch as any).mock.calls[0];
+    const [url, config] = (global.fetch as any).mock.calls.find(([url]: [string]) => url.endsWith('/auth/login'));
     expect(url).toMatch(/\/auth\/login$/);
     expect(config.method).toBe('POST');
     expect(config.headers.Authorization).toBeUndefined();
@@ -142,7 +142,7 @@ describe('Inicio de sesión (fetch simulado)', () => {
     await fillAndSubmit('persona@ejemplo.com', 'incorrecta');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Correo electrónico o contraseña incorrectos',
+      'El correo o la contraseña no son correctos.',
     );
     expect(tokenStorage.get()).toBeNull();
   });

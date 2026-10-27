@@ -1,3 +1,4 @@
+import { formatReferenceMoney } from '@/lib/money';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
@@ -173,6 +174,8 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
         );
       }
 
+      if (urlStr.endsWith('/carritos/actual')) return Promise.resolve(jsonResponse({ data: { id: 3, usuario_id: userId, estado: 'activo', expira_en: '2030-01-01T00:00:00Z' } }));
+      if (/\/carritos\/3\/items$/.test(urlStr)) return Promise.resolve(jsonResponse({ data: { items: [], total: 2500 } }));
       const matchPago = urlStr.match(/\/pagos\/(\d+)$/);
       if (matchPago) {
         const id = Number(matchPago[1]);
@@ -218,7 +221,7 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
     await waitFor(() => {
       expect(screen.getByText('Pago aprobado')).toBeInTheDocument();
       expect(screen.getByText('#10')).toBeInTheDocument();
-      expect(screen.getByText('Q2,500.00')).toBeInTheDocument();
+      expect(screen.getByText(formatReferenceMoney(2500, 'es')!)).toBeInTheDocument();
     });
 
     const pagoFetch = fetchCalls.find((c) => c.url.includes('/pagos/10'));
@@ -239,7 +242,7 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
       screen.getByText('Este intento de pago ha sido cancelado o ha expirado sin completarse.')
     ).toBeInTheDocument();
     expect(screen.getByText('#12')).toBeInTheDocument();
-    expect(screen.getByText('Q2,500.00')).toBeInTheDocument();
+    expect(screen.getByText(formatReferenceMoney(2500, 'es')!)).toBeInTheDocument();
     expect(screen.getByText('cancelado')).toBeInTheDocument();
   });
 
@@ -255,7 +258,7 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
       expect(screen.getByText('Fondos insuficientes en la tarjeta.')).toBeInTheDocument();
     });
 
-    const linkRechazado = screen.getByRole('link', { name: /regresar al checkout/i });
+    const linkRechazado = await screen.findByRole('link', { name: /regresar al checkout/i });
     expect(linkRechazado).toHaveAttribute('href', '/checkout');
 
     // Comprobar que no se envió ningún POST para crear un nuevo pago
@@ -271,7 +274,7 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
       expect(screen.getByRole('heading', { name: 'Pago cancelado' })).toBeInTheDocument();
     });
 
-    const linkCancelado = screen.getByRole('link', { name: /regresar al checkout/i });
+    const linkCancelado = await screen.findByRole('link', { name: /regresar al checkout/i });
     expect(linkCancelado).toHaveAttribute('href', '/checkout');
 
     // Sigue sin haber ningún POST automático

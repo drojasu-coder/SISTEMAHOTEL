@@ -1,3 +1,5 @@
+import crypto from "crypto";
+import * as mediaUploadService from "../storage/mediaUpload.service";
 import { AppError } from "../../utils/AppError";
 import * as s3Service from "../storage/s3.service";
 import { getAssetCredits } from "../storage/credits";
@@ -78,4 +80,53 @@ export const remove = async (id: number) => {
   }
 
   await amenidad.destroy();
+};
+
+export const requestImageUpload = async (
+  id: number,
+  userId: number,
+  contentType: string
+) => {
+  const amenidad = await Amenidad.findByPk(id);
+  if (!amenidad) {
+    throw new AppError(404, "AMENITY_NOT_FOUND", "La amenidad solicitada no existe");
+  }
+  return mediaUploadService.presignEntityUpload({
+    entityType: "amenidad",
+    entityId: id,
+    contentType,
+    userId,
+  });
+};
+
+export const confirmImageUpload = async (
+  id: number,
+  userId: number,
+  uploadToken: string,
+  tempKey: string
+) => {
+  return mediaUploadService.confirmEntityUpload({
+    entityType: "amenidad",
+    entityId: id,
+    userId,
+    uploadToken,
+    tempKey,
+    Model: Amenidad,
+    column: "imagen_key",
+    buildFinalKey: (amenidad, ext) => {
+      const slug = mediaUploadService.resolveStorageSlug(amenidad.sucursal_id);
+      const rand = crypto.randomBytes(6).toString("hex");
+      return `sedes/${slug}/amenidades/amenidad-${amenidad.id}-${Date.now()}-${rand}.${ext}`;
+    },
+    serializeEntity: (a) => getById(a.id),
+  });
+};
+
+export const removeImage = async (id: number) => {
+  return mediaUploadService.removeEntityImage({
+    entityId: id,
+    Model: Amenidad,
+    column: "imagen_key",
+    serializeEntity: (a) => getById(a.id),
+  });
 };

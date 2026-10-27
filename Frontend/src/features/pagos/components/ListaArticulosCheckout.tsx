@@ -1,10 +1,13 @@
+import { groupItems, itemTypeLabel } from '@/features/compra/itemGroups';
+import { useLocale } from '@/i18n/LocaleContext';
+import { PurchaseItemDetails } from '@/features/compra/PurchaseItemDetails';
+import { usePublicTexts } from '@/i18n/public';
 import React from 'react';
 import type { CarritoItem } from '@/features/carrito/types';
 import {
   descripcionItem,
   etiquetaTipoItem,
   formatearGTQ,
-  textosCheckout,
 } from '../textos';
 
 interface ListaArticulosCheckoutProps {
@@ -19,7 +22,7 @@ interface ListaArticulosCheckoutProps {
  */
 export const ListaArticulosCheckout: React.FC<
   ListaArticulosCheckoutProps
-> = ({ items }) => (
+> = ({ items }) => { const textosCheckout = usePublicTexts('checkout'); const { locale } = useLocale(); return (
   <section aria-labelledby="checkout-articulos" className="flex flex-col gap-3">
     <h2
       id="checkout-articulos"
@@ -31,22 +34,24 @@ export const ListaArticulosCheckout: React.FC<
       {textosCheckout.articulos(items.length)}
     </p>
     <ul className="flex flex-col gap-3">
-      {items.map((item) => (
+      {groupItems(items).flatMap((group) => group.entries.map((item, index) => (
         <li key={item.id}>
+          {index === 0 && <h3 className="mb-3 font-serif text-lg">{itemTypeLabel(group.type, locale)}</h3>}
           <article className="surface flex flex-col gap-3 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-neutro-200 bg-neutro-100 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-700">
-                {etiquetaTipoItem(item.tipo_item)}
+                {locale === 'es' ? etiquetaTipoItem(item.tipo_item) : itemTypeLabel(item.tipo_item, locale)}
               </span>
               <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-500">
-                Artículo #{item.id}
+                {textosCheckout.articulosLista.referencia} #{item.id}
               </span>
             </div>
 
-            <h3 className="break-words text-base font-serif font-semibold text-neutro-900">
+            <h3 lang="es" className="break-words text-base font-serif font-semibold text-neutro-900">
               {descripcionItem(item)}
             </h3>
 
+            <PurchaseItemDetails item={item} />
             <dl className="grid grid-cols-2 gap-3 border-t border-neutro-200 pt-3 text-xs">
               <div className="flex flex-col gap-1">
                 <dt className="eyebrow">
@@ -71,7 +76,7 @@ export const ListaArticulosCheckout: React.FC<
             )}
           </article>
         </li>
-      ))}
+      )))}
     </ul>
   </section>
-);
+); };

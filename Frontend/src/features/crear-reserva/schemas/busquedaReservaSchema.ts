@@ -1,3 +1,4 @@
+import { extraEs, type ExtraKey } from '@/i18n/publicExtra';
 import { z } from 'zod';
 import type { DisponibilidadHabitacionQuery } from '../types';
 
@@ -28,27 +29,27 @@ export function isValidCalendarDate(str: string): boolean {
   );
 }
 
-export const busquedaReservaFormSchema = z
+export const createBusquedaReservaSchema = (message: (key: ExtraKey) => string = (key) => extraEs[key]) => z
   .object({
     sucursal_id: z
-      .string({ required_error: 'Debe seleccionar una sede' })
+      .string({ required_error: message('requiredSite') })
       .trim()
-      .min(1, 'Debe seleccionar una sede')
+      .min(1, message('requiredSite'))
       .refine(
         (val) => {
           const num = Number(val);
           return !Number.isNaN(num) && Number.isInteger(num) && num > 0;
         },
-        { message: 'Debe seleccionar una sede válida' }
+        { message: message('validSite') }
       ),
 
     fecha_entrada: z
-      .string({ required_error: 'La fecha de entrada es obligatoria' })
+      .string({ required_error: message('requiredArrival') })
       .trim()
-      .min(1, 'La fecha de entrada es obligatoria')
+      .min(1, message('requiredArrival'))
       .refine(isValidCalendarDate, {
         message:
-          'La fecha de entrada debe ser una fecha de calendario válida (AAAA-MM-DD)',
+          message('validArrival'),
       })
       .refine(
         (val) => {
@@ -56,30 +57,30 @@ export const busquedaReservaFormSchema = z
           return val >= today;
         },
         {
-          message: 'La fecha de entrada no puede ser anterior a hoy en Guatemala',
+          message: message('arrivalPast'),
         }
       ),
 
     fecha_salida: z
-      .string({ required_error: 'La fecha de salida es obligatoria' })
+      .string({ required_error: message('requiredDeparture') })
       .trim()
-      .min(1, 'La fecha de salida es obligatoria')
+      .min(1, message('requiredDeparture'))
       .refine(isValidCalendarDate, {
         message:
-          'La fecha de salida debe ser una fecha de calendario válida (AAAA-MM-DD)',
+          message('validDeparture'),
       }),
 
     numero_huespedes: z
-      .string({ required_error: 'El número de huéspedes es obligatorio' })
+      .string({ required_error: message('requiredGuests') })
       .trim()
-      .min(1, 'El número de huéspedes es obligatorio')
+      .min(1, message('requiredGuests'))
       .refine(
         (val) => {
           const num = Number(val);
           return !Number.isNaN(num) && Number.isInteger(num) && num > 0;
         },
         {
-          message: 'El número de huéspedes debe ser un número entero mayor a cero',
+          message: message('validGuests'),
         }
       ),
 
@@ -96,10 +97,11 @@ export const busquedaReservaFormSchema = z
       return data.fecha_salida > data.fecha_entrada;
     },
     {
-      message: 'La fecha de salida debe ser posterior a la fecha de entrada',
+      message: message('departureAfter'),
       path: ['fecha_salida'],
     }
   );
+export const busquedaReservaFormSchema = createBusquedaReservaSchema();
 
 export type BusquedaReservaFormData = z.infer<typeof busquedaReservaFormSchema>;
 

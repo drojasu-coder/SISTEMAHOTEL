@@ -25,6 +25,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
       },
+      imagen_key: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

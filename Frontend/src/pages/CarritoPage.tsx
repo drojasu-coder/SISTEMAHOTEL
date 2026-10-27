@@ -1,8 +1,16 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { verifyCartPayment } from '@/features/compra/verifyCartPayment';
+import { groupItems, itemTypeLabel } from '@/features/compra/itemGroups';
+import { PurchaseSteps } from '@/features/compra/PurchaseSteps';
+import { CartExpiry } from '@/features/compra/CartExpiry';
+import { useCartPaymentLock } from '@/features/compra/useCartPaymentLock';
+import { usePublicInterface } from '@/i18n/public';
+import { usePublicTexts, TranslatedError } from '@/i18n/public';
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Plus, RefreshCw } from 'lucide-react';
 import { ApiError } from '@/api/client/http';
-import { getApiErrorMessage } from '@/api/errors';
+
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas';
@@ -20,23 +28,24 @@ import {
   useCarritoItemsQuery,
 } from '@/features/carrito/hooks/useCarritoPantalla';
 import { useRetirarItemCarrito } from '@/features/carrito/hooks/useRetirarItemCarrito';
-import { textosCarrito } from '@/features/carrito/textos';
+
 
 interface MensajeCarrito {
   tono: 'success' | 'info' | 'warning';
-  texto: string;
+  texto: 'retiroExito' | 'retiroArticuloAusente' | 'retiroCarritoVencido' | 'retiroSinAcceso' | 'retiroRed' | 'retiroError';
   /** Ofrece una consulta manual cuando el resultado de la retirada es incierto. */
   comprobar?: boolean;
 }
 
 interface ErrorConsulta {
   titulo: string;
-  descripcion: string;
+  descripcion: React.ReactNode;
 }
 
 function describirErrorConsulta(
   error: unknown,
   titulo: string,
+  textosCarrito: ReturnType<typeof usePublicTexts<'carrito'>>,
 ): ErrorConsulta {
   if (esErrorHttp(error, 403)) {
     return {
@@ -52,7 +61,7 @@ function describirErrorConsulta(
     };
   }
 
-  return { titulo, descripcion: getApiErrorMessage(error) };
+  return { titulo, descripcion: <TranslatedError error={{ api: error }} /> };
 }
 
 function describirErrorRetiro(error: unknown): MensajeCarrito {
@@ -60,7 +69,7 @@ function describirErrorRetiro(error: unknown): MensajeCarrito {
     if (error.status === 0) {
       return {
         tono: 'warning',
-        texto: textosCarrito.retiroRed,
+        texto: 'retiroRed',
         comprobar: true,
       };
     }
@@ -68,7 +77,7 @@ function describirErrorRetiro(error: unknown): MensajeCarrito {
     if (error.status === 403) {
       return {
         tono: 'warning',
-        texto: textosCarrito.retiroSinAcceso,
+        texto: 'retiroSinAcceso',
         comprobar: true,
       };
     }
@@ -76,7 +85,7 @@ function describirErrorRetiro(error: unknown): MensajeCarrito {
     if (error.status === 409) {
       return {
         tono: 'warning',
-        texto: textosCarrito.retiroCarritoVencido,
+        texto: 'retiroCarritoVencido',
       };
     }
 
@@ -84,18 +93,18 @@ function describirErrorRetiro(error: unknown): MensajeCarrito {
       return codigoErrorCarrito(error) === 'CART_ITEM_NOT_FOUND'
         ? {
             tono: 'info',
-            texto: textosCarrito.retiroArticuloAusente,
+            texto: 'retiroArticuloAusente',
           }
         : {
             tono: 'warning',
-            texto: textosCarrito.retiroCarritoVencido,
+            texto: 'retiroCarritoVencido',
           };
     }
 
     if (error.status >= 500) {
       return {
         tono: 'warning',
-        texto: textosCarrito.retiroError,
+        texto: 'retiroError',
         comprobar: true,
       };
     }
@@ -103,12 +112,18 @@ function describirErrorRetiro(error: unknown): MensajeCarrito {
 
   return {
     tono: 'warning',
-    texto: textosCarrito.retiroError,
+    texto: 'retiroError',
     comprobar: true,
   };
 }
 
 const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
+  const textosCarrito = usePublicTexts('carrito');
+  const { p, locale } = usePublicInterface();
+  const retiringRef = useRef(false);
+  const queryClient = useQueryClient();
+  const [knownPaymentId, setKnownPaymentId] = useState<number | null>(null);
+  const [uncertainPayment, setUncertainPayment] = useState(false);
   const carritoQuery = useCarritoActualQuery(userId);
   const carrito = carritoQuery.data;
   // Una consulta en error no debe seguir presentando el carrito que quedó en
@@ -126,6 +141,7 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
     userId,
   );
   const retirar = useRetirarItemCarrito(userId);
+  const paymentLock = useCartPaymentLock(carritoValido?.id ?? null, userId);
 
   const [itemAConfirmar, setItemAConfirmar] =
     useState<CarritoItem | null>(null);
@@ -147,6 +163,8 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
     ) {
       setMensaje(null);
       setItemAConfirmar(null);
+      setKnownPaymentId(null);
+      setUncertainPayment(false);
     }
 
     if (idActual !== null) {
@@ -164,10 +182,10 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
 
   // Una confirmación abierta no debe sobrevivir a un cambio de carrito.
   useEffect(() => {
-    if (itemAConfirmar && itemAConfirmar.carrito_id !== carritoValido?.id) {
+    if (itemAConfirmar && (itemAConfirmar.carrito_id !== carritoValido?.id || paymentLock.locked)) {
       setItemAConfirmar(null);
     }
-  }, [carritoValido?.id, itemAConfirmar]);
+  }, [carritoValido?.id, itemAConfirmar, paymentLock.locked]);
 
   const items = itemsQuery.data?.items ?? [];
   const datosInvalidos = Boolean(
@@ -187,12 +205,14 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
     ? describirErrorConsulta(
         carritoQuery.error,
         textosCarrito.errorCarritoTitulo,
+        textosCarrito,
       )
     : null;
   const errorArticulos = itemsError
     ? describirErrorConsulta(
         itemsQuery.error,
         textosCarrito.errorArticulosTitulo,
+        textosCarrito,
       )
     : null;
 
@@ -203,7 +223,17 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
     }
   };
 
+  const checkExpiry = async () => {
+    const cart = carritoValido?.id ?? ultimoCarritoId.current;
+    if (cart === null) return;
+    const verification = await verifyCartPayment(queryClient, userId, cart, paymentLock.attempt.data?.pago_id ?? knownPaymentId);
+    setKnownPaymentId(verification.paymentId);
+    setUncertainPayment(verification.uncertain);
+    consultarEstado();
+  };
+
   const abrirConfirmacion = (item: CarritoItem) => {
+    if (paymentLock.locked) return;
     setMensaje(null);
     setItemAConfirmar(item);
   };
@@ -216,6 +246,8 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
 
   const confirmarRetiro = () => {
     if (
+      paymentLock.locked ||
+      retiringRef.current ||
       !itemAConfirmar ||
       !carritoValido ||
       retirar.isPending ||
@@ -231,17 +263,20 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
       return;
     }
 
+    if (carritoValido.expira_en && new Date(carritoValido.expira_en).getTime() <= Date.now()) { consultarEstado(); return; }
+    retiringRef.current = true;
     const carritoId = carritoValido.id;
     const itemId = itemAConfirmar.id;
 
     retirar.mutate(
       { carritoId, itemId },
       {
+        onSettled: () => { retiringRef.current = false; },
         onSuccess: () => {
           setItemAConfirmar(null);
           setMensaje({
             tono: 'success',
-            texto: textosCarrito.retiroExito,
+            texto: 'retiroExito',
           });
         },
         onError: (error) => {
@@ -257,6 +292,7 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
       aria-labelledby="titulo-carrito"
       className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8"
     >
+      <PurchaseSteps current={0} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <p className="eyebrow">{textosCarrito.subtitulo}</p>
@@ -278,7 +314,7 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link
-            to={RESERVAS_ROUTES.NUEVA}
+            to="/habitaciones"
             className={buttonStyles({ className: 'w-full sm:w-auto' })}
           >
             <Plus className="size-4" aria-hidden="true" />
@@ -299,7 +335,7 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
 
       {mensaje && (
         <div className="flex flex-col items-start gap-3">
-          <Alert tone={mensaje.tono}>{mensaje.texto}</Alert>
+          <Alert tone={mensaje.tono}>{textosCarrito[mensaje.texto]}</Alert>
           <div className="flex flex-wrap gap-2">
             {mensaje.comprobar && (
               <Button
@@ -324,13 +360,16 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
         </div>
       )}
 
+      {carritoValido && <CartExpiry expiresAt={carritoValido.expira_en} onCheck={() => { void checkExpiry(); }} />}
+      {paymentLock.locked && carritoValido && <Alert tone="info"><p>{p('purchaseLocked')}</p><Link to="/checkout" className="inline-flex min-h-11 items-center font-semibold underline">{p('purchaseRecover')}</Link></Alert>}
       {carritoQuery.isPending && (
         <div className="flex justify-center py-12">
           <LoadingNotice label={textosCarrito.cargandoCarrito} />
         </div>
       )}
 
-      {sinCarritoActivo && (
+      {sinCarritoActivo && (knownPaymentId !== null || uncertainPayment) && <Alert tone="info"><p>{p('purchaseExpiredPayment')}</p><Button variant="ghost" onClick={() => { void checkExpiry(); }}>{textosCarrito.comprobarEstado}</Button>{knownPaymentId !== null && <Link className="inline-flex min-h-11 items-center underline" to={`/pagos/${knownPaymentId}/resultado`}>{p('purchaseRecover')}</Link>}</Alert>}
+      {sinCarritoActivo && knownPaymentId === null && !uncertainPayment && (
         <CarritoVacio
           titulo={textosCarrito.sinCarritoTitulo}
           descripcion={textosCarrito.sinCarritoDescripcion}
@@ -411,17 +450,17 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
               <p className="text-xs text-neutro-500">
                 {textosCarrito.articulos(items.length)}
               </p>
-              <ul className="flex flex-col gap-4">
-                {items.map((item) => (
+              {groupItems(items).map((group) => <section key={group.type} className="flex flex-col gap-3"><h2 className="font-serif text-xl">{itemTypeLabel(group.type, locale)}</h2><ul className="flex flex-col gap-4">
+                {group.entries.map((item) => (
                   <li key={item.id}>
                     <CarritoItemCard
                       item={item}
                       onRetirar={abrirConfirmacion}
-                      retiroBloqueado={retirar.isPending}
+                      retiroBloqueado={retirar.isPending || paymentLock.locked}
                     />
                   </li>
                 ))}
-              </ul>
+              </ul></section>)}
             </div>
 
             <ResumenCarrito

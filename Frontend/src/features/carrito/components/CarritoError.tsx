@@ -5,11 +5,11 @@ import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Feedback';
 import { RESERVAS_ROUTES } from '@/features/reservas';
-import { textosCarrito } from '../textos';
+import { usePublicTexts } from '@/i18n/public';
 
 interface CarritoErrorProps {
   titulo: string;
-  descripcion: string;
+  descripcion: React.ReactNode;
   onReintentar?: () => void;
   reintentando?: boolean;
 }
@@ -20,7 +20,7 @@ export const CarritoError: React.FC<CarritoErrorProps> = ({
   descripcion,
   onReintentar,
   reintentando = false,
-}) => (
+}) => { const textosCarrito = usePublicTexts('carrito'); return (
   <Card className="flex flex-col items-start gap-4">
     <Alert tone="error" title={titulo}>
       <p>{descripcion}</p>
@@ -50,4 +50,4 @@ export const CarritoError: React.FC<CarritoErrorProps> = ({
       </Link>
     </div>
   </Card>
-);
+); };
