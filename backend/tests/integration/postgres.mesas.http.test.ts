@@ -63,6 +63,13 @@ describe("HTTP mesas against isolated PostgreSQL (hotel_test_db)", () => {
       activa: true,
     });
     testSucursalId = sucursal.id;
+
+    // El gerente opera en esta sede (ficha de empleado con sede principal).
+    await database.Empleado.create({
+      usuario_id: gerenteRestauranteUserId,
+      sucursal_id: testSucursalId,
+      area: "QA",
+    });
   });
 
   afterAll(async () => {
@@ -71,6 +78,9 @@ describe("HTTP mesas against isolated PostgreSQL (hotel_test_db)", () => {
     }
     if (mesaSinEstadoId) {
       await database.Mesa.destroy({ where: { id: mesaSinEstadoId }, force: true });
+    }
+    if (gerenteRestauranteUserId) {
+      await database.Empleado.destroy({ where: { usuario_id: gerenteRestauranteUserId }, force: true });
     }
     if (testSucursalId) {
       await database.Sucursal.destroy({ where: { id: testSucursalId }, force: true });

@@ -1,15 +1,18 @@
 import { DateField } from '@/components/ui/DateField';
 import { TimeField } from '@/components/ui/TimeField';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import { ServiceReservationPanel, ServiceAuthNotice } from '@/components/shared/ServiceReservationPanel';
+import { useServiceDraft } from '@/features/auth/serviceDraft';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import { TranslatedError, type LocalizedError } from '@/i18n/public';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle, Info } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
+import { useAccessCopy } from '../accessCopy';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useCreateReservaAmenidadMutation } from '../hooks/useReservasAmenidad';
 import { AMENIDADES_ROUTES } from '../constants/routes';
@@ -29,6 +32,7 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
 }) => {
   const textosAmenidades = usePublicTexts('amenidades');
   const { p , date: calendarDate } = usePublicInterface();
+  const access = useAccessCopy();
   const navigate = useNavigate();
   const siteBlocked = useDraftSiteGuard(amenidad?.id, amenidad?.sucursal_id);
   const { status, user } = useAuth();
@@ -37,17 +41,20 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
   const isCliente = status === 'authenticated' && user?.rol === 'cliente';
 
   // Obtener fecha de hoy en formato local YYYY-MM-DD
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = getTodayInGuatemala();
+  const draft = useServiceDraft('amenidades', amenidad?.id ?? 0, { fecha: hoy, horaInicio: '', horaFin: '', mobiliario: '' });
 
-  const [fecha, setFecha] = useState(hoy);
-  const [horaInicio, setHoraInicio] = useState('10:00');
-  const [horaFin, setHoraFin] = useState('12:00');
-  const [mobiliario, setMobiliario] = useState('');
+  const [fecha, setFecha] = useState(draft.initial.fecha);
+  const [horaInicio, setHoraInicio] = useState(draft.initial.horaInicio);
+  const [horaFin, setHoraFin] = useState(draft.initial.horaFin);
+  const [mobiliario, setMobiliario] = useState(draft.initial.mobiliario);
   const [errorLocal, setErrorLocal] = useState<LocalizedError | null>(null);
   const [falloIncierto, setFalloIncierto] = useState(false);
   const [reservaCreada, setReservaCreada] = useState<ReservaAmenidad | null>(null);
 
   const createMutation = useCreateReservaAmenidadMutation();
+
+  useEffect(() => { if (amenidad && !reservaCreada) draft.save({ fecha, horaInicio, horaFin, mobiliario }); }, [amenidad?.id, fecha, horaInicio, horaFin, mobiliario, reservaCreada, draft.save]);
 
   if (!isOpen || !amenidad) return null;
 
@@ -85,12 +92,15 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
         franja_horaria,
         mobiliario: mobiliario.trim() ? mobiliario.trim() : null,
       });
+      draft.clear();
       setReservaCreada(created);
     } catch (err: any) {
       const apiCode = err?.code || err?.response?.data?.code;
       const apiMsg = err?.message || err?.response?.data?.message;
 
-      if (apiCode === 'AMENITY_CAPACITY_FULL') {
+      if (apiCode === 'AMENITY_NOT_RESERVABLE') {
+        setErrorLocal({ server: access('notReservable') });
+      } else if (apiCode === 'AMENITY_CAPACITY_FULL') {
         setErrorLocal({ section: 'amenidades', key: 'cliente.capacidadExcedida' });
       } else if (apiCode === 'AMENITY_RESERVATION_ALREADY_EXISTS') {
         setErrorLocal({ section: 'amenidades', key: 'cliente.reservaDuplicada' });
@@ -117,7 +127,7 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
   };
 
   return (
-    <Modal open onClose={handleCerrar} closeLabel={t.cerrar} title={reservaCreada ? t.reservaExitosaTitulo : t.reservarModalTitulo} busy={createMutation.isPending} busyLabel={p('processingRequest')}>
+    <ServiceReservationPanel name={amenidad.nombre} siteId={amenidad.sucursal_id} siteName={amenidad.Sucursal?.nombre} media={{ src: amenidad.imagen_url, alt: amenidad.nombre, credits: amenidad.imagen_creditos }} open onClose={handleCerrar} closeLabel={t.cerrar} title={reservaCreada ? t.reservaExitosaTitulo : t.reservarModalTitulo} busy={createMutation.isPending} busyLabel={p('processingRequest')}>
         {reservaCreada ? (
           <div className="flex flex-col items-center gap-4 text-center py-4">
             <div className="flex size-14 items-center justify-center rounded-full bg-verde-100 text-verde-700">
@@ -183,26 +193,11 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
                 <span lang="es">{amenidad.nombre}</span> • {p('maxCapacity')} {amenidad.aforo_maximo} {' '}{p('people')}{' '}</p>
             </div>
 
-            {!isCliente && (
-              <div className="mb-6 rounded-lg border border-azul-200 bg-azul-50 p-4 text-sm text-azul-900">
-                <div className="flex gap-2">
-                  <Info className="size-5 shrink-0 text-azul-600" aria-hidden="true" />
-                  <div className="flex flex-col gap-2">
-                    <p>{t.debeIniciarSesion}</p>
-                    <Link
-                      to="/login"
-                      className={buttonStyles({
-                        variant: 'primary',
-                        size: 'sm',
-                        className: 'w-fit',
-                      })}
-                    >
-                      {t.iniciarSesionParaReservar}
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
+            {amenidad.reservable === false ? <div className="space-y-4">
+              <Alert tone="info" title={access('notReservableTitle')}><p>{access('notReservable')}</p></Alert>
+              <div className="flex justify-end"><Button type="button" variant="secondary" onClick={handleCerrar}>{access('close')}</Button></div>
+            </div> : <>
+            <ServiceAuthNotice kind="amenidades" resourceId={amenidad.id} />
 
             {errorLocal && (
               <div className="mb-4">
@@ -224,12 +219,12 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
 
             <form onSubmit={(event) => { if (siteBlocked || createMutation.isPending) { event.preventDefault(); return; } void handleSubmit(event); }} className="flex flex-col gap-4">
               <DraftSiteNotice blocked={siteBlocked} /><fieldset disabled={siteBlocked} className="contents">
-              <DateField id="reserva-fecha" label={t.fechaLabel} name="fecha" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={!isCliente || createMutation.isPending} />
+              <DateField id="reserva-fecha" label={t.fechaLabel} name="fecha" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={createMutation.isPending} />
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TimeField id="reserva-hora-inicio" label={t.horaInicioLabel} name="horaInicio" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} required disabled={!isCliente || createMutation.isPending} />
-                <TimeField id="reserva-hora-fin" label={t.horaFinLabel} name="horaFin" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} required disabled={!isCliente || createMutation.isPending} />
+                <TimeField id="reserva-hora-inicio" label={t.horaInicioLabel} name="horaInicio" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} required disabled={createMutation.isPending} />
+                <TimeField id="reserva-hora-fin" label={t.horaFinLabel} name="horaFin" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} required disabled={createMutation.isPending} />
               </div>
-              <Input label={t.mobiliarioLabel} id="reserva-mobiliario" name="mobiliario" maxLength={30} placeholder={t.mobiliarioPlaceholder} value={mobiliario} onChange={(e) => setMobiliario(e.target.value)} disabled={!isCliente || createMutation.isPending} />
+              <Input label={t.mobiliarioLabel} id="reserva-mobiliario" name="mobiliario" maxLength={30} placeholder={t.mobiliarioPlaceholder} value={mobiliario} onChange={(e) => setMobiliario(e.target.value)} disabled={createMutation.isPending} />
 
               <div className="mt-4 flex items-center justify-end gap-3 pt-2">
                 <Button
@@ -250,8 +245,9 @@ export const ReservaAmenidadFormModal: React.FC<ReservaAmenidadFormModalProps> =
                 </Button>
               </div>
             </fieldset></form>
+            </>}
           </div>
         )}
-    </Modal>
+    </ServiceReservationPanel>
   );
 };

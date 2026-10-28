@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
       Empleado.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
       Empleado.belongsTo(models.Sucursal, { foreignKey: "sucursal_id" });
       Empleado.hasMany(models.Turno, { foreignKey: "empleado_id" });
+      Empleado.hasMany(models.EmpleadoSede, { foreignKey: "empleado_id", as: "sedesAdicionales" });
     }
   }
   Empleado.init(

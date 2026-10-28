@@ -1,17 +1,25 @@
 import { AppError } from "../../utils/AppError";
+import { assertSucursalExists } from "./servicioSpa.service";
 const db = require("../../models");
 
 const {
   Terapeuta,
   CitaBienestar,
+  Sucursal,
 } = db;
 
-export const getAll = async () => {
-  return await Terapeuta.findAll({ order: [["nombre", "ASC"]] });
+const sucursalInclude = { model: Sucursal, attributes: ["id", "nombre"] };
+
+export const getAll = async (filters: { sucursalId?: number } = {}, scopeWhere: Record<string | symbol, unknown> = {}) => {
+  return await Terapeuta.findAll({
+    where: { ...scopeWhere, ...(filters.sucursalId !== undefined ? { sucursal_id: filters.sucursalId } : {}) },
+    include: [sucursalInclude],
+    order: [["nombre", "ASC"]],
+  });
 };
 
 export const getById = async (id: number) => {
-  const terapeuta = await Terapeuta.findByPk(id);
+  const terapeuta = await Terapeuta.findByPk(id, { include: [sucursalInclude] });
   if (!terapeuta) {
     throw new AppError(404, "THERAPIST_NOT_FOUND", "El terapeuta solicitado no existe");
   }
@@ -21,19 +29,23 @@ export const getById = async (id: number) => {
 export const create = async (
   data: any
 ) => {
-  return Terapeuta.create({
+  await assertSucursalExists(data.sucursal_id);
+  const terapeuta = await Terapeuta.create({
     nombre: data.nombre,
     activo:
       data.activo !== undefined
         ? data.activo
         : true,
+    sucursal_id: data.sucursal_id ?? null,
   });
+  return getById(terapeuta.id);
 };
 
 export const update = async (id: number, data: any) => {
   const terapeuta = await getById(id);
+  await assertSucursalExists(data.sucursal_id);
   await terapeuta.update(data);
-  return terapeuta;
+  return getById(id);
 };
 
 export const remove = async (

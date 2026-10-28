@@ -14,7 +14,9 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useMiCitaSpaQuery } from '../hooks/useBienestar';
 import { BIENESTAR_ROUTES } from '../constants/routes';
-import { textosBienestar, formatearGTQ } from '../textos';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BotonAnadirAlCarrito } from '@/features/carrito/components/BotonAnadirAlCarrito';
 import { ApiError } from '@/api/client/http';
 
@@ -23,6 +25,8 @@ interface CitaBienestarDetalleCardProps {
 }
 
 export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> = ({ id }) => {
+  const textosBienestar = usePublicTexts('bienestar');
+  const { p, date } = usePublicInterface();
   const { user } = useAuth();
   const citaQuery = useMiCitaSpaQuery(id, user?.id);
 
@@ -34,9 +38,9 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
       <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
         <Card className="flex flex-col items-center justify-center p-12 text-center border-rojo-200 bg-rojo-50">
           <AlertCircle className="size-12 text-rojo-500 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">Identificador no válido</h2>
+          <h2 className="text-lg font-semibold text-neutro-900 mb-2">{p('wellnessInvalidId')}</h2>
           <p className="text-sm text-neutro-600 max-w-md mb-6">
-            El número de cita solicitado no es válido en el sistema.
+            {p('wellnessInvalidIdHelp')}
           </p>
           <Link
             to={BIENESTAR_ROUTES.MIS_RESERVAS}
@@ -83,17 +87,17 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
           )}
           <h2 className="text-lg font-semibold text-neutro-900 mb-2">
             {isForbidden
-              ? 'Acceso denegado'
+              ? p('wellnessForbidden')
               : isNotFound
               ? textosBienestar.citaNoEncontrada
               : textosBienestar.errorCargarDetalle}
           </h2>
           <p className="text-sm text-neutro-600 max-w-md mb-6">
             {isForbidden
-              ? 'No tiene permisos para acceder a esta cita de spa porque pertenece a otro huésped.'
+              ? p('wellnessForbiddenHelp')
               : isNotFound
               ? textosBienestar.citaNoEncontradaDesc
-              : 'Ocurrió un error al cargar los datos de la cita. Por favor verifique su conexión e intente nuevamente.'}
+              : p('wellnessDetailError')}
           </p>
           <div className="flex gap-4">
             {!isForbidden && !isNotFound && (
@@ -116,13 +120,6 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
 
   if (!cita) return null;
 
-  const estadoClases =
-    cita.estado === 'confirmada'
-      ? 'bg-selva-100 text-selva-800'
-      : cita.estado === 'cancelada'
-      ? 'bg-rojo-100 text-rojo-800'
-      : 'bg-neutro-100 text-neutro-800';
-
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
       {/* Enlace de retorno */}
@@ -143,14 +140,10 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
               {textosBienestar.citaNumero(cita.id ?? '')}
             </h1>
             <p className="text-sm text-neutro-600 mt-0.5">
-              {cita.ServicioBienestar?.nombre ?? 'Tratamiento de spa'}
+              <span lang="es">{cita.ServicioBienestar?.nombre ?? textosBienestar.noDisponible}</span>
             </p>
           </div>
-          <span
-            className={`self-start sm:self-center inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase ${estadoClases}`}
-          >
-            {cita.estado}
-          </span>
+          <span><span className="sr-only">{p('purchaseOperational')}: </span><StatusBadge domain="reservation" value={cita.estado} /></span>
         </div>
 
         {/* Datos de la cita */}
@@ -161,8 +154,8 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
                 {textosBienestar.servicioContratado}
               </p>
               <div className="flex items-center gap-2 text-neutro-900 font-medium">
-                <Sparkles className="size-4 text-selva-600" />
-                <span>{cita.ServicioBienestar?.nombre ?? textosBienestar.noDisponible}</span>
+                <Sparkles className="size-4 text-selva-600" aria-hidden="true" />
+                <span lang="es">{cita.ServicioBienestar?.nombre ?? textosBienestar.noDisponible}</span>
               </div>
             </div>
 
@@ -184,7 +177,7 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
               </p>
               <div className="flex items-center gap-2 text-neutro-900">
                 <User className="size-4 text-neutro-400" />
-                <span>{cita.Terapeuta?.nombre ?? 'Terapeuta asignado'}</span>
+                <span lang="es">{cita.Terapeuta?.nombre ?? p('assignedTherapist')}</span>
               </div>
             </div>
           </div>
@@ -196,7 +189,7 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
               </p>
               <div className="flex items-center gap-2 text-neutro-900">
                 <Calendar className="size-4 text-neutro-400" />
-                <span>{cita.fecha}</span>
+                <span>{date(cita.fecha)}</span>
               </div>
             </div>
 
@@ -217,7 +210,7 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
                 {textosBienestar.tarifaServicio}
               </p>
               <span className="text-xl font-bold font-serif text-bronce-700">
-                {formatearGTQ(cita.ServicioBienestar?.precio)}
+                <MoneyReference amount={cita.ServicioBienestar?.precio} />
               </span>
             </div>
           </div>
@@ -226,21 +219,23 @@ export const CitaBienestarDetalleCard: React.FC<CitaBienestarDetalleCardProps> =
         {/* Botón de pago / carrito */}
         <div className="border-t border-neutro-200 pt-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
           <p className="text-xs text-neutro-500 max-w-sm">
-            Las citas confirmadas pueden añadirse al carrito para abonarse de forma segura mediante pasarela o métodos autorizados.
+            {p('wellnessFinancialNotice')} {p('wellnessCartRecovery')}
           </p>
 
           <div className="w-full sm:w-auto">
-            {cita.id && (
+            {cita.id && cita.estado && (
               <BotonAnadirAlCarrito
                 reservaId={cita.id}
-                reservaEstado={cita.estado ?? 'confirmada'}
+                reservaEstado={cita.estado}
                 tipo_item="bienestar"
                 variant="primary"
                 size="md"
+                publicInterface
               />
             )}
           </div>
         </div>
+        <p className="text-sm text-neutro-600">{p('wellnessContactConditions')} <Link to="/sedes" className="inline-flex min-h-11 items-center underline">{p('wellnessContact')}</Link></p>
       </Card>
     </section>
   );

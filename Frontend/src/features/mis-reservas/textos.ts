@@ -8,6 +8,7 @@ import type { EstadoReservaHabitacion } from '@/features/reservas';
  */
 export const textosMisReservas = {
   subtitulo: 'HOTEL HUNAHPÚ',
+  tabs: { habitaciones: 'Reservas de Habitación', restaurante: 'Reservas de Mesa', amenidades: 'Pases de Amenidades', actividades: 'Actividades Recreativas', bienestar: 'Bienestar y Spa', eventos: 'Eventos y Salones' },
   titulo: 'Mis reservas',
   descripcion:
     'Consulte el estado y los detalles de sus reservas de habitación.',
@@ -98,3 +99,28 @@ export const textosMisReservas = {
     volver: 'Volver',
   },
 } as const;
+
+
+export const myReservationsEn = {
+  subtitulo: 'HOTEL HUNAHPÚ', titulo: 'My reservations', descripcion: 'View the status and details of your room reservations.',
+  tabs: { habitaciones: 'Room reservations', restaurante: 'Table reservations', amenidades: 'Amenity passes', actividades: 'Recreational activities', bienestar: 'Wellness and spa', eventos: 'Events and venues' },
+  reservar: 'Reserve a room', reservasMostradas: (n: number) => `${n} ${n === 1 ? 'reservation' : 'reservations'}`,
+  cargandoListado: 'Loading your reservations…', errorListadoTitulo: 'Unable to load your reservations',
+  vacioTitulo: 'You have no room reservations yet', vacioDescripcion: 'Your reservations will appear here with their status and amount.',
+  reservaNumero: (id: number | string) => `Reservation #${id}`, verDetalle: 'View details', verDetalleReserva: (id: number | string) => `View reservation ${id} details`,
+  detalleEtiqueta: 'Reservation details', volverListado: 'Back to my reservations', cargandoDetalle: 'Loading reservation details…',
+  errorDetalleTitulo: 'Unable to load the reservation', errorConexionTitulo: 'Unable to connect to the server', errorConexionDescripcion: 'Check your connection and try again.',
+  idInvalidoTitulo: 'Invalid reservation identifier', idInvalidoDescripcion: 'This link does not contain a valid reservation identifier. Choose a reservation from your list.',
+  noEncontradaTitulo: 'Reservation not found', noEncontradaDescripcion: 'This reservation does not exist or is no longer available.',
+  sinAccesoTitulo: 'You cannot access this reservation', sinAccesoDescripcion: 'This reservation belongs to another account. You can only view your own reservations.',
+  estanciaTitulo: 'Stay', campos: { habitacion: 'Room', tipo: 'Room category', sede: 'Location', entrada: 'Arrival', salida: 'Departure', noches: 'Nights', huespedes: 'Guests', estado: 'Status', importe: 'Reservation amount' },
+  noches: (n: number) => `${n} ${n === 1 ? 'night' : 'nights'}`, huespedes: (n: number) => `${n} ${n === 1 ? 'guest' : 'guests'}`,
+  habitacionNumero: (n: string) => `Room ${n}`, sinHabitacion: 'Room unavailable', sinTipo: 'Room category unavailable', sinSede: 'Location unavailable',
+  sedePorIdentificador: (id: number) => `Location #${id}`, noDisponible: 'Unavailable', avisoSedes: 'Location names could not be loaded; their identifiers are shown.',
+  importeNota: 'Amount recorded by the hotel for this reservation. Payment information is shown separately.',
+  estados: { pendiente: 'Pending', confirmada: 'Confirmed', cancelada: 'Cancelled', finalizada: 'Finished', expirada: 'Expired' },
+  acceso: { verificandoSesion: 'Checking your session…', errorSesionTitulo: 'Unable to verify your session', errorSesionDescripcion: 'Check your connection and try again.',
+    sinSesionTitulo: 'Sign in to view your reservations', sinSesionDescripcion: 'Sign in with your customer account to view your room reservations.', iniciarSesion: 'Sign in',
+    rolTitulo: 'This section is for customers', rolDescripcion: 'Your account does not have the customer role required to view personal reservations here.',
+    irMiEspacio: 'Go to my area', irInicio: 'Go to home', reintentar: 'Retry', volver: 'Back' },
+};

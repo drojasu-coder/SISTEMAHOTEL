@@ -6,7 +6,13 @@ import { Navbar } from '@/components/shared/Navbar';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { tokenStorage } from '@/api/session';
-import { meResponse, renderWithProviders } from '@/test/renderWithProviders';
+import { meResponse, renderWithProviders as baseRender } from '@/test/renderWithProviders';
+import { installAdminReadMocks } from '@/test/adminReads';
+
+const renderWithProviders: typeof baseRender = (ui, options) => {
+  installAdminReadMocks();
+  return baseRender(ui, options);
+};
 
 describe('Navegación pública', () => {
   beforeEach(() => tokenStorage.clear());
@@ -81,7 +87,8 @@ describe('Panel administrativo responsivo y accesible', () => {
     renderPanel();
     expect(await screen.findByText('Administrador')).toBeInTheDocument();
     expect(screen.getAllByText(/Ana Gómez/).length).toBeGreaterThan(0);
-    expect(document.body).not.toHaveTextContent(/Demo|Todas las sedes|Sede activa/i);
+    expect(document.body).not.toHaveTextContent(/Demo|Hunapú Antigua/i);
+    expect(screen.getByRole('combobox', { name: 'Filtrar por sede' })).toHaveValue('all');
   });
 
   it('tiene enlace para saltar al contenido y un único contenedor principal', async () => {

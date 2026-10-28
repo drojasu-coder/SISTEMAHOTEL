@@ -88,6 +88,7 @@ const responderBase = (
     saldo?: number;
   } = {},
 ) => {
+  if (call.method === 'POST' && call.url.endsWith('/pagos/88/verificar')) return respuestaPago({ estado: 'procesando' });
   if (call.url.endsWith('/auth/me')) return respuestaMe(3);
   if (call.url.endsWith(CARRITO_ACTUAL) && call.method === 'GET') {
     return respuestaCarrito(crearCarrito());
@@ -231,7 +232,6 @@ describe('Checkout (CheckoutPage)', () => {
     let intentoActivo: IntentoActivoData | null = null;
 
     stripeMocks.confirmPayment.mockImplementation(async () => {
-      pagoAprobado = true;
       intentoActivo = crearIntentoActivo({
         estado_local: 'aprobado',
         estado_intento: 'completado_en_pasarela',
@@ -242,6 +242,7 @@ describe('Checkout (CheckoutPage)', () => {
     });
 
     const { calls } = instalarFetch((call) => {
+      if (call.method === 'POST' && call.url.endsWith('/pagos/88/verificar')) { pagoAprobado = true; return respuestaPago({ estado: 'aprobado' }); }
       if (call.method === 'POST' && call.url.endsWith('/pagos')) {
         intentoActivo = crearIntentoActivo();
         return respuestaCrearPago();
@@ -295,6 +296,8 @@ describe('Checkout (CheckoutPage)', () => {
 
     // El resultado del SDK no se trata como aprobación: fue necesario que
     // GET /pagos/88 devolviera estado aprobado.
+    expect(llamadas(calls, 'POST', '/pagos/88/verificar')).toHaveLength(1);
+    expect(JSON.parse(llamadas(calls, 'POST', '/pagos/88/verificar')[0].body!)).toEqual({});
     expect(postsPago(calls)).toHaveLength(1);
     expect(getStoredCheckoutAttempt(3, 10)).toBeNull();
   });

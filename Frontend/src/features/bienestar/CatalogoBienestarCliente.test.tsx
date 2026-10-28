@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   renderWithProviders,
@@ -41,6 +41,7 @@ const mockTerapeutas: Terapeuta[] = [
 
 describe('Catálogo de Bienestar y Spa (CatalogoBienestarPage)', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     tokenStorage.clear();
     vi.restoreAllMocks();
   });
@@ -105,9 +106,9 @@ describe('Catálogo de Bienestar y Spa (CatalogoBienestarPage)', () => {
 
     expect(await screen.findByText('Masaje Relajante con Aromaterapia')).toBeInTheDocument();
     expect(screen.getByText('Tratamiento Facial Rejuvenecedor')).toBeInTheDocument();
-    expect(screen.getByText(/Q\s*350\.00.*US\$/)).toBeInTheDocument();
-    expect(screen.getByText(/Q\s*280\.00.*US\$/)).toBeInTheDocument();
-    expect(screen.getByText(/60 minutos de sesión/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*350\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*280\.00/)).toBeInTheDocument();
+    expect(within(screen.getByText('Masaje Relajante con Aromaterapia').closest('article')!).getByText(/60 minutos de sesión/)).toBeInTheDocument();
   });
 
   it('permite filtrar servicios mediante la barra de búsqueda', async () => {
@@ -132,12 +133,12 @@ describe('Catálogo de Bienestar y Spa (CatalogoBienestarPage)', () => {
 
     expect(await screen.findByText('Masaje Relajante con Aromaterapia')).toBeInTheDocument();
 
-    const reservarBtns = screen.getAllByRole('button', { name: /Reservar cita/i });
+    const reservarBtns = screen.getAllByRole('button', { name: /Ver y reservar/i });
     await user.click(reservarBtns[0]);
 
     // Modal abierto
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Reservar Cita de Spa')).toBeInTheDocument();
+    expect(screen.getByText('Reservar cita de Bienestar')).toBeInTheDocument();
 
     // Solo muestra terapeutas activos
     const terapeutaSelect = screen.getByLabelText(/Seleccionar terapeuta/i);
@@ -146,6 +147,10 @@ describe('Catálogo de Bienestar y Spa (CatalogoBienestarPage)', () => {
 
     // Confirmar reserva
     const confirmarBtn = screen.getByRole('button', { name: /Confirmar reserva de cita/i });
+    // Fecha futura fija: con la fecha de hoy la prueba dependía de la hora a la que se ejecuta
+    // (el formulario rechaza horas ya pasadas en Guatemala).
+    fireEvent.change(screen.getByLabelText(/^Fecha/i), { target: { value: '2030-06-20' } });
+    await user.type(screen.getByLabelText(/Hora de inicio/i), '10:00');
     await user.click(confirmarBtn);
 
     // Pantalla de éxito
@@ -170,13 +175,17 @@ describe('Catálogo de Bienestar y Spa (CatalogoBienestarPage)', () => {
 
     expect(await screen.findByText('Masaje Relajante con Aromaterapia')).toBeInTheDocument();
 
-    const reservarBtns = screen.getAllByRole('button', { name: /Reservar cita/i });
+    const reservarBtns = screen.getAllByRole('button', { name: /Ver y reservar/i });
     await user.click(reservarBtns[0]);
 
     const terapeutaSelect = await screen.findByLabelText(/Seleccionar terapeuta/i);
     await user.selectOptions(terapeutaSelect, '10');
 
     const confirmarBtn = screen.getByRole('button', { name: /Confirmar reserva de cita/i });
+    // Fecha futura fija: con la fecha de hoy la prueba dependía de la hora a la que se ejecuta
+    // (el formulario rechaza horas ya pasadas en Guatemala).
+    fireEvent.change(screen.getByLabelText(/^Fecha/i), { target: { value: '2030-06-20' } });
+    await user.type(screen.getByLabelText(/Hora de inicio/i), '10:00');
     await user.click(confirmarBtn);
 
     expect(

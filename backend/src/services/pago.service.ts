@@ -2,6 +2,7 @@ import { AppError } from "../utils/AppError";
 import { stripeService, toStripeAmount } from "./stripe.service";
 import Stripe from "stripe";
 import { Op } from "sequelize";
+import { env } from "../config/env";
 import {
   PAYMENT_CURRENCY,
   PAYMENT_METHODS,
@@ -1997,7 +1998,14 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
   return result;
 };
 
-export const processStripeWebhook = async (object: any, eventType: string) =>
+interface VerifiedPaymentContext {
+  requester: RequesterContext;
+  paymentId: number;
+  cartId: number | null;
+  reservationId: number | null;
+}
+
+export const processStripeWebhook = async (object: any, eventType: string, verification?: VerifiedPaymentContext) =>
   sequelize.transaction(async (transaction: any) => {
     const isRefundEvent = eventType.includes("refund");
     const intentId = isRefundEvent ? (typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id) : object.id;
@@ -2053,6 +2061,17 @@ export const processStripeWebhook = async (object: any, eventType: string) =>
       });
     }
     if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
+
+    // La verificación explícita vuelve a comprobar identidad/propiedad bajo
+    // los mismos locks que el webhook; ninguna respuesta remota sustituye el JWT.
+    if (verification) {
+      if (Number(payment.id) !== verification.paymentId ||
+          (payment.carrito_id ?? null) !== verification.cartId ||
+          (payment.reserva_habitacion_id ?? null) !== verification.reservationId) {
+        throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
+      }
+      await assertPaymentOwnership(payment, verification.requester, transaction);
+    }
 
     if (isRefundEvent) {
       const refundObj = object as Stripe.Refund;
@@ -2270,6 +2289,40 @@ export const getPagoById = async (id: number, requester: RequesterContext) => {
   if (!pago) throw new AppError(404, "PAYMENT_NOT_FOUND", "El pago no existe");
   await assertPaymentOwnership(pago, requester);
   return pago;
+};
+
+/** Consulta Stripe desde el servidor y aplica únicamente resultados terminales
+ * verificados. No crea intentos, cargos ni reembolsos; es seguro repetirla. */
+export const verifyPago = async (id: number, requester: RequesterContext) => {
+  const payment = await getPagoById(id, requester);
+  if (payment.metodo !== "tarjeta" || payment.pasarela !== "stripe" || !payment.id_transaccion_externo) {
+    throw new AppError(422, "PAYMENT_NOT_VERIFIABLE", "El pago no tiene un intento de tarjeta que se pueda verificar");
+  }
+  if (["aprobado", "reembolsado", "reembolsado_parcial"].includes(payment.estado)) return payment;
+
+  let intent: Awaited<ReturnType<typeof stripeService.retrievePaymentIntent>>;
+  try {
+    intent = await stripeService.retrievePaymentIntent(payment.id_transaccion_externo);
+  } catch {
+    throw new AppError(502, "STRIPE_RETRIEVAL_FAILED", "No fue posible consultar el estado del pago en Stripe");
+  }
+  if (intent.id !== payment.id_transaccion_externo ||
+      intent.amount !== toStripeAmount(payment.monto, payment.moneda) ||
+      intent.currency?.toUpperCase() !== payment.moneda ||
+      intent.metadata?.pago_id !== String(payment.id) ||
+      (intent.metadata?.carrito_id ?? null) !== (payment.carrito_id ? String(payment.carrito_id) : null) ||
+      (intent.metadata?.reserva_habitacion_id ?? null) !== (payment.reserva_habitacion_id ? String(payment.reserva_habitacion_id) : null) ||
+      (env.NODE_ENV !== "production" && intent.livemode) ||
+      (intent.status === "succeeded" && intent.amount_received !== intent.amount)) {
+    throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
+  }
+  if (intent.status === "succeeded" || intent.status === "canceled") {
+    return processStripeWebhook(intent, intent.status === "succeeded" ? "payment_intent.succeeded" : "payment_intent.canceled", {
+      requester, paymentId: Number(payment.id), cartId: payment.carrito_id ?? null,
+      reservationId: payment.reserva_habitacion_id ?? null,
+    });
+  }
+  return getPagoById(id, requester);
 };
 
 export const getPagos = async (

@@ -314,7 +314,7 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link
-            to="/habitaciones"
+            to={RESERVAS_ROUTES.NUEVA}
             className={buttonStyles({ className: 'w-full sm:w-auto' })}
           >
             <Plus className="size-4" aria-hidden="true" />

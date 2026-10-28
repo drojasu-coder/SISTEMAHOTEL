@@ -1,3 +1,4 @@
+import { textosMisReservas } from '@/features/mis-reservas/textos';
 import { textosCarrito } from '@/features/carrito/textos';
 import { textosCheckout, textosPagos } from '@/features/pagos/textos';
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -10,9 +11,9 @@ import { textosEventos, etiquetasTipoEvento } from '@/features/eventos/textos';
 import { textosCrearReserva } from '@/features/crear-reserva/textos';
 import { publicEn } from './public.en';
 import { extraEs, extraEn, type ExtraKey } from './publicExtra';
-import { formatGTQ } from '@/lib/money';
+import { formatDisplayMoney } from '@/lib/money';
 import { formatCalendarDate } from '@/lib/dates';
-export const publicEs = { carrito: textosCarrito, checkout: textosCheckout, pagos: textosPagos, estados: es.estados, auth: es.auth, comunes: es.comunes, restaurante: es.restaurante, amenidades: es.amenidades, actividades: textosActividades, bienestar: textosBienestar, eventos: textosEventos, tiposEvento: etiquetasTipoEvento, crearReserva: textosCrearReserva };
+export const publicEs = { misReservas: textosMisReservas, carrito: textosCarrito, checkout: textosCheckout, pagos: textosPagos, estados: es.estados, auth: es.auth, comunes: es.comunes, restaurante: es.restaurante, amenidades: es.amenidades, actividades: textosActividades, bienestar: textosBienestar, eventos: textosEventos, tiposEvento: etiquetasTipoEvento, crearReserva: textosCrearReserva };
 type Widen<T> = T extends (...args: infer A) => unknown ? (...args: A) => string : T extends string ? string : { [K in keyof T]: Widen<T[K]> };
 export type PublicSection = keyof typeof publicEs;
 /** Fusiona por clave, con fallback español. No examina ni sustituye frases del DOM. */
@@ -28,14 +29,14 @@ export function usePublicTexts<K extends PublicSection>(section: K): Widen<(type
   return useMemo(() => mergePublic(publicEs[section], locale === 'en' ? publicEn[section] : undefined), [locale, section]);
 }
 export function usePublicInterface() {
-  const { locale } = useLocale();
+  const { locale, currency } = useLocale();
   const p = (key: ExtraKey, params: Record<string, string | number> = {}) => {
     let text: string = (locale === 'en' && extraEn[key]?.trim()) || extraEs[key];
     for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value));
     return text;
   };
   const states: Record<string, string> = locale === 'en' ? publicEn.estados : es.estados;
-  return { locale, p, stateLabel: (value: string) => states[value] ?? value, money: (value: unknown) => formatGTQ(value) ?? p('amountUnavailable'), date: (value: unknown) => formatCalendarDate(value, locale) ?? p('dateUnavailable') };
+  return { locale, p, stateLabel: (value: string) => states[value] ?? value, money: (value: unknown) => formatDisplayMoney(value, currency) ?? p('amountUnavailable'), date: (value: unknown) => formatCalendarDate(value, locale) ?? p('dateUnavailable') };
 }
 export type LocalizedError = { section: PublicSection | 'extra'; key: string } | { server: string } | { api: unknown };
 export const TranslatedError: React.FC<{ error: LocalizedError }> = ({ error }) => {

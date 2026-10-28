@@ -41,6 +41,27 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 0,
       },
+      // "por_hora": reserva exclusiva del recurso; "experiencia": salida de duración fija con cupo compartido.
+      modalidad: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: "por_hora",
+      },
+      duracion_minutos: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+      },
+      cupo_maximo: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+      },
+      precio_persona: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: null,
+      },
       imagen_key: {
         type: DataTypes.STRING(500),
         allowNull: true,

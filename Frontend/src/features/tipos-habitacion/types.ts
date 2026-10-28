@@ -8,6 +8,7 @@
 
 export interface TipoHabitacion {
   id: number;
+  sucursal_id?: number | null;
   nombre: string;
   capacidad_maxima: number;
   tarifa_noche: string | number;
@@ -40,6 +41,7 @@ export interface TipoHabitacionResponse {
 }
 
 export interface CreateTipoHabitacionInput {
+  sucursal_id: number | null;
   nombre: string;
   capacidad_maxima: number;
   tarifa_noche: number;
@@ -48,6 +50,7 @@ export interface CreateTipoHabitacionInput {
 }
 
 export interface UpdateTipoHabitacionInput {
+  sucursal_id?: number | null;
   nombre?: string;
   capacidad_maxima?: number;
   tarifa_noche?: number;

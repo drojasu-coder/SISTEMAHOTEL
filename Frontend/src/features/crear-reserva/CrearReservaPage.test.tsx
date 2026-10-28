@@ -1,3 +1,4 @@
+import { setStayDates, changeGuestCount } from '@/test/stayControls';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -162,7 +163,7 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
         );
       }
 
-      if (urlStr.includes('/habitaciones/disponibles')) {
+      if (urlStr.includes('/habitaciones/disponibles') || urlStr.includes('/api/public/habitaciones/disponibles')) {
         capturedGetDisponibilidadUrl = urlStr;
         return Promise.resolve(
           jsonResponse({
@@ -215,24 +216,24 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
   };
 
-  it('restringe el acceso a usuarios no clientes o anónimos sin ejecutar consultas privadas', async () => {
-    tokenStorage.set('token-admin');
-    setupFetchMock({ role: 'admin' });
+  it('permite el acceso al visitante sin sesión y muestra el formulario de búsqueda', async () => {
+    tokenStorage.clear();
+    setupFetchMock({ role: 'cliente' });
 
     renderWithProviders(<CrearReservaPage />);
 
     await waitFor(() => {
       expect(
-        screen.getByText('Acceso reservado para clientes')
+        screen.getByRole('heading', { name: 'Reservar habitación' })
       ).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(/Esta sección está destinada exclusivamente para que los clientes/i)
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Sede del hotel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Fechas de estancia/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Número de huéspedes')).toBeInTheDocument();
 
-    // No debe haber llamado a disponibilidad
-    expect(capturedGetDisponibilidadUrl).toBeNull();
+    // No debe mostrar pantalla de acceso restringido
+    expect(screen.queryByText('Acceso reservado para clientes')).not.toBeInTheDocument();
   });
 
   it('permite el acceso a usuarios con rol cliente y muestra el formulario de búsqueda', async () => {
@@ -248,8 +249,7 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
 
     expect(screen.getByLabelText('Sede del hotel')).toBeInTheDocument();
-    expect(screen.getByLabelText('Fecha de entrada (check-in)')).toBeInTheDocument();
-    expect(screen.getByLabelText('Fecha de salida (check-out)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Fechas de estancia/ })).toBeInTheDocument();
     expect(screen.getByLabelText('Número de huéspedes')).toBeInTheDocument();
     expect(screen.getByLabelText('Tipo de habitación (opcional)')).toBeInTheDocument();
   });
@@ -265,6 +265,8 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
       expect(screen.getByRole('button', { name: /buscar disponibilidad/i })).toBeInTheDocument();
     });
 
+    // La cantidad propone dos huéspedes; se puede vaciar para corregirla.
+    await user.clear(screen.getByLabelText('Número de huéspedes'));
     // Envío en blanco
     await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
 
@@ -275,17 +277,13 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
       expect(screen.getByText('El número de huéspedes es obligatorio')).toBeInTheDocument();
     });
 
-    // Validar que un valor de 0 en huéspedes se rechace explícitamente
-    const huespedesInput = screen.getByLabelText('Número de huéspedes');
-    await user.clear(huespedesInput);
-    await user.type(huespedesInput, '0');
-    await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
+    // El contador impide introducir cero y deshabilita disminuir en el mínimo real.
+    await user.click(screen.getByRole('button', { name: 'Aumentar huéspedes' }));
+    expect(screen.getByLabelText('Número de huéspedes')).toHaveValue(1);
+    expect(screen.getByRole('button', { name: 'Disminuir huéspedes' })).toBeDisabled();
+    changeGuestCount('0');
+    expect(screen.getByLabelText('Número de huéspedes')).toHaveValue(1);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText('El número de huéspedes debe ser un número entero mayor a cero')
-      ).toBeInTheDocument();
-    });
   });
 
   it('busca disponibilidad con parámetros exactos y muestra resultados con montos del servidor', async () => {
@@ -302,13 +300,9 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     // Llenar formulario
     await user.selectOptions(screen.getByLabelText('Sede del hotel'), '1');
 
-    const entrada = screen.getByLabelText('Fecha de entrada (check-in)');
-    const salida = screen.getByLabelText('Fecha de salida (check-out)');
-    const huespedes = screen.getByLabelText('Número de huéspedes');
 
-    await user.type(entrada, '2026-11-01');
-    await user.type(salida, '2026-11-03');
-    await user.type(huespedes, '2');
+    await setStayDates('2026-11-01', '2026-11-03');
+    changeGuestCount('2');
 
     await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
 
@@ -320,15 +314,15 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
       expect(capturedGetDisponibilidadUrl).toContain('numero_huespedes=2');
     });
 
-    // Muestra los resultados devueltos por el backend
+    // Muestra los resultados devueltos por el backend (nombres de tipo, no números de habitación internos)
     await waitFor(() => {
-      expect(screen.getByText('Habitación 101')).toBeInTheDocument();
-      expect(screen.getByText('Habitación 102')).toBeInTheDocument();
+      expect(screen.getAllByText('Suite Presidencial').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Doble Deluxe').length).toBeGreaterThan(0);
     });
 
     // Verificar formato GTQ y cifras exactas del servidor sin recalcular
-    expect(screen.getByText(/Q\s*1,250\.00.*US\$/)).toBeInTheDocument();
-    expect(screen.getByText(/Q\s*2,500\.00.*US\$/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*1,250\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*2,500\.00/)).toBeInTheDocument();
     expect(screen.getAllByText('2 noches de estancia').length).toBe(2);
   });
 
@@ -344,20 +338,19 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
 
     await user.selectOptions(screen.getByLabelText('Sede del hotel'), '1');
-    await user.type(screen.getByLabelText('Fecha de entrada (check-in)'), '2026-11-01');
-    await user.type(screen.getByLabelText('Fecha de salida (check-out)'), '2026-11-03');
-    await user.type(screen.getByLabelText('Número de huéspedes'), '2');
+    await setStayDates('2026-11-01', '2026-11-03');
+    changeGuestCount('2');
 
     await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Habitación 101')).toBeInTheDocument();
+      expect(screen.getAllByText('Suite Presidencial').length).toBeGreaterThan(0);
     });
 
     // Ahora el usuario modifica el número de huéspedes
     const huespedes = screen.getByLabelText('Número de huéspedes');
     await user.clear(huespedes);
-    await user.type(huespedes, '3');
+    changeGuestCount('3');
 
     // Debe mostrar la advertencia de que los criterios se han modificado
     await waitFor(() => {
@@ -383,24 +376,23 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
 
     await user.selectOptions(screen.getByLabelText('Sede del hotel'), '1');
-    await user.type(screen.getByLabelText('Fecha de entrada (check-in)'), '2026-11-01');
-    await user.type(screen.getByLabelText('Fecha de salida (check-out)'), '2026-11-03');
-    await user.type(screen.getByLabelText('Número de huéspedes'), '2');
+    await setStayDates('2026-11-01', '2026-11-03');
+    changeGuestCount('2');
 
     await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Habitación 101')).toBeInTheDocument();
+      expect(screen.getAllByText('Suite Presidencial').length).toBeGreaterThan(0);
     });
 
-    // Seleccionar Habitación 101
+    // Seleccionar habitación
     const botonesSeleccionar = screen.getAllByRole('button', { name: /seleccionar habitación/i });
     await user.click(botonesSeleccionar[0]);
 
     // Modal de resumen abierto
     await waitFor(() => {
       expect(screen.getByText('Resumen de su reserva')).toBeInTheDocument();
-      expect(screen.getByText('Habitación 101 (Suite Presidencial)')).toBeInTheDocument();
+      expect(screen.getAllByText('Suite Presidencial').length).toBeGreaterThan(0);
       expect(screen.getByText('Total de la reserva:')).toBeInTheDocument();
     });
 
@@ -429,7 +421,7 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
       expect(screen.getByText('¡Reserva creada exitosamente!')).toBeInTheDocument();
       expect(screen.getByText('#88')).toBeInTheDocument();
       expect(screen.getByText(/^pendiente$/i)).toBeInTheDocument();
-      expect(screen.getByText(/Q\s*2,500\.00.*US\$/)).toBeInTheDocument();
+      expect(screen.getByText(/Q\s*2,500\.00/)).toBeInTheDocument();
       expect(screen.getByText(/Su reserva se encuentra en estado "Pendiente"/i)).toBeInTheDocument();
     });
 
@@ -455,14 +447,13 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
 
     await user.selectOptions(screen.getByLabelText('Sede del hotel'), '1');
-    await user.type(screen.getByLabelText('Fecha de entrada (check-in)'), '2026-11-01');
-    await user.type(screen.getByLabelText('Fecha de salida (check-out)'), '2026-11-03');
-    await user.type(screen.getByLabelText('Número de huéspedes'), '2');
+    await setStayDates('2026-11-01', '2026-11-03');
+    changeGuestCount('2');
 
     await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Habitación 101')).toBeInTheDocument();
+      expect(screen.getAllByText('Suite Presidencial').length).toBeGreaterThan(0);
     });
 
     const botonesSeleccionar = screen.getAllByRole('button', { name: /seleccionar habitación/i });
@@ -505,14 +496,13 @@ describe('Flujo de disponibilidad y creación de reservas (CrearReservaPage)', (
     });
 
     await user.selectOptions(screen.getByLabelText('Sede del hotel'), '1');
-    await user.type(screen.getByLabelText('Fecha de entrada (check-in)'), '2026-11-01');
-    await user.type(screen.getByLabelText('Fecha de salida (check-out)'), '2026-11-03');
-    await user.type(screen.getByLabelText('Número de huéspedes'), '2');
+    await setStayDates('2026-11-01', '2026-11-03');
+    changeGuestCount('2');
 
     await user.click(screen.getByRole('button', { name: /buscar disponibilidad/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Habitación 101')).toBeInTheDocument();
+      expect(screen.getAllByText('Suite Presidencial').length).toBeGreaterThan(0);
     });
 
     const botonesSeleccionar = screen.getAllByRole('button', { name: /seleccionar habitación/i });

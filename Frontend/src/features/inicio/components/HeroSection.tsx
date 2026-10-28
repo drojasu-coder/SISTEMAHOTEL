@@ -7,9 +7,11 @@ import type { InicioData } from '../types';
 
 interface HeroSectionProps {
   data: InicioData;
+  /** Ciudad de la sede cuya portada se muestra. */
+  place?: string;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ data }) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({ data, place }) => {
   const { p } = usePublicInterface();
   return (
     <section
@@ -37,7 +39,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ data }) => {
       {/* Contenido principal del Hero */}
       <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-16 text-center sm:px-6 lg:px-8">
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-bronce-300 sm:text-sm">
-          HOTEL HUNAHPÚ · GUATEMALA
+          HOTEL HUNAHPÚ · <span lang="es">{place ?? 'GUATEMALA'}</span>
         </p>
 
         <h1 className="font-serif text-3xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl text-white drop-shadow-sm">
@@ -50,7 +52,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ data }) => {
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
-            to={data.hero_cta_enlace || '/crear-reserva'}
+            to="/reservar"
             className={buttonStyles({
               size: 'lg',
               variant: 'primary',
@@ -58,7 +60,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ data }) => {
                 'shadow-lg shadow-bronce-900/30 font-semibold px-8 py-3.5 text-base hover:scale-[1.02] transition-transform',
             })}
           >
-            <span>{data.hero_cta_texto || p('reserveStay')}</span>
+            <span>{p('reserveStay')}</span>
             <ArrowRight className="size-4 ml-1" aria-hidden="true" />
           </Link>
         </div>

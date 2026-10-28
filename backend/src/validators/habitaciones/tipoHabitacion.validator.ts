@@ -3,6 +3,13 @@ import { z } from "zod";
 import { moneySchema } from "../common.validator";
 
 const tipoHabitacionFields = {
+  // Sede del tipo; null u omitido = categoría general (solo administración general).
+  sucursal_id: z
+    .number()
+    .int("El ID de la sucursal debe ser un número entero")
+    .positive("El ID de la sucursal debe ser positivo")
+    .nullable()
+    .optional(),
   nombre: z
     .string()
     .trim()

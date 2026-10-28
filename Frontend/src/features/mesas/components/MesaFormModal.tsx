@@ -7,11 +7,12 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Feedback';
 import { ApiError } from '@/api/client/http';
 import { getApiErrorMessage, getFieldErrors } from '@/api/errors';
-import { es } from '@/i18n/es';
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import {
   CAMPOS_MESA,
-  mesaFormSchema,
+  createMesaFormSchema,
+  mensajesMesa,
+  mensajesMesaEn,
   sanitizeCreateMesa,
   sanitizeUpdateMesa,
   type MesaFormValues,
@@ -19,7 +20,8 @@ import {
 import { useCreateMesaMutation, useUpdateMesaMutation } from '../hooks/useMesas';
 import { SelectField } from './SelectField';
 import type { Mesa } from '../types';
-import { textosMesas } from '../texts';
+import { useTextosMesas } from '../texts';
+import { useLocale } from '@/i18n/LocaleContext';
 
 interface MesaFormModalProps {
   open: boolean;
@@ -39,6 +41,9 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
   mesa,
   onSuccess,
 }) => {
+  const textosMesas = useTextosMesas();
+  const { locale } = useLocale();
+  const schema = React.useMemo(() => createMesaFormSchema(locale === 'en' ? mensajesMesaEn : mensajesMesa), [locale]);
   const isEditing = Boolean(mesa);
   const title = isEditing ? textosMesas.editarTitulo : textosMesas.crearTitulo;
   const description = isEditing ? textosMesas.editarDescripcion : textosMesas.crearDescripcion;
@@ -60,7 +65,7 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
     setError,
     formState: { errors, isSubmitting },
   } = useForm<MesaFormValues>({
-    resolver: zodResolver(mesaFormSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       sucursal_id: '',
       zona: '',
@@ -140,8 +145,7 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
 
         {sedesNoDisponibles && (
           <Alert tone="error">
-            No fue posible cargar el catálogo de sedes. Inténtelo de nuevo o contacte al
-            administrador.
+            {textosMesas.errorSedes}
           </Alert>
         )}
 
@@ -195,7 +199,7 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
 
         <Input
           label={textosMesas.estado}
-          labelSuffix={es.comunes.opcional}
+          labelSuffix={textosMesas.opcional}
           type="text"
           placeholder={textosMesas.estadoPlaceholder}
           hint={isEditing ? textosMesas.estadoAyudaEdicion : textosMesas.estadoAyuda}

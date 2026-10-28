@@ -159,13 +159,17 @@ describe("Enrutamiento del flujo de reservas (AppRouter / GuestLayout)", () => {
     ).toBeInTheDocument();
   });
 
-  it("ruta /reservar sin sesión solicita iniciar sesión amigablemente", async () => {
+  it("ruta /reservar sin sesión muestra búsqueda pública y no exige autenticación anticipada", async () => {
+    global.fetch = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ data: [] })));
     renderReservasRouter(RESERVAS_ROUTES.NUEVA);
 
     expect(
-      await screen.findByRole("heading", { name: textosCrearReserva.accesoRestringidoTitulo })
+      await screen.findByRole("heading", { name: textosCrearReserva.tituloPagina, level: 1 })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: textosCrearReserva.botonIniciarSesion })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole('button', { name: textosCrearReserva.botonBuscar })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: textosCrearReserva.accesoRestringidoTitulo })).not.toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/public/tipos-habitacion'))).toBe(true));
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith('/api/tipos-habitacion') || String(url).endsWith('/auth/me'))).toBe(false);
   });
 
   it("ruta /mis-reservas sin sesión muestra estado sin sesión y enlace al login", async () => {

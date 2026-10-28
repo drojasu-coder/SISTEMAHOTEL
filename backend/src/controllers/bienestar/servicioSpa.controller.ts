@@ -3,7 +3,11 @@ import * as service from "../../services/bienestar/servicioSpa.service";
 
 export const getAll = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await service.getAll();
+    const query = req.query as { sucursal_id?: number; incluir_inactivos?: string };
+    const data = await service.getAll({
+      sucursalId: query.sucursal_id,
+      incluirInactivos: query.incluir_inactivos === "true",
+    });
     res.status(200).json({ status: "success", data });
   } catch (error) { next(error); }
 };

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import * as controller from "../../controllers/pagos/pago.controller";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
@@ -238,6 +239,38 @@ router.get("/resumen", validateQuery(resumenPagoQuerySchema), controller.resumen
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/intento-activo", validateQuery(intentoActivoQuerySchema), controller.intentoActivo);
+
+/**
+ * @openapi
+ * /api/pagos/{id}/verificar:
+ *   post:
+ *     tags: [Pagos]
+ *     summary: Verificar un intento existente directamente con Stripe
+ *     description: >
+ *       Requiere propiedad del pago o rol administrativo de pagos. No acepta importes,
+ *       estados ni identificadores de Stripe del navegador. Consulta el intento asociado
+ *       y reconcilia resultados terminales con la misma transacción del webhook.
+ *       No crea otro intento ni cobra de nuevo. Las lecturas GET continúan sin mutaciones.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: integer, minimum: 1 } }]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema: { type: object, additionalProperties: false }
+ *     responses:
+ *       200:
+ *         description: Estado verificado; puede seguir en proceso
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PagoResponse' }
+ *       400: { description: ID o cuerpo inválidos }
+ *       401: { description: No autenticado }
+ *       404: { description: Pago no encontrado o ajeno }
+ *       409: { description: El intento no corresponde al pago persistido }
+ *       422: { description: Pago sin intento de tarjeta verificable }
+ *       502: { description: No se pudo consultar Stripe; no se altera el pago }
+ */
+router.post("/:id/verificar", validateParams(pagoIdSchema), validateBody(z.object({}).strict()), controller.verificar);
 
 /**
  * @openapi

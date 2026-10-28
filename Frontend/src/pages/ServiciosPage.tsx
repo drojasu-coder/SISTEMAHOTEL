@@ -139,6 +139,7 @@ export const ServiciosPage: React.FC = () => {
         </Card>
 
         {/* Tarjeta de Instructores Deportivos */}
+        {user?.rol === 'admin' && <>
         <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
@@ -163,7 +164,7 @@ export const ServiciosPage: React.FC = () => {
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>
           </div>
-        </Card>
+        </Card></>}
 
         {/* Tarjeta de Servicios de Spa */}
         <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
@@ -301,6 +302,7 @@ export const ServiciosPage: React.FC = () => {
         </Card>
 
         {/* Tarjeta de Servicios Adicionales de Eventos */}
+        {user?.rol === 'admin' && <>
         <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
@@ -325,7 +327,7 @@ export const ServiciosPage: React.FC = () => {
               <ChevronRight className="size-4" aria-hidden="true" />
             </Link>
           </div>
-        </Card>
+        </Card></>}
 
         {/* Tarjeta de Reservas y Cotizaciones de Eventos */}
         <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">

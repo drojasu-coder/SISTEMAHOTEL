@@ -1,3 +1,4 @@
+import type { usePublicTexts } from '@/i18n/public';
 import type { ReservaHabitacion } from '@/features/reservas';
 import { textosMisReservas } from './textos';
 
@@ -128,18 +129,19 @@ export function reservaNecesitaCatalogoSedes(
 export function resolverNombreSede(
   reserva: ReservaHabitacion,
   sedesPorId: ReadonlyMap<number, string>,
+  textos: ReturnType<typeof usePublicTexts<'misReservas'>> = textosMisReservas,
 ): string {
   const nombreIncluido = reserva.Habitacion?.Sucursal?.nombre?.trim();
   if (nombreIncluido) return nombreIncluido;
 
   const sucursalId = reserva.Habitacion?.sucursal_id;
   if (typeof sucursalId !== 'number') {
-    return textosMisReservas.sinSede;
+    return textos.sinSede;
   }
 
   const nombreCatalogo = sedesPorId.get(sucursalId)?.trim();
   return (
     nombreCatalogo ||
-    textosMisReservas.sedePorIdentificador(sucursalId)
+    textos.sedePorIdentificador(sucursalId)
   );
 }

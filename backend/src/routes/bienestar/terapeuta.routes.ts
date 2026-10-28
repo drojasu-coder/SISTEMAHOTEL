@@ -1,10 +1,10 @@
 import { Router } from "express";
 import * as controller from "../../controllers/bienestar/terapeuta.controller";
-import { validateBody, validateParams } from "../../middlewares/validate.middleware";
+import { validateBody, validateParams, validateQuery } from "../../middlewares/validate.middleware";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
 import { ROLES } from "../../constants/roles";
-import { createTerapeutaSchema, updateTerapeutaSchema } from "../../validators/bienestar/terapeuta.validator";
+import { createTerapeutaSchema, listTerapeutasQuerySchema, updateTerapeutaSchema } from "../../validators/bienestar/terapeuta.validator";
 import { idParamSchema } from "../../validators/common.validator";
 
 const router = Router();
@@ -33,7 +33,7 @@ const router = Router();
  *                   items:
  *                     $ref: '#/components/schemas/Terapeuta'
  */
-router.get("/", controller.getAll);
+router.get("/", validateQuery(listTerapeutasQuerySchema), controller.getAll);
 /**
  * @openapi
  * /api/terapeutas/{id}:

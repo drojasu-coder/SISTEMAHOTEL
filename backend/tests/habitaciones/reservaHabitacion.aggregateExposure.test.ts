@@ -558,9 +558,23 @@ describe(
         expect(
           stripeMock.updatePaymentIntentMetadata
         ).not.toHaveBeenCalled();
+        /**
+         * La reconciliación previa al cobro (BE-014, posterior a este caso)
+         * consulta en modo lectura los intentos ya existentes de la reserva.
+         * Aquí el mock falla en cada consulta (Stripe no disponible): solo se
+         * admite consultar intentos propios y el fallo debe conservar la
+         * exposición (pago directo sigue "procesando", carrito rechazado 409).
+         */
+        const knownIntentIds = intents.map((intent) => intent.id);
+        for (const [intentId] of stripeMock.retrievePaymentIntent.mock.calls as unknown as [string][]) {
+          expect(knownIntentIds).toContain(intentId);
+        }
+        expect(cartPaymentResponse?.status).toBe(409);
         expect(
-          stripeMock.retrievePaymentIntent
-        ).not.toHaveBeenCalled();
+          finalExposure.payments.filter(
+            (payment: any) => payment.estado === "procesando"
+          )
+        ).toHaveLength(1);
         expect(
           stripeMock.cancelPaymentIntent
         ).not.toHaveBeenCalled();

@@ -6,6 +6,7 @@ import { env } from "../../config/env";
 import * as s3Service from "../storage/s3.service";
 import * as mediaUploadService from "../storage/mediaUpload.service";
 import { getAssetCredits } from "../storage/credits";
+import { SedeScope, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
 
 const db = require("../../models");
 
@@ -96,8 +97,32 @@ export async function serializeHabitacion(h: any): Promise<any> {
   return plain;
 }
 
-export const getAllHabitaciones = async () => {
+/**
+ * Las funciones administrativas reciben el alcance por sede del solicitante.
+ * Sin alcance (catálogo público) no se filtra por sede.
+ */
+const GLOBAL_SCOPE: SedeScope = { global: true };
+
+/**
+ * Un tipo con sede solo puede asignarse a habitaciones de esa misma sede; los
+ * tipos generales (sin sede) se pueden usar en cualquiera.
+ */
+const assertTipoDeLaSede = (tipo: any, sucursalId: number) => {
+  if (tipo?.sucursal_id != null && Number(tipo.sucursal_id) !== Number(sucursalId)) {
+    throw new AppError(
+      409,
+      "TIPO_HABITACION_SEDE_MISMATCH",
+      "El tipo de habitación pertenece a otra sede"
+    );
+  }
+};
+
+export const getAllHabitaciones = async (
+  scope: SedeScope = GLOBAL_SCOPE,
+  sucursalId?: number
+) => {
   const habitaciones = await Habitacion.findAll({
+    where: sedeWhere(scope, sucursalId),
     include: [
       {
         model: TipoHabitacion,
@@ -115,7 +140,8 @@ export const getAllHabitaciones = async () => {
 };
 
 export const getHabitacionById = async (
-  id: number
+  id: number,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
   const habitacion = await Habitacion.findByPk(id, {
     include: [
@@ -139,12 +165,17 @@ export const getHabitacionById = async (
     );
   }
 
+  assertSedeAccess(scope, habitacion.sucursal_id);
+
   return serializeHabitacion(habitacion);
 };
 
 export const createHabitacion = async (
-  data: CreateHabitacionData
+  data: CreateHabitacionData,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
+  assertSedeAccess(scope, data.sucursal_id);
+
   const sucursal = await Sucursal.findByPk(
     data.sucursal_id
   );
@@ -168,6 +199,8 @@ export const createHabitacion = async (
       "El tipo de habitación no fue encontrado"
     );
   }
+
+  assertTipoDeLaSede(tipoHabitacion, data.sucursal_id);
 
   const habitacionExistente = await Habitacion.findOne({
     where: {
@@ -197,7 +230,8 @@ export const createHabitacion = async (
 
 export const updateHabitacion = async (
   id: number,
-  data: UpdateHabitacionData
+  data: UpdateHabitacionData,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => sequelize.transaction(async (transaction: any) => {
   /**
    * Esta ruta bloquea Habitación objetivo -> consulta reservas sin bloquearlas.
@@ -216,6 +250,13 @@ export const updateHabitacion = async (
       "HABITACION_NOT_FOUND",
       "La habitación no fue encontrada"
     );
+  }
+
+  // La sede actual y la de destino deben estar autorizadas: mover una habitación
+  // a otra sede no puede servir para salir (o entrar) del alcance propio.
+  assertSedeAccess(scope, habitacion.sucursal_id);
+  if (data.sucursal_id !== undefined) {
+    assertSedeAccess(scope, data.sucursal_id);
   }
 
   if (data.sucursal_id !== undefined) {
@@ -297,6 +338,17 @@ export const updateHabitacion = async (
   }
 
   if (
+    data.tipo_habitacion_id !== undefined ||
+    data.sucursal_id !== undefined
+  ) {
+    const tipoFinal = await TipoHabitacion.findByPk(
+      data.tipo_habitacion_id ?? habitacion.tipo_habitacion_id,
+      { attributes: ["id", "sucursal_id"], transaction }
+    );
+    assertTipoDeLaSede(tipoFinal, data.sucursal_id ?? habitacion.sucursal_id);
+  }
+
+  if (
     data.numero !== undefined ||
     data.sucursal_id !== undefined
   ) {
@@ -362,7 +414,8 @@ export const updateHabitacion = async (
 });
 
 export const deleteHabitacion = async (
-  id: number
+  id: number,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
   const habitacion = await Habitacion.findByPk(id);
 
@@ -373,6 +426,8 @@ export const deleteHabitacion = async (
       "La habitación no fue encontrada"
     );
   }
+
+  assertSedeAccess(scope, habitacion.sucursal_id);
 
   const reservaHabitacion = await ReservaHabitacion.findOne({
     where: {
@@ -513,6 +568,8 @@ export const getHabitacionesDisponibles = async (
         TipoHabitacion: {
           id: h.TipoHabitacion.id,
           nombre: h.TipoHabitacion.nombre,
+          nombre_comercial: h.TipoHabitacion.nombre_comercial ?? null,
+          sucursal_id: h.TipoHabitacion.sucursal_id ?? null,
           capacidad_maxima: h.TipoHabitacion.capacidad_maxima,
           tarifa_noche: tarifaNoche,
           descripcion: h.TipoHabitacion.descripcion ?? null,
@@ -526,15 +583,22 @@ export const getHabitacionesDisponibles = async (
   );
 };
 
-export const requestImageUpload = async (
-  id: number,
-  userId: number,
-  contentType: string
-) => {
-  const habitacion = await Habitacion.findByPk(id);
+/** Comprobación previa de sede para operaciones sobre una habitación existente. */
+export const assertHabitacionEnAlcance = async (id: number, scope: SedeScope) => {
+  const habitacion = await Habitacion.findByPk(id, { attributes: ["id", "sucursal_id"] });
   if (!habitacion) {
     throw new AppError(404, "HABITACION_NOT_FOUND", "La habitación no fue encontrada");
   }
+  assertSedeAccess(scope, habitacion.sucursal_id);
+};
+
+export const requestImageUpload = async (
+  id: number,
+  userId: number,
+  contentType: string,
+  scope: SedeScope = GLOBAL_SCOPE
+) => {
+  await assertHabitacionEnAlcance(id, scope);
   return mediaUploadService.presignEntityUpload({
     entityType: "habitacion",
     entityId: id,
@@ -547,8 +611,10 @@ export const confirmImageUpload = async (
   id: number,
   userId: number,
   uploadToken: string,
-  tempKey: string
+  tempKey: string,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
+  await assertHabitacionEnAlcance(id, scope);
   return mediaUploadService.confirmEntityUpload({
     entityType: "habitacion",
     entityId: id,
@@ -573,7 +639,8 @@ export const confirmImageUpload = async (
   });
 };
 
-export const removeImage = async (id: number) => {
+export const removeImage = async (id: number, scope: SedeScope = GLOBAL_SCOPE) => {
+  await assertHabitacionEnAlcance(id, scope);
   return mediaUploadService.removeEntityImage({
     entityId: id,
     Model: Habitacion,

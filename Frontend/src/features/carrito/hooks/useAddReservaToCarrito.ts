@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/api/client/http';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -6,6 +6,7 @@ import { carritoApi } from '../api/carritoApi';
 import { carritoQueryKeys } from '../constants/queryKeys';
 import { textosCarrito } from '../textos';
 import type { CarritoItem, TipoItemCarrito } from '../types';
+import type { ExtraKey } from '@/i18n/publicExtra';
 
 export interface UseAddReservaToCarritoOptions {
   tipo_item?: TipoItemCarrito;
@@ -18,6 +19,7 @@ export interface EstadoFeedbackAnadir {
   texto: string;
   verCarrito?: boolean;
   esIncierto?: boolean;
+  publicKey?: ExtraKey;
 }
 
 /**
@@ -39,6 +41,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<EstadoFeedbackAnadir | null>(null);
+  const adding = useRef(false);
 
   const mutation = useMutation({
     mutationFn: async (reservaId: number) => {
@@ -68,6 +71,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
       setFeedback({
         tono: 'success',
         texto: textosCarrito.anadirExito,
+        publicKey: 'addedCart',
         verCarrito: true,
       });
 
@@ -86,6 +90,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
           setFeedback({
             tono: 'info',
             texto: textosCarrito.yaEnCarrito,
+            publicKey: 'wellnessCartAlready',
             verCarrito: true,
           });
           options?.onError?.(error);
@@ -96,6 +101,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
           setFeedback({
             tono: 'error',
             texto: textosCarrito.referenciaAjena,
+            publicKey: 'wellnessCartNotOwned',
           });
           options?.onError?.(error);
           return;
@@ -105,6 +111,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
           setFeedback({
             tono: 'warning',
             texto: textosCarrito.referenciaNoDisponible,
+            publicKey: 'wellnessCartUnavailable',
           });
           options?.onError?.(error);
           return;
@@ -114,6 +121,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
           setFeedback({
             tono: 'warning',
             texto: textosCarrito.carritoInactivo,
+            publicKey: 'wellnessCartInactive',
           });
           options?.onError?.(error);
           return;
@@ -123,6 +131,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
           setFeedback({
             tono: 'warning',
             texto: textosCarrito.errorRedAnadir,
+            publicKey: 'wellnessCartUncertain',
             verCarrito: true,
             esIncierto: true,
           });
@@ -136,6 +145,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
         setFeedback({
           tono: 'warning',
           texto: textosCarrito.errorRedAnadir,
+          publicKey: 'wellnessCartUncertain',
           verCarrito: true,
           esIncierto: true,
         });
@@ -146,13 +156,17 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
       setFeedback({
         tono: 'error',
         texto: textosCarrito.errorAnadirGenerico,
+        publicKey: 'wellnessCartFailed',
       });
       options?.onError?.(error);
     },
+    onSettled: () => { adding.current = false; },
   });
 
   return {
     anadirAlCarrito: (reservaId: number) => {
+      if (adding.current) return;
+      adding.current = true;
       setFeedback(null);
       mutation.mutate(reservaId);
     },

@@ -13,6 +13,14 @@ import {
 import {
   AppError,
 } from "../../utils/AppError";
+import { getSedeScope, parseSucursalIdQuery } from "../../utils/sedeScope";
+
+/**
+ * Alcance por sede del personal; el cliente se rige por la propiedad de sus
+ * reservas y no recibe alcance de sede.
+ */
+const staffScope = async (req: Request) =>
+  req.user!.rol === ROLES.CLIENTE ? undefined : getSedeScope(req.user!);
 
 export const getAllReservaHabitaciones =
   async (
@@ -23,7 +31,9 @@ export const getAllReservaHabitaciones =
     try {
       const reservas =
         await reservaHabitacionService.getAllReservaHabitaciones(
-          req.user!
+          req.user!,
+          await staffScope(req),
+          parseSucursalIdQuery(req.query.sucursal_id)
         );
 
       res
@@ -52,9 +62,9 @@ export const getReservaHabitacionById =
           Number(
             req.params.id
           ),
-          req.user!
+          req.user!,
+          await staffScope(req)
         );
-
       res
         .status(200)
         .json({
@@ -114,7 +124,8 @@ export const createReservaHabitacion =
 
       const reserva =
         await reservaHabitacionService.createReservaHabitacion(
-          reservaData
+          reservaData,
+          await staffScope(req)
         );
 
       res
@@ -143,7 +154,8 @@ export const updateReservaHabitacion =
           Number(
             req.params.id
           ),
-          req.body
+          req.body,
+          await staffScope(req)
         );
 
       res
@@ -171,7 +183,8 @@ export const deleteReservaHabitacion =
         await reservaHabitacionService.deleteReservaHabitacion(
           Number(
             req.params.id
-          )
+          ),
+          await staffScope(req)
         );
 
       res

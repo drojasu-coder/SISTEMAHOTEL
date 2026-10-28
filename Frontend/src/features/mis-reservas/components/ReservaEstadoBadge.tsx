@@ -4,7 +4,7 @@ import {
   type EstadoReservaHabitacion,
 } from '@/features/reservas';
 import { cn } from '@/lib/cn';
-import { textosMisReservas } from '../textos';
+import { usePublicTexts } from '@/i18n/public';
 
 const estilos: Record<EstadoReservaHabitacion, string> = {
   pendiente:
@@ -24,6 +24,7 @@ function esEstadoConocido(
 export const ReservaEstadoBadge: React.FC<{ estado: string }> = ({
   estado,
 }) => {
+  const textosMisReservas = usePublicTexts('misReservas');
   const conocido = esEstadoConocido(estado);
 
   return (

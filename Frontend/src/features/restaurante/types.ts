@@ -47,3 +47,31 @@ export interface ReservaMesaResponse {
   status: string;
   data: ReservaMesa;
 }
+
+export const CATEGORIAS_MENU = ["desayuno", "entrada", "plato_fuerte", "postre", "bebida"] as const;
+export type CategoriaMenu = (typeof CATEGORIAS_MENU)[number];
+
+/** GET /api/restaurantes: restaurante principal de una sede con resumen de mesas. */
+export interface Restaurante {
+  id: number;
+  sucursal_id: number;
+  nombre: string;
+  descripcion?: string | null;
+  activo?: boolean;
+  Sucursal?: { id: number; nombre: string; ciudad?: string | null };
+  mesas?: { total: number; plazas: number };
+}
+
+/** Producto de la carta. El precio es final (GTQ) y llega como cadena DECIMAL. */
+export interface ProductoMenu {
+  id: number;
+  restaurante_id: number;
+  categoria: CategoriaMenu;
+  nombre: string;
+  descripcion?: string | null;
+  precio: number | string;
+  disponible: boolean;
+  orden?: number;
+  imagen_url?: string | null;
+  imagen_creditos?: { autor?: string; licencia?: string; url?: string; texto?: string } | null;
+}

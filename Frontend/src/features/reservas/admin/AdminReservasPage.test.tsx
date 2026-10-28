@@ -10,6 +10,8 @@ import {
 } from '@/test/renderWithProviders';
 import { tokenStorage } from '@/api/session';
 import { AdminReservasPage } from '@/pages/AdminReservasPage';
+import { AdminScopeProvider } from '@/features/admin-core/AdminScopeContext';
+import { LocaleProvider } from '@/i18n/LocaleContext';
 import { AdminReservaDetallePage } from '@/pages/AdminReservaDetallePage';
 import { textosAdminReservas } from './textos';
 import type { ReservaHabitacion } from '../types';
@@ -223,7 +225,7 @@ describe('Consulta administrativa de reservas (AdminReservasPage y AdminReservaD
     expect(screen.getByText('Reserva #102')).toBeInTheDocument();
   });
 
-  it('3. filtra por estado y por sede hotelera', async () => {
+  it('3. filtra por estado en pantalla y por sede (selector global) en el servidor', async () => {
     const user = userEvent.setup();
     instalarFetchMock();
 
@@ -236,13 +238,56 @@ describe('Consulta administrativa de reservas (AdminReservasPage y AdminReservaD
 
     expect(screen.queryByText('Reserva #101')).not.toBeInTheDocument();
     expect(screen.getByText('Reserva #102')).toBeInTheDocument();
+    // La sede ya no tiene selector local: la decide el selector global del panel.
+    expect(screen.queryByLabelText(textosAdminReservas.filtros.sedeLabel)).not.toBeInTheDocument();
+  });
 
-    // Filtro por sede incompatible
-    const sedeSelect = screen.getByLabelText(textosAdminReservas.filtros.sedeLabel);
-    await user.selectOptions(sedeSelect, '1'); // Hunapú Central
-    expect(screen.queryByText('Reserva #101')).not.toBeInTheDocument();
+  it('3b. la sede elegida en el selector global se pide al servidor con sucursal_id', async () => {
+    sessionStorage.setItem('hunahpu.admin.scope.sede.v1:3', '1');
+    instalarFetchMock();
+    const baseFetch = vi.mocked(globalThis.fetch).getMockImplementation()!;
+    vi.mocked(globalThis.fetch).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/admin/alcance')) {
+        return jsonResponse({ success: true, data: { global: false, sedes: mockSedes.map(({ id, nombre, activa }) => ({ id, nombre, activa })) } });
+      }
+      if (url.includes('/reservas-habitacion?sucursal_id=1')) {
+        return jsonResponse({ success: true, statusCode: 200, message: 'OK', data: mockReservas.filter((r) => r.Habitacion?.sucursal_id === 1) });
+      }
+      return baseFetch(input, init);
+    });
+
+    renderWithProviders(<AdminScopeProvider><AdminReservasPage /></AdminScopeProvider>, { route: '/admin/reservas' });
+
+    expect(await screen.findByText('Reserva #101')).toBeInTheDocument();
     expect(screen.queryByText('Reserva #102')).not.toBeInTheDocument();
-    expect(screen.getByText(textosAdminReservas.listado.sinResultadosTitulo)).toBeInTheDocument();
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some((url) => url.includes('/reservas-habitacion?sucursal_id=1'))).toBe(true);
+    sessionStorage.removeItem('hunahpu.admin.scope.sede.v1:3');
+  });
+
+  it('3c. en inglés traduce listado y detalle, y la fecha de registro no se muestra en ISO', async () => {
+    localStorage.setItem('hunahpu.language.v1', 'en');
+    instalarFetchMock();
+
+    renderWithProviders(
+      <LocaleProvider>
+        <Routes>
+          <Route path="/admin/reservas" element={<AdminReservasPage />} />
+          <Route path="/admin/reservas/:id" element={<AdminReservaDetallePage />} />
+        </Routes>
+      </LocaleProvider>,
+      { route: '/admin/reservas' },
+    );
+    expect(await screen.findByText('Reservation #101')).toBeInTheDocument();
+    expect(screen.getAllByText('Pending').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Reservation status')).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getAllByRole('link', { name: /View details/i })[0]);
+    expect(await screen.findByText(/Registered on: Oct 20, 2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-10-20T10:00:00/)).not.toBeInTheDocument();
+    expect(screen.getByText('Recorded total amount')).toBeInTheDocument();
+    localStorage.removeItem('hunahpu.language.v1');
   });
 
   it('4. presenta estado de catálogo vacío cuando no hay reservas registradas', async () => {

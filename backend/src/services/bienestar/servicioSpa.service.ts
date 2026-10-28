@@ -9,7 +9,19 @@ const db = require("../../models");
 const {
   ServicioBienestar,
   CitaBienestar,
+  Sucursal,
 } = db;
+
+const sucursalInclude = { model: Sucursal, attributes: ["id", "nombre"] };
+
+/** Una sucursal indicada explícitamente debe existir. NULL = servicio general. */
+export const assertSucursalExists = async (sucursalId: number | null | undefined) => {
+  if (sucursalId == null) return;
+  const sucursal = await Sucursal.findByPk(sucursalId);
+  if (!sucursal) {
+    throw new AppError(404, "BRANCH_NOT_FOUND", "La sucursal indicada no existe");
+  }
+};
 
 export async function serializeServicioBienestar(servicio: any): Promise<any> {
   if (!servicio) return null;
@@ -21,8 +33,15 @@ export async function serializeServicioBienestar(servicio: any): Promise<any> {
   return plain;
 }
 
-export const getAll = async () => {
+export const getAll = async (
+  filters: { sucursalId?: number; incluirInactivos?: boolean } = {}, scopeWhere: Record<string | symbol, unknown> = {}
+) => {
+  const where: Record<string | symbol, unknown> = { ...scopeWhere };
+  if (!filters.incluirInactivos) where.activo = true;
+  if (filters.sucursalId !== undefined) where.sucursal_id = filters.sucursalId;
   const servicios = await ServicioBienestar.findAll({
+    where,
+    include: [sucursalInclude],
     order: [["nombre", "ASC"]],
   });
   return Promise.all(servicios.map(serializeServicioBienestar));
@@ -32,7 +51,7 @@ export const getById = async (
   id: number
 ) => {
   const servicio =
-    await ServicioBienestar.findByPk(id);
+    await ServicioBienestar.findByPk(id, { include: [sucursalInclude] });
 
   if (!servicio) {
     throw new AppError(
@@ -48,12 +67,15 @@ export const getById = async (
 export const create = async (
   data: any
 ) => {
+  await assertSucursalExists(data.sucursal_id);
   const servicio = await ServicioBienestar.create({
     nombre: data.nombre,
     duracion_minutos:
       data.duracion_minutos,
     precio: data.precio,
     imagen_key: data.imagen_key ?? null,
+    sucursal_id: data.sucursal_id ?? null,
+    activo: data.activo ?? true,
   });
   return serializeServicioBienestar(servicio);
 };
@@ -71,9 +93,10 @@ export const update = async (
     );
   }
 
+  await assertSucursalExists(data.sucursal_id);
   await servicio.update(data);
 
-  return serializeServicioBienestar(servicio);
+  return getById(id);
 };
 
 export const remove = async (

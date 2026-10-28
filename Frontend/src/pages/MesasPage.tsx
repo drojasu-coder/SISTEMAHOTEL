@@ -6,25 +6,28 @@ import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/features/auth/AuthContext';
 import { hasPermission } from '@/features/auth/permissions';
-import { es } from '@/i18n/es';
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
+import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
 import { useMesasQuery } from '@/features/mesas/hooks/useMesas';
 import { MesaFilters } from '@/features/mesas/components/MesaFilters';
 import { MesaFormModal } from '@/features/mesas/components/MesaFormModal';
 import { MesasList } from '@/features/mesas/components/MesasList';
 import type { Mesa } from '@/features/mesas/types';
 import { getApiErrorMessage } from '@/api/errors';
-import { textosMesas } from '@/features/mesas/texts';
+import { useTextosMesas } from '@/features/mesas/texts';
 import { RESTAURANTE_ROUTES } from '@/features/restaurante';
 
 export const MesasPage: React.FC = () => {
+  const textosMesas = useTextosMesas();
   const { user } = useAuth();
   const canManageMesas = user ? hasPermission(user.rol, 'restaurante.gestionar') : false;
 
   const { data: mesas, isLoading, isError, error, refetch } = useMesasQuery();
-  const { data: sucursales, isError: isErrorSucursales } = useSedesQuery();
+  const { data: sucursales } = useSedesQuery();
 
-  const [sedeSeleccionada, setSedeSeleccionada] = useState('');
+  // La sede la decide el selector global del panel (catálogo público de mesas, filtrado en pantalla).
+  const { selectedSedeId } = useAdminScope();
+  const sedeSeleccionada = selectedSedeId === 'all' ? '' : String(selectedSedeId);
   const [zonaSeleccionada, setZonaSeleccionada] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [mesaSeleccionada, setMesaSeleccionada] = useState<Mesa | null>(null);
@@ -55,7 +58,7 @@ export const MesasPage: React.FC = () => {
     });
   }, [mesas, sedeSeleccionada, zonaSeleccionada]);
 
-  const hayFiltros = sedeSeleccionada !== '' || zonaSeleccionada !== '';
+  const hayFiltros = zonaSeleccionada !== '';
 
   const handleOpenCreate = () => {
     setMesaSeleccionada(null);
@@ -72,7 +75,6 @@ export const MesasPage: React.FC = () => {
   };
 
   const handleClearFilters = () => {
-    setSedeSeleccionada('');
     setZonaSeleccionada('');
   };
 
@@ -81,7 +83,7 @@ export const MesasPage: React.FC = () => {
       {/* Encabezado */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{es.modulos.restaurante}</p>
+          <p className="eyebrow">{textosMesas.modulo}</p>
           <h1 className="text-[2rem] leading-[2.375rem] md:text-[2.5rem] md:leading-[3rem] text-neutro-900">
             {textosMesas.titulo}
           </h1>
@@ -95,7 +97,7 @@ export const MesasPage: React.FC = () => {
               className="inline-flex items-center gap-1.5 rounded-md border border-neutro-300 bg-blanco px-4 py-2 text-sm font-medium text-neutro-700 shadow-sm hover:bg-neutro-50 transition-colors"
             >
               <CalendarCheck className="size-4" aria-hidden="true" />
-              <span>Ver reservas de restaurante</span>
+              <span>{textosMesas.verReservas}</span>
             </Link>
           )}
 
@@ -122,7 +124,7 @@ export const MesasPage: React.FC = () => {
               onClick={() => setFeedbackMessage(null)}
               className="text-xs font-semibold underline hover:no-underline"
             >
-              {es.comunes.cerrar}
+              {textosMesas.cerrar}
             </button>
           </div>
         </Alert>
@@ -131,18 +133,9 @@ export const MesasPage: React.FC = () => {
       {/* Filtros por sede y zona */}
       {!isLoading && !isError && Array.isArray(mesas) && mesas.length > 0 && (
         <>
-          {isErrorSucursales && (
-            <Alert tone="warning">
-              No fue posible cargar el catálogo de sedes, por lo que el filtro por sede no está
-              disponible. Los demás filtros siguen funcionando.
-            </Alert>
-          )}
           <MesaFilters
-            sedes={isErrorSucursales ? [] : (sucursales ?? [])}
             zonas={zonas}
-            sedeSeleccionada={sedeSeleccionada}
             zonaSeleccionada={zonaSeleccionada}
-            onSedeChange={setSedeSeleccionada}
             onZonaChange={setZonaSeleccionada}
             onClear={handleClearFilters}
           />
@@ -155,7 +148,7 @@ export const MesasPage: React.FC = () => {
       {/* Estados principales */}
       {isLoading && (
         <div className="py-12 flex justify-center">
-          <LoadingNotice label={es.comunes.cargando} />
+          <LoadingNotice label={textosMesas.cargando} />
         </div>
       )}
 
@@ -165,7 +158,7 @@ export const MesasPage: React.FC = () => {
             {getApiErrorMessage(error)}
           </Alert>
           <Button type="button" variant="ghost" onClick={() => refetch()}>
-            {es.comunes.reintentar}
+            {textosMesas.reintentar}
           </Button>
         </Card>
       )}

@@ -9,6 +9,7 @@ import {
 } from "@/test/renderWithProviders";
 import { tokenStorage } from "@/api/session";
 import { HabitacionesPage } from "@/pages/HabitacionesPage";
+import { AdminScopeProvider } from "@/features/admin-core/AdminScopeContext";
 import type { Habitacion, TipoHabitacion } from "./types";
 import type { Sucursal } from "@/features/sedes/types";
 
@@ -167,22 +168,36 @@ describe("Gestión de habitaciones (HabitacionesPage)", () => {
     expect(screen.getAllByText(/Habitación 101/i).length).toBeGreaterThan(0);
   });
 
-  it("filtra habitaciones por sede", async () => {
+  it("la sede del selector global se consulta en el servidor (sin selector local)", async () => {
     tokenStorage.set("jwt-admin");
+    // Sede elegida en el selector global del panel (usuario de prueba id 3).
+    sessionStorage.setItem("hunahpu.admin.scope.sede.v1:3", "2");
     setupFetchMock();
-    const user = userEvent.setup();
+    const baseFetch = global.fetch as ReturnType<typeof vi.fn>;
+    global.fetch = vi.fn().mockImplementation((url: string, config: any) => {
+      if (url.includes("/admin/alcance")) {
+        return Promise.resolve(jsonResponse({
+          success: true,
+          data: { global: true, sedes: mockSedes.map(({ id, nombre, activa }) => ({ id, nombre, activa })) },
+        }));
+      }
+      if (url.includes("/habitaciones?sucursal_id=2")) {
+        return Promise.resolve(jsonResponse({
+          success: true, statusCode: 200, message: "Habitaciones obtenidas",
+          data: mockHabitaciones.filter((h) => h.sucursal_id === 2),
+        }));
+      }
+      return baseFetch(url, config);
+    });
 
-    renderWithProviders(<HabitacionesPage />);
+    renderWithProviders(<AdminScopeProvider><HabitacionesPage /></AdminScopeProvider>);
 
-    await screen.findAllByText(/Habitación 101/i);
-
-    const sedeFilter = screen.getByLabelText(/Filtrar por sede/i);
-    await user.selectOptions(sedeFilter, "2"); // Hotel Hunapú Atitlán
-
+    expect((await screen.findAllByText(/Habitación 201/i)).length).toBeGreaterThan(0);
     expect(screen.queryAllByText(/Habitación 101/i)).toHaveLength(0);
-    expect(screen.queryAllByText(/Habitación 102/i)).toHaveLength(0);
-    expect(screen.getAllByText(/Habitación 201/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Habitación 202/i).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/Filtrar por sede/i)).toBeNull();
+    const urls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.includes("/habitaciones?sucursal_id=2"))).toBe(true);
+    sessionStorage.removeItem("hunahpu.admin.scope.sede.v1:3");
   });
 
   it("filtra habitaciones por estado operativo", async () => {
@@ -364,7 +379,7 @@ describe("Gestión de habitaciones (HabitacionesPage)", () => {
     const sedeSelect = screen.getByLabelText(/^Sede$/i);
     const tipoSelect = screen.getByLabelText(/^Tipo de habitación$/i);
     const numInput = screen.getByLabelText(/^Número de habitación$/i);
-    const estadoSelect = screen.getByLabelText(/^Estado de la habitación$/i);
+    const estadoSelect = screen.getByLabelText(/^Estado físico de la habitación$/i);
 
     await user.selectOptions(sedeSelect, "1");
     await user.selectOptions(tipoSelect, "2");
@@ -510,7 +525,7 @@ describe("Gestión de habitaciones (HabitacionesPage)", () => {
     const numInput = screen.getByLabelText(/^Número de habitación$/i);
     expect(numInput).toHaveValue("101");
 
-    const estadoSelect = screen.getByLabelText(/^Estado de la habitación$/i);
+    const estadoSelect = screen.getByLabelText(/^Estado físico de la habitación$/i);
     await user.selectOptions(estadoSelect, "limpieza");
 
     const submitBtn = screen.getByRole("button", { name: /Guardar habitación/i });

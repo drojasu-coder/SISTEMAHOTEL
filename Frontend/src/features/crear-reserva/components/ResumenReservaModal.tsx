@@ -10,13 +10,14 @@ import { ApiError } from '@/api/client/http';
 import { TranslatedError } from '@/i18n/public';
 import { RESERVAS_ROUTES } from '@/features/reservas/constants/routes';
 
-import type { HabitacionDisponible, DisponibilidadHabitacionQuery } from '../types';
+import type { DisponibilidadHabitacionQuery } from '../types';
+import type { HabitacionDisponiblePublico } from '@/features/habitaciones/types';
 import { DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
 
 export interface ResumenReservaModalProps {
   open: boolean;
   onClose: () => void;
-  habitacion: HabitacionDisponible | null;
+  habitacion: HabitacionDisponiblePublico | null;
   criterios: DisponibilidadHabitacionQuery | null;
   sedeNombre?: string;
   isSubmitting: boolean;
@@ -47,9 +48,9 @@ export const ResumenReservaModal: React.FC<ResumenReservaModalProps> = ({
   const isNetworkError =
     Boolean(error && (!(error instanceof ApiError) || error.status === 0 || error.status >= 500 || error.code === 'NETWORK_ERROR'));
 
-  const tipoNombre = habitacion.TipoHabitacion?.nombre ?? p('room');
+  const tipoNombre = habitacion.tipo?.nombre ?? p('room');
   const sedeFinal =
-    sedeNombre ?? habitacion.Sucursal?.nombre ?? p('siteName');
+    sedeNombre ?? habitacion.sucursal?.nombre ?? p('siteName');
 
   return (
     <Modal
@@ -126,7 +127,7 @@ export const ResumenReservaModal: React.FC<ResumenReservaModalProps> = ({
                 {textosCrearReserva.resumenHabitacion}
               </span>
               <p className="font-semibold text-neutro-800">
-                {textosCrearReserva.habitacionNumero(habitacion.numero)} ({tipoNombre})
+                {tipoNombre}
               </p>
             </div>
 

@@ -19,6 +19,7 @@ import {
 } from "../helpers/auth";
 
 import {
+  assignEmpleadoSede,
   createParqueo,
 } from "../fixtures/hotel";
 
@@ -82,6 +83,11 @@ describe(
               ROLES.RECEPCIONISTA,
           });
 
+
+        // El personal opera en la sede del parqueo.
+
+        await assignEmpleadoSede(recepcionista.usuario.id, parqueo.sucursal_id);
+
         const response =
           await request(app)
             .post(
@@ -119,6 +125,11 @@ describe(
             rol:
               ROLES.GERENTE_HABITACIONES,
           });
+
+
+        // El personal opera en la sede del parqueo.
+
+        await assignEmpleadoSede(gerente.usuario.id, parqueo.sucursal_id);
 
         const response =
           await request(app)

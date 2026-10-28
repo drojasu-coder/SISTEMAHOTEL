@@ -1,3 +1,4 @@
+import { getTodayInGuatemala, isValidCalendarDate } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import { extraEs, type ExtraKey } from '@/i18n/publicExtra';
 import { z } from 'zod';
 
@@ -11,10 +12,7 @@ export const buildReservaEventoSchema = (message: (key: ExtraKey) => string = (k
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, message('eventDateFormat'))
       .refine((val) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const selected = new Date(`${val}T00:00:00`);
-        return selected >= today;
+        return isValidCalendarDate(val) && val >= getTodayInGuatemala();
       }, message('eventDatePast')),
     hora_inicio: z
       .string()

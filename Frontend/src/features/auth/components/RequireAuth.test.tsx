@@ -8,6 +8,7 @@ import { api } from '@/api/client/http';
 import { tokenStorage } from '@/api/session';
 import { getOrCreateCheckoutIdempotencyKey, getStoredCheckoutAttempt } from '@/features/pagos/utils/idempotency';
 import { useAuth } from '../AuthContext';
+import { installAdminReadMocks } from '@/test/adminReads';
 import {
   errorResponse,
   jsonResponse,
@@ -18,6 +19,7 @@ import {
 } from '@/test/renderWithProviders';
 
 function openApp(path: string) {
+  installAdminReadMocks();
   window.history.replaceState(null, '', path);
   render(<App />);
 }
@@ -109,7 +111,10 @@ describe('Rutas protegidas por permisos (aplicación completa, fetch simulado)',
 
     const nav = await screen.findByRole('navigation', { name: /Panel administrativo/i });
     const links = Array.from(nav.querySelectorAll('a')).map((a) => a.textContent);
-    expect(links).toEqual(['Inicio', 'Habitaciones y reservas', 'Facturación', 'Pagos y reembolsos']);
+    expect(links).toEqual(['Inicio', 'Habitaciones', 'Tipos de habitación', 'Reservas', 'Estacionamiento', 'Facturación', 'Pagos y reembolsos']);
+    expect(Array.from(nav.querySelectorAll('a')).map(a => a.getAttribute('href'))).toEqual([
+      '/admin', '/admin/habitaciones', '/admin/tipos-habitacion', '/admin/reservas', '/admin/parqueos', '/admin/facturacion', '/admin/pagos',
+    ]);
   });
 
   it('el panel no muestra métricas, personas ni sedes ficticias', async () => {
@@ -118,10 +123,13 @@ describe('Rutas protegidas por permisos (aplicación completa, fetch simulado)',
     openApp('/admin');
 
     await screen.findByRole('heading', { level: 1, name: /Bienvenido/i });
-    expect(document.body).not.toHaveTextContent(/Todas las sedes/i);
+    await screen.findByText('Sin habitaciones registradas');
+    expect(screen.getByRole('combobox', { name: 'Filtrar por sede' })).toHaveValue('all');
     expect(document.body).not.toHaveTextContent(/Sede activa/i);
     expect(document.body).not.toHaveTextContent(/Q\s?\d/);
-    expect(document.body).not.toHaveTextContent(/Ocupación|Check-in|Ingresos/i);
+    expect(screen.getByText('Ocupación por reservas')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/Ingresos/i);
   });
 
   describe('restauración de sesión y errores', () => {
@@ -141,7 +149,7 @@ describe('Rutas protegidas por permisos (aplicación completa, fetch simulado)',
 
       expect(await screen.findByRole('heading', { level: 1, name: /Bienvenido/i })).toBeInTheDocument();
       expect(tokenStorage.get()).toBe('jwt-guardado');
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/auth/me'))).toHaveLength(2);
     });
 
     it('conserva el token ante un error 5xx del servidor al restaurar', async () => {

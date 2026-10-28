@@ -1,3 +1,5 @@
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { commercialRoomName } from '@/features/habitaciones/public/roomCategories';
 import React from 'react';
 import { Alert } from '@/components/ui/Feedback';
 import { Card } from '@/components/ui/Card';
@@ -5,11 +7,9 @@ import type { ReservaHabitacion } from '@/features/reservas';
 import { BotonAnadirAlCarrito } from '@/features/carrito';
 import {
   calcularNoches,
-  formatFechaCalendario,
-  formatGTQ,
   resolverNombreSede,
 } from '../formato';
-import { textosMisReservas } from '../textos';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 
 interface DatoProps {
   etiqueta: string;
@@ -34,13 +34,14 @@ export const ReservaDetalle: React.FC<ReservaDetalleProps> = ({
   sedesPorId,
   avisoSedes,
 }) => {
+  const textosMisReservas = usePublicTexts('misReservas');
+  const { date } = usePublicInterface();
   const habitacion = reserva.Habitacion;
   const tipo = habitacion?.TipoHabitacion;
   const noches = calcularNoches(
     reserva.fecha_entrada,
     reserva.fecha_salida,
   );
-  const importe = formatGTQ(reserva.total);
 
   return (
     <div className="flex flex-col gap-5">
@@ -53,19 +54,19 @@ export const ReservaDetalle: React.FC<ReservaDetalleProps> = ({
             {habitacion?.numero ?? textosMisReservas.sinHabitacion}
           </Dato>
           <Dato etiqueta={textosMisReservas.campos.tipo}>
-            {tipo?.nombre ?? textosMisReservas.sinTipo}
+            {tipo ? commercialRoomName(tipo) : textosMisReservas.sinTipo}
           </Dato>
           <Dato etiqueta={textosMisReservas.campos.sede}>
-            {resolverNombreSede(reserva, sedesPorId)}
+            {resolverNombreSede(reserva, sedesPorId, textosMisReservas)}
           </Dato>
           <Dato etiqueta={textosMisReservas.campos.huespedes}>
             {textosMisReservas.huespedes(reserva.numero_huespedes)}
           </Dato>
           <Dato etiqueta={textosMisReservas.campos.entrada}>
-            {formatFechaCalendario(reserva.fecha_entrada)}
+            {date(reserva.fecha_entrada)}
           </Dato>
           <Dato etiqueta={textosMisReservas.campos.salida}>
-            {formatFechaCalendario(reserva.fecha_salida)}
+            {date(reserva.fecha_salida)}
           </Dato>
           {noches !== null && (
             <Dato etiqueta={textosMisReservas.campos.noches}>
@@ -79,7 +80,7 @@ export const ReservaDetalle: React.FC<ReservaDetalleProps> = ({
         <div className="flex flex-col gap-1">
           <p className="eyebrow">{textosMisReservas.campos.importe}</p>
           <p className="font-serif text-[2rem] font-semibold leading-tight text-neutro-900">
-            {importe ?? textosMisReservas.noDisponible}
+            <MoneyReference amount={reserva.total} />
           </p>
           <p className="text-xs text-neutro-600">
             {textosMisReservas.importeNota}

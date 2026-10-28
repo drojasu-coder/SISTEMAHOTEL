@@ -4,11 +4,14 @@ import { Select } from '@/components/ui/Select';
 import { TranslatedError, type LocalizedError } from '@/i18n/public';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Modal } from "@/components/ui/Modal";
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ServiceReservationPanel, ServiceAuthNotice } from '@/components/shared/ServiceReservationPanel';
+import { useServiceDraft } from '@/features/auth/serviceDraft';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
+import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Button } from "@/components/ui/Button";
+import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useCreateReservaMesaMutation } from "../hooks/useReservasMesa";
@@ -17,20 +20,15 @@ import { RESTAURANTE_ROUTES } from "../constants/routes";
 import type { MesaConSucursal, ReservaMesa } from "../types";
 import { ApiError } from "@/api/client/http";
 import { CheckCircle2, ArrowRight } from "lucide-react";
+import { validateMesaReservation, normalizeMesaTime, validMesaReservationFields, type MesaReservationFields } from '../reservationValidation';
+import { readMesaAttempt, saveMesaAttempt } from '../reservationAttempt';
+import { restauranteApi } from '../api/restauranteApi';
 
 interface ReservaMesaModalProps {
   isOpen: boolean;
   onClose: () => void;
   mesa: MesaConSucursal | null;
 }
-
-const getTodayDateString = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
 
 export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
   isOpen,
@@ -47,14 +45,25 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
 
   const isCliente = status === "authenticated" && user?.rol === "cliente";
 
-  const [fecha, setFecha] = useState<string>(getTodayDateString());
-  const [hora, setHora] = useState<string>("13:00");
-  const [comensales, setComensales] = useState<number>(2);
+  const { sites } = usePublicPreferences();
+  const site = sites.find((item) => item.id === mesa?.sucursal_id);
+  const draft = useServiceDraft('restaurante', mesa?.id ?? 0, { fecha: getTodayInGuatemala(), hora: '', comensales: 1 });
+  const [uncertain, setUncertain] = useState<MesaReservationFields | null>(() => readMesaAttempt(mesa?.id ?? 0));
+  const [fecha, setFecha] = useState<string>(uncertain?.fecha ?? draft.initial.fecha);
+  const [hora, setHora] = useState<string>(uncertain?.hora ?? draft.initial.hora);
+  const [comensales, setComensales] = useState<number>(uncertain?.numero_comensales ?? draft.initial.comensales);
   const [errorLocal, setErrorLocal] = useState<LocalizedError | null>(null);
   const [reservaConfirmada, setReservaConfirmada] = useState<ReservaMesa | null>(null);
+  const submitting = useRef(false);
+  const checking = useRef(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [checkedEmpty, setCheckedEmpty] = useState(false);
+  const [checkError, setCheckError] = useState(false);
+
+  useEffect(() => { if (mesa && !reservaConfirmada) draft.save({ fecha, hora, comensales }); }, [mesa?.id, fecha, hora, comensales, reservaConfirmada, draft.save]);
 
   const handleClose = () => {
-    if (createMutation.isPending) return;
+    if (submitting.current || checking.current) return;
     setErrorLocal(null);
     setReservaConfirmada(null);
     onClose();
@@ -62,24 +71,25 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
 
   if (!mesa) return null;
 
-  const capacidadMaxima = mesa.capacidad || 4;
+  const capacidadMaxima = mesa.capacidad;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isCliente || createMutation.isPending) return;
+    if (!isCliente || submitting.current || uncertain || reservaConfirmada || mesa.estado === 'mantenimiento') return;
 
     setErrorLocal(null);
 
-    if (comensales > capacidadMaxima) {
-      setErrorLocal({ section: 'restaurante', key: 'errorCapacidad' });
+    const fields = { fecha, hora, numero_comensales: comensales };
+    const validation = validateMesaReservation(fields, capacidadMaxima);
+    if (validation) {
+      setErrorLocal({ section: 'restaurante', key: validation });
       return;
     }
 
-    if (comensales < 1) {
-      setErrorLocal({ section: 'extra', key: 'minimumDiners' });
-      return;
-    }
-
+    submitting.current = true;
+    draft.save({ fecha, hora, comensales });
+    // Se escribe ANTES del POST: recargar o navegar durante el envío tampoco lo repite.
+    saveMesaAttempt(mesa.id, fields);
     try {
       const payload = {
         mesa_id: mesa.id,
@@ -89,31 +99,56 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
       };
 
       const resultado = await createMutation.mutateAsync(payload);
+      if (!resultado || !Number.isSafeInteger(resultado.id) || resultado.id <= 0 || resultado.mesa_id !== mesa.id ||
+        resultado.estado !== 'confirmada' || !validMesaReservationFields(resultado)) throw new Error('Unconfirmed reservation response');
+      saveMesaAttempt(mesa.id, null);
+      draft.clear();
       setReservaConfirmada(resultado);
     } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        if (err.code === "TABLE_UNAVAILABLE") {
-          setErrorLocal({ section: 'restaurante', key: 'errorMesaOcupada' });
-        } else if (err.code === "TABLE_IN_MAINTENANCE") {
-          setErrorLocal({ section: 'restaurante', key: 'errorMesaMantenimiento' });
-        } else if (err.code === "TABLE_CAPACITY_EXCEEDED") {
-          setErrorLocal({ section: 'restaurante', key: 'errorCapacidad' });
-        } else if (err.code === "TABLE_RESERVATION_DATE_IN_PAST") {
-          setErrorLocal({ section: 'restaurante', key: 'errorFechaPasada' });
-        } else if (err.code === "TABLE_RESERVATION_TIME_IN_PAST") {
-          setErrorLocal({ section: 'restaurante', key: 'errorHoraPasada' });
-        } else {
-          setErrorLocal({ api: err });
-        }
-      } else {
-        setErrorLocal({ section: 'restaurante', key: 'falloConexionIncierto' });
+      if (!(err instanceof ApiError) || err.status === 0 || err.status === 408 || err.status >= 500) {
+        setUncertain(fields);
+        return;
       }
+      saveMesaAttempt(mesa.id, null);
+      if (err.code === "TABLE_UNAVAILABLE") {
+        setErrorLocal({ section: 'restaurante', key: 'errorMesaOcupada' });
+      } else if (err.code === "TABLE_IN_MAINTENANCE") {
+        setErrorLocal({ section: 'restaurante', key: 'errorMesaMantenimiento' });
+      } else if (err.code === "TABLE_CAPACITY_EXCEEDED") {
+        setErrorLocal({ section: 'restaurante', key: 'errorCapacidad' });
+      } else if (err.code === "TABLE_RESERVATION_DATE_IN_PAST") {
+        setErrorLocal({ section: 'restaurante', key: 'errorFechaPasada' });
+      } else if (err.code === "TABLE_RESERVATION_TIME_IN_PAST") {
+        setErrorLocal({ section: 'restaurante', key: 'errorHoraPasada' });
+      } else {
+        setErrorLocal({ api: err });
+      }
+    } finally {
+      submitting.current = false;
     }
   };
 
+  const checkReservations = async () => {
+    if (!uncertain || !isCliente || checking.current) return;
+    checking.current = true; setIsChecking(true); setCheckError(false); setCheckedEmpty(false);
+    try {
+      // Lectura nueva del endpoint propio; no se deduce éxito ni ausencia desde caché.
+      const reservations = await restauranteApi.getMyReservas();
+      const found = reservations.find((item) => item.estado === 'confirmada' && item.mesa_id === mesa.id &&
+        item.fecha === uncertain.fecha && normalizeMesaTime(item.hora) === normalizeMesaTime(uncertain.hora) &&
+        item.numero_comensales === uncertain.numero_comensales);
+      if (found) {
+        saveMesaAttempt(mesa.id, null); draft.clear(); setUncertain(null); setReservaConfirmada(found);
+      } else setCheckedEmpty(true);
+    } catch { setCheckError(true); }
+    finally { checking.current = false; setIsChecking(false); }
+  };
+
   return (
-    <Modal
-      busy={createMutation.isPending}
+    <ServiceReservationPanel
+      name={`${p('table')} #${mesa.id}`} siteId={mesa.sucursal_id} siteName={mesa.Sucursal?.nombre}
+      media={{ src: site?.restaurante_imagen_url, alt: `${p('restaurant')} ${site?.nombre ?? ''}`, credits: site?.restaurante_imagen_creditos }}
+      busy={createMutation.isPending || isChecking}
       busyLabel={p('processingRequest')}
       open={isOpen}
       onClose={handleClose}
@@ -132,7 +167,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                   {t.identificadorReserva}: <span className="font-bold">#{reservaConfirmada.id}</span>
                 </p>
                 <p className="text-xs mt-1">
-                  {t.cliente.pagoNota}
+                  {t.siguienteAccion}
                 </p>
               </div>
             </div>
@@ -141,17 +176,17 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
               <div className="flex justify-between">
                 <span className="text-neutro-600">{t.cliente.sede}:</span>
                 <span className="font-medium text-neutro-900">
-                  <span lang="es">{mesa.Sucursal?.nombre || p('siteName')}</span>
+                  <span lang="es">{site?.nombre || mesa.Sucursal?.nombre || (mesa.sucursal_id ? `#${mesa.sucursal_id}` : p('siteName'))}</span>
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-neutro-600">{t.cliente.mesa}:</span>
                 <span className="font-medium text-neutro-900">
-                  {p('table')} #{mesa.id} (<span lang="es">{mesa.zona}</span>)
+                  {p('table')} #{reservaConfirmada.mesa_id} (<span lang="es">{reservaConfirmada.Mesa?.zona ?? mesa.zona}</span>)
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-neutro-600">{calendarDate(t.cliente.fecha)}:</span>
+                <span className="text-neutro-600">{t.cliente.fecha}:</span>
                 <span className="font-medium text-neutro-900">{calendarDate(reservaConfirmada.fecha)}</span>
               </div>
               <div className="flex justify-between">
@@ -196,29 +231,20 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
               </Button>
             </div>
           </div>
-        ) : !isCliente ? (
-          <div className="space-y-4">
-            <Alert tone="warning">
-              <p className="text-sm">{t.debeIniciarSesion}</p>
-            </Alert>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="ghost" onClick={handleClose}>
-                {t.cerrar}
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => {
-                  handleClose();
-                  navigate("/login?redirect=/restaurante");
-                }}
-              >
-                {t.iniciarSesionParaReservar}
-              </Button>
-            </div>
-          </div>
         ) : (
           <form onSubmit={(event) => { if (siteBlocked) { event.preventDefault(); return; } void handleSubmit(event); }} className="space-y-4">
+              <ServiceAuthNotice kind="restaurante" resourceId={mesa.id} />
+              {mesa.estado === 'mantenimiento' && <Alert tone="warning">{t.errorMesaMantenimiento}</Alert>}
+              {uncertain && <Alert tone="warning">
+                <p>{t.resultadoIncierto}</p>
+                <p className="mt-2 text-sm">{calendarDate(uncertain.fecha)} · {uncertain.hora} · {t.capacidadPersonas(uncertain.numero_comensales)}</p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <Link className={buttonStyles({ variant: 'secondary' })} to={RESTAURANTE_ROUTES.MIS_RESERVAS}>{t.irMisReservas}</Link>
+                  <Button type="button" variant="secondary" disabled={!isCliente || isChecking} onClick={() => void checkReservations()}>{isChecking ? t.comprobando : t.comprobarReservas}</Button>
+                </div>
+                {checkError && <p role="alert" className="mt-3">{t.errorComprobar}</p>}
+                {checkedEmpty && <div className="mt-3 space-y-3"><p>{t.intentoNoEncontrado}</p><Button type="button" variant="ghost" onClick={() => { saveMesaAttempt(mesa.id, null); setUncertain(null); setCheckedEmpty(false); }}>{t.prepararNuevoEnvio}</Button></div>}
+              </Alert>}
               <DraftSiteNotice blocked={siteBlocked} /><fieldset disabled={siteBlocked} className="contents">
             {errorLocal && (
               <Alert tone="error">
@@ -236,7 +262,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                   {t.sedeLabel}
                 </p>
                 <div className="mt-1 flex items-center gap-2 rounded-md border border-neutro-200 bg-neutro-100 px-3 py-2 text-sm text-neutro-900">
-                  <span><span lang="es">{mesa.Sucursal?.nombre || p('siteName')}</span></span>
+                  <span><span lang="es">{site?.nombre || mesa.Sucursal?.nombre || (mesa.sucursal_id ? `#${mesa.sucursal_id}` : p('siteName'))}</span></span>
                 </div>
               </div>
               <div>
@@ -244,14 +270,14 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                   {t.mesaLabel}
                 </p>
                 <div className="mt-1 flex items-center gap-2 rounded-md border border-neutro-200 bg-neutro-100 px-3 py-2 text-sm text-neutro-900">
-                  <span>{p('table')} — <span lang="es">{mesa.zona}</span> ({t.comensalesMax(capacidadMaxima)})</span>
+                  <span>{p('table')} #{mesa.id} — <span lang="es">{mesa.zona}</span> ({t.comensalesMax(capacidadMaxima)})</span>
                 </div>
               </div>
             </div>
 
-            <DateField label={t.fechaLabel} id="reserva-fecha" min={getTodayDateString()} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={createMutation.isPending} />
-            <TimeField label={t.horaLabel} id="reserva-hora" value={hora} onChange={(e) => setHora(e.target.value)} required disabled={createMutation.isPending} />
-            <Select label={t.comensalesLabel} hint={t.comensalesMax(capacidadMaxima)} id="reserva-comensales" value={comensales} onChange={(e) => setComensales(Number(e.target.value))} required disabled={createMutation.isPending}>
+            <DateField label={t.fechaLabel} id="reserva-fecha" min={getTodayInGuatemala()} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={createMutation.isPending || Boolean(uncertain)} />
+            <TimeField label={t.horaLabel} hint={t.ayudaHora} id="reserva-hora" value={hora} onChange={(e) => setHora(e.target.value)} required disabled={createMutation.isPending || Boolean(uncertain)} />
+            <Select label={t.comensalesLabel} hint={t.comensalesMax(capacidadMaxima)} id="reserva-comensales" value={comensales} onChange={(e) => setComensales(Number(e.target.value))} required disabled={createMutation.isPending || Boolean(uncertain)}>
               {Array.from({ length: capacidadMaxima }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{t.capacidadPersonas(n)}</option>)}
             </Select>
 
@@ -267,7 +293,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
               <Button
                 type="submit"
                 variant="primary"
-                disabled={createMutation.isPending}
+                disabled={!isCliente || createMutation.isPending || Boolean(uncertain) || mesa.estado === 'mantenimiento'}
               >
                 {createMutation.isPending ? t.confirmando : t.confirmarReserva}
               </Button>
@@ -275,6 +301,6 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
           </fieldset></form>
         )}
       </div>
-    </Modal>
+    </ServiceReservationPanel>
   );
 };

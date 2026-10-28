@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useInicioQuery } from '@/features/inicio/hooks/useInicio';
 import { HeroSection } from '@/features/inicio/components/HeroSection';
 import { BuscadorDisponibilidad } from '@/features/inicio/components/BuscadorDisponibilidad';
@@ -7,6 +8,7 @@ import { SedesSection } from '@/features/inicio/components/SedesSection';
 import { ExperienciasSection } from '@/features/inicio/components/ExperienciasSection';
 import { ContactoSection } from '@/features/inicio/components/ContactoSection';
 import type { InicioData } from '@/features/inicio/types';
+import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
 
 const DEFAULT_INICIO_DATA: InicioData = {
   id: 1,
@@ -23,7 +25,7 @@ const DEFAULT_INICIO_DATA: InicioData = {
     texto: 'Mark Harpur (Unsplash)',
   },
   hero_cta_texto: 'Reservar estancia',
-  hero_cta_enlace: '/crear-reserva',
+  hero_cta_enlace: '/reservar',
 
   presentacion_titulo: 'Hospitalidad con identidad y excelencia',
   presentacion_texto:
@@ -69,6 +71,10 @@ const DEFAULT_INICIO_DATA: InicioData = {
 
 export const HomePage: React.FC = () => {
   const { data } = useInicioQuery();
+  const { selected, sites } = usePublicPreferences();
+  const { hash } = useLocation();
+  // Portada real de la sede activa (o de la primera sede si se ven todas), con su nombre correcto.
+  const coverSite = (typeof selected === 'number' ? sites.find((s) => s.id === selected) : undefined) ?? sites[0];
 
   const inicioData: InicioData = {
     ...DEFAULT_INICIO_DATA,
@@ -77,13 +83,26 @@ export const HomePage: React.FC = () => {
     hero_subtitulo: data?.hero_subtitulo || DEFAULT_INICIO_DATA.hero_subtitulo,
     hero_cta_texto: data?.hero_cta_texto || DEFAULT_INICIO_DATA.hero_cta_texto,
     hero_cta_enlace: data?.hero_cta_enlace || DEFAULT_INICIO_DATA.hero_cta_enlace,
+    ...(coverSite?.imagen_url && {
+      hero_imagen_url: coverSite.imagen_url,
+      hero_imagen_alt: [coverSite.nombre, coverSite.ciudad].filter(Boolean).join(', '),
+      hero_imagen_creditos: coverSite.imagen_creditos ?? null,
+    }),
   };
 
+  useEffect(() => {
+    if (hash !== '#contacto') return;
+    const section = document.getElementById('contacto');
+    if (section) {
+      section.scrollIntoView({ block: 'start' });
+      section.focus({ preventScroll: true });
+    }
+  }, [hash, inicioData.contacto_visible, data?.id]);
 
   return (
     <div className="flex w-full flex-col">
       {/* 1. Hero Banner Principal */}
-      <HeroSection data={inicioData} />
+      <HeroSection data={inicioData} place={coverSite?.ciudad ?? undefined} />
 
       {/* 2. Buscador de Disponibilidad conectado en tiempo real */}
       <BuscadorDisponibilidad />

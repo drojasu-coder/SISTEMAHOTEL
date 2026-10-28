@@ -12,6 +12,518 @@ methodology:
   - REGRESSION
 
 findings:
+  - id: QA-ADMIN-LAYOUT-001
+    status: closed
+    severity: medium
+    category: administrative-responsive-overflow
+    invariant: >-
+      Inicio y tipos de habitación no desbordan horizontalmente la página;
+      las tablas pueden recorrerse con teclado y las acciones del formulario
+      son alcanzables mediante desplazamiento en móvil.
+    reproduction:
+      test_file: Frontend/src/pages/AdminPage.tsx
+      test_name: "Playwright, viewport 1024px y deviceScaleFactor 1"
+    expected: "document.scrollWidth <= innerWidth en 320, 390, 768, 1024 y 1440px."
+    actual_before_fix: >-
+      Inicio alcanzaba 1029px con viewport 1024px por un texto sr-only absoluto
+      en la acción de tabla; el encabezado de tipos alcanzaba 1053px porque
+      el botón nuevo y el texto compartían una fila sin espacio suficiente.
+    root_cause: >-
+      Nombre accesible posicionado fuera del contenedor desplazable y
+      encabezado flex sin ajuste de línea ni mínimo de ancho controlado.
+    correction: >-
+      aria-label en la acción de reserva; tabla compartida acotada y enfocable
+      para desplazamiento horizontal; encabezado de tipos con flex-wrap y
+      texto reducible. Navegación lateral desplazable, encabezado móvil sin
+      solapamientos y títulos Montserrat en Inicio y tipos.
+    verification:
+      browser: "Playwright, API real y PostgreSQL hotel_test_db; Inicio y tipos sin desbordamiento en los cinco anchos, ES/EN, sin pageerror."
+      regression: "95 pruebas frontend focalizadas aprobadas, incluidos Table, Tabs, ImageUploader y ResponsiveLayouts."
+  - id: QA-ADMIN-TYPE-001
+    status: closed
+    severity: medium
+    category: room-type-site-contract-and-ux
+    invariant: >-
+      El formulario envía sucursal_id de una sede autorizada; las categorías
+      generales son legibles para el personal pero solo editables por admin.
+    reproduction:
+      test_file: Frontend/src/features/tipos-habitacion/TiposHabitacionScope.test.tsx
+      test_name: "envía sucursal_id seleccionado al guardar"
+    expected: "Selector de sede autorizado y payload con sucursal_id; generales sin acción de edición para personal."
+    actual_before_fix: >-
+      Las tres pruebas RED fallaron: el formulario no tenía selector ni campo
+      sucursal_id y el listado ofrecía editar categorías generales al personal.
+    root_cause: "El contrato frontend antecedía a las reglas de alcance por sede del backend."
+    correction: >-
+      Selector obligatorio de sede desde metadatos privados de alcance,
+      sucursal_id explícito (null solo para general), opción general y edición
+      de generales solo para admin global. Personal limitado a sus sedes;
+      listado identifica el alcance de cada tipo e incluye generales al filtrar.
+      Formularios y validaciones ES/EN, tarifa vacía inválida y cero explícito
+      válido; creación/edición invalidan el listado y reintentar una fotografía
+      fallida conserva el registro creado. Cachés privados por usuario y rol.
+    verification:
+      tests: "TiposHabitacionScope 5/5 y TiposHabitacionPage 10/10; incluidas creación, actualización visible, acceso general, sedes autorizadas e inglés."
+      browser: "API real en hotel_test_db: crear, editar y recargar listado; admin general disponible y recepción solo sede propia, generales en lectura."
+      regression: "95 pruebas frontend focalizadas aprobadas; build y TypeScript frontend correctos."
+  - id: QA-ADMIN-DASH-001
+    status: closed
+    severity: high
+    category: dashboard-data-and-site-scope
+    invariant: >-
+      Inicio separa estado físico y ocupación por estancias confirmadas,
+      muestra movimientos del día y limita todas sus consultas a sedes autorizadas.
+      La ausencia de datos y los errores de consulta no se confunden.
+    reproduction:
+      test_file: backend/tests/admin/dashboard.test.ts
+      test_name: "separa habitaciones ocupadas de estancias confirmadas y muestra exclusivamente movimientos del día"
+    expected: "Dos habitaciones físicas ocupadas y una estancia confirmada: 50%; ninguna llegada pendiente/futura presentada como llegada confirmada del día."
+    actual_before_fix: >-
+      PostgreSQL QA reprodujo 100% en vez de 50% y una llegada pendiente
+      contada como programada. El endpoint no recibía el alcance del usuario,
+      cargaba facturas/pagos globales y las listas de hoy incluían fechas futuras.
+    root_cause: >-
+      Math.max entre estado físico y reservas, filtros diferentes entre
+      indicadores y listas, y consultas independientes sin alcance de sede.
+    correction: >-
+      Servicio propio del dashboard reutiliza el alcance backend existente sin
+      cambiar permisos. Ocupación = habitaciones distintas con estancia
+      confirmada que cumple entrada <= hoy < salida / inventario actual;
+      estado físico separado. Llegadas/salidas confirmadas exactamente hoy,
+      pendientes y actividad actualizada con el mismo ámbito, sin facturación
+      ni datos personales. Lectura consistente REPEATABLE READ, validación de
+      filtros, fallo propagado y porcentaje null si no existe inventario.
+      Frontend valida el contrato y la sede de respuesta, oculta indicadores
+      tras fallo de consulta y actualiza caché tras cambios de reserva/habitación.
+      Selector compartido solo visible en pantallas que aplican su filtro.
+    verification:
+      database_guard: "[QA DB GUARD] Base de datos detectada: hotel_test_db; [QA DB GUARD] ✅ Entorno de pruebas seguro"
+      tests: "Dashboard PostgreSQL 5/5; regresión dashboard, reservaHabitacion.adminAccess y OpenAPI 19/19."
+      frontend: "Inicio operativo 4/4 y ámbito compartido 3/3 dentro de 95 pruebas focalizadas aprobadas. LoginForm, RequireAuth y ResponsiveLayouts corregidos mediante contratos de mocks y expectativas vigentes, sin cambiar autenticación ni debilitar controles."
+      production_readonly: "2026-10-27: hotel_db consultada con default_transaction_read_only=on; cuatro sedes, 276 habitaciones, ninguna estancia confirmada incluye hoy; seis confirmadas en otras fechas y dos pendientes. Sin escrituras ni migraciones."
+      browser: "API real hotel_test_db: 1/4 habitaciones con estancia confirmada = 25%, 2 físicamente ocupadas, llegada 1, salida 1 y pendiente 1; error 503 sin métricas ficticias."
+      static: "TypeScript backend, build/TypeScript frontend y git diff --check correctos."
+  - id: QA-ROOM-UX-001
+    status: closed
+    severity: medium
+    category: frontend-search-continuity-and-ux
+    invariant: >-
+      Inicio y /reservar comparten estancia y huéspedes; una búsqueda
+      confirmada publica los criterios vigentes en la URL y conserva el
+      contexto al explorar catálogo y detalle, sin consultas durante la edición.
+    reproduction:
+      test_file: Frontend/src/features/inicio/publicNavigation.test.tsx
+      test_name: "conserva rango y huéspedes entre Inicio, catálogo, detalle y /reservar; publica criterios y no busca durante la edición"
+    expected: "Un rango visual coherente, cantidad válida, criterios recuperables y resultados vinculados a su consulta real."
+    actual_before_fix: >-
+      Inicio y CrearReservaPage utilizaban campos nativos separados; el
+      RoomSearchPanel existente añadía un calendario junto a esos mismos
+      campos. Inicio limitaba visualmente huéspedes a seis aunque el
+      contrato de disponibilidad solo exige un entero positivo. handleSearch
+      actualizaba submittedQuery pero no la URL; navegar con enlaces sin
+      criterios perdía la estancia del formulario.
+    root_cause: >-
+      Controles y estado de transferencia distintos entre pantallas;
+      calendario reusable no integrado en el recorrido principal y estado
+      de búsqueda confirmado no sincronizado con sus parámetros públicos.
+    correction: >-
+      StayDateRange compartido con DayPicker ya instalado, dos meses desde
+      768px y uno en móvil, selección independiente de llegada/salida,
+      mínimo una noche y hoy en Guatemala. Alternativa manual dentro del
+      diálogo; foco devuelto y acción de aplicar visible. GuestCount con
+      botones y mínimo uno, sin inventar un máximo comercial. Draft de
+      transferencia limitado a fechas y huéspedes: URL explícita prevalece
+      y sede general sigue en PublicPreferences. Resumen de criterios,
+      anuncio de cantidad y acceso a resultados iniciado por el usuario,
+      sin scroll/foco automático. Tipos como opciones visuales y capacidad,
+      orden y búsqueda textual dentro de una sección expandible.
+    files_changed:
+      production:
+        - Frontend/src/features/habitaciones/public/StayDateRange.tsx
+        - Frontend/src/features/habitaciones/public/GuestCount.tsx
+        - Frontend/src/features/habitaciones/public/RoomCatalogFilters.tsx
+        - Frontend/src/features/habitaciones/public/stayDraft.ts
+        - Frontend/src/features/habitaciones/public/RoomSearchPanel.tsx
+        - Frontend/src/features/habitaciones/public/RoomCatalog.tsx
+        - Frontend/src/features/habitaciones/public/RoomDetail.tsx
+        - Frontend/src/features/habitaciones/public/roomSearch.ts
+        - Frontend/src/features/crear-reserva/components/CriteriosBusquedaForm.tsx
+        - Frontend/src/features/crear-reserva/components/HabitacionesDisponiblesList.tsx
+        - Frontend/src/features/inicio/components/BuscadorDisponibilidad.tsx
+        - Frontend/src/pages/CrearReservaPage.tsx
+        - Frontend/src/i18n/publicExtra.ts
+      tests:
+        - Frontend/src/features/habitaciones/public/StayControls.test.tsx
+        - Frontend/src/features/habitaciones/public/RoomPages.test.tsx
+        - Frontend/src/features/inicio/publicNavigation.test.tsx
+        - Frontend/src/features/crear-reserva/CrearReservaPage.test.tsx
+        - Frontend/src/features/crear-reserva/CrearReservaPublic.test.tsx
+        - Frontend/src/features/preferencias/consumers.test.tsx
+        - Frontend/src/test/integration/reservarPublicReal.integration.test.tsx
+        - Frontend/src/test/stayControls.ts
+    final_verification:
+      related: "153 passed, 16 archivos; incluye 5 pruebas HTTP reales de solo lectura"
+      calendar: >-
+        Selección visual, edición conservando la otra fecha, conteo de
+        noches, cambio de mes, un/dos meses, límite local de Guatemala,
+        rechazo de salida igual/anterior y datos alternativos inválidos.
+        ArrowRight mueve el foco; Tab queda dentro del diálogo incluso
+        con rango incompleto; Escape devuelve foco al selector.
+      real_http: >-
+        Antigua, 2026-11-10 a 2026-11-12, tres huéspedes: 200, Suite id 3,
+        dos noches, Q3,000.00. Edición de salida a 2026-11-13 y cuatro
+        huéspedes: 200, tres noches, Q4,500.00. Importes del servidor.
+      browser: >-
+        Navegador integrado: Inicio, catálogo, detalle, regreso al catálogo,
+        reserva y conservación del contexto; filtros de tipo/capacidad y
+        búsqueda; español e inglés. Móvil 390x844, tablet 768x1024 y
+        escritorio; sin desbordamiento horizontal en vistas medidas.
+        Montserrat verificada en estilos efectivos. Sin salto automático
+        a resultados; el botón explícito desplaza y enfoca la región.
+      typecheck: green
+      build: "green; permanece advertencia de tamaño del bundle"
+      database: "Sin SQL, cuentas, reservas ni pagos reales; observador de integración impide cualquier método distinto de GET"
+      dependencies: "Sin dependencias nuevas; DayPicker 9.13.0, Modal, Button y DateField existentes"
+      pending: "Firefox directo y sesión autenticada real; autorización/retorno y seguridad de creación cubiertos con HTTP simulado"
+
+  - id: QA-ROOM-NAV-001
+    status: closed
+    severity: high
+    category: frontend-public-navigation
+    files_changed:
+      production:
+        - Frontend/src/features/inicio/components/BuscadorDisponibilidad.tsx
+        - Frontend/src/features/inicio/components/HeroSection.tsx
+        - Frontend/src/features/inicio/components/ContactoSection.tsx
+        - Frontend/src/features/preferencias/SiteSelector.tsx
+        - Frontend/src/features/habitaciones/public/RoomCatalog.tsx
+        - Frontend/src/features/habitaciones/public/RoomDetail.tsx
+        - Frontend/src/features/habitaciones/public/roomSearch.ts
+        - Frontend/src/pages/CrearReservaPage.tsx
+        - Frontend/src/features/crear-reserva/components/CriteriosBusquedaForm.tsx
+        - Frontend/src/app/router/AppRouter.tsx
+        - Frontend/src/features/auth/reservationDraft.ts
+        - Frontend/src/features/auth/useAuthReturn.ts
+        - Frontend/src/features/auth/secureReturn.ts
+        - Frontend/src/i18n/publicExtra.ts
+      tests:
+        - Frontend/src/features/inicio/publicNavigation.test.tsx
+        - Frontend/src/features/habitaciones/public/RoomPages.test.tsx
+        - Frontend/src/features/auth/continuity.test.tsx
+        - Frontend/src/features/auth/reservationDraft.test.ts
+        - Frontend/src/app/router/ReservasRouter.test.tsx
+        - Frontend/src/features/preferencias/consumers.test.tsx
+        - Frontend/src/test/integration/reservarPublicReal.integration.test.tsx
+    invariant: >-
+      Inicio, catálogo y detalle confluyen en /reservar conservando sede,
+      fechas, huéspedes y habitación; los errores de Inicio aparecen junto
+      a los campos y la autenticación se solicita solo al confirmar.
+    reproduction:
+      test_file: Frontend/src/features/inicio/publicNavigation.test.tsx
+      command: npm --prefix Frontend test -- src/features/inicio/publicNavigation.test.tsx
+    expected: "Criterios válidos llevan a /reservar; criterios inválidos muestran errores accesibles en Inicio."
+    actual_before_fix: >-
+      Cinco pruebas RED: destino /habitaciones, ausencia de error de fecha
+      pasada, Todas las sedes aceptada por el buscador aunque el proceso
+      requiere una sede concreta, catálogo con formularios duplicados y
+      detalle sin enlace público al proceso principal. En el navegador,
+      Antigua 2026-10-27 a 2026-10-28 con dos huéspedes sí avanzaba a
+      /habitaciones; no se reprodujo la permanencia exacta informada con
+      esos criterios válidos. El navegador bloqueaba onSubmit mediante
+      validación HTML antes de poder mostrar errores propios por campo.
+    root_cause: >-
+      BuscadorDisponibilidad construía sede/buscar para el catálogo y
+      mezclaba validación nativa con validación parcial del controlador.
+      Catálogo y detalle duplicaban búsqueda; el detalle duplicaba creación
+      y pedía login anticipado. Los enlaces de tarjetas omitían el ID de
+      habitación y la redirección de compatibilidad descartaba el query.
+    correction: >-
+      Reutilizar el esquema de criterios y mostrar errores por campo con
+      noValidate; navegar a /reservar con sucursal_id y criterios exactos.
+      Catálogo informativo con búsqueda por tipo, filtro de tipo y orden
+      por precio/capacidad, sin formulario de estancia ni rangos de precio.
+      Detalle informativo que enlaza al mismo proceso. Selección por ID
+      solo tras comprobar disponibilidad vigente. Compatibilidad y retorno
+      de login conservan parámetros públicos, filtrando secretos e importes.
+      Las pruebas de 409, creación incierta y adición separada se mantienen
+      recorriendo CrearReservaPage, donde ahora reside toda creación.
+    final_verification:
+      focused: "8 passed (publicNavigation.test.tsx)"
+      related: "144 passed en 15 archivos, incluidas 4 pruebas de HTTP real sin respuestas sustituidas"
+      real_http: >-
+        Inicio 2026-10-27 a 2026-10-28, Antigua, dos huéspedes: GET
+        /api/public/habitaciones/disponibles 200, Doble y Suite. Catálogo,
+        detalle y selección de Doble id 2: 200, una noche y Q1,000.00.
+      browser: >-
+        Navegador integrado: Inicio válido e inválido, catálogo sin fechas,
+        detalle, reserva con y sin criterios, filtro móvil, sede Atitlán,
+        alias, resumen y acceso a login. Español e inglés; viewports
+        390x844 y 1440x900 sin desbordamiento horizontal en las vistas medidas.
+      typecheck: green
+      build: green
+      database: "Sin SQL, sin backend integration QA, sin cuentas/reservas/pagos creados; HTTP real limitado a GET"
+      pending: "Firefox directo y login con credenciales reales; login/registro y retorno cubiertos con HTTP simulado"
+
+  - id: QA-ROOM-NAV-002
+    status: closed
+    severity: high
+    category: frontend-site-initialization
+    invariant: "Un enlace con sede explícita puede inicializar la búsqueda aunque la preferencia global sea otra."
+    reproduction:
+      test_file: Frontend/src/features/inicio/publicNavigation.test.tsx
+      test_name: "aplica la sede explícita del enlace aunque la preferencia previa sea otra, sin invalidar su búsqueda inicial"
+    expected: "Habitación solicitada seleccionada y habilitada tras GET vigente de la sede del enlace."
+    actual_before_fix: "RED: no aparece Habitación seleccionada; navegador con preferencia Atitlán y enlace Antigua invalidaba criterios iniciales."
+    root_cause: "El watcher de React Hook Form trataba setValue al sincronizar la sede como una edición manual."
+    correction: >-
+      Notificar onCriteriaChange solo para eventos change del usuario;
+      el cambio manual de sede global sigue invalidando resultados por
+      incompatibleSite en CrearReservaPage.
+    final_verification:
+      isolated: green
+      related: "144 passed; mismo typecheck/build y límites de QA-ROOM-NAV-001"
+      browser: "Preferencia Atitlán -> /crear-reserva con sucursal_id=1 -> /reservar conserva criterios y selecciona Doble id 2 habilitada."
+
+  - id: QA-ROOM-UI-001
+    status: closed
+    severity: high
+    category: frontend-public-query
+    invariant: >-
+      /reservar sin sesión consulta solo los tipos públicos y presenta el
+      estado de esa consulta, incluidos sus errores y reintentos.
+    reproduction:
+      test_file: Frontend/src/test/integration/reservarPublicReal.integration.test.tsx
+      test_name: "procesa los tres tipos reales sin ejecutar la consulta privada ni mostrar su error"
+      command: RUN_PUBLIC_ROOM_INTEGRATION=1 npm --prefix Frontend test -- src/test/integration/reservarPublicReal.integration.test.tsx
+    expected: "GET /api/public/tipos-habitacion 200; tres opciones reales y opción general; ninguna consulta privada"
+    actual_before_fix: >-
+      El test real falla al detectar GET /api/tipos-habitacion 401
+      AUTH_TOKEN_REQUIRED junto al GET público 200. El navegador integrado
+      muestra el aviso de error aunque aquí sí aparecen los tres tipos.
+    root_cause: >-
+      useTiposHabitacionQuery se ejecutaba incondicionalmente y el aviso y
+      reintento observaban su estado privado, incluso cuando el selector
+      consumía tiposPublicosQuery. El JSON público y la URL son correctos;
+      CORS permite http://localhost:5173.
+    correction: >-
+      Hook privado con enabled=isCliente; consulta pública tras resolver la
+      sesión; datos, error y refetch provienen de la consulta activa.
+    final_verification:
+      database: "Solo GET contra el servidor existente; sin SQL, cuentas ni reservas creadas"
+      real_http: "4 passed; respuestas conservadas sin sustituir fetch por datos inventados"
+      focused_related: "144 passed en 15 archivos, incluidas las 4 pruebas HTTP reales"
+      broader_regression: >-
+        Los cuatro fallos de la ampliación anterior quedan resueltos al
+        adaptar las pruebas al recorrido solicitado por el usuario en
+        QA-ROOM-NAV-001: acceso público a /reservar y continuidad de login
+        desde el único proceso. Se conservan las verificaciones de
+        selección, permisos y ausencia de POST de negocio. Regresión: 144 passed.
+      browser: "Navegador integrado: tres tipos, disponibilidad, resumen y redirección a login verificados; Firefox no accesible"
+      authenticated_return: "Verificado con HTTP simulado; pendiente con sesión real"
+      typecheck: green
+      build: "green; advertencia de tamaño del bundle"
+
+  - id: QA-ROOM-UI-002
+    status: closed
+    severity: high
+    category: frontend-public-availability
+    invariant: "El visitante puede buscar disponibilidad real antes de autenticarse."
+    reproduction:
+      test_file: Frontend/src/test/integration/reservarPublicReal.integration.test.tsx
+      test_name: "busca en Antigua, selecciona una habitación real y pide login solo al continuar, conservando los criterios al volver"
+    expected: "GET público de disponibilidad y habitaciones devueltas por el servidor"
+    actual_before_fix: "La prueba no encuentra botones de selección; el navegador muestra cero resultados sin ejecutar la consulta."
+    root_cause: "CrearReservaPage pasaba isCliente como condición obligatoria de enabled pese al soporte público del hook."
+    correction: "Habilitar búsqueda sin sesión y separar las claves públicas y privadas por identidad autenticada."
+    final_verification:
+      real_http: "Antigua, 2026-11-10 a 2026-11-12, 2 huéspedes, Suite: 200, habitación id 3, total estimado Q3,000.00"
+      regression: "Mismas verificaciones y pendientes que QA-ROOM-UI-001"
+
+  - id: QA-ROOM-UI-003
+    status: closed
+    severity: medium
+    category: frontend-reservation-return
+    invariant: "El retorno de login conserva tipo, sede, fechas, huéspedes y selección válida sin crear automáticamente una reserva."
+    reproduction:
+      test_file: Frontend/src/test/integration/reservarPublicReal.integration.test.tsx
+      test_name: "busca en Antigua, selecciona una habitación real y pide login solo al continuar, conservando los criterios al volver"
+    expected: "Suite permanece seleccionada al restaurar tipo_habitacion_id=3."
+    actual_before_fix: "El selector vuelve vacío/general; el test real falla con valor esperado 3 y recibido vacío."
+    root_cause: >-
+      La restauración de submittedQuery y los valores iniciales omitían
+      tipo_habitacion_id. Los selectores sin valor controlado perdían la
+      selección inicial si sus opciones llegaban después.
+    correction: "Restaurar el filtro del URL y vincular los selectores de sede y tipo al valor de React Hook Form."
+    final_verification:
+      real_http: "Retorno al URL conservando los criterios y habitación seleccionada: passed"
+      simulated_http: "Login completo, reconsulta privada y ninguna creación de reserva: passed"
+      regression: "Mismas verificaciones y pendientes que QA-ROOM-UI-001"
+
+  - id: QA-WELL-UI-001
+    status: closed
+    severity: medium
+    category: frontend-duplicate-submit
+    invariant: "Dos submit antes del render siguiente deben crear una sola cita."
+    reproduction:
+      test_file: Frontend/src/features/bienestar/ficha4C.test.tsx
+      test_name: "QA-WELL-UI-001: dos submit antes del render siguiente crean una sola cita"
+      command: npm --prefix Frontend test -- src/features/bienestar/ficha4C.test.tsx -t QA-WELL-UI-001
+    expected:
+      create_calls: 1
+    actual_before_fix:
+      create_calls: 2
+      isolated: "1 failed"
+    root_cause: >-
+      La validación asíncrona de React Hook Form permitía dos onSubmit antes
+      de que mutation.isPending reflejara la primera creación.
+    correction: >-
+      Bloqueo sincrónico previo a la validación del formulario, retry false
+      explícito y registro de creación pendiente/creada sin precios ni credenciales.
+    regression_test:
+      test_file: Frontend/src/features/bienestar/ficha4C.test.tsx
+      test_name: "QA-WELL-UI-001: dos submit antes del render siguiente crean una sola cita"
+    verification_scope: "API simulada; sin escrituras reales ni defecto de concurrencia PostgreSQL atribuido"
+    final_verification:
+      isolated: green
+      focused: "24 Ficha 4C tests passed; 71 related tests passed"
+      full_frontend: "668 passed, 19 pre-existing skipped; 2 workers"
+      typecheck: green
+      build: green
+      regression: green
+      new_failures: none
+
+  - id: QA-WELL-UI-002
+    status: closed
+    severity: medium
+    category: frontend-financial-display
+    invariant: "La confirmación debe mostrar la tarifa del servicio devuelta con la cita."
+    reproduction:
+      test_file: Frontend/src/features/bienestar/ficha4C.test.tsx
+      test_name: "QA-WELL-UI-002: la confirmación usa la tarifa devuelta con la cita, aunque cambie el catálogo"
+      command: npm --prefix Frontend test -- src/features/bienestar/ficha4C.test.tsx -t QA-WELL-UI-002
+    expected:
+      displayed_tariff: "399.75 returned with appointment"
+    actual_before_fix:
+      displayed_tariff: "380.50 from earlier catalog"
+      isolated: "1 failed"
+    root_cause: "La confirmación usaba servicio.precio del catálogo anterior y descartaba la relación recibida con la cita."
+    correction: >-
+      Mostrar ServicioBienestar.precio de la respuesta de cita con MoneyReference,
+      sin asumir pago, total histórico ni gratuidad; tipo manual admite DECIMAL string real.
+    regression_test:
+      test_file: Frontend/src/features/bienestar/ficha4C.test.tsx
+      test_name: "QA-WELL-UI-002: la confirmación usa la tarifa devuelta con la cita, aunque cambie el catálogo"
+    verification_scope: "Cambio de tarifa simulado; no modifica precios del backend"
+    final_verification:
+      isolated: green
+      focused: "24 Ficha 4C tests passed; 71 related tests passed"
+      full_frontend: "668 passed, 19 pre-existing skipped; 2 workers"
+      typecheck: green
+      build: green
+      regression: green
+      new_failures: none
+
+  - id: QA-WELL-CART-001
+    status: closed
+    severity: medium
+    category: frontend-duplicate-cart-add
+    invariant: "Dos clics en un turno deben iniciar una sola adición de la misma cita."
+    reproduction:
+      test_file: Frontend/src/features/bienestar/ficha4C.test.tsx
+      test_name: "QA-WELL-CART-001: dos clics en el mismo turno añaden la cita al carrito una sola vez"
+      command: npm --prefix Frontend test -- src/features/bienestar/ficha4C.test.tsx -t QA-WELL-CART-001
+    expected:
+      get_or_create_cart_calls: 1
+    actual_before_fix:
+      get_or_create_cart_calls: 2
+      isolated: "1 failed"
+    root_cause: "El botón dependía de isLoading y el hook compartido no adquiría un bloqueo sincrónico."
+    correction: >-
+      useAddReservaToCarrito bloquea inmediatamente con useRef y libera en
+      onSettled, conservando retry false y la misma referencia al reintentar.
+    regression_test:
+      test_file: Frontend/src/features/bienestar/ficha4C.test.tsx
+      test_name: "QA-WELL-CART-001: dos clics en el mismo turno añaden la cita al carrito una sola vez"
+    verification_scope: "API simulada; prueba de duplicado UI del componente existente"
+    final_verification:
+      isolated: green
+      focused: "24 Ficha 4C tests passed; 71 related tests passed"
+      full_frontend: "668 passed, 19 pre-existing skipped; 2 workers"
+      typecheck: green
+      build: green
+      regression: green
+      new_failures: none
+
+  - id: QA-REST-UI-001
+    status: closed
+    severity: medium
+    category: frontend-recovery
+    invariant: >-
+      Tras un POST de reserva de mesa cuyo resultado se desconoce, la interfaz
+      debe bloquear otro envío y permitir comprobar las reservas propias.
+    reproduction:
+      test_file: Frontend/src/features/restaurante/ficha4B.test.tsx
+      test_name: "QA-REST-UI-001: ante pérdida de red bloquea otro envío y ofrece consultar reservas propias"
+      command: npm --prefix Frontend test -- src/features/restaurante/ficha4B.test.tsx -t QA-REST-UI-001
+    expected:
+      submit: blocked_until_explicit_recovery
+      recovery: authenticated_own_reservations_read
+    actual_before_fix:
+      submit: enabled_after_network_failure
+      recovery: generic_network_error_without_panel_action
+      isolated: "1 failed"
+    root_cause: >-
+      httpClient convierte la pérdida de red en ApiError status 0. El modal
+      solo trataba como inciertos los errores que no eran ApiError y no
+      conservaba el intento ni bloqueaba el siguiente POST.
+    correction: >-
+      Marca de intento antes del POST, clasificación de resultado incierto,
+      bloqueo en memoria y sessionStorage, lectura nueva de reservas propias
+      y confirmación explícita antes de preparar otro envío; nunca retry del POST.
+    regression_test:
+      test_file: Frontend/src/features/restaurante/ficha4B.test.tsx
+      test_name: "QA-REST-UI-001: ante pérdida de red bloquea otro envío y ofrece consultar reservas propias"
+    verification_scope: "API simulada; sin escrituras de base de datos ni defecto backend atribuido"
+    final_verification:
+      focused: "2 reproduced defects now pass; Ficha 4B 30 passed; Ficha 4A/catalog regression 48 passed"
+      full_frontend: "644 passed, 19 pre-existing skipped; 2 workers, no test/timeout changes"
+      typecheck: green
+      build: green
+      regression: green
+      new_failures: none
+
+  - id: QA-REST-UI-002
+    status: closed
+    severity: medium
+    category: frontend-duplicate-submit
+    invariant: "Dos submit en el mismo turno deben producir un solo POST de creación."
+    reproduction:
+      test_file: Frontend/src/features/restaurante/ficha4B.test.tsx
+      test_name: "QA-REST-UI-002: dos submit en el mismo turno producen una sola creación"
+      command: npm --prefix Frontend test -- src/features/restaurante/ficha4B.test.tsx -t QA-REST-UI-002
+    expected:
+      create_requests: 1
+    actual_before_fix:
+      create_requests: 2
+      isolated: "1 failed"
+    root_cause: >-
+      El guard dependía exclusivamente de mutation.isPending, que todavía
+      era falso cuando llegaba un segundo evento antes del render siguiente.
+    correction: >-
+      useRef adquiere el bloqueo sincrónico antes de mutateAsync, con
+      liberación en finally y protección adicional de confirmación/resultado incierto.
+    regression_test:
+      test_file: Frontend/src/features/restaurante/ficha4B.test.tsx
+      test_name: "QA-REST-UI-002: dos submit en el mismo turno producen una sola creación"
+    verification_scope: "API simulada; prueba de duplicado UI, no prueba de concurrencia PostgreSQL"
+    final_verification:
+      focused: "2 reproduced defects now pass; Ficha 4B 30 passed; Ficha 4A/catalog regression 48 passed"
+      full_frontend: "644 passed, 19 pre-existing skipped; 2 workers, no test/timeout changes"
+      typecheck: green
+      build: green
+      regression: green
+      new_failures: none
+
   - id: QA-RA-FIN-CANDIDATE-001
     status: closed
     severity: high
@@ -7223,3 +7735,225 @@ findings:
       full_frontend: "602 passed, 19 pre-existing skipped; complete inventory across 3 shards"
       regression: green
       new_failures: none
+
+  - id: QA-ADMIN-FACT-AUTH-001
+    status: closed
+    severity: high
+    category: fiscal-read-role-authorization
+    invariant: >-
+      Solo admin, recepcionista, gerente_habitaciones y cliente deben alcanzar
+      los controladores de lectura fiscal. La propiedad del cliente se conserva
+      en los servicios existentes.
+    reproduction:
+      test_file: backend/tests/unit/adminFiscalRoles.test.ts
+      command: npm --prefix backend test -- --project baseline tests/unit/adminFiscalRoles.test.ts
+      database: "No utilizada; autenticacion y controladores simulados, middleware de roles real"
+    expected:
+      operational_and_restaurant_manager: "403 INSUFFICIENT_PERMISSIONS"
+    actual_before_fix:
+      operational_and_restaurant_manager: "200; 2 pruebas fallidas, 5 correctas"
+    root_cause: >-
+      Los cuatro GET fiscales solo exigian autenticacion; los servicios filtran
+      por propietario exclusivamente al rol cliente. Un rol operativo alcanzaba
+      las lecturas globales.
+    correction: >-
+      Integrada selectivamente la restriccion de roles de Jose en factura.routes.ts
+      y facturaItem.routes.ts, manteniendo los controles de propiedad existentes.
+    final_verification:
+      isolated: "7 passed"
+      frontend_routes_permissions_layout: "76 passed"
+      real_anonymous_get: "401 AUTH_TOKEN_REQUIRED"
+      authenticated_database_integration: "Pendiente; aislamiento 55433 no disponible, no se uso 55432"
+
+  - id: QA-ADMIN-CONTRACT-001
+    status: closed
+    severity: medium
+    category: frontend-admin-envelope-compatibility
+    invariant: >-
+      El selector de sedes debe aceptar el contrato real status=success y data
+      sin exigir la bandera success de otros controladores administrativos.
+    reproduction:
+      test_file: Frontend/src/features/admin-core/workbench.test.ts
+      test_name: acepta el contrato real de sucursales con status success sin bandera success
+      actual_http: "GET /api/sucursales: 200, status success, data array con 4 registros"
+      database: "Solo lectura HTTP; pruebas con API simulada, ninguna escritura"
+    expected:
+      read_list: "Devuelve los registros de sedes"
+    actual_before_fix:
+      read_list: "Rechaza la respuesta con lista valida; 1 failed, 4 passed"
+    root_cause: >-
+      Durante la integracion se agrego una comprobacion exclusiva de response.success;
+      sucursales utiliza la envoltura status=success. No era un defecto del backend.
+    correction: >-
+      El lector admite ambos contratos de exito observados y rechaza envolturas
+      fallidas o datos que no sean listas. El mock de sedes reproduce la respuesta real.
+    final_verification:
+      frontend_focused_and_regression: "76 passed, 9 files"
+      frontend_typecheck: green
+      frontend_build: green
+
+  - id: QA-ADMIN-UX-001
+    status: closed
+    severity: medium
+    category: frontend-admin-mobile-overflow
+    invariant: >-
+      Las tarjetas de Personal y Usuarios deben conservar los datos y acciones
+      dentro del ancho de pantalla, incluidos nombres y correos largos.
+    reproduction:
+      test_file: Frontend/scripts/verify-admin-responsive.cjs
+      command: >-
+        HUNAHPU_QA_CREDENTIALS_FILE=<archivo-protegido-externo>
+        HUNAHPU_PLAYWRIGHT_MODULE=<modulo-playwright-disponible>
+        node Frontend/scripts/verify-admin-responsive.cjs
+      database: "hotel_db de desarrollo; login real y GET, ninguna mutacion de registros"
+    expected:
+      mobile: "Ancho del documento igual al viewport; buscador accesible"
+    actual_before_fix:
+      chromium: "Viewport 390px: documento 557px; regresion a 320px: documento 558px"
+    root_cause: >-
+      Las tarjetas y el bloque de texto conservaban su ancho minimo intrinseco;
+      los correos sin espacios ensanchaban la columna del listado.
+    correction: >-
+      PersonalPage permite reducir la tarjeta y el bloque de texto, aplica
+      overflow-wrap:anywhere y conserva el ancho de las etiquetas de estado.
+    final_verification:
+      real_chromium: "16 comprobaciones aprobadas; ES/EN, Empleados/Usuarios, 320/390/768/1440px"
+      browser_errors: 0
+      unexpected_writes: 0
+      related_frontend_regression: "74 passed, 9 files"
+
+  - id: QA-WELL-SITE-001
+    status: fixed
+    severity: medium
+    category: frontend-commercial-integration
+    invariant: El formulario identifica la sede del servicio, el enlace conserva la
+      sede y solo se ofrecen terapeutas asignables a los servicios mostrados.
+    reproduction:
+      test_file: Frontend/src/features/commercialClosure.test.tsx
+      test_name: identifica la sede real del tratamiento en el formulario anónimo y
+        restringe sus terapeutas
+      environment: Vitest con HTTP simulado; contraste de contratos y Chromium con API
+        real de desarrollo, sin reservas ni pagos
+    actual_before_fix: El panel decía catálogo general para un servicio de Antigua;
+      el enlace de otra sede se ignoraba y profesionales de otra sede ocultaban la falta
+      de terapeutas locales.
+    root_cause: El panel omitía sucursal_id al componer ServiceReservationPanel; el
+      catálogo ignoraba sede en URL y comprobaba terapeutas globales.
+    correction: Se transmite la sede, se reutilizan el contexto del enlace y la guarda
+      de sede, y la comprobación de terapeutas respeta la sede del servicio.
+    verification:
+      focused: 91 passed (9 archivos); 23 passed adicionales/repetidos en 2 archivos
+        tras ordenar la confirmación
+      browser: 27 comprobaciones reales de preparación, validaciones, sedes, navegación
+        y retorno del login; cero errores JavaScript
+      global_typecheck_and_build: Bloqueados por 6 errores ajenos en Frontend/src/pages/AdminPage.tsx,
+        archivo modificado concurrentemente y fuera del alcance; no se debilitó la configuración
+        ni se editó ese archivo
+    closure_pending: Typecheck/build global sin errores del panel administrativo; no
+      se marca cerrado mientras esa comprobación siga bloqueada.
+  - id: QA-EVT-SEARCH-001
+    status: fixed
+    severity: low
+    category: frontend-commercial-integration
+    invariant: La búsqueda pública encuentra los nombres de salones aunque el visitante
+      omita tildes.
+    reproduction:
+      test_file: Frontend/src/features/commercialClosure.test.tsx
+      test_name: encuentra nombres sin exigir tildes al escribir la búsqueda
+      environment: Vitest con HTTP simulado; contraste de contratos y Chromium con API
+        real de desarrollo, sin reservas ni pagos
+    actual_before_fix: La consulta salon no encontraba los salones publicados como Salón.
+    root_cause: La búsqueda solo convertía a minúsculas sin normalizar diacríticos.
+    correction: Normalización local de búsqueda, conservando los nombres originales
+      publicados.
+    verification:
+      focused: 91 passed (9 archivos); 23 passed adicionales/repetidos en 2 archivos
+        tras ordenar la confirmación
+      browser: 27 comprobaciones reales de preparación, validaciones, sedes, navegación
+        y retorno del login; cero errores JavaScript
+      global_typecheck_and_build: Bloqueados por 6 errores ajenos en Frontend/src/pages/AdminPage.tsx,
+        archivo modificado concurrentemente y fuera del alcance; no se debilitó la configuración
+        ni se editó ese archivo
+    closure_pending: Typecheck/build global sin errores del panel administrativo; no
+      se marca cerrado mientras esa comprobación siga bloqueada.
+  - id: QA-EVT-COPY-001
+    status: fixed
+    severity: low
+    category: frontend-commercial-integration
+    invariant: El acceso de una cotización describe una solicitud y no una reserva confirmada.
+    reproduction:
+      test_file: Frontend/src/features/commercialClosure.test.tsx
+      test_name: el acceso anónimo describe una solicitud de cotización y no una confirmación
+        de reserva
+      environment: Vitest con HTTP simulado; contraste de contratos y Chromium con API
+        real de desarrollo, sin reservas ni pagos
+    actual_before_fix: El formulario de solicitud decía inicie sesión para confirmar
+      su reserva.
+    root_cause: El aviso compartido utilizaba siempre el texto de confirmación de reserva.
+    correction: El aviso acepta texto anónimo opcional; Eventos proporciona su mensaje
+      ES/EN de solicitud sin cambiar los otros módulos.
+    verification:
+      focused: 91 passed (9 archivos); 23 passed adicionales/repetidos en 2 archivos
+        tras ordenar la confirmación
+      browser: 27 comprobaciones reales de preparación, validaciones, sedes, navegación
+        y retorno del login; cero errores JavaScript
+      global_typecheck_and_build: Bloqueados por 6 errores ajenos en Frontend/src/pages/AdminPage.tsx,
+        archivo modificado concurrentemente y fuera del alcance; no se debilitó la configuración
+        ni se editó ese archivo
+    closure_pending: Typecheck/build global sin errores del panel administrativo; no
+      se marca cerrado mientras esa comprobación siga bloqueada.
+  - id: QA-ROOM-CONFIRM-001
+    status: fixed
+    severity: medium
+    category: frontend-commercial-integration
+    invariant: La confirmación presenta sede y nombre comercial, fechas, huéspedes,
+      importe y referencia, sin priorizar el número físico interno.
+    reproduction:
+      test_file: Frontend/src/features/commercialClosure.test.tsx
+      test_name: muestra sede y nombre comercial con referencia, estado y estancia sin
+        el número físico
+      environment: Vitest con HTTP simulado; contraste de contratos y Chromium con API
+        real de desarrollo, sin reservas ni pagos
+    actual_before_fix: La confirmación mostraba ANT-019 y omitía la sede.
+    root_cause: La tarjeta usaba Habitacion.numero y TipoHabitacion.nombre sin leer
+      nombre_comercial ni Sucursal.
+    correction: La tarjeta muestra primero la sede y el nombre comercial del tipo; mantiene
+      datos persistidos y acciones existentes, con fallback al nombre publicado cuando
+      no hay nombre comercial.
+    verification:
+      focused: 91 passed (9 archivos); 23 passed adicionales/repetidos en 2 archivos
+        tras ordenar la confirmación
+      browser: 27 comprobaciones reales de preparación, validaciones, sedes, navegación
+        y retorno del login; cero errores JavaScript
+      global_typecheck_and_build: Bloqueados por 6 errores ajenos en Frontend/src/pages/AdminPage.tsx,
+        archivo modificado concurrentemente y fuera del alcance; no se debilitó la configuración
+        ni se editó ese archivo
+    closure_pending: Typecheck/build global sin errores del panel administrativo; no
+      se marca cerrado mientras esa comprobación siga bloqueada.
+
+  - id: QA-AUTH-SEC-002
+    status: closed
+    severity: high
+    category: SEC
+    invariant: >-
+      Los roles operativos sin alcance financiero territorial no pueden consultar
+      ni administrar facturas, partidas o pagos globales; el cliente conserva sus registros propios.
+    reproduction:
+      test_file: backend/tests/auth/finalOperationalRoles.test.ts
+      test_name: bloquea finanzas globales de recepción y gerencia mientras conserva el acceso del administrador
+      environment: hotel_test_db aislada en puerto 55433, HTTP real y PostgreSQL
+    expected: Recepcionista y gerente reciben 403 en facturas, partidas y pagos administrativos.
+    actual_before_fix: GET /api/facturas con recepcionista devolvió 200.
+    root_cause: >-
+      La autorización financiera consideraba administrativos a roles operativos sin
+      una relación territorial segura de las facturas y pagos consultados.
+    correction: >-
+      Se reservan las operaciones administrativas financieras al administrador general
+      en rutas, servicios y verificación compartida de propiedad. El adaptador operativo
+      deniega expresamente el acceso financiero del personal. No cambian Stripe ni los importes.
+    verification:
+      focused: 21 pruebas de roles aprobadas con PostgreSQL y guard de hotel_test_db.
+      related: 17 pruebas de reportes y exportaciones aprobadas; 41 pruebas frontend aprobadas.
+      typecheck: Backend y frontend aprobados.
+      build: Frontend aprobado.
+      development_data: Sin escrituras en hotel_db ni hotel_test_db compartida de puerto 55432.

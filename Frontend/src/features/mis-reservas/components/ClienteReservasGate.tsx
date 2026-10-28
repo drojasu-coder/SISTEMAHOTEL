@@ -6,7 +6,7 @@ import { LoadingNotice } from '@/components/ui/Feedback';
 import { useAuth } from '@/features/auth/AuthContext';
 import { getHomeRouteForUser } from '@/features/auth/routing';
 import type { AuthUser } from '@/features/auth/types';
-import { textosMisReservas } from '../textos';
+import { usePublicTexts } from '@/i18n/public';
 
 interface AccessLayoutProps {
   icon: React.ReactNode;
@@ -20,7 +20,7 @@ const AccessLayout: React.FC<AccessLayoutProps> = ({
   title,
   description,
   children,
-}) => (
+}) => { const textosMisReservas = usePublicTexts('misReservas'); return (
   <section className="mx-auto flex min-h-[60vh] w-full max-w-lg flex-col items-center justify-center gap-6 px-4 py-14 text-center">
     <span className="rounded-full bg-bronce-50 p-4 text-bronce-700">
       {icon}
@@ -36,7 +36,7 @@ const AccessLayout: React.FC<AccessLayoutProps> = ({
     </div>
     {children}
   </section>
-);
+); };
 
 interface ClienteReservasGateProps {
   children: (user: AuthUser) => React.ReactNode;
@@ -52,6 +52,7 @@ interface ClienteReservasGateProps {
 export const ClienteReservasGate: React.FC<ClienteReservasGateProps> = ({
   children,
 }) => {
+  const textosMisReservas = usePublicTexts('misReservas');
   const { status, user, retry } = useAuth();
   const location = useLocation();
 

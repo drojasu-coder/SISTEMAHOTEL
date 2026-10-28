@@ -126,13 +126,13 @@ describe('Filtros públicos por URL', () => {
     const api = vi.spyOn(amenidadesApi, 'getAll').mockResolvedValue([]);
     const view = mount(<CatalogoAmenidadesCliente />);
     expect(await screen.findByRole('heading', { name: 'No hay amenidades registradas' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Explorar sedes' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Cambiar sede' })[1]).toBeInTheDocument();
     view.unmount(); api.mockRejectedValue(new ApiError(500, 'stack trace privado'));
     const failed = mount(<CatalogoAmenidadesCliente />);
     expect(await screen.findByRole('alert')).not.toHaveTextContent('stack trace privado');
     api.mockResolvedValue(amenities);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
-    expect(await screen.findByRole('heading', { name: 'Sin resultados con estos filtros' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Esta sede no tiene opciones en el catálogo.' })).toBeInTheDocument();
     failed.unmount(); localStorage.setItem(SITE_KEY, '2');
     mount(<CatalogoAmenidadesCliente />, '/amenidades?q=noexiste');
     expect(await screen.findByRole('heading', { name: 'Sin resultados con estos filtros' })).toBeInTheDocument();
@@ -143,8 +143,8 @@ describe('Filtros públicos por URL', () => {
     const view = mount(<CatalogoSalonesList />, '/eventos');
     await screen.findByRole('heading', { name: 'Salón Jardín' });
     expect(view.container.querySelector('a button, button a')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Ver salón' })).toHaveAttribute('href', '/eventos/salones/9');
-    expect(screen.getByText(/US\$\s*100\.00/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver salón' })).toHaveAttribute('href', '/eventos/salones/9?sede=1');
+    expect(screen.getByText(/Q780\.00/)).toBeInTheDocument();
   });
 });
 

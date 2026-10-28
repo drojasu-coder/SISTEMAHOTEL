@@ -1,16 +1,18 @@
 import crypto from "crypto";
 import * as mediaUploadService from "../storage/mediaUpload.service";
-import { Op } from "sequelize";
+import { Op, fn, col } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { getTodayDate } from "./reservaHabitacion.service";
 import * as s3Service from "../storage/s3.service";
 import { getAssetCredits } from "../storage/credits";
+import { SedeScope, assertGlobalScope, assertHasSede, assertSedeAccess } from "../../utils/sedeScope";
 
 const db = require("../../models");
 
-const { sequelize, TipoHabitacion, Habitacion, ReservaHabitacion } = db;
+const { sequelize, TipoHabitacion, Habitacion, ReservaHabitacion, Sucursal } = db;
 
 interface CreateTipoHabitacionData {
+  sucursal_id?: number | null;
   nombre: string;
   capacidad_maxima: number;
   tarifa_noche: number;
@@ -19,6 +21,7 @@ interface CreateTipoHabitacionData {
 }
 
 interface UpdateTipoHabitacionData {
+  sucursal_id?: number | null;
   nombre?: string;
   capacidad_maxima?: number;
   tarifa_noche?: number;
@@ -36,14 +39,90 @@ export async function serializeTipoHabitacion(tipo: any): Promise<any> {
   return plain;
 }
 
-export const getAllTipoHabitaciones = async () => {
+/**
+ * Alcance por sede (ver utils/sedeScope). Un tipo con sede pertenece a esa sede;
+ * un tipo sin sede es una categoría general compartida: el personal puede
+ * consultarla, pero solo la administración general puede modificarla.
+ * Sin alcance (cliente) se conserva la consulta de solo lectura existente.
+ */
+const assertTipoLegible = (tipo: any, scope?: SedeScope) => {
+  if (!scope || scope.global) return;
+  assertHasSede(scope);
+  if (tipo.sucursal_id != null) assertSedeAccess(scope, tipo.sucursal_id);
+};
+
+const assertSedeEditable = (sucursalId: number | null | undefined, scope: SedeScope) => {
+  if (sucursalId == null) assertGlobalScope(scope);
+  else assertSedeAccess(scope, sucursalId);
+};
+
+const validateSucursal = async (sucursalId: number | null | undefined, transaction?: any) => {
+  if (sucursalId == null) return;
+  if (!(await Sucursal.findByPk(sucursalId, { transaction }))) {
+    throw new AppError(404, "SUCURSAL_NOT_FOUND", "La sucursal no fue encontrada");
+  }
+};
+
+const findTipoEditable = async (id: number, scope: SedeScope) => {
+  const tipo = await TipoHabitacion.findByPk(id);
+  if (!tipo) {
+    throw new AppError(404, "TIPO_HABITACION_NOT_FOUND", "El tipo de habitación no fue encontrado");
+  }
+  assertSedeEditable(tipo.sucursal_id, scope);
+  return tipo;
+};
+
+const GLOBAL_SCOPE: SedeScope = { global: true };
+
+export const getAllTipoHabitaciones = async (scope?: SedeScope, sucursalId?: number) => {
+  let where: Record<string | symbol, unknown> = {};
+  if (sucursalId !== undefined) {
+    if (scope) assertSedeAccess(scope, sucursalId);
+    where = { sucursal_id: sucursalId };
+  } else if (scope && !scope.global) {
+    assertHasSede(scope);
+    where = { [Op.or]: [{ sucursal_id: { [Op.in]: scope.sucursalIds } }, { sucursal_id: null }] };
+  }
   const tipos = await TipoHabitacion.findAll({
+    where,
     order: [["id", "ASC"]],
   });
   return Promise.all(tipos.map(serializeTipoHabitacion));
 };
 
-export const getTipoHabitacionById = async (id: number) => {
+/**
+ * Categorías comerciales públicas: solo tipos asignados a una sede y con
+ * inventario. Los tipos generales anteriores (sin sede o sin habitaciones)
+ * se conservan para el historial, pero no se ofrecen al cliente.
+ */
+export const getPublicCatalog = async (sucursalId?: number) => {
+  const tipos = await TipoHabitacion.findAll({
+    where: {
+      sucursal_id: sucursalId !== undefined ? sucursalId : { [Op.ne]: null },
+    },
+    include: [{ model: Sucursal, attributes: ["id", "nombre"] }],
+    order: [["sucursal_id", "ASC"], ["tarifa_noche", "ASC"], ["capacidad_maxima", "ASC"], ["id", "ASC"]],
+  });
+  const conteos = await Habitacion.findAll({
+    attributes: [
+      "tipo_habitacion_id",
+      [fn("COUNT", col("id")), "total"],
+      [fn("MIN", col("id")), "referencia_id"],
+    ],
+    where: { tipo_habitacion_id: tipos.map((t: any) => t.id), estado: { [Op.ne]: "mantenimiento" } },
+    group: ["tipo_habitacion_id"],
+    raw: true,
+  });
+  const porTipo = new Map(conteos.map((c: any) => [Number(c.tipo_habitacion_id), c]));
+  const conInventario = tipos.filter((t: any) => porTipo.has(t.id));
+  return Promise.all(conInventario.map(async (t: any) => {
+    const plain = await serializeTipoHabitacion(t);
+    plain.habitacion_referencia_id = Number((porTipo.get(t.id) as any).referencia_id);
+    return plain;
+  }));
+};
+
+export const getTipoHabitacionById = async (id: number, scope?: SedeScope) => {
   const tipoHabitacion = await TipoHabitacion.findByPk(id);
 
   if (!tipoHabitacion) {
@@ -54,13 +133,20 @@ export const getTipoHabitacionById = async (id: number) => {
     );
   }
 
+  assertTipoLegible(tipoHabitacion, scope);
+
   return serializeTipoHabitacion(tipoHabitacion);
 };
 
 export const createTipoHabitacion = async (
-  data: CreateTipoHabitacionData
+  data: CreateTipoHabitacionData,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
+  assertSedeEditable(data.sucursal_id, scope);
+  await validateSucursal(data.sucursal_id);
+
   const tipo = await TipoHabitacion.create({
+    sucursal_id: data.sucursal_id ?? null,
     nombre: data.nombre,
     capacidad_maxima: data.capacidad_maxima,
     tarifa_noche: data.tarifa_noche,
@@ -72,7 +158,8 @@ export const createTipoHabitacion = async (
 
 export const updateTipoHabitacion = async (
   id: number,
-  data: UpdateTipoHabitacionData
+  data: UpdateTipoHabitacionData,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => sequelize.transaction(async (transaction: any) => {
   const tipoHabitacion = await TipoHabitacion.findByPk(id, {
     transaction,
@@ -85,6 +172,28 @@ export const updateTipoHabitacion = async (
       "TIPO_HABITACION_NOT_FOUND",
       "El tipo de habitación no fue encontrado"
     );
+  }
+
+  // Sede actual y sede de destino deben ser editables por el solicitante.
+  assertSedeEditable(tipoHabitacion.sucursal_id, scope);
+  if (data.sucursal_id !== undefined && data.sucursal_id !== tipoHabitacion.sucursal_id) {
+    assertSedeEditable(data.sucursal_id, scope);
+    await validateSucursal(data.sucursal_id, transaction);
+    // Un tipo con sede solo puede usarse por habitaciones de esa sede.
+    if (data.sucursal_id != null) {
+      const ajena = await Habitacion.findOne({
+        where: { tipo_habitacion_id: id, sucursal_id: { [Op.ne]: data.sucursal_id } },
+        attributes: ["id"],
+        transaction,
+      });
+      if (ajena) {
+        throw new AppError(
+          409,
+          "TIPO_HABITACION_SEDE_CONFLICT",
+          "No se puede cambiar la sede del tipo porque lo usan habitaciones de otra sede"
+        );
+      }
+    }
   }
 
   if (
@@ -141,16 +250,8 @@ export const updateTipoHabitacion = async (
   return serializeTipoHabitacion(tipoHabitacion);
 });
 
-export const deleteTipoHabitacion = async (id: number) => {
-  const tipoHabitacion = await TipoHabitacion.findByPk(id);
-
-  if (!tipoHabitacion) {
-    throw new AppError(
-      404,
-      "TIPO_HABITACION_NOT_FOUND",
-      "El tipo de habitación no fue encontrado"
-    );
-  }
+export const deleteTipoHabitacion = async (id: number, scope: SedeScope = GLOBAL_SCOPE) => {
+  const tipoHabitacion = await findTipoEditable(id, scope);
 
   const habitacion = await Habitacion.findOne({
     where: {
@@ -174,12 +275,10 @@ export const deleteTipoHabitacion = async (id: number) => {
 export const requestImageUpload = async (
   id: number,
   userId: number,
-  contentType: string
+  contentType: string,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
-  const tipo = await TipoHabitacion.findByPk(id);
-  if (!tipo) {
-    throw new AppError(404, "TIPO_HABITACION_NOT_FOUND", "El tipo de habitación no fue encontrado");
-  }
+  await findTipoEditable(id, scope);
   return mediaUploadService.presignEntityUpload({
     entityType: "tipo-habitacion",
     entityId: id,
@@ -192,8 +291,10 @@ export const confirmImageUpload = async (
   id: number,
   userId: number,
   uploadToken: string,
-  tempKey: string
+  tempKey: string,
+  scope: SedeScope = GLOBAL_SCOPE
 ) => {
+  await findTipoEditable(id, scope);
   return mediaUploadService.confirmEntityUpload({
     entityType: "tipo-habitacion",
     entityId: id,
@@ -210,7 +311,8 @@ export const confirmImageUpload = async (
   });
 };
 
-export const removeImage = async (id: number) => {
+export const removeImage = async (id: number, scope: SedeScope = GLOBAL_SCOPE) => {
+  await findTipoEditable(id, scope);
   return mediaUploadService.removeEntityImage({
     entityId: id,
     Model: TipoHabitacion,

@@ -2,18 +2,22 @@ import { useRevalidateErrors, usePublicInterface, usePublicTexts } from '@/i18n/
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Search } from 'lucide-react';
+import { AlertCircle, ChevronDown, MapPin, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
 import {
   createBusquedaReservaSchema,
-  getTodayInGuatemala,
   toDisponibilidadQuery,
   type BusquedaReservaFormData,
 } from '../schemas/busquedaReservaSchema';
 import type { DisponibilidadHabitacionQuery } from '../types';
+import { StayDateRange } from '@/features/habitaciones/public/StayDateRange';
+import { GuestCount } from '@/features/habitaciones/public/GuestCount';
+import { readStayDraft, saveStayDraft } from '@/features/habitaciones/public/stayDraft';
 import type { PublicSite } from '@/features/preferencias/storage';
+import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
+import { useLocale } from '@/i18n/LocaleContext';
 
 interface SedeOption {
   id: number;
@@ -51,7 +55,7 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
 }) => {
   const { p, locale } = usePublicInterface();
   const textosCrearReserva = usePublicTexts('crearReserva');
-  const today = getTodayInGuatemala();
+  const [saved] = React.useState(readStayDraft);
 
   const {
     register,
@@ -59,14 +63,15 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
     trigger,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<BusquedaReservaFormData>({
     resolver: zodResolver(createBusquedaReservaSchema(p), { errorMap: () => ({ message: p('invalidField') }) }),
     defaultValues: {
       sucursal_id: initialValues?.sucursal_id ?? '',
-      fecha_entrada: initialValues?.fecha_entrada ?? '',
-      fecha_salida: initialValues?.fecha_salida ?? '',
-      numero_huespedes: initialValues?.numero_huespedes ?? '',
+      fecha_entrada: initialValues?.fecha_entrada ?? saved.fecha_entrada ?? '',
+      fecha_salida: initialValues?.fecha_salida ?? saved.fecha_salida ?? '',
+      numero_huespedes: initialValues?.numero_huespedes ?? saved.numero_huespedes ?? '2',
       tipo_habitacion_id: initialValues?.tipo_habitacion_id ?? '',
     },
   });
@@ -75,17 +80,30 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
     if (publicSite !== undefined) setValue('sucursal_id', publicSite === 'all' ? '' : String(publicSite));
   }, [publicSite, setValue]);
 
+  // Sede activa (selector global del encabezado) para el indicador del sitio público.
+  const { openSelection, selectionOpen } = usePublicPreferences();
+  const { t } = useLocale();
+  const changeSiteLabel = t('changeSite');
+  const sedeActual = sedes.find((sede) => String(sede.id) === watch('sucursal_id'));
+
   // Notificar cuando cualquier criterio cambie para invalidar selecciones previas
   useEffect(() => {
-    const subscription = watch(() => {
-      onCriteriaChange();
+    const subscription = watch((_values, { type }) => {
+      // setValue sincroniza la sede del enlace; solo la edición del usuario cambia criterios.
+      if (type === 'change') onCriteriaChange();
     });
     return () => subscription.unsubscribe();
   }, [watch, onCriteriaChange]);
 
   useRevalidateErrors(locale, () => trigger(), Object.keys(errors).length > 0);
 
+  useEffect(() => {
+    const { fecha_entrada, fecha_salida, numero_huespedes } = getValues();
+    saveStayDraft({ fecha_entrada, fecha_salida, numero_huespedes });
+  }, [getValues]);
+
   const onFormSubmit = (data: BusquedaReservaFormData) => {
+    saveStayDraft(data);
     const query = toDisponibilidadQuery(data);
     onSubmitSearch(query);
   };
@@ -106,7 +124,29 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
         className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
         noValidate
       >
-        {/* Selector de Sede */}
+        {/* En el sitio público la sede es la del encabezado: se muestra y se cambia con el selector global.
+            Fuera de ese contexto (sin selector global) se conserva el campo de selección. */}
+        {publicSite !== undefined ? (
+          <div className="flex min-w-0 flex-col gap-2" data-invalid={errors.sucursal_id ? true : undefined}>
+            <span id="criterios-sede-label" className="text-xs font-semibold text-neutro-700">{textosCrearReserva.sedeLabel}</span>
+            <input type="hidden" {...register('sucursal_id')} />
+            <button type="button" id="criterios-sede" disabled={isSearching} aria-haspopup="dialog" aria-expanded={selectionOpen}
+              aria-label={`${textosCrearReserva.sedeLabel}: ${sedeActual?.nombre ?? textosCrearReserva.sedePlaceholder}. ${changeSiteLabel}`}
+              aria-invalid={Boolean(errors.sucursal_id)} aria-describedby={errors.sucursal_id ? 'criterios-sede-help' : undefined}
+              onClick={(event) => openSelection(event.currentTarget)}
+              className="field-control flex items-center gap-2 text-left">
+              <MapPin className="size-4 shrink-0 text-bronce-700" aria-hidden="true" />
+              <span lang={sedeActual ? 'es' : undefined} className="min-w-0 flex-1 truncate">{sedeActual?.nombre ?? textosCrearReserva.sedePlaceholder}</span>
+              <ChevronDown className="size-4 shrink-0 text-bronce-700" aria-hidden="true" />
+            </button>
+            {errors.sucursal_id && (
+              <p id="criterios-sede-help" role="alert" className="flex items-start gap-2 text-xs text-error-600">
+                <AlertCircle className="mt-px size-4 shrink-0" aria-hidden="true" />
+                {errors.sucursal_id.message}
+              </p>
+            )}
+          </div>
+        ) : (
         <div
           className="flex min-w-0 flex-col gap-2"
           data-invalid={errors.sucursal_id ? true : undefined}
@@ -127,6 +167,7 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
             disabled={isSearching}
             className="field-control"
             {...register('sucursal_id', { onChange: (event) => onSiteChange?.(Number(event.target.value)) })}
+            value={watch('sucursal_id')}
           >
             <option value="" disabled>
               {textosCrearReserva.sedePlaceholder}
@@ -149,115 +190,25 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
           )}
         </div>
 
-        {/* Fecha de Entrada */}
-        <div
-          className="flex min-w-0 flex-col gap-2"
-          data-invalid={errors.fecha_entrada ? true : undefined}
-        >
-          <label
-            htmlFor="criterios-fecha-entrada"
-            className="text-xs font-semibold text-neutro-700"
-          >
-            {textosCrearReserva.fechaEntradaLabel}
-          </label>
-          <input
-            id="criterios-fecha-entrada"
-            type="date"
-            min={today}
-            aria-label={textosCrearReserva.fechaEntradaLabel}
-            aria-invalid={Boolean(errors.fecha_entrada)}
-            aria-describedby={
-              errors.fecha_entrada ? 'criterios-fecha-entrada-help' : undefined
-            }
-            disabled={isSearching}
-            className="field-control"
-            {...register('fecha_entrada')}
-          />
-          {errors.fecha_entrada && (
-            <p
-              id="criterios-fecha-entrada-help"
-              role="alert"
-              className="flex items-start gap-2 text-xs text-error-600"
-            >
-              <AlertCircle className="mt-px size-4 shrink-0" aria-hidden="true" />
-              {errors.fecha_entrada.message}
-            </p>
-          )}
-        </div>
+        )}
 
-        {/* Fecha de Salida */}
-        <div
-          className="flex min-w-0 flex-col gap-2"
-          data-invalid={errors.fecha_salida ? true : undefined}
-        >
-          <label
-            htmlFor="criterios-fecha-salida"
-            className="text-xs font-semibold text-neutro-700"
-          >
-            {textosCrearReserva.fechaSalidaLabel}
-          </label>
-          <input
-            id="criterios-fecha-salida"
-            type="date"
-            min={today}
-            aria-label={textosCrearReserva.fechaSalidaLabel}
-            aria-invalid={Boolean(errors.fecha_salida)}
-            aria-describedby={
-              errors.fecha_salida ? 'criterios-fecha-salida-help' : undefined
-            }
-            disabled={isSearching}
-            className="field-control"
-            {...register('fecha_salida')}
-          />
-          {errors.fecha_salida && (
-            <p
-              id="criterios-fecha-salida-help"
-              role="alert"
-              className="flex items-start gap-2 text-xs text-error-600"
-            >
-              <AlertCircle className="mt-px size-4 shrink-0" aria-hidden="true" />
-              {errors.fecha_salida.message}
-            </p>
-          )}
+        <div className="sm:col-span-2">
+          <StayDateRange value={{ fecha_entrada: watch('fecha_entrada'), fecha_salida: watch('fecha_salida') }} disabled={isSearching}
+            arrivalError={errors.fecha_entrada?.message} departureError={errors.fecha_salida?.message}
+            onChange={(range) => {
+              setValue('fecha_entrada', range.fecha_entrada, { shouldDirty: true, shouldValidate: true });
+              setValue('fecha_salida', range.fecha_salida, { shouldDirty: true, shouldValidate: true });
+              saveStayDraft({ ...range, numero_huespedes: getValues('numero_huespedes') });
+              onCriteriaChange();
+            }} />
         </div>
-
-        {/* Número de Huéspedes */}
-        <div
-          className="flex min-w-0 flex-col gap-2"
-          data-invalid={errors.numero_huespedes ? true : undefined}
-        >
-          <label
-            htmlFor="criterios-huespedes"
-            className="text-xs font-semibold text-neutro-700"
-          >
-            {textosCrearReserva.huespedesLabel}
-          </label>
-          <input
-            id="criterios-huespedes"
-            type="number"
-            min="1"
-            step="1"
-            placeholder={textosCrearReserva.huespedesPlaceholder}
-            aria-label={textosCrearReserva.huespedesLabel}
-            aria-invalid={Boolean(errors.numero_huespedes)}
-            aria-describedby={
-              errors.numero_huespedes ? 'criterios-huespedes-help' : undefined
-            }
-            disabled={isSearching}
-            className="field-control"
-            {...register('numero_huespedes')}
-          />
-          {errors.numero_huespedes && (
-            <p
-              id="criterios-huespedes-help"
-              role="alert"
-              className="flex items-start gap-2 text-xs text-error-600"
-            >
-              <AlertCircle className="mt-px size-4 shrink-0" aria-hidden="true" />
-              {errors.numero_huespedes.message}
-            </p>
-          )}
-        </div>
+        <GuestCount label={textosCrearReserva.huespedesLabel} value={watch('numero_huespedes')} disabled={isSearching}
+          error={errors.numero_huespedes?.message} onChange={(value) => {
+            setValue('numero_huespedes', value, { shouldDirty: true, shouldValidate: true });
+            const { fecha_entrada, fecha_salida } = getValues();
+            saveStayDraft({ fecha_entrada, fecha_salida, numero_huespedes: value });
+            onCriteriaChange();
+          }} />
 
         {/* Tipo de Habitación (Opcional) */}
         <div
@@ -280,6 +231,7 @@ export const CriteriosBusquedaForm: React.FC<CriteriosBusquedaFormProps> = ({
             disabled={isSearching}
             className="field-control"
             {...register('tipo_habitacion_id')}
+            value={watch('tipo_habitacion_id')}
           >
             <option value="">{textosCrearReserva.tipoHabitacionTodos}</option>
             {tiposHabitacion.map((tipo) => (

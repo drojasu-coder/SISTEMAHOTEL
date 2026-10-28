@@ -6,11 +6,11 @@ const positive = (value: string) => /^[1-9]\d*$/.test(value) && Number.isSafeInt
 /** El almacenamiento es entrada no confiable. No basta con JSON.parse o la versión. */
 export function validatedRoomDraft(value: unknown): string | null {
   const path = safeReturnPath(value);
-  if (!path || !/^\/habitaciones(?:\/[1-9]\d*)?(?:\?|$)/.test(path)) return null;
+  if (!path || !/^\/(?:habitaciones(?:\/[1-9]\d*)?|reservar|crear-reserva)(?:\?|$)/.test(path)) return null;
   const params = new URLSearchParams(path.split('?')[1]);
   const arrival = params.get('fecha_entrada'); const departure = params.get('fecha_salida');
   if (!arrival || !departure || !isValidCalendarDate(arrival) || !isValidCalendarDate(departure) || departure <= arrival) return null;
-  for (const key of ['numero_huespedes', 'tipo_habitacion_id', 'sucursal_id']) if (params.has(key) && !positive(params.get(key)!)) return null;
+  for (const key of ['numero_huespedes', 'tipo_habitacion_id', 'sucursal_id', 'habitacion_id']) if (params.has(key) && !positive(params.get(key)!)) return null;
   if (params.has('sede') && params.get('sede') !== 'all' && !positive(params.get('sede')!)) return null;
   if (params.has('buscar') && !['0', '1'].includes(params.get('buscar')!)) return null;
   if (params.has('pagina') && !positive(params.get('pagina')!)) return null;
@@ -37,7 +37,7 @@ export function restoreRoomDraft(): string | null {
 }
 export function roomLoginState(path: string) {
   const safe = safeReturnPath(path);
-  const from = safe && /^\/habitaciones(?:\/[1-9]\d*)?(?:\?|$)/.test(safe) ? safe : '/habitaciones';
+  const from = safe && /^\/(?:habitaciones(?:\/[1-9]\d*)?|reservar|crear-reserva)(?:\?|$)/.test(safe) ? safe : '/habitaciones';
   saveRoomDraft(from);
   return { from };
 }

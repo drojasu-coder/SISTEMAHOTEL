@@ -66,8 +66,9 @@ const validateSucursal = async (
   return sucursal;
 };
 
-export const getAll = async () => {
+export const getAll = async (where: Record<string | symbol, unknown> = {}) => {
   const salones = await Salon.findAll({
+    where,
     include: [
       {
         model: Sucursal,

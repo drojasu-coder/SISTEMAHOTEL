@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useServiceSelection } from '@/features/preferencias/useServiceSelection';
+import { MissingServiceSelection } from '@/components/shared/ServiceReservationPanel';
+import { Link, useLocation } from 'react-router-dom';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { PageContainer, PageHeader } from '@/components/shared/PageContainer';
 import { ServiceMedia } from '@/components/shared/ServiceCard';
@@ -13,33 +14,43 @@ import { usePublicPreferences } from '@/features/preferencias/PublicPreferences'
 import { ResourceSiteNotice } from '@/features/preferencias/SiteContextNotice';
 import { useSalonQuery } from '../hooks/useEventos';
 import { ReservaEventoModal } from './ReservaEventoModal';
+import { ApiError } from '@/api/client/http';
+import { Alert } from '@/components/ui/Feedback';
+import { publicEventCopy, publicVenueSite } from '../publicEventExperience';
 
 export function SalonDetalleCard({ id }: { id: number }) {
   const t = usePublicTexts('eventos');
-  const { p } = usePublicInterface();
+  const { p, locale } = usePublicInterface();
+  const copy = publicEventCopy[locale];
   const { sites } = usePublicPreferences();
-  const [open, setOpen] = useState(false);
-  const query = useSalonQuery(id);
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.delete('recurso');
+  const catalogHref = `/eventos${params.size ? `?${params}` : ''}`;
+  const validId = Number.isSafeInteger(id) && id > 0;
+  const query = useSalonQuery(validId ? id : 0);
   const salon = query.data;
-  const siteName = sites.find((site) => site.id === salon?.sucursal_id)?.nombre || salon?.sucursal?.nombre;
+  const selection = useServiceSelection(salon ? [salon] : [], query.isSuccess);
+  const siteName = salon ? publicVenueSite(salon, sites) || copy.siteUnknown : undefined;
+  const notFound = query.error instanceof ApiError && query.error.status === 404;
   return <PageContainer>
-    <DataState status={query.isPending ? 'loading' : query.isError || !salon ? 'error' : 'success'} loadingLabel={p('loadingVenue')}
+    <nav aria-label={p('breadcrumbs')}><Link to={catalogHref} className={buttonStyles({ variant: 'ghost', size: 'sm' })}>{t.volverAlCatalogo}</Link></nav>
+    {selection.missing && <MissingServiceSelection onClose={selection.close} />}
+    <DataState status={!validId ? 'error' : query.isPending ? 'loading' : query.isError || !salon ? 'error' : 'success'} loadingLabel={p('loadingVenue')}
       loadingContent={<div className="space-y-6"><Skeleton height="h-12" /><Skeleton height="aspect-[16/9]" /></div>}
-      errorContent={<ErrorState message={p('venueDetailError')} description={p('venueNotFound')} retryLabel={p('retry')} onRetry={() => { void query.refetch(); }} />}>
+      errorContent={!validId ? <Alert tone="error" title={copy.invalidId}>{copy.invalidIdHelp}</Alert> : <ErrorState message={notFound ? copy.notFound : p('venueDetailError')} description={notFound ? copy.notFoundHelp : copy.loadError} retryLabel={p('retry')} onRetry={() => { void query.refetch(); }} />}>
       {salon && <>
         <PageHeader eyebrow={t.detalleEyebrow} title={<span lang="es">{salon.nombre}</span>}
-          breadcrumbs={<nav aria-label={p('breadcrumbs')}><Link to="/eventos" className={buttonStyles({ variant: 'ghost', size: 'sm' })}>{t.volverAlCatalogo}</Link></nav>}
           context={<><p className="text-sm text-bronce-700" lang="es">{siteName}</p><ResourceSiteNotice siteId={salon.sucursal_id} name={salon.sucursal?.nombre} /></>} />
         <div className="grid gap-8 md:grid-cols-3">
           <div className="space-y-6 md:col-span-2">
             <div className="surface overflow-hidden"><ServiceMedia src={salon.imagen_url} alt={salon.nombre} credits={salon.imagen_creditos} /></div>
-            <Card><h2 className="mb-3 font-serif text-xl font-semibold">{p('venueDescription')}</h2><p className="whitespace-pre-line text-sm text-neutro-600">{salon.descripcion ? <span lang="es">{salon.descripcion}</span> : p('venueDescriptionFallback')}</p></Card>
-            <Card><h2 className="mb-4 font-serif text-xl font-semibold">{t.caracteristicasSalon}</h2><dl className="space-y-3 text-sm"><div><dt>{t.capacidadMaximaLabel}</dt><dd>{t.capacidadPersonas(salon.capacidad_maxima ?? 0)}</dd></div><div><dt>{t.tarifaBaseLabel}</dt><dd><MoneyReference amount={salon.tarifa_base} /></dd></div></dl></Card>
-            <Card><h2 className="mb-3 font-serif text-xl font-semibold">{t.condicionesAlquiler}</h2><p className="text-sm text-neutro-600">{t.condicionesTexto}</p></Card>
+            <Card><h2 className="mb-3 font-serif text-xl font-semibold">{p('venueDescription')}</h2><p className="whitespace-pre-line text-sm text-neutro-600">{salon.descripcion ? <span lang="es">{salon.descripcion}</span> : copy.descriptionMissing}</p></Card>
+            <Card><h2 className="mb-4 font-serif text-xl font-semibold">{t.caracteristicasSalon}</h2><dl className="space-y-3 text-sm"><div><dt>{t.capacidadMaximaLabel}</dt><dd>{salon.capacidad_maxima != null ? t.capacidadPersonas(salon.capacidad_maxima) : copy.capacityUnknown}</dd></div><div><dt>{t.tarifaBaseLabel}</dt><dd><MoneyReference amount={salon.tarifa_base} /></dd></div></dl></Card>
           </div>
-          <div><Card className="space-y-4 md:sticky md:top-28"><p className="text-sm">{p('estimatedInvestment')}</p><p className="font-semibold"><MoneyReference amount={salon.tarifa_base} /> {p('baseRate')}</p><p className="text-sm text-neutro-600">{p('venueIncludedDescription')}</p><Button className="w-full" onClick={() => setOpen(true)}>{t.solicitarCotizacion}</Button></Card></div>
+          <div><Card className="space-y-4 md:sticky md:top-28"><p className="text-sm">{t.tarifaBaseLabel}</p><p className="font-semibold"><MoneyReference amount={salon.tarifa_base} /></p><p className="text-sm text-neutro-600">{copy.rateHint}</p><p className="text-sm text-neutro-600">{copy.quoteNotice}</p><Button className="w-full" onClick={() => selection.select(salon)}>{p('serviceQuote')}</Button></Card></div>
         </div>
-        {open && <ReservaEventoModal salon={salon} isOpen onClose={() => setOpen(false)} />}
+        {selection.selected && <ReservaEventoModal key={salon.id} salon={salon} isOpen onClose={selection.close} />}
       </>}
     </DataState>
   </PageContainer>;

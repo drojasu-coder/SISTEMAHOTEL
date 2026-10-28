@@ -33,8 +33,8 @@ export function Table<T extends { id: string }>({
 }: TableProps<T>) {
   return (
     <DataState status={status || (rows.length ? 'success' : 'empty')} onRetry={onRetry}>
-      <div className={cn(className)}>
-        <div className="hidden overflow-x-auto md:block">
+      <div className={cn('min-w-0 max-w-full', className)}>
+        <div role="region" aria-label={caption} tabIndex={0} className="hidden max-w-full overflow-x-auto rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-bronce-600 md:block">
           <table className="w-full border-collapse text-left text-sm">
             <caption className="sr-only">{caption}</caption>
             <thead className="border-b bg-neutro-50 text-xs text-neutro-600">
@@ -75,7 +75,7 @@ export function Table<T extends { id: string }>({
               {columns.map((c) => (
                 <div key={c.key} className="flex flex-wrap justify-between gap-2">
                   <dt className="text-xs text-neutro-600">{c.label}</dt>
-                  <dd className="text-neutro-900">{c.render(row)}</dd>
+                  <dd className="min-w-0 break-words text-neutro-900">{c.render(row)}</dd>
                 </div>
               ))}
             </dl>

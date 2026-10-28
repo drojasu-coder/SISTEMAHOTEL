@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MesasPage } from '@/pages/MesasPage';
+import { AdminScopeProvider } from '@/features/admin-core/AdminScopeContext';
+import { LocaleProvider } from '@/i18n/LocaleContext';
 import { tokenStorage } from '@/api/session';
 import {
   renderWithProviders,
@@ -90,6 +92,11 @@ function mockApi(options: {
     if (String(url).endsWith('/sucursales')) {
       return Promise.resolve(jsonResponse({ status: 'success', data: mockSucursales }));
     }
+    if (String(url).includes('/admin/alcance')) {
+      return Promise.resolve(jsonResponse({ success: true, data: {
+        global: true, sedes: mockSucursales.map(({ id, nombre }) => ({ id, nombre, activa: true })),
+      } }));
+    }
     if (String(url).endsWith('/mesas') && method === 'GET') {
       mesasAttempts += 1;
       if (options.mesasError && mesasAttempts === 1) {
@@ -174,16 +181,16 @@ describe('Módulo de gestión de mesas (MesasPage)', () => {
     expect(screen.getAllByText(/3 mesas mostradas/).length).toBeGreaterThan(0);
   });
 
-  it('filtra por sede con el catálogo real de sedes', async () => {
+  it('filtra por la sede del selector global del panel (sin selector local)', async () => {
     tokenStorage.set('jwt-admin');
+    sessionStorage.setItem('hunahpu.admin.scope.sede.v1:3', '2');
     mockApi({});
 
-    const user = userEvent.setup();
-    renderWithProviders(<MesasPage />);
+    renderWithProviders(<AdminScopeProvider><MesasPage /></AdminScopeProvider>);
 
     await screen.findByRole('heading', { level: 1, name: /Mesas de HOTEL HUNAHPÚ/i });
-
-    await user.selectOptions(screen.getByLabelText('Filtrar por sede'), '2');
+    await waitFor(() => expect(listado().queryByText('Terraza')).toBeNull());
+    expect(screen.queryByLabelText('Filtrar por sede')).toBeNull();
 
     // Solo queda la mesa de la sede seleccionada.
     expect(listado().getByText('Salón Principal')).toBeInTheDocument();
@@ -191,6 +198,7 @@ describe('Módulo de gestión de mesas (MesasPage)', () => {
     expect(listado().getByText('Hotel Hunapú Antigua')).toBeInTheDocument();
     expect(listado().queryByText('Hotel Hunapú Centro')).toBeNull();
     expect(screen.getAllByText(/1 mesas mostradas/).length).toBeGreaterThan(0);
+    sessionStorage.removeItem('hunahpu.admin.scope.sede.v1:3');
   });
 
   it('filtra por zona usando las zonas presentes en los datos', async () => {
@@ -215,14 +223,16 @@ describe('Módulo de gestión de mesas (MesasPage)', () => {
 
   it('muestra aviso sin resultados y permite limpiar los filtros', async () => {
     tokenStorage.set('jwt-admin');
+    sessionStorage.setItem('hunahpu.admin.scope.sede.v1:3', '2');
     mockApi({});
 
     const user = userEvent.setup();
-    renderWithProviders(<MesasPage />);
+    renderWithProviders(<AdminScopeProvider><MesasPage /></AdminScopeProvider>);
 
     await screen.findByRole('heading', { level: 1, name: /Mesas de HOTEL HUNAHPÚ/i });
+    await waitFor(() => expect(listado().queryByText('Terraza')).toBeNull());
 
-    await user.selectOptions(screen.getByLabelText('Filtrar por sede'), '2');
+    // Zona sin mesas en la sede global elegida.
     await user.selectOptions(screen.getByLabelText('Filtrar por zona'), 'Terraza');
 
     expect(
@@ -234,7 +244,27 @@ describe('Módulo de gestión de mesas (MesasPage)', () => {
     await waitFor(() => {
       expect(listado().getByText('Salón Principal')).toBeInTheDocument();
     });
-    expect(screen.getAllByText(/3 mesas mostradas/).length).toBeGreaterThan(0);
+    // Limpiar filtros locales conserva la sede del selector global.
+    expect(screen.getAllByText(/1 mesas mostradas/).length).toBeGreaterThan(0);
+    sessionStorage.removeItem('hunahpu.admin.scope.sede.v1:3');
+  });
+
+  it('en inglés traduce la pantalla y los mensajes de validación del formulario', async () => {
+    tokenStorage.set('jwt-admin');
+    localStorage.setItem('hunahpu.language.v1', 'en');
+    mockApi({});
+
+    const user = userEvent.setup();
+    renderWithProviders(<LocaleProvider><MesasPage /></LocaleProvider>);
+
+    await screen.findByRole('heading', { level: 1, name: 'HOTEL HUNAHPÚ tables' });
+    expect(screen.getByLabelText('Filter by area')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Register table/i }));
+    const guardar = screen.getByRole('button', { name: /Save table/i });
+    await waitFor(() => expect(guardar).toBeEnabled());
+    await user.click(guardar);
+    expect(await screen.findByText('The area cannot be empty')).toBeInTheDocument();
+    localStorage.removeItem('hunahpu.language.v1');
   });
 
   it('muestra estado vacío cuando no hay mesas registradas', async () => {

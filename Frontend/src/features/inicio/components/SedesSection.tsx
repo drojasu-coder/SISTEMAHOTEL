@@ -6,6 +6,7 @@ import { usePublicPreferences } from '@/features/preferencias/PublicPreferences'
 import { useLocale } from '@/i18n/LocaleContext';
 import { buttonStyles } from '@/components/ui/Button';
 import type { InicioData } from '../types';
+import { publicContactPhone } from '@/lib/contact';
 
 interface SedesSectionProps {
   data: InicioData;
@@ -102,10 +103,10 @@ export const SedesSection: React.FC<SedesSectionProps> = ({ data }) => {
                       </p>
                     )}
 
-                    {sede.telefono && (
+                    {publicContactPhone(sede.telefono) && (
                       <p className="flex items-center gap-1.5 text-xs text-neutro-600">
                         <Phone className="size-3.5 shrink-0 text-bronce-600" aria-hidden="true" />
-                        <span>{sede.telefono}</span>
+                        <a className="inline-flex min-h-11 items-center underline" href={publicContactPhone(sede.telefono)!.href}>{publicContactPhone(sede.telefono)!.display}</a>
                       </p>
                     )}
                   </div>

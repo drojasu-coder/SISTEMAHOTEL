@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/features/auth/AuthContext";
-import { useSedesFallback } from "@/features/mis-reservas/hooks/useSedesFallback";
+import { useAdminScope } from "@/features/admin-core/AdminScopeContext";
+import { estadoReservaMesa } from "../estadoReservaMesa";
+import { useTextosAdminRestaurante } from "../adminTextos";
+import { useLocale } from "@/i18n/LocaleContext";
+import { formatAdminCalendarDate, formatAdminTimeOfDay } from "@/features/admin-core/adminDates";
 import {
   useAdminReservasMesaQuery,
   useUpdateEstadoReservaMesaMutation,
@@ -14,7 +18,6 @@ import {
   AdminReservasRestauranteFilters,
   type AdminReservasRestauranteFiltersState,
 } from "./AdminReservasRestauranteFilters";
-import { textosRestaurante } from "../textos";
 import { RESTAURANTE_ROUTES } from "../constants/routes";
 import type { ReservaMesa } from "../types";
 import { ApiError } from "@/api/client/http";
@@ -28,20 +31,22 @@ import {
 
 export const AdminReservasRestauranteList: React.FC = () => {
   const { status, user } = useAuth();
-  const t = textosRestaurante.adminReservas;
+  const t = useTextosAdminRestaurante();
+  const { locale } = useLocale();
 
-  const isAdmin = status === "authenticated" && user?.rol === "admin";
+  const isAdmin = status === "authenticated" && (user?.rol === "admin" || user?.rol === "gerente_habitaciones");
+  // La sede del selector global del panel se aplica en el servidor.
+  const { selectedSedeId } = useAdminScope();
   const { data: reservas = [], isLoading, isError, refetch } = useAdminReservasMesaQuery(
     user?.id,
-    isAdmin
+    isAdmin,
+    selectedSedeId
   );
 
-  const sedesQuery = useSedesFallback(true);
   const updateMutation = useUpdateEstadoReservaMesaMutation();
 
   const [filters, setFilters] = useState<AdminReservasRestauranteFiltersState>({
     busqueda: "",
-    sucursalId: "",
     estado: "",
     fecha: "",
   });
@@ -56,27 +61,8 @@ export const AdminReservasRestauranteList: React.FC = () => {
     nuevoEstado: "confirmada" | "cancelada";
   } | null>(null);
 
-  const sedesDisponibles = useMemo(() => {
-    if (sedesQuery.data && sedesQuery.data.length > 0) {
-      return sedesQuery.data;
-    }
-    const map = new Map<number, string>();
-    for (const r of reservas) {
-      const sId = r.Mesa?.sucursal_id;
-      if (sId) {
-        map.set(sId, r.Mesa?.Sucursal?.nombre || `Sede #${sId}`);
-      }
-    }
-    return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
-  }, [sedesQuery.data, reservas]);
-
   const reservasFiltradas = useMemo(() => {
     return reservas.filter((r) => {
-      if (filters.sucursalId !== "") {
-        const sId = r.Mesa?.sucursal_id ? String(r.Mesa.sucursal_id) : "";
-        if (sId !== filters.sucursalId) return false;
-      }
-
       if (filters.estado !== "" && r.estado !== filters.estado) {
         return false;
       }
@@ -188,9 +174,8 @@ export const AdminReservasRestauranteList: React.FC = () => {
         filters={filters}
         onChange={setFilters}
         onReset={() =>
-          setFilters({ busqueda: "", sucursalId: "", estado: "", fecha: "" })
+          setFilters({ busqueda: "", estado: "", fecha: "" })
         }
-        sedes={sedesDisponibles}
         totalCount={reservas.length}
         filteredCount={reservasFiltradas.length}
       />
@@ -246,7 +231,7 @@ export const AdminReservasRestauranteList: React.FC = () => {
             type="button"
             variant="ghost"
             onClick={() =>
-              setFilters({ busqueda: "", sucursalId: "", estado: "", fecha: "" })
+              setFilters({ busqueda: "", estado: "", fecha: "" })
             }
           >
             Limpiar filtros
@@ -257,45 +242,46 @@ export const AdminReservasRestauranteList: React.FC = () => {
       {/* Tabla de Reservas */}
       {!isLoading && !isError && reservasFiltradas.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-neutro-200 bg-white shadow-sm">
-          <table className="w-full text-left text-sm text-neutro-800">
+          <table className="w-full min-w-[60rem] text-left text-sm text-neutro-800">
             <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold uppercase tracking-wider text-neutro-600">
               <tr>
-                <th className="px-4 py-3">{t.colId}</th>
-                <th className="px-4 py-3">{t.colCliente}</th>
-                <th className="px-4 py-3">{t.colSede}</th>
-                <th className="px-4 py-3">{t.colMesa}</th>
-                <th className="px-4 py-3">{t.colFecha}</th>
-                <th className="px-4 py-3">{t.colHorario}</th>
-                <th className="px-4 py-3">{t.colComensales}</th>
-                <th className="px-4 py-3">{t.colEstado}</th>
-                <th className="px-4 py-3 text-right">{t.colAcciones}</th>
+                <th className="px-3 py-3">{t.colId}</th>
+                <th className="px-3 py-3">{t.colCliente}</th>
+                <th className="px-3 py-3">{t.colSede}</th>
+                <th className="px-3 py-3">{t.colMesa}</th>
+                <th className="px-3 py-3">{t.colFecha}</th>
+                <th className="px-3 py-3">{t.colHorario}</th>
+                <th className="px-3 py-3">{t.colComensales}</th>
+                <th className="px-3 py-3">{t.colEstado}</th>
+                <th className="px-3 py-3 text-right">{t.colAcciones}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutro-200">
               {reservasFiltradas.map((r) => {
                 const isCancelada = r.estado === "cancelada";
+                const estado = estadoReservaMesa(r.estado, t.estados);
                 const sedeNombre =
-                  r.Mesa?.Sucursal?.nombre || `Sede #${r.Mesa?.sucursal_id ?? ""}`;
+                  r.Mesa?.Sucursal?.nombre || t.sedeId(r.Mesa?.sucursal_id ?? "");
 
                 return (
                   <tr key={r.id} className="hover:bg-neutro-50 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-neutro-900">
+                    <td className="px-3 py-3 font-semibold text-neutro-900">
                       #{r.id}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div>
                         <p className="font-medium text-neutro-900">
-                          {r.Usuario?.nombre || "Cliente"}
+                          {r.Usuario?.nombre || t.clienteSinNombre}
                         </p>
                         <p className="text-xs text-neutro-500">
-                          {r.Usuario?.email || `Usuario #${r.usuario_id}`}
+                          {r.Usuario?.email || t.usuarioId(r.usuario_id)}
                         </p>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-neutro-700">{sedeNombre}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3 text-neutro-700">{sedeNombre}</td>
+                    <td className="px-3 py-3">
                       <div>
-                        <span className="font-medium">Mesa #{r.mesa_id}</span>
+                        <span className="whitespace-nowrap font-medium">{t.mesa(r.mesa_id)}</span>
                         {r.Mesa?.zona && (
                           <span className="text-xs text-neutro-500 block">
                             {r.Mesa.zona}
@@ -303,23 +289,21 @@ export const AdminReservasRestauranteList: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-neutro-700">{r.fecha}</td>
-                    <td className="px-4 py-3 text-neutro-700">{r.hora}</td>
-                    <td className="px-4 py-3 text-neutro-700">
-                      {textosRestaurante.capacidadPersonas(r.numero_comensales)}
+                    <td className="whitespace-nowrap px-3 py-3 text-neutro-700">{formatAdminCalendarDate(r.fecha, locale)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-neutro-700">{formatAdminTimeOfDay(r.hora, locale)}</td>
+                    <td className="px-3 py-3 text-neutro-700">
+                      {t.personas(r.numero_comensales)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                          isCancelada
-                            ? "bg-error-50 text-error-700 border-error-600/20"
-                            : "bg-exito-50 text-exito-700 border-exito-600/20"
-                        }`}
+                        className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${estado.className}`}
+                        title={estado.conocido ? undefined : t.estadoRegistrado(r.estado)}
                       >
-                        {isCancelada ? "Cancelada" : "Confirmada"}
+                        {estado.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
                       <Link
                         to={RESTAURANTE_ROUTES.ADMIN_DETALLE_RESERVA(r.id)}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-900"
@@ -332,23 +316,26 @@ export const AdminReservasRestauranteList: React.FC = () => {
                         <Button
                           type="button"
                           variant="ghost"
-                          className="text-xs text-verde-700 hover:text-verde-800"
+                          aria-label={t.reactivarAria(r.id)}
+                          className="shrink-0 whitespace-nowrap text-xs text-verde-700 hover:text-verde-800"
                           onClick={() => handleOpenActionModal(r, "confirmada")}
                         >
                           <CheckCircle2 className="size-3.5 mr-1" aria-hidden="true" />
                           {t.reactivarReserva}
                         </Button>
-                      ) : (
+                      ) : r.estado === "confirmada" ? (
                         <Button
                           type="button"
                           variant="ghost"
-                          className="text-xs text-error-600 hover:text-error-700"
+                          aria-label={t.cancelarAria(r.id)}
+                          className="shrink-0 whitespace-nowrap text-xs text-error-600 hover:text-error-700"
                           onClick={() => handleOpenActionModal(r, "cancelada")}
                         >
                           <XCircle className="size-3.5 mr-1" aria-hidden="true" />
                           {t.cancelarReserva}
                         </Button>
-                      )}
+                      ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -384,11 +371,11 @@ export const AdminReservasRestauranteList: React.FC = () => {
                 {modalAction.reserva.Usuario?.nombre} ({modalAction.reserva.Usuario?.email})
               </p>
               <p>
-                <span className="font-semibold">{t.colMesa}:</span> Mesa #{modalAction.reserva.mesa_id}
+                <span className="font-semibold">{t.colMesa}:</span> {t.mesa(modalAction.reserva.mesa_id)}
               </p>
               <p>
-                <span className="font-semibold">{t.colFecha} y {t.colHorario}:</span>{" "}
-                {modalAction.reserva.fecha} a las {modalAction.reserva.hora} hrs
+                <span className="font-semibold">{t.fechaYHorario}:</span>{" "}
+                {t.fechaHora(formatAdminCalendarDate(modalAction.reserva.fecha, locale), formatAdminTimeOfDay(modalAction.reserva.hora, locale))}
               </p>
             </div>
           )}

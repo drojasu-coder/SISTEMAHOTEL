@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ImageOff } from 'lucide-react';
+import { ImageOff, Info } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/cn';
 import { usePublicInterface } from '@/i18n/public';
@@ -10,17 +10,27 @@ export function ServiceMedia({ src, alt, altLang = 'es', credits, priority = fal
   src?: string | null; alt?: string; altLang?: string; credits?: Credits | null; priority?: boolean; ratio?: 'card' | 'panorama';
 }) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
+  const [creditsOpen, setCreditsOpen] = useState(false);
   const { p, locale } = usePublicInterface();
   const visible = Boolean(src && failedSource !== src);
-  return <figure className="m-0">
+  const hasCredits = Boolean(credits && (credits.texto || credits.autor || credits.licencia || credits.url));
+  // El crédito no ocupa espacio en la tarjeta: queda disponible tras un botón discreto
+  // y siempre accesible para lectores de pantalla (atribución exigida por CC BY).
+  return <figure className="relative m-0">
     <div className={cn('w-full overflow-hidden bg-neutro-100', ratio === 'panorama' ? 'aspect-[21/9] sm:aspect-[28/9]' : 'aspect-[16/9]')}>
       {visible ? <img src={src!} alt={alt ?? p('imageUnavailable')} lang={altLang} width={800} height={450} loading={priority ? 'eager' : 'lazy'} onError={() => setFailedSource(src!)} className="h-full w-full object-cover" /> :
         <div role="img" aria-label={p('imageUnavailable')} className="flex h-full items-center justify-center text-neutro-500"><ImageOff className="size-9" aria-hidden="true" /></div>}
     </div>
-    {credits && (credits.texto || credits.autor || credits.licencia || credits.url) && <figcaption lang={locale} className="break-words border-b border-neutro-200 px-4 py-2 text-xs text-neutro-600">
-      {p('photo')}{' '}{credits.url ? <a href={credits.url} target="_blank" rel="noopener noreferrer" className="underline">{credits.texto || credits.autor || p('photoSource')}</a> : credits.texto || credits.autor}
-      {credits.licencia && <> · {credits.licencia}</>}
-    </figcaption>}
+    {credits && hasCredits && <>
+      {visible && <button type="button" aria-expanded={creditsOpen} aria-label={p('photoSource')} title={p('photoSource')} onClick={() => setCreditsOpen((open) => !open)}
+        className="absolute bottom-2 right-2 inline-flex size-8 items-center justify-center rounded-full bg-neutro-900/55 text-white backdrop-blur-sm transition hover:bg-neutro-900/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
+        <Info className="size-4" aria-hidden="true" />
+      </button>}
+      <figcaption lang={locale} className={cn('break-words text-xs', visible && !creditsOpen ? 'sr-only' : visible ? 'absolute inset-x-2 bottom-12 rounded-md bg-neutro-900/80 px-3 py-2 text-white' : 'border-b border-neutro-200 px-4 py-2 text-neutro-600')}>
+        {p('photo')}{' '}{credits.url ? <a href={credits.url} target="_blank" rel="noopener noreferrer" className="underline">{credits.autor || credits.texto || p('photoSource')}</a> : credits.autor || credits.texto}
+        {credits.licencia && <> · {credits.licencia}</>}
+      </figcaption>
+    </>}
   </figure>;
 }
 

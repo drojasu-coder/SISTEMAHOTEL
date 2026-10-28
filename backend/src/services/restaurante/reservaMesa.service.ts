@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
+import { SedeScope, sedeWhere } from "../../utils/sedeScope";
 
 const db = require("../../models");
 
@@ -298,10 +299,18 @@ const validateAvailability =
     }
   };
 
+/**
+ * Listado administrativo. `sucursal_id` filtra por la sede de la mesa y debe
+ * estar dentro del alcance del solicitante (ver utils/sedeScope).
+ */
 export const getAll =
-  async () => {
+  async (
+    scope: SedeScope = { global: true },
+    sucursalId?: number
+  ) => {
     return ReservaMesa.findAll(
       {
+        where: sedeWhere(scope, sucursalId, "$Mesa.sucursal_id$"),
         include:
           reservaMesaInclude,
 

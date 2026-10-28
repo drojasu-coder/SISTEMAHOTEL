@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
+import { SedeScope, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
 
 const db = require("../../models");
 
@@ -9,7 +10,60 @@ const {
   ReservaParqueo,
   Parqueo,
   ReservaHabitacion,
+  Habitacion,
 } = db;
+
+/**
+ * Alcance por sede (ver utils/sedeScope): el parqueo y, si existe, la reserva
+ * de habitación vinculada deben pertenecer a sedes autorizadas, y además a la
+ * misma sede: un parqueo de una sede no puede asociarse a una estancia de otra.
+ */
+const GLOBAL_SCOPE: SedeScope = { global: true };
+
+const assertReservaHabitacionVinculable = async (
+  reservaHabitacion: any,
+  parqueo: any,
+  scope: SedeScope,
+  transaction?: any
+) => {
+  if (!reservaHabitacion) return;
+  const habitacion = await Habitacion.findByPk(
+    reservaHabitacion.habitacion_id,
+    { attributes: ["id", "sucursal_id"], transaction }
+  );
+  assertSedeAccess(scope, habitacion?.sucursal_id);
+  if (Number(habitacion?.sucursal_id) !== Number(parqueo.sucursal_id)) {
+    throw new AppError(
+      409,
+      "PARQUEO_SEDE_MISMATCH",
+      "El parqueo y la reserva de habitación vinculada deben pertenecer a la misma sede"
+    );
+  }
+};
+
+const findReservaParqueoEnAlcance = async (
+  id: number,
+  scope: SedeScope,
+  options: Record<string, unknown> = {}
+) => {
+  const reservaParqueo = await ReservaParqueo.findByPk(id, options);
+  if (!reservaParqueo) {
+    throw new AppError(
+      404,
+      "RESERVA_PARQUEO_NOT_FOUND",
+      "La reserva de parqueo no fue encontrada"
+    );
+  }
+  if (!scope.global) {
+    // Lectura sin bloqueo del parqueo actual: no altera el orden Reserva -> Parqueo destino.
+    const parqueoActual = await Parqueo.findByPk(reservaParqueo.parqueo_id, {
+      attributes: ["id", "sucursal_id"],
+      transaction: options.transaction,
+    });
+    assertSedeAccess(scope, parqueoActual?.sucursal_id);
+  }
+  return reservaParqueo;
+};
 
 type DateValue = string | Date;
 
@@ -220,7 +274,8 @@ const validateLockedReferences =
       | number
       | null
       | undefined,
-    transaction: any
+    transaction: any,
+    scope: SedeScope = GLOBAL_SCOPE
   ) => {
     const parqueo =
       await Parqueo.findByPk(
@@ -242,9 +297,10 @@ const validateLockedReferences =
       );
     }
 
+    assertSedeAccess(scope, parqueo.sucursal_id);
+
     let reservaHabitacion =
       null;
-
     if (
       reservaHabitacionId !=
       null
@@ -256,12 +312,17 @@ const validateLockedReferences =
             transaction,
           }
         );
-
       if (
         !reservaHabitacion
       ) {
         throw notFoundReservaHabitacion();
       }
+      await assertReservaHabitacionVinculable(
+        reservaHabitacion,
+        parqueo,
+        scope,
+        transaction
+      );
     }
 
     return {
@@ -362,35 +423,35 @@ const validateOverlap =
   };
 
 export const getAllReservaParqueos =
-  async () =>
+  async (scope: SedeScope = GLOBAL_SCOPE) =>
     ReservaParqueo.findAll({
+      ...(scope.global
+        ? {}
+        : {
+            include: [
+              {
+                model: Parqueo,
+                attributes: [],
+                where: sedeWhere(scope),
+                required: true,
+              },
+            ],
+          }),
       order: [["id", "ASC"]],
     });
 
 export const getReservaParqueoById =
   async (
-    id: number
-  ) => {
-    const reservaParqueo =
-      await ReservaParqueo.findByPk(
-        id
-      );
-
-    if (!reservaParqueo) {
-      throw new AppError(
-        404,
-        "RESERVA_PARQUEO_NOT_FOUND",
-        "La reserva de parqueo no fue encontrada"
-      );
-    }
-
-    return reservaParqueo;
-  };
+    id: number,
+    scope: SedeScope = GLOBAL_SCOPE
+  ) =>
+    findReservaParqueoEnAlcance(id, scope);
 
 export const createReservaParqueo =
   async (
     data:
-      CreateReservaParqueoData
+      CreateReservaParqueoData,
+    scope: SedeScope = GLOBAL_SCOPE
   ) => {
     /**
      * Validaciones que no requieren acceso a BD.
@@ -423,7 +484,8 @@ export const createReservaParqueo =
           await validateLockedReferences(
             data.parqueo_id,
             data.reserva_habitacion_id,
-            transaction
+            transaction,
+            scope
           );
 
         validateParqueoReservable(
@@ -460,7 +522,8 @@ export const updateReservaParqueo =
   async (
     id: number,
     data:
-      UpdateReservaParqueoData
+      UpdateReservaParqueoData,
+    scope: SedeScope = GLOBAL_SCOPE
   ) => {
     /**
      * PATCH completo dentro de una transacción.
@@ -479,8 +542,9 @@ export const updateReservaParqueo =
         transaction: any
       ) => {
         const reservaParqueo =
-          await ReservaParqueo.findByPk(
+          await findReservaParqueoEnAlcance(
             id,
+            scope,
             {
               transaction,
               lock:
@@ -489,14 +553,6 @@ export const updateReservaParqueo =
                   .UPDATE,
             }
           );
-
-        if (!reservaParqueo) {
-          throw new AppError(
-            404,
-            "RESERVA_PARQUEO_NOT_FOUND",
-            "La reserva de parqueo no fue encontrada"
-          );
-        }
 
         const parqueoId =
           data.parqueo_id ??
@@ -553,7 +609,8 @@ export const updateReservaParqueo =
           await validateLockedReferences(
             parqueoId,
             reservaHabitacionId,
-            transaction
+            transaction,
+            scope
           );
 
         validateParqueoReservable(
@@ -592,20 +649,14 @@ export const updateReservaParqueo =
 
 export const deleteReservaParqueo =
   async (
-    id: number
+    id: number,
+    scope: SedeScope = GLOBAL_SCOPE
   ) => {
     const reservaParqueo =
-      await ReservaParqueo.findByPk(
-        id
+      await findReservaParqueoEnAlcance(
+        id,
+        scope
       );
-
-    if (!reservaParqueo) {
-      throw new AppError(
-        404,
-        "RESERVA_PARQUEO_NOT_FOUND",
-        "La reserva de parqueo no fue encontrada"
-      );
-    }
 
     /**
      * Actualmente el modelo no posee estado,

@@ -34,12 +34,14 @@ const email = (name: string) => `qa.${name}@ejemplo.test`;
 
 /** Operación representativa del backend protegida por cada permiso (requireRole). */
 const PROBES: Record<Permission, { method: 'GET' | 'POST' | 'PATCH'; path: string }> = {
-  'habitaciones.gestionar': { method: 'POST', path: '/habitaciones' },
+  'habitaciones.gestionar': { method: 'PATCH', path: '/habitaciones/999999' },
+  'habitaciones.configurar': { method: 'POST', path: '/habitaciones' },
+  'reservas.gestionar': { method: 'GET', path: '/admin/dashboard' },
   'facturas.gestionar': { method: 'POST', path: '/facturas' },
   'pagos.administrar': { method: 'POST', path: '/pagos/999999/aprobar-transferencia' },
   'restaurante.gestionar': { method: 'POST', path: '/mesas' },
   'servicios.administrar': { method: 'POST', path: '/amenidades' },
-  'personal.administrar': { method: 'GET', path: '/usuarios' },
+  'personal.administrar': { method: 'GET', path: '/empleados' },
   'configuracion.administrar': { method: 'PATCH', path: '/configuraciones/iva' },
 };
 
@@ -82,8 +84,8 @@ describe.skipIf(!password)('Backend real (hotel_test_db) — autenticación y pe
       admin: '/admin',
       recepcionista: '/admin',
       gerente_habitaciones: '/admin',
-      gerente_restaurante: '/admin',
-      empleado_operativo: '/cuenta',
+      gerente_restaurante: '/cuenta',
+      empleado_operativo: '/admin',
       cliente: '/',
     };
     for (const rol of ROLES) {

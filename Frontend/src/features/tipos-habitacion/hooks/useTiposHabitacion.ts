@@ -2,13 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tiposHabitacionApi } from "../api/tiposHabitacionApi";
 import { TIPOS_HABITACION_QUERY_KEY } from "@/features/habitaciones/hooks/useHabitaciones";
 import type { CreateTipoHabitacionInput, UpdateTipoHabitacionInput } from "../types";
+import { useAuth } from "@/features/auth/AuthContext";
 
 export { TIPOS_HABITACION_QUERY_KEY };
 
-export function useTiposHabitacionQuery() {
+export function useTiposHabitacionQuery(enabled = true) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: TIPOS_HABITACION_QUERY_KEY,
+    queryKey: [...TIPOS_HABITACION_QUERY_KEY, 'admin', user?.id, user?.rol],
     queryFn: tiposHabitacionApi.getAll,
+    enabled,
   });
 }
 

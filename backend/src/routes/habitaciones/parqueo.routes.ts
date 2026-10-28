@@ -37,7 +37,8 @@ const rolesGestionHabitaciones = [
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/", authMiddleware, parqueoController.getAllParqueos);
+// Inventario de parqueos: información operativa, solo para roles de gestión de habitaciones.
+router.get("/", authMiddleware, requireRole(...rolesGestionHabitaciones), parqueoController.getAllParqueos);
 
 /**
  * @openapi
@@ -74,7 +75,7 @@ router.get("/", authMiddleware, parqueoController.getAllParqueos);
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/:id", authMiddleware, validateParams(parqueoIdSchema), parqueoController.getParqueoById);
+router.get("/:id", authMiddleware, requireRole(...rolesGestionHabitaciones), validateParams(parqueoIdSchema), parqueoController.getParqueoById);
 
 /**
  * @openapi

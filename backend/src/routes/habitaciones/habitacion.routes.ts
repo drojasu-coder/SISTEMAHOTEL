@@ -86,6 +86,8 @@ const rolesGestionHabitaciones = [
 router.get(
   "/",
   authMiddleware,
+  // Inventario interno (número y estado): el cliente usa /api/public/habitaciones.
+  requireRole(...rolesGestionHabitaciones),
   habitacionController.getAllHabitaciones
 );
 
@@ -236,6 +238,7 @@ router.get(
 router.get(
   "/:id",
   authMiddleware,
+  requireRole(...rolesGestionHabitaciones),
   validateParams(habitacionIdSchema),
   habitacionController.getHabitacionById
 );

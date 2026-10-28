@@ -17,6 +17,7 @@ export interface ModalProps {
   busy?: boolean;
   busyLabel?: string;
   initialFocusRef?: React.RefObject<HTMLElement>;
+  presentation?: 'dialog' | 'service';
 }
 
 /**
@@ -37,6 +38,7 @@ export const Modal: React.FC<ModalProps> = ({
   busy = false,
   busyLabel,
   initialFocusRef,
+  presentation = 'dialog',
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -97,7 +99,7 @@ export const Modal: React.FC<ModalProps> = ({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className={cn('fixed inset-0 z-50 flex items-center justify-center', presentation === 'service' ? 'sm:p-6' : 'p-4 sm:p-6')}>
       <div
         className="fixed inset-0 bg-neutro-900/50 backdrop-blur-sm transition-opacity"
         onClick={() => onCloseRef.current()}
@@ -111,7 +113,8 @@ export const Modal: React.FC<ModalProps> = ({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         className={cn(
-          'relative z-50 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-neutro-200 bg-white shadow-soft',
+          'relative z-50 flex w-full flex-col overflow-hidden border border-neutro-200 bg-white shadow-soft',
+          presentation === 'service' ? 'h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-h-[90dvh] sm:max-w-5xl sm:rounded-xl' : 'max-h-[90vh] max-w-lg rounded-xl',
           className,
         )}
       >

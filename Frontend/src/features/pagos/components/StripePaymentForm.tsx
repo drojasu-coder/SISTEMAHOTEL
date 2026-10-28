@@ -90,7 +90,7 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
       <div className="flex flex-col gap-1 rounded-lg border border-neutro-200 bg-neutro-50 p-3">
         <p className="eyebrow">{textosCheckout.pago.importe}</p>
         <p className="font-serif text-xl font-semibold text-neutro-900">
-          {moneda === 'GTQ' ? <MoneyReference amount={monto} /> : `${moneda} ${monto}`}
+          {moneda === 'GTQ' ? <MoneyReference currency="GTQ" amount={monto} /> : `${moneda} ${monto}`}
         </p>
       </div>
 

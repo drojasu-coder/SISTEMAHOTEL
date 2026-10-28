@@ -69,11 +69,11 @@ export const es = {
     carrito: 'Carrito',
   },
   roles: {
-    admin: 'Administrador',
+    admin: 'Administrador general',
     recepcionista: 'Recepción',
     gerente_restaurante: 'Gerente de restaurante',
-    gerente_habitaciones: 'Gerente de habitaciones',
-    empleado_operativo: 'Personal operativo',
+    gerente_habitaciones: 'Gerente de sede',
+    empleado_operativo: 'Encargado de habitaciones',
     cliente: 'Cliente',
   },
   modulos: {
@@ -653,7 +653,7 @@ export const es = {
       "Disfrute de nuestra selecta gastronomía en las diferentes sedes de HOTEL HUNAHPÚ.",
     mesasTitulo: "Mesas del restaurante",
     mesasDescripcion:
-      "Consulte los espacios gastronómicos disponibles en nuestras sedes y reserve su mesa.",
+      "Elija una mesa real por sede, zona y capacidad, y prepare su reserva.",
     todasLasSedes: "Todas las sedes",
     todasLasZonas: "Todas las zonas",
     zona: "Zona",
@@ -670,7 +670,7 @@ export const es = {
     reintentar: "Reintentar",
     sinMesasTitulo: "No hay mesas registradas",
     sinMesasDesc:
-      "No se encontraron mesas de restaurante disponibles en este momento.",
+      "Aún no hay mesas de restaurante en el catálogo. Puede consultar de nuevo más adelante.",
     sinResultadosTitulo: "No se encontraron mesas",
     sinResultadosDesc: "Intente seleccionando otra sede o zona.",
     limpiarFiltros: "Limpiar filtros",
@@ -696,7 +696,19 @@ export const es = {
     cancelar: "Cancelar",
     reservaExitosaTitulo: "¡Reserva de mesa confirmada!",
     reservaExitosaDesc:
-      "Su reserva ha sido registrada exitosamente en nuestro restaurante. No requiere pago previo ni anticipo.",
+      "Su reserva ha sido registrada en nuestro restaurante. Consulte su detalle para revisar la información.",
+    siguienteAccion: "Puede consultar el detalle o volver a Mis reservas.",
+    estadoNoDisponibilidad: "El estado actual no indica disponibilidad para una fecha u hora.",
+    ayudaHora: "Indique una hora en formato de 24 horas. La disponibilidad se comprueba al confirmar; no se muestran horarios previamente verificados.",
+    errorFechaInvalida: "Indique una fecha válida para la reserva.",
+    errorHoraInvalida: "Indique una hora válida en formato de 24 horas.",
+    errorComensalesInvalidos: "Indique un número entero de comensales mayor que cero.",
+    resultadoIncierto: "No pudimos confirmar el resultado del envío. Su reserva podría haberse registrado. Compruebe Mis reservas antes de enviar otra solicitud.",
+    comprobarReservas: "Comprobar Mis reservas",
+    comprobando: "Comprobando reservas…",
+    errorComprobar: "No fue posible consultar sus reservas. El envío continúa bloqueado; puede comprobar de nuevo o abrir Mis reservas.",
+    intentoNoEncontrado: "Esta consulta no encontró una reserva confirmada con esos datos. Si ha revisado Mis reservas, puede preparar otro envío y confirmarlo expresamente. Una solicitud anterior aún podría estar procesándose.",
+    prepararNuevoEnvio: "He revisado mis reservas; preparar otro envío",
     identificadorReserva: "Número de reserva",
     verDetalle: "Ver detalle de la reserva",
     irMisReservas: "Ir a Mis Reservas de Restaurante",
@@ -706,7 +718,7 @@ export const es = {
     errorFechaPasada: "La fecha de la reserva no puede estar en el pasado.",
     errorHoraPasada: "La hora de la reserva no puede estar en el pasado.",
     errorMesaOcupada:
-      "La mesa ya se encuentra reservada para esa fecha y hora. Por favor seleccione otro horario u otra mesa.",
+      "La mesa ya se encuentra reservada para esa fecha y hora. Cambie la fecha o la hora e inténtelo de nuevo. No tenemos otros horarios verificados para ofrecerle.",
     errorMesaMantenimiento:
       "La mesa seleccionada se encuentra en mantenimiento y no puede ser reservada.",
     falloConexionIncierto:
@@ -740,7 +752,7 @@ export const es = {
         confirmada: "Confirmada",
         cancelada: "Cancelada",
       },
-      pagoNota: "Esta reserva gastronómica no requiere pago ni anticipo previo.",
+      pagoNota: "Consulte aquí los datos y el estado de su reserva gastronómica.",
       volverMisReservas: "Volver a Mis Reservas",
       verDetalle: "Ver detalle",
       reservaNoEncontrada:

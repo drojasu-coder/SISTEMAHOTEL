@@ -121,7 +121,7 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago, allo
           <div>
             <span className="text-xs text-neutro-500">{isAprobado ? p('purchaseChargedAmount') : p('purchaseRecordedAmount')}</span>
             <p className="font-serif text-lg font-bold text-selva-700">
-              {pago.moneda === 'GTQ' ? <MoneyReference amount={pago.monto} /> : `${pago.moneda} ${pago.monto}`} <small>{pago.moneda}</small>
+              {pago.moneda === 'GTQ' ? <MoneyReference currency="GTQ" amount={pago.monto} /> : `${pago.moneda} ${pago.monto}`} <small>{pago.moneda}</small>
             </p>
           </div>
 

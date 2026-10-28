@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       Mesa.belongsTo(models.Sucursal, { foreignKey: "sucursal_id" });
       Mesa.hasMany(models.ReservaMesa, { foreignKey: "mesa_id" });
+      Mesa.belongsTo(models.Restaurante, { foreignKey: "restaurante_id" });
     }
   }
   Mesa.init(
@@ -30,6 +31,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(20),
         allowNull: false,
         defaultValue: "disponible",
+      },
+      restaurante_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
       },
     },
     {

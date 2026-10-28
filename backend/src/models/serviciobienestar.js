@@ -9,6 +9,8 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       ServicioBienestar.hasMany(models.CitaBienestar, { foreignKey: "servicio_bienestar_id" });
+      // NULL = servicio general anterior a la vinculación por sede.
+      ServicioBienestar.belongsTo(models.Sucursal, { foreignKey: "sucursal_id" });
     }
   }
   ServicioBienestar.init(
@@ -29,6 +31,16 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(500),
         allowNull: true,
         defaultValue: null,
+      },
+      sucursal_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+      },
+      activo: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
       },
     },
     {

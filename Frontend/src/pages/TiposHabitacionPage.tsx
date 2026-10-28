@@ -1,17 +1,17 @@
 import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Plus, BedDouble, Bed } from "lucide-react";
-import { Button, buttonStyles } from "@/components/ui/Button";
+import { Plus, BedDouble } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/features/auth/AuthContext";
 import { hasPermission } from "@/features/auth/permissions";
-import { es } from "@/i18n/es";
+import { useAdminScope } from "@/features/admin-core/AdminScopeContext";
+import { useAdminSedes } from "@/features/admin-core/hooks/useAdminSedes";
 import { useTiposHabitacionQuery } from "@/features/tipos-habitacion/hooks/useTiposHabitacion";
 import { TiposHabitacionList } from "@/features/tipos-habitacion/components/TiposHabitacionList";
 import { TiposHabitacionFilters } from "@/features/tipos-habitacion/components/TiposHabitacionFilters";
 import { TipoHabitacionFormModal } from "@/features/tipos-habitacion/components/TipoHabitacionFormModal";
-import { textosTiposHabitacion } from "@/features/tipos-habitacion/textos";
+import { useTiposHabitacionTexts } from "@/features/tipos-habitacion/textos";
 import type {
   TipoHabitacion,
   TiposHabitacionFiltersState,
@@ -19,13 +19,20 @@ import type {
 import { getApiErrorMessage } from "@/api/errors";
 
 export const TiposHabitacionPage: React.FC = () => {
+  const textosTiposHabitacion = useTiposHabitacionTexts();
+  const { selectedSedeId, setSelectedSedeId } = useAdminScope();
   const { user } = useAuth();
   const canManageTipos = user
     ? hasPermission(user.rol, "habitaciones.gestionar")
     : false;
+  const authorized = useAdminSedes(canManageTipos);
+  const canEditTipo = (tipo: TipoHabitacion) => canManageTipos && authorized.isSuccess && (
+    tipo.sucursal_id === null ? user?.rol === 'admin' && authorized.data?.global === true
+      : authorized.data?.sedes.some(site => site.id === tipo.sucursal_id) === true
+  );
 
   const { data: tipos, isLoading, isError, error, refetch } =
-    useTiposHabitacionQuery();
+    useTiposHabitacionQuery(Boolean(user));
 
   const [filters, setFilters] = useState<TiposHabitacionFiltersState>({
     search: "",
@@ -38,9 +45,9 @@ export const TiposHabitacionPage: React.FC = () => {
   const filteredTipos = useMemo(() => {
     if (!tipos) return [];
     const term = filters.search.trim().toLowerCase();
-    if (!term) return tipos;
-    return tipos.filter((t) => t.nombre.toLowerCase().includes(term));
-  }, [tipos, filters.search]);
+    return tipos.filter(tipo => (selectedSedeId === 'all' || tipo.sucursal_id === null || tipo.sucursal_id === selectedSedeId)
+      && (!term || tipo.nombre.toLowerCase().includes(term)));
+  }, [tipos, filters.search, selectedSedeId]);
 
   const handleOpenCreate = () => {
     setSelectedTipo(null);
@@ -48,6 +55,7 @@ export const TiposHabitacionPage: React.FC = () => {
   };
 
   const handleOpenEdit = (tipo: TipoHabitacion) => {
+    if (!canEditTipo(tipo)) return;
     setSelectedTipo(tipo);
     setModalOpen(true);
   };
@@ -59,10 +67,10 @@ export const TiposHabitacionPage: React.FC = () => {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12">
       {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-1 basis-72 flex-col gap-1.5">
           <p className="eyebrow">{textosTiposHabitacion.subtitulo}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] md:text-[2.5rem] md:leading-[3rem] text-neutro-900">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900 sm:text-3xl">
             {textosTiposHabitacion.titulo}
           </h1>
           <p className="text-sm text-neutro-600 max-w-2xl">
@@ -70,19 +78,13 @@ export const TiposHabitacionPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
-          <Link
-            to="/admin/habitaciones"
-            className={buttonStyles({ variant: "ghost" })}
-          >
-            <Bed className="size-4" aria-hidden="true" />
-            <span>{es.habitaciones.titulo}</span>
-          </Link>
+        <div className="flex max-w-full flex-wrap items-center gap-3 self-start">
           {canManageTipos && (
             <Button
               type="button"
               variant="primary"
               onClick={handleOpenCreate}
+              disabled={authorized.isLoading || authorized.isError}
             >
               <Plus className="size-4" aria-hidden="true" />
               <span>{textosTiposHabitacion.nuevoTipo}</span>
@@ -101,11 +103,16 @@ export const TiposHabitacionPage: React.FC = () => {
               onClick={() => setFeedbackMessage(null)}
               className="text-xs font-semibold underline hover:no-underline"
             >
-              {es.comunes.cerrar}
+              {textosTiposHabitacion.cerrar}
             </button>
           </div>
         </Alert>
       )}
+
+      {canManageTipos && authorized.isError && <Alert tone="error">{textosTiposHabitacion.scopeError}
+        <Button variant="text" onClick={() => void authorized.refetch()}>{textosTiposHabitacion.retry}</Button>
+      </Alert>}
+      <p className="text-xs text-neutro-600">{textosTiposHabitacion.siteNote}</p>
 
       {/* Barra de búsqueda */}
       {!isLoading && !isError && tipos && tipos.length > 0 && (
@@ -130,7 +137,7 @@ export const TiposHabitacionPage: React.FC = () => {
             {getApiErrorMessage(error)}
           </Alert>
           <Button type="button" variant="ghost" onClick={() => refetch()}>
-            {es.comunes.reintentar}
+            {textosTiposHabitacion.retry}
           </Button>
         </Card>
       )}
@@ -140,7 +147,7 @@ export const TiposHabitacionPage: React.FC = () => {
         <Card className="flex flex-col items-center justify-center gap-4 py-12 text-center">
           <BedDouble className="size-12 text-neutro-400" aria-hidden="true" />
           <div className="flex flex-col gap-1 max-w-md">
-            <h2 className="text-lg font-serif font-semibold text-neutro-800">
+            <h2 className="font-sans text-lg font-semibold text-neutro-800">
               {textosTiposHabitacion.sinTiposTitulo}
             </h2>
             <p className="text-xs text-neutro-600">
@@ -150,7 +157,7 @@ export const TiposHabitacionPage: React.FC = () => {
             </p>
           </div>
           {canManageTipos && (
-            <Button type="button" variant="primary" onClick={handleOpenCreate}>
+            <Button type="button" variant="primary" onClick={handleOpenCreate} disabled={authorized.isLoading || authorized.isError}>
               <Plus className="size-4" aria-hidden="true" />
               {textosTiposHabitacion.nuevoTipo}
             </Button>
@@ -172,7 +179,7 @@ export const TiposHabitacionPage: React.FC = () => {
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setFilters({ search: "" })}
+              onClick={() => { setFilters({ search: "" }); setSelectedSedeId('all'); }}
             >
               {textosTiposHabitacion.limpiarFiltros}
             </Button>
@@ -183,7 +190,9 @@ export const TiposHabitacionPage: React.FC = () => {
       {!isLoading && !isError && filteredTipos.length > 0 && (
         <TiposHabitacionList
           tipos={filteredTipos}
-          canEdit={canManageTipos}
+          canEdit={canManageTipos && authorized.isSuccess}
+          isEditable={canEditTipo}
+          sedes={authorized.data?.sedes ?? []}
           onEdit={handleOpenEdit}
         />
       )}

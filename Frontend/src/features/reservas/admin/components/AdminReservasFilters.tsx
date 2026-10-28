@@ -2,16 +2,14 @@ import React from 'react';
 import { Search, X, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ESTADOS_RESERVA_HABITACION, type EstadoReservaHabitacion } from '../../types';
-import { textosAdminReservas } from '../textos';
+import { useTextosAdminReservas } from '../textos';
 import type { ReservasAdminFiltersState } from '../types';
-import type { Sucursal } from '@/features/sedes/types';
 
 interface AdminReservasFiltersProps {
   filters: ReservasAdminFiltersState;
   onChange: (
     updater: (prev: ReservasAdminFiltersState) => ReservasAdminFiltersState
   ) => void;
-  sedes: Sucursal[];
   totalResults: number;
   totalCatalog: number;
 }
@@ -19,26 +17,26 @@ interface AdminReservasFiltersProps {
 export const AdminReservasFilters: React.FC<AdminReservasFiltersProps> = ({
   filters,
   onChange,
-  sedes,
   totalResults,
   totalCatalog,
 }) => {
+  const textosAdminReservas = useTextosAdminReservas();
   const hasActiveFilters =
     Boolean(filters.search.trim()) ||
-    filters.sucursalId !== 'all' ||
     filters.estado !== 'all';
 
   const handleClearAll = () => {
-    onChange(() => ({
+    // La sede la decide el selector global del panel; aquí no se reinicia.
+    onChange((prev) => ({
+      ...prev,
       search: '',
-      sucursalId: 'all',
       estado: 'all',
     }));
   };
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-neutro-200 bg-white p-4 shadow-soft">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {/* Búsqueda por cliente, habitación o ID */}
         <div className="relative">
           <label htmlFor="filtro-reserva-buscar" className="sr-only">
@@ -63,39 +61,12 @@ export const AdminReservasFilters: React.FC<AdminReservasFiltersProps> = ({
             <button
               type="button"
               onClick={() => onChange((prev) => ({ ...prev, search: '' }))}
-              aria-label="Limpiar búsqueda"
+              aria-label={textosAdminReservas.filtros.limpiarBusqueda}
               className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-neutro-500 hover:bg-neutro-100 hover:text-neutro-900"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
           )}
-        </div>
-
-        {/* Filtro por Sede */}
-        <div>
-          <label htmlFor="filtro-reserva-sede" className="sr-only">
-            {textosAdminReservas.filtros.sedeLabel}
-          </label>
-          <select
-            id="filtro-reserva-sede"
-            aria-label={textosAdminReservas.filtros.sedeLabel}
-            value={filters.sucursalId}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange((prev) => ({
-                ...prev,
-                sucursalId: val === 'all' ? 'all' : Number(val),
-              }));
-            }}
-            className="field-control"
-          >
-            <option value="all">{textosAdminReservas.filtros.todasLasSedes}</option>
-            {sedes.map((sede) => (
-              <option key={sede.id} value={sede.id}>
-                {sede.nombre}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Filtro por Estado */}

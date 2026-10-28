@@ -3,37 +3,34 @@ import { Search, X, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { textosHabitaciones } from "../textos";
 import type { EstadoHabitacion, HabitacionesFiltersState } from "../types";
-import type { Sucursal } from "@/features/sedes/types";
 
 interface HabitacionesFiltersProps {
   filters: HabitacionesFiltersState;
   onChange: (updater: (prev: HabitacionesFiltersState) => HabitacionesFiltersState) => void;
-  sedes: Sucursal[];
   totalResults: number;
 }
 
 export const HabitacionesFilters: React.FC<HabitacionesFiltersProps> = ({
   filters,
   onChange,
-  sedes,
   totalResults,
 }) => {
   const hasActiveFilters =
     Boolean(filters.search.trim()) ||
-    filters.sucursalId !== "all" ||
     filters.estado !== "all";
 
   const handleClearAll = () => {
-    onChange(() => ({
+    // La sede la decide el selector global del panel; aquí no se reinicia.
+    onChange((prev) => ({
+      ...prev,
       search: "",
-      sucursalId: "all",
       estado: "all",
     }));
   };
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-neutro-200 bg-white p-4 shadow-soft">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {/* Búsqueda por número */}
         <div className="relative">
           <label htmlFor="filtro-numero" className="sr-only">
@@ -64,33 +61,6 @@ export const HabitacionesFilters: React.FC<HabitacionesFiltersProps> = ({
               <X className="size-4" aria-hidden="true" />
             </button>
           )}
-        </div>
-
-        {/* Filtro por Sede */}
-        <div>
-          <label htmlFor="filtro-sede" className="sr-only">
-            {textosHabitaciones.filtroSedeLabel}
-          </label>
-          <select
-            id="filtro-sede"
-            aria-label={textosHabitaciones.filtroSedeLabel}
-            value={filters.sucursalId}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange((prev) => ({
-                ...prev,
-                sucursalId: val === "all" ? "all" : Number(val),
-              }));
-            }}
-            className="field-control"
-          >
-            <option value="all">{textosHabitaciones.todasLasSedes}</option>
-            {sedes.map((sede) => (
-              <option key={sede.id} value={sede.id}>
-                {sede.nombre}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Filtro por Estado */}

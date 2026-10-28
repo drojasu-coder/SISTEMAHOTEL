@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Upload, X, Trash2, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useLocale } from '@/i18n/LocaleContext';
 
 export interface ImageUploaderProps {
   label?: string;
@@ -26,8 +27,8 @@ const RASTER_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const SVG_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
 
 export const ImageUploader: React.FC<ImageUploaderProps> = ({
-  label = 'Fotografía',
-  optionalLabel = '(opcional)',
+  label,
+  optionalLabel,
   helpText,
   allowSvg = false,
   currentImageUrl,
@@ -39,10 +40,16 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   isUploading = false,
   uploadProgress = 0,
   error,
-  currentImageLabel = 'Fotografía actual',
-  currentImageStatus = 'Asociada en almacenamiento seguro',
+  currentImageLabel,
+  currentImageStatus,
   className = '',
 }) => {
+  const { locale } = useLocale();
+  const en = locale === 'en';
+  label ??= en ? 'Photograph' : 'Fotografía';
+  optionalLabel ??= en ? '(optional)' : '(opcional)';
+  currentImageLabel ??= en ? 'Current photograph' : 'Fotografía actual';
+  currentImageStatus ??= en ? 'Saved photograph' : 'Fotografía guardada';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -52,8 +59,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     ? 'image/jpeg,image/png,image/webp,image/svg+xml'
     : 'image/jpeg,image/png,image/webp';
   const defaultHelp = allowSvg
-    ? 'Archivos SVG, JPEG, PNG o WebP de hasta 5 MiB'
-    : 'Archivos JPEG, PNG o WebP de hasta 5 MiB';
+    ? (en ? 'SVG, JPEG, PNG or WebP files up to 5 MiB' : 'Archivos SVG, JPEG, PNG o WebP de hasta 5 MiB')
+    : (en ? 'JPEG, PNG or WebP files up to 5 MiB' : 'Archivos JPEG, PNG o WebP de hasta 5 MiB');
 
   useEffect(() => {
     if (!selectedFile) {
@@ -73,8 +80,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
     if (!allowedTypes.includes(file.type)) {
       setLocalError(
         allowSvg
-          ? 'Formato no admitido. Utilice archivos SVG, JPEG, PNG o WebP.'
-          : 'Formato no admitido. Utilice archivos JPEG, PNG o WebP.',
+          ? (en ? 'Unsupported format. Use SVG, JPEG, PNG or WebP files.' : 'Formato no admitido. Utilice archivos SVG, JPEG, PNG o WebP.')
+          : (en ? 'Unsupported format. Use JPEG, PNG or WebP files.' : 'Formato no admitido. Utilice archivos JPEG, PNG o WebP.'),
       );
       e.target.value = '';
       return;
@@ -82,7 +89,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     if (file.size > MAX_FILE_SIZE) {
       setLocalError(
-        `El archivo pesa ${(file.size / (1024 * 1024)).toFixed(1)} MiB y supera el límite de 5 MiB.`,
+        en ? `The file is ${(file.size / (1024 * 1024)).toFixed(1)} MiB and exceeds the 5 MiB limit.` : `El archivo pesa ${(file.size / (1024 * 1024)).toFixed(1)} MiB y supera el límite de 5 MiB.`,
       );
       e.target.value = '';
       return;
@@ -122,7 +129,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           <div className="flex-1 min-w-0">
             <p className="truncate text-xs font-semibold text-neutro-900">{selectedFile.name}</p>
             <p className="text-[11px] text-neutro-500">
-              {(selectedFile.size / 1024).toFixed(0)} KB · Nuevo archivo seleccionado
+              {(selectedFile.size / 1024).toFixed(0)} KB · {en ? 'New file selected' : 'Nuevo archivo seleccionado'}
             </p>
             {isUploading && (
               <div className="mt-2 w-full">
@@ -142,7 +149,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             size="sm"
             onClick={handleClearSelection}
             disabled={disabled || isUploading}
-            aria-label="Cancelar selección"
+            aria-label={en ? 'Cancel selection' : 'Cancelar selección'}
           >
             <X className="size-4 text-neutro-600" />
           </Button>
@@ -170,7 +177,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               disabled={disabled || isUploading}
             >
               <RotateCw className="size-3.5 mr-1" />
-              <span className="text-xs">Cambiar</span>
+              <span className="text-xs">{en ? 'Change' : 'Cambiar'}</span>
             </Button>
             <Button
               type="button"
@@ -179,7 +186,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               onClick={onRemoveCurrent}
               disabled={disabled || isUploading}
               className="text-error-700 hover:bg-error-50"
-              aria-label="Quitar imagen"
+              aria-label={en ? 'Remove image' : 'Quitar imagen'}
             >
               <Trash2 className="size-3.5" />
             </Button>
@@ -192,7 +199,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         <div className="flex items-center justify-between rounded-lg border border-error-200 bg-error-50 p-3 text-xs text-error-800">
           <div className="flex items-center gap-2">
             <Trash2 className="size-4 shrink-0 text-error-600" />
-            <span>La imagen actual será retirada al guardar los cambios.</span>
+            <span>{en ? 'The current image will be removed when you save.' : 'La imagen actual será retirada al guardar los cambios.'}</span>
           </div>
           <Button
             type="button"
@@ -202,29 +209,31 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             disabled={disabled || isUploading}
             className="text-xs font-semibold underline"
           >
-            Deshacer
+            {en ? 'Undo' : 'Deshacer'}
           </Button>
         </div>
       )}
 
       {/* 4. Dropzone / selector para elegir imagen */}
       {!previewUrl && (!currentImageUrl || removeMarked) && (
-        <div
-          onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
+        <button
+          type="button"
+          disabled={disabled || isUploading}
+          onClick={() => fileInputRef.current?.click()}
           className={`flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-neutro-300 bg-neutro-50 p-6 text-center cursor-pointer transition-colors hover:border-bronce-500 hover:bg-bronce-50/20 ${
             disabled || isUploading ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
-          <div className="flex size-10 items-center justify-center rounded-full bg-neutro-200/70 text-neutro-600">
+          <span className="flex size-10 items-center justify-center rounded-full bg-neutro-200/70 text-neutro-600">
             <Upload className="size-5 text-bronce-600" />
-          </div>
-          <div className="flex flex-col gap-0.5">
+          </span>
+          <span className="flex flex-col gap-0.5">
             <span className="text-xs font-semibold text-neutro-800">
-              {currentImageUrl && removeMarked ? 'Seleccionar nueva imagen' : 'Subir archivo'}
+              {currentImageUrl && removeMarked ? (en ? 'Select new image' : 'Seleccionar nueva imagen') : (en ? 'Upload file' : 'Subir archivo')}
             </span>
             <span className="text-[11px] text-neutro-500">{helpText || defaultHelp}</span>
-          </div>
-        </div>
+          </span>
+        </button>
       )}
 
       <input

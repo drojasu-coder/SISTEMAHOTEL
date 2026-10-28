@@ -15,6 +15,7 @@ import type { TipoHabitacion } from "./types";
 const mockTipos: TipoHabitacion[] = [
   {
     id: 1,
+    sucursal_id: 5,
     nombre: "Suite Presidencial",
     capacidad_maxima: 2,
     tarifa_noche: "1250.00",
@@ -22,6 +23,7 @@ const mockTipos: TipoHabitacion[] = [
   },
   {
     id: 2,
+    sucursal_id: 5,
     nombre: "Doble Deluxe",
     capacidad_maxima: 4,
     tarifa_noche: "750.00",
@@ -29,12 +31,21 @@ const mockTipos: TipoHabitacion[] = [
   },
   {
     id: 3,
+    sucursal_id: null,
     nombre: "Habitación Económica",
     capacidad_maxima: 1,
     tarifa_noche: "0.00",
     descripcion: "Alojamiento de cortesía para personal o promociones especiales",
   },
 ];
+
+function renderTypes(role = 'admin') {
+  const original = global.fetch;
+  global.fetch = vi.fn((input, init) => String(input).includes('/admin/dashboard')
+    ? Promise.resolve(jsonResponse({ data: { global: role === 'admin', sedes: [{ id: 5, nombre: 'Sede QA', activa: true }] } }))
+    : original(input, init));
+  return renderWithProviders(<TiposHabitacionPage />);
+}
 
 describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
   beforeEach(() => {
@@ -67,7 +78,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     tokenStorage.set("jwt-admin");
     setupFetchMock();
 
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     expect((await screen.findAllByText("Suite Presidencial")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Doble Deluxe").length).toBeGreaterThan(0);
@@ -89,7 +100,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     setupFetchMock();
     const user = userEvent.setup();
 
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     await screen.findAllByText("Suite Presidencial");
 
@@ -112,12 +123,13 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     setupFetchMock();
     const user = userEvent.setup();
 
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     await screen.findAllByText("Suite Presidencial");
 
     const newBtn = screen.getByRole("button", { name: /Nuevo tipo de habitación/i });
     await user.click(newBtn);
+    await user.selectOptions(await screen.findByLabelText("Sede del tipo de habitación"), "general");
 
     expect(
       screen.getByRole("heading", { name: /Registrar nuevo tipo de habitación/i })
@@ -180,12 +192,13 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     });
 
     const user = userEvent.setup();
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     await screen.findAllByText("Suite Presidencial");
 
     const newBtn = screen.getByRole("button", { name: /Nuevo tipo de habitación/i });
     await user.click(newBtn);
+    await user.selectOptions(await screen.findByLabelText("Sede del tipo de habitación"), "general");
 
     const nameInput = screen.getByLabelText(/^Nombre del tipo de habitación$/i);
     const capInput = screen.getByLabelText(/Capacidad máxima/i);
@@ -202,6 +215,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     await waitFor(() => {
       expect(createdPayload).toEqual({
         nombre: "Cabaña de Cortesía",
+        sucursal_id: null,
         capacidad_maxima: 3,
         tarifa_noche: 0,
         descripcion: null,
@@ -244,7 +258,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     });
 
     const user = userEvent.setup();
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     await screen.findAllByText("Suite Presidencial");
 
@@ -303,7 +317,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     });
 
     const user = userEvent.setup();
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     expect(
       await screen.findByText(/No fue posible cargar los tipos de habitación/i)
@@ -319,7 +333,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     tokenStorage.set("jwt-admin");
     setupFetchMock([]);
 
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     expect(
       await screen.findByText(/No hay tipos de habitación registrados/i)
@@ -333,7 +347,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     tokenStorage.set("jwt-recepcion");
     setupFetchMock(mockTipos, "recepcionista");
 
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes("recepcionista");
 
     await screen.findAllByText("Suite Presidencial");
 
@@ -349,7 +363,7 @@ describe("Gestión de Tipos de Habitación (TiposHabitacionPage)", () => {
     tokenStorage.set("jwt-cliente");
     setupFetchMock(mockTipos, "cliente");
 
-    renderWithProviders(<TiposHabitacionPage />);
+    renderTypes();
 
     await screen.findAllByText("Suite Presidencial");
 

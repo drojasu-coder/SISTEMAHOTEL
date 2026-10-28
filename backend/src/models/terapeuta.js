@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       Terapeuta.hasMany(models.CitaBienestar, { foreignKey: "terapeuta_id", as: "CitasBienestar" });
+      Terapeuta.belongsTo(models.Sucursal, { foreignKey: "sucursal_id" });
     }
   }
   Terapeuta.init(
@@ -20,6 +21,11 @@ module.exports = (sequelize, DataTypes) => {
       activo: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+      },
+      sucursal_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
       },
     },
     {

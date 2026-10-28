@@ -3,7 +3,8 @@ import * as terapeutaService from "../../services/bienestar/terapeuta.service";
 
 export const getAll = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const data = await terapeutaService.getAll();
+    const { sucursal_id } = req.query as { sucursal_id?: number };
+    const data = await terapeutaService.getAll({ sucursalId: sucursal_id });
     res.status(200).json({ status: "success", data });
   } catch (error) { next(error); }
 };

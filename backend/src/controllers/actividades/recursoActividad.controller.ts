@@ -69,3 +69,10 @@ export const deleteImage = async (req: Request, res: Response, next: NextFunctio
     next(error);
   }
 };
+
+export const getSalidas = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await recursoService.getSalidas(Number(req.params.id), String(req.query.fecha));
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
+};

@@ -1,18 +1,23 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Alert } from "@/components/ui/Feedback";
 import { ImageUploader } from "@/components/ui/ImageUploader";
 import { ApiError } from "@/api/client/http";
-import { getApiErrorMessage, getFieldErrors } from "@/api/errors";
-import { es } from "@/i18n/es";
-import { textosTiposHabitacion } from "../textos";
+import { getFieldErrors } from "@/api/errors";
+import { useLocale } from "@/i18n/LocaleContext";
+import { useAuth } from "@/features/auth/AuthContext";
+import { useAdminScope } from "@/features/admin-core/AdminScopeContext";
+import { useAdminSedes } from "@/features/admin-core/hooks/useAdminSedes";
+import { useRevalidateErrors, TranslatedError } from "@/i18n/public";
+import { useTiposHabitacionTexts } from "../textos";
 import {
-  tipoHabitacionFormSchema,
+  createTipoHabitacionFormSchema,
   sanitizeCreateTipoHabitacion,
   sanitizeUpdateTipoHabitacion,
   type TipoHabitacionFormData,
@@ -38,6 +43,12 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
   tipo,
   onSuccess,
 }) => {
+  const textosTiposHabitacion = useTiposHabitacionTexts();
+  const { locale } = useLocale();
+  const { user } = useAuth();
+  const { selectedSedeId } = useAdminScope();
+  const authorized = useAdminSedes(open);
+  const formSchema = useMemo(() => createTipoHabitacionFormSchema(locale), [locale]);
   const isEditing = Boolean(tipo);
   const title = isEditing
     ? textosTiposHabitacion.editarTitulo
@@ -50,7 +61,6 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
   const updateMutation = useUpdateTipoHabitacionMutation();
   const uploadImageMutation = useUploadTipoHabitacionImageMutation();
   const removeImageMutation = useRemoveTipoHabitacionImageMutation();
-  const activeMutation = isEditing ? updateMutation : createMutation;
 
   // Estado para la imagen del tipo de habitación
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -59,22 +69,33 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
   const [uploadProgress, setUploadProgress] = useState(0);
   const [imageError, setImageError] = useState<string | null>(null);
   const [persistedId, setPersistedId] = useState<number | null>(null);
+  const activeMutation = isEditing || persistedId !== null ? updateMutation : createMutation;
 
   const {
     register,
     handleSubmit,
     reset,
     setError,
+    getValues,
+    setValue,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<TipoHabitacionFormData>({
-    resolver: zodResolver(tipoHabitacionFormSchema),
+    resolver: zodResolver(formSchema),
     defaultValues: {
+      sucursal_id: "",
       nombre: "",
       capacidad_maxima: "",
       tarifa_noche: "",
       descripcion: "",
     },
   });
+  useRevalidateErrors(locale, () => trigger(), Object.keys(errors).length > 0);
+  useEffect(() => {
+    if (open && !tipo && user?.rol !== 'admin' && authorized.data?.sedes.length === 1 && !getValues('sucursal_id')) {
+      setValue('sucursal_id', String(authorized.data.sedes[0].id));
+    }
+  }, [open, tipo, authorized.data, user?.rol, getValues, setValue]);
 
   useEffect(() => {
     if (open) {
@@ -87,6 +108,7 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
 
       if (tipo) {
         reset({
+          sucursal_id: tipo.sucursal_id === null ? "general" : tipo.sucursal_id === undefined ? "" : String(tipo.sucursal_id),
           nombre: tipo.nombre ?? "",
           capacidad_maxima:
             tipo.capacidad_maxima !== undefined && tipo.capacidad_maxima !== null
@@ -100,6 +122,8 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
         });
       } else {
         reset({
+          sucursal_id: typeof selectedSedeId === 'number' ? String(selectedSedeId)
+            : user?.rol !== 'admin' && authorized.data?.sedes.length === 1 ? String(authorized.data.sedes[0].id) : "",
           nombre: "",
           capacidad_maxima: "",
           tarifa_noche: "",
@@ -114,6 +138,10 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
   }, [open, tipo, reset]);
 
   const onSubmit = async (data: TipoHabitacionFormData) => {
+    const permitted = data.sucursal_id === 'general'
+      ? user?.rol === 'admin' && authorized.data?.global
+      : authorized.data?.sedes.some(site => site.id === Number(data.sucursal_id));
+    if (!permitted) { setError('sucursal_id', { message: textosTiposHabitacion.scopeError }); return; }
     setImageError(null);
     let targetId: number;
 
@@ -143,11 +171,11 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
         if (err.status === 400) {
           const fieldErrors = getFieldErrors(err);
           for (const [field, msg] of Object.entries(fieldErrors)) {
-            if (field in tipoHabitacionFormSchema.shape) {
+            if (field in formSchema.shape) {
               setError(field as keyof TipoHabitacionFormData, { message: msg });
             }
           }
-        } else if (err.status === 409) {
+        } else if (err.status === 409 && err.code?.includes('CAPACITY')) {
           setError("capacidad_maxima", { message: err.message });
         }
       }
@@ -158,7 +186,7 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
       try {
         await removeImageMutation.mutateAsync(targetId);
       } catch (err: any) {
-        setImageError("No fue posible retirar la imagen actual.");
+        setImageError(textosTiposHabitacion.fotoError);
         return;
       }
     }
@@ -174,10 +202,7 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
         });
       } catch (err: any) {
         setIsUploadingImage(false);
-        setImageError(
-          err?.message ||
-            "Error al subir la imagen del tipo de habitación. Los datos fueron guardados; puede reintentar.",
-        );
+        setImageError(textosTiposHabitacion.fotoError);
         return;
       } finally {
         setIsUploadingImage(false);
@@ -199,14 +224,28 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
     isUploadingImage ||
     isSubmitting;
 
+  if (tipo?.sucursal_id === null && user?.rol !== 'admin') return <Modal open={open} onClose={onClose} title={title} closeLabel={textosTiposHabitacion.cerrar} className="font-sans [&_h2]:font-sans">
+    <Alert tone="info">{textosTiposHabitacion.readonly}</Alert>
+  </Modal>;
+
   return (
-    <Modal open={open} onClose={onClose} title={title} description={description}>
+    <Modal open={open} onClose={() => { if (!isPending) onClose(); }} busy={isPending} title={title} description={description} closeLabel={textosTiposHabitacion.cerrar} className="font-sans [&_h2]:font-sans">
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
         {activeMutation.isError && (
           <Alert tone="error">
-            {getApiErrorMessage(activeMutation.error)}
+            <TranslatedError error={{ api: activeMutation.error }} />
           </Alert>
         )}
+
+        {authorized.isError && <Alert tone="error">{textosTiposHabitacion.scopeError}
+          <Button variant="text" onClick={() => void authorized.refetch()}>{textosTiposHabitacion.retry}</Button>
+        </Alert>}
+        <Select label={textosTiposHabitacion.sede} error={errors.sucursal_id?.message}
+          loading={authorized.isLoading} disabled={isPending || authorized.isError} {...register('sucursal_id')}>
+          <option value="">{textosTiposHabitacion.selectSede}</option>
+          {user?.rol === 'admin' && authorized.data?.global && <option value="general">{textosTiposHabitacion.general}</option>}
+          {authorized.data?.sedes.map(site => <option key={site.id} value={site.id}>{site.nombre}</option>)}
+        </Select>
 
         <Input
           label={textosTiposHabitacion.nombre}
@@ -231,7 +270,7 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
             {...register("capacidad_maxima")}
           />
           <p className="text-[0.6875rem] text-neutro-500">
-            {es.tiposHabitacion.capacidadAyuda}
+            {textosTiposHabitacion.capacidadAyuda}
           </p>
         </div>
 
@@ -249,7 +288,7 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
         <div className="flex min-w-0 flex-col gap-2" data-invalid={errors.descripcion ? true : undefined}>
           <label htmlFor="tipo-descripcion" className="text-xs font-semibold text-neutro-700">
             {textosTiposHabitacion.descripcionLabel}
-            <span className="ml-1 font-normal text-neutro-500">({es.comunes.opcional})</span>
+            <span className="ml-1 font-normal text-neutro-500">({textosTiposHabitacion.opcional})</span>
           </label>
           <textarea
             id="tipo-descripcion"
@@ -269,10 +308,10 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
         </div>
 
         <ImageUploader
-          label="Fotografía representativa del tipo de habitación"
-          helpText="Archivos JPEG, PNG o WebP de hasta 5 MiB"
+          label={textosTiposHabitacion.fotografia}
+          helpText={textosTiposHabitacion.fotoAyuda}
           currentImageUrl={tipo?.imagen_url}
-          currentImageLabel="Fotografía del tipo de habitación"
+          currentImageLabel={textosTiposHabitacion.fotoActual}
           selectedFile={selectedFile}
           removeMarked={removeMarked}
           onFileSelect={setSelectedFile}
@@ -292,7 +331,7 @@ export const TipoHabitacionFormModal: React.FC<TipoHabitacionFormModalProps> = (
           >
             {textosTiposHabitacion.cancelar}
           </Button>
-          <Button type="submit" variant="primary" isLoading={isPending}>
+          <Button type="submit" variant="primary" isLoading={isPending} disabled={authorized.isLoading || authorized.isError}>
             {isPending ? textosTiposHabitacion.guardando : textosTiposHabitacion.guardar}
           </Button>
         </div>

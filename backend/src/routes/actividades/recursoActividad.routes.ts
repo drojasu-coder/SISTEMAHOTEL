@@ -1,11 +1,11 @@
 import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 import { Router } from "express";
 import * as recursoController from "../../controllers/actividades/recursoActividad.controller";
-import { validateBody, validateParams } from "../../middlewares/validate.middleware";
+import { validateBody, validateParams, validateQuery } from "../../middlewares/validate.middleware";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
 import { ROLES } from "../../constants/roles";
-import { createRecursoActividadSchema, updateRecursoActividadSchema } from "../../validators/actividades/recursoActividad.validator";
+import { createRecursoActividadSchema, salidasQuerySchema, updateRecursoActividadSchema } from "../../validators/actividades/recursoActividad.validator";
 import { idParamSchema } from "../../validators/common.validator";
 
 const router = Router();
@@ -58,6 +58,21 @@ router.get("/", recursoController.getAll);
  *         description: Recurso no encontrado
  */
 router.get("/:id", validateParams(idParamSchema), recursoController.getById);
+
+/**
+ * @openapi
+ * /api/recursos-actividad/{id}/salidas:
+ *   get:
+ *     tags: [Recursos de Actividad]
+ *     summary: Salidas confirmadas de una fecha y lugares disponibles (público, sin datos de clientes)
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: integer } }
+ *       - { in: query, name: fecha, required: true, schema: { type: string, format: date } }
+ *     responses:
+ *       200: { description: "Salidas con participantes y disponibles (cupo restante en experiencias)" }
+ *       404: { description: Recurso inexistente }
+ */
+router.get("/:id/salidas", validateParams(idParamSchema), validateQuery(salidasQuerySchema), recursoController.getSalidas);
 
 router.use(authMiddleware);
 router.use(requireRole(ROLES.ADMIN));

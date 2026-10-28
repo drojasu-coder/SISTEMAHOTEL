@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError";
 import * as mediaUploadService from "../storage/mediaUpload.service";
 import * as s3Service from "../storage/s3.service";
 import { getAssetCredits } from "../storage/credits";
+import { assertExperienciaCompleta } from "../../validators/actividades/recursoActividad.validator";
 
 const db = require("../../models");
 
@@ -16,6 +17,10 @@ interface CreateRecursoData {
   precio_equipo?: number;
   precio_instructor_hora?: number;
   imagen_key?: string | null;
+  modalidad?: "por_hora" | "experiencia";
+  duracion_minutos?: number | null;
+  cupo_maximo?: number | null;
+  precio_persona?: number | null;
 }
 
 interface UpdateRecursoData {
@@ -25,7 +30,16 @@ interface UpdateRecursoData {
   precio_equipo?: number;
   precio_instructor_hora?: number;
   imagen_key?: string | null;
+  modalidad?: "por_hora" | "experiencia";
+  duracion_minutos?: number | null;
+  cupo_maximo?: number | null;
+  precio_persona?: number | null;
 }
+
+const MODALIDAD_KEYS = ["modalidad", "duracion_minutos", "cupo_maximo", "precio_persona"] as const;
+
+const pickModalidad = (data: Partial<CreateRecursoData>) =>
+  Object.fromEntries(MODALIDAD_KEYS.filter((k) => data[k] !== undefined).map((k) => [k, data[k]]));
 
 export async function serializeRecursoActividad(recurso: any): Promise<any> {
   if (!recurso) return null;
@@ -37,8 +51,9 @@ export async function serializeRecursoActividad(recurso: any): Promise<any> {
   return plain;
 }
 
-export const getAll = async () => {
+export const getAll = async (where: Record<string | symbol, unknown> = {}) => {
   const recursos = await RecursoActividad.findAll({
+    where,
     include: [{ model: Sucursal, attributes: ["id", "nombre"] }],
     order: [["tipo", "ASC"], ["nombre", "ASC"]],
   });
@@ -71,6 +86,7 @@ export const create = async (data: CreateRecursoData) => {
       precio_instructor_hora: data.precio_instructor_hora,
     }),
     imagen_key: data.imagen_key ?? null,
+    ...pickModalidad(data),
   });
 
   return getById(created.id);
@@ -81,7 +97,30 @@ export const update = async (id: number, data: UpdateRecursoData) => {
   if (!recurso) {
     throw new AppError(404, "ACTIVITY_RESOURCE_NOT_FOUND", "El recurso de actividad no existe");
   }
+  const modalidad = pickModalidad(data);
+  if (Object.keys(modalidad).length > 0) {
+    const resultante = { ...recurso.get({ plain: true }), ...modalidad };
+    if (!assertExperienciaCompleta(resultante)) {
+      throw new AppError(
+        422,
+        "INVALID_ACTIVITY_MODE",
+        "Una experiencia requiere duracion_minutos, cupo_maximo y precio_persona"
+      );
+    }
+    // Cambiar la modalidad alteraría cómo se validan las reservas ya confirmadas.
+    if (resultante.modalidad !== recurso.modalidad) {
+      const confirmadas = await ReservaActividad.count({ where: { recurso_id: id, estado: "confirmada" } });
+      if (confirmadas > 0) {
+        throw new AppError(
+          409,
+          "ACTIVITY_MODE_IN_USE",
+          "No se puede cambiar la modalidad de un recurso con reservas confirmadas"
+        );
+      }
+    }
+  }
   await recurso.update({
+    ...modalidad,
     ...(data.tipo !== undefined && { tipo: data.tipo }),
     ...(data.nombre !== undefined && { nombre: data.nombre }),
     ...(data.precio_hora !== undefined && { precio_hora: data.precio_hora }),
@@ -158,4 +197,43 @@ export const removeImage = async (id: number) => {
     column: "imagen_key",
     serializeEntity: serializeRecursoActividad,
   });
+};
+
+/**
+ * Ocupación pública de un recurso en una fecha: salidas confirmadas agrupadas
+ * por hora de inicio. Solo expone conteos, nunca datos de los clientes.
+ * En experiencias, "disponibles" es el cupo restante de cada salida.
+ */
+export const getSalidas = async (id: number, fecha: string) => {
+  const recurso = await RecursoActividad.findByPk(id);
+  if (!recurso) {
+    throw new AppError(404, "ACTIVITY_RESOURCE_NOT_FOUND", "El recurso de actividad no existe");
+  }
+  const reservas = await ReservaActividad.findAll({
+    where: { recurso_id: id, fecha, estado: "confirmada" },
+    attributes: ["hora_inicio", "hora_fin", "numero_participantes"],
+    order: [["hora_inicio", "ASC"]],
+    raw: true,
+  });
+  const experiencia = recurso.modalidad === "experiencia";
+  const porInicio = new Map<string, { hora_inicio: string; hora_fin: string; participantes: number }>();
+  for (const r of reservas as any[]) {
+    const actual = porInicio.get(r.hora_inicio);
+    if (actual) {
+      actual.participantes += Number(r.numero_participantes);
+      if (r.hora_fin > actual.hora_fin) actual.hora_fin = r.hora_fin;
+    } else {
+      porInicio.set(r.hora_inicio, { hora_inicio: r.hora_inicio, hora_fin: r.hora_fin, participantes: Number(r.numero_participantes) });
+    }
+  }
+  return {
+    recurso_id: recurso.id,
+    fecha,
+    modalidad: recurso.modalidad,
+    cupo_maximo: experiencia ? recurso.cupo_maximo : null,
+    salidas: [...porInicio.values()].map((salida) => ({
+      ...salida,
+      disponibles: experiencia ? Math.max(0, Number(recurso.cupo_maximo) - salida.participantes) : 0,
+    })),
+  };
 };

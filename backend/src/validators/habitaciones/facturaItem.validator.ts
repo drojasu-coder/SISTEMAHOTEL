@@ -11,6 +11,7 @@ export const createFacturaItemSchema = z
     descripcion: z.string().trim().min(1).max(255),
     cantidad: z.number().int().positive(),
     precio_unitario: precioUnitario,
+    tipo_concepto: z.enum(["servicio", "hospedaje"]).optional(),
   })
   .strict();
 
@@ -20,6 +21,7 @@ export const updateFacturaItemSchema = z
     descripcion: z.string().trim().min(1).max(255),
     cantidad: z.number().int().positive(),
     precio_unitario: precioUnitario,
+    tipo_concepto: z.enum(["servicio", "hospedaje"]).optional(),
   })
   .partial()
   .strict();

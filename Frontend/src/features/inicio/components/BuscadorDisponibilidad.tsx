@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, Search, AlertCircle } from 'lucide-react';
+import { ChevronDown, MapPin, Search } from 'lucide-react';
 import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
-import { SiteSelector } from '@/features/preferencias/SiteSelector';
 import { useLocale } from '@/i18n/LocaleContext';
 import { Button } from '@/components/ui/Button';
-import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
+import { createBusquedaReservaSchema, getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
+import { usePublicInterface } from '@/i18n/public';
+import { StayDateRange } from '@/features/habitaciones/public/StayDateRange';
+import { GuestCount } from '@/features/habitaciones/public/GuestCount';
+import { readStayDraft, saveStayDraft } from '@/features/habitaciones/public/stayDraft';
 import { calendarDateKey, parseCalendarDate } from '@/lib/dates';
 
 const getTodayFormatted = getTodayInGuatemala;
@@ -17,129 +20,72 @@ function getTomorrowFormatted(): string {
 
 export const BuscadorDisponibilidad: React.FC = () => {
   const navigate = useNavigate();
-  const { selected, status } = usePublicPreferences();
+  const { selected, status, sites, openSelection, selectionOpen } = usePublicPreferences();
+  const site = typeof selected === 'number' ? sites.find((s) => s.id === selected) : undefined;
   const { t, locale } = useLocale();
+  const { p } = usePublicInterface();
 
-  const [fechaEntrada, setFechaEntrada] = useState<string>(getTodayFormatted());
-  const [fechaSalida, setFechaSalida] = useState<string>(getTomorrowFormatted());
-  const [numeroHuespedes, setNumeroHuespedes] = useState<string>('2');
-  const [errorMsg, setErrorMsg] = useState<'requiredSite' | 'datesRequired' | 'datesOrder' | null>(null);
+  const [saved] = useState(readStayDraft);
+  const [fechaEntrada, setFechaEntrada] = useState<string>(saved.fecha_entrada ?? getTodayFormatted());
+  const [fechaSalida, setFechaSalida] = useState<string>(saved.fecha_salida ?? getTomorrowFormatted());
+  const [numeroHuespedes, setNumeroHuespedes] = useState<string>(saved.numero_huespedes ?? '2');
+  const [submitted, setSubmitted] = useState(false);
+  const validation = createBusquedaReservaSchema(p).safeParse({
+    sucursal_id: status === 'ready' && typeof selected === 'number' ? String(selected) : '',
+    fecha_entrada: fechaEntrada,
+    fecha_salida: fechaSalida,
+    numero_huespedes: numeroHuespedes,
+  });
+  const errors = submitted && !validation.success ? validation.error.flatten().fieldErrors : {};
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-
-    if (status !== 'ready') {
-      setErrorMsg('requiredSite');
-      return;
-    }
-
-    if (!fechaEntrada || !fechaSalida) {
-      setErrorMsg('datesRequired');
-      return;
-    }
-
-    if (fechaSalida <= fechaEntrada) {
-      setErrorMsg('datesOrder');
-      return;
-    }
-
+    setSubmitted(true);
+    if (!validation.success) return;
+    saveStayDraft(validation.data);
     const params = new URLSearchParams({
-      sede: String(selected),
-      buscar: '1',
-      fecha_entrada: fechaEntrada,
-      fecha_salida: fechaSalida,
-      numero_huespedes: numeroHuespedes || '1',
+      sucursal_id: validation.data.sucursal_id,
+      fecha_entrada: validation.data.fecha_entrada,
+      fecha_salida: validation.data.fecha_salida,
+      numero_huespedes: validation.data.numero_huespedes,
     });
-
-    navigate(`/habitaciones?${params.toString()}`);
+    navigate(`/reservar?${params}`);
   };
 
   return (
     <div lang={locale} className="relative z-20 mx-auto -mt-10 w-full max-w-5xl px-4 sm:px-6">
       <div className="rounded-2xl border border-neutro-200 bg-white p-5 shadow-xl md:p-6">
-        <form onSubmit={handleSearch} className="flex flex-col gap-4">
+        <form noValidate onSubmit={handleSearch} className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Campo Sede */}
-            <SiteSelector id="home-search-sede" labelClassName="text-xs font-semibold uppercase tracking-wider text-neutro-700" className="h-11 rounded-lg border border-neutro-300 bg-neutro-50 px-3 text-sm text-neutro-900 focus:border-bronce-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-bronce-500 transition-colors" />
-
-            {/* Campo Fecha Entrada */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="home-search-entrada"
-                className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutro-700"
-              >
-                <Calendar className="size-3.5 text-bronce-600" aria-hidden="true" />
-                <span>{t('arrival')}</span>
-              </label>
-              <input
-                type="date"
-                id="home-search-entrada"
-                value={fechaEntrada}
-                min={getTodayFormatted()}
-                onChange={(e) => {
-                  setFechaEntrada(e.target.value);
-                  setErrorMsg(null);
-                }}
-                className="h-11 rounded-lg border border-neutro-300 bg-neutro-50 px-3 text-sm text-neutro-900 focus:border-bronce-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-bronce-500 transition-colors"
-                required
-              />
+            {/* La sede es la del encabezado: aquí solo se muestra y se cambia con el mismo selector global. */}
+            <div className="min-w-0 text-xs">
+              <p id="home-search-sede-label" className="text-xs font-semibold uppercase tracking-wider text-neutro-700">{t('site')}</p>
+              <button type="button" id="home-search-sede" aria-haspopup="dialog" aria-expanded={selectionOpen}
+                aria-label={`${t('site')}: ${site?.nombre ?? t(status === 'loading' ? 'loadingSite' : 'chooseSite')}. ${t('changeSite')}`}
+                aria-invalid={Boolean(errors.sucursal_id?.[0])} aria-describedby={errors.sucursal_id?.[0] ? 'home-search-sede-error' : undefined}
+                onClick={(event) => openSelection(event.currentTarget)}
+                className="mt-1 flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-neutro-300 bg-neutro-50 px-3 text-left text-sm text-neutro-900 transition-colors hover:border-bronce-500 focus:border-bronce-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-bronce-500 aria-[invalid=true]:border-error-600">
+                <MapPin className="size-4 shrink-0 text-bronce-700" aria-hidden="true" />
+                <span lang={site ? 'es' : locale} className="min-w-0 flex-1 truncate">{site?.short ?? t(status === 'loading' ? 'loadingSite' : 'chooseSite')}</span>
+                <ChevronDown className="size-4 shrink-0 text-bronce-700" aria-hidden="true" />
+              </button>
+              {errors.sucursal_id?.[0] && <p id="home-search-sede-error" role="alert" className="mt-1 text-xs text-error-600">{errors.sucursal_id[0]}</p>}
             </div>
 
-            {/* Campo Fecha Salida */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="home-search-salida"
-                className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutro-700"
-              >
-                <Calendar className="size-3.5 text-bronce-600" aria-hidden="true" />
-                <span>{t('departure')}</span>
-              </label>
-              <input
-                type="date"
-                id="home-search-salida"
-                value={fechaSalida}
-                min={fechaEntrada || getTodayFormatted()}
-                onChange={(e) => {
-                  setFechaSalida(e.target.value);
-                  setErrorMsg(null);
-                }}
-                className="h-11 rounded-lg border border-neutro-300 bg-neutro-50 px-3 text-sm text-neutro-900 focus:border-bronce-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-bronce-500 transition-colors"
-                required
-              />
+            <div className="sm:col-span-2">
+              <StayDateRange value={{ fecha_entrada: fechaEntrada, fecha_salida: fechaSalida }}
+                arrivalError={errors.fecha_entrada?.[0]} departureError={errors.fecha_salida?.[0]}
+                onChange={(range) => {
+                  setFechaEntrada(range.fecha_entrada); setFechaSalida(range.fecha_salida);
+                  saveStayDraft({ ...range, numero_huespedes: numeroHuespedes });
+                }} />
             </div>
-
-            {/* Campo Huéspedes */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="home-search-huespedes"
-                className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutro-700"
-              >
-                <Users className="size-3.5 text-bronce-600" aria-hidden="true" />
-                <span>{t('guests')}</span>
-              </label>
-              <select
-                id="home-search-huespedes"
-                value={numeroHuespedes}
-                onChange={(e) => setNumeroHuespedes(e.target.value)}
-                className="h-11 rounded-lg border border-neutro-300 bg-neutro-50 px-3 text-sm text-neutro-900 focus:border-bronce-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-bronce-500 transition-colors"
-              >
-                <option value="1">1 {t('guest')}</option>
-                <option value="2">2 {t('guests')}</option>
-                <option value="3">3 {t('guests')}</option>
-                <option value="4">4 {t('guests')}</option>
-                <option value="5">5 {t('guests')}</option>
-                <option value="6">6 {t('guests')}</option>
-              </select>
-            </div>
+            <GuestCount label={t('guests')} value={numeroHuespedes} error={errors.numero_huespedes?.[0]} onChange={(value) => {
+              setNumeroHuespedes(value);
+              saveStayDraft({ fecha_entrada: fechaEntrada, fecha_salida: fechaSalida, numero_huespedes: value });
+            }} />
           </div>
-
-          {errorMsg && (
-            <div className="flex items-center gap-2 text-xs font-medium text-red-600">
-              <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-              <span role="alert">{t(errorMsg)}</span>
-            </div>
-          )}
 
           <div className="flex justify-end pt-2">
             <Button

@@ -13,8 +13,6 @@ import {
 const router = Router();
 const rolesGestionFacturas = [
   ROLES.ADMIN,
-  ROLES.RECEPCIONISTA,
-  ROLES.GERENTE_HABITACIONES,
 ];
 
 /**
@@ -32,7 +30,7 @@ const rolesGestionFacturas = [
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/", authMiddleware, facturaController.getAllFacturas);
+router.get("/", authMiddleware, requireRole(...rolesGestionFacturas, ROLES.CLIENTE), facturaController.getAllFacturas);
 
 /**
  * @openapi
@@ -64,7 +62,7 @@ router.get("/", authMiddleware, facturaController.getAllFacturas);
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/:id", authMiddleware, validateParams(facturaIdSchema), facturaController.getFacturaById);
+router.get("/:id", authMiddleware, requireRole(...rolesGestionFacturas, ROLES.CLIENTE), validateParams(facturaIdSchema), facturaController.getFacturaById);
 
 /**
  * @openapi
@@ -72,6 +70,11 @@ router.get("/:id", authMiddleware, validateParams(facturaIdSchema), facturaContr
  *   post:
  *     tags: [Facturas]
  *     summary: Crear una factura
+ *     description: >
+ *       El modo precios_incluyen_impuestos conserva los precios finales publicados:
+ *       desglosa IVA y, para conceptos hospedaje, INGUAT, sin añadirlos al total.
+ *       La omisión del modo conserva compatibilidad con documentos de precios base.
+ *       La tasa de IVA y la tasa de hospedaje quedan guardadas en el documento.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -86,6 +89,7 @@ router.get("/:id", authMiddleware, validateParams(facturaIdSchema), facturaContr
  *               nombre_fiscal: { type: string, maxLength: 150 }
  *               direccion_fiscal: { type: string, maxLength: 255, nullable: true }
  *               subtotal: { type: number, minimum: 0 }
+ *               precios_incluyen_impuestos: { type: boolean, default: false }
  *               estado: { type: string, enum: [pendiente, pagada, anulada] }
  *               fecha_emision: { type: string, format: date-time }
  *     responses:

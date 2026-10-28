@@ -9,7 +9,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variants = {
   primary: 'border-transparent bg-bronce-600 text-white hover:bg-bronce-700 active:bg-bronce-800',
-  secondary: 'border-transparent bg-selva-600 text-white hover:bg-selva-700 active:bg-selva-800',
+  // Acción normal o filtro no seleccionado: contorno bronce de la identidad (el verde queda para estados semánticos).
+  secondary: 'border-bronce-600 bg-white text-bronce-800 hover:bg-bronce-50 active:bg-bronce-100',
   ghost:
     'border-neutro-300 bg-transparent text-neutro-700 hover:bg-neutro-100 active:bg-neutro-200',
   text: 'border-transparent bg-transparent text-bronce-700 hover:underline active:text-bronce-900',

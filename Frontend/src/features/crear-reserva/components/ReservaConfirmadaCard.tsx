@@ -24,6 +24,10 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
   const textosCrearReserva = usePublicTexts('crearReserva');
   const { p, date: calendarDate } = usePublicInterface();
   const isPendiente = reserva.estado === 'pendiente';
+  // El backend incluye el tipo completo, incluido su nombre comercial cuando existe.
+  const tipo = reserva.Habitacion?.TipoHabitacion as (NonNullable<NonNullable<ReservaHabitacion['Habitacion']>['TipoHabitacion']> & { nombre_comercial?: string | null }) | undefined;
+  const nombreComercial = tipo?.nombre_comercial?.trim() || tipo?.nombre;
+  const sede = reserva.Habitacion?.Sucursal?.nombre;
 
   return (
     <Card className="flex flex-col gap-6 border-selva-600/30 bg-selva-50/10 p-6">
@@ -53,6 +57,16 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
       {/* Datos persistidos de la reserva */}
       <div className="rounded-lg border border-neutro-200 bg-white p-5 shadow-xs">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {sede && <div>
+            <span className="text-xs text-neutro-500">{textosCrearReserva.resumenSede}</span>
+            <p lang="es" className="text-sm font-semibold text-neutro-800">{sede}</p>
+          </div>}
+          {nombreComercial && (
+            <div>
+              <span className="text-xs text-neutro-500">{textosCrearReserva.resumenHabitacion}</span>
+              <p lang="es" className="text-sm font-semibold text-neutro-800">{nombreComercial}</p>
+            </div>
+          )}
           <div>
             <span className="text-xs text-neutro-500">
               {textosCrearReserva.exitoId}
@@ -95,17 +109,7 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
             </p>
           </div>
 
-          {reserva.Habitacion && (
-            <div>
-              <span className="text-xs text-neutro-500">{p('assignedRoom')}</span>
-              <p className="text-xs font-medium text-neutro-800">
-                {' '}{p('room')}{' '}{reserva.Habitacion.numero}
-                {reserva.Habitacion.TipoHabitacion
-                  ? ` · ${reserva.Habitacion.TipoHabitacion.nombre}`
-                  : ''}
-              </p>
-            </div>
-          )}
+
         </div>
       </div>
 

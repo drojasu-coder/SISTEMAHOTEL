@@ -416,9 +416,10 @@ const validateCapacity = (
 
 export const getAll =
   async (
-    requester?: { id: number; rol: string }
+    requester?: { id: number; rol: string },
+    scopeWhere: Record<string | symbol, unknown> = {}
   ) => {
-    const where: any = {};
+    const where: any = { ...scopeWhere };
     if (requester && requester.rol === "cliente") {
       where.usuario_id = requester.id;
     }
@@ -527,6 +528,15 @@ export const create =
               404,
               "AMENITY_NOT_FOUND",
               "La amenidad solicitada no existe"
+            );
+          }
+
+          // Los espacios compartidos son de libre acceso y no admiten reservas.
+          if (amenidad.reservable === false) {
+            throw new AppError(
+              422,
+              "AMENITY_NOT_RESERVABLE",
+              "Esta amenidad es de libre acceso y no requiere reserva"
             );
           }
 

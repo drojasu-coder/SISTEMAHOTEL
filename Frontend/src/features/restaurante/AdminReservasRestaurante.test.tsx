@@ -10,6 +10,8 @@ import {
 } from "@/test/renderWithProviders";
 import { tokenStorage } from "@/api/session";
 import { AdminReservasRestaurantePage } from "@/pages/AdminReservasRestaurantePage";
+import { AdminScopeProvider } from "@/features/admin-core/AdminScopeContext";
+import { LocaleProvider } from "@/i18n/LocaleContext";
 import { AdminDetalleReservaRestaurantePage } from "@/pages/AdminDetalleReservaRestaurantePage";
 import type { ReservaMesa } from "./types";
 
@@ -126,6 +128,55 @@ describe("Atención Administrativa de Reservas de Restaurante", () => {
 
     const detalleLinks = screen.getAllByRole("link", { name: /Ver detalle/i });
     expect(detalleLinks[0]).toHaveAttribute("href", "/admin/reservas-restaurante/501");
+  });
+
+  it("usa la sede del selector global en el servidor y no inventa estados", async () => {
+    tokenStorage.set("admin-token");
+    sessionStorage.setItem("hunahpu.admin.scope.sede.v1:3", "1");
+    setupFetchMock();
+    const baseFetch = global.fetch as ReturnType<typeof vi.fn>;
+    const deSede1 = mockAdminReservas.filter((r) => r.Mesa?.sucursal_id === 1);
+    global.fetch = vi.fn().mockImplementation((url: string, config: any) => {
+      const urlStr = String(url);
+      if (urlStr.includes("/admin/alcance")) {
+        return Promise.resolve(jsonResponse({ success: true, data: { global: true, sedes: [
+          { id: 1, nombre: "Hotel Hunapú Antigua", activa: true },
+          { id: 2, nombre: "Hotel Hunapú Atitlán", activa: true },
+        ] } }));
+      }
+      if (urlStr.includes("/reservas-mesa?sucursal_id=1")) {
+        // Un estado no reconocido debe mostrarse como desconocido, nunca como confirmado.
+        return Promise.resolve(jsonResponse({ status: "success", data: [{ ...deSede1[0], estado: "en_revision" }] }));
+      }
+      return baseFetch(url, config);
+    });
+
+    renderWithProviders(<AdminScopeProvider><AdminReservasRestaurantePage /></AdminScopeProvider>);
+
+    expect(await screen.findByText("Desconocido")).toBeInTheDocument();
+    expect(screen.queryByText("Confirmada", { selector: "span" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Cancelar reserva/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Todas las sedes/i)).not.toBeInTheDocument();
+    const urls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
+    expect(urls.some((url) => url.includes("/reservas-mesa?sucursal_id=1"))).toBe(true);
+    sessionStorage.removeItem("hunahpu.admin.scope.sede.v1:3");
+  });
+
+  it("en inglés traduce la pantalla y presenta fecha y hora legibles", async () => {
+    tokenStorage.set("admin-token");
+    localStorage.setItem("hunahpu.language.v1", "en");
+    setupFetchMock();
+
+    renderWithProviders(<LocaleProvider><AdminReservasRestaurantePage /></LocaleProvider>);
+
+    expect(await screen.findByRole("heading", { name: "Restaurant reservations" })).toBeInTheDocument();
+    expect(await screen.findByRole("columnheader", { name: "Guest" })).toBeInTheDocument();
+    expect(screen.getAllByText("Confirmed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Sep 1, 2027")).toBeInTheDocument();
+    expect(screen.getByText("12:00 PM")).toBeInTheDocument();
+    expect(screen.queryByText("2027-09-01")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Cancel reservation #/ }).length).toBeGreaterThan(0);
+    localStorage.removeItem("hunahpu.language.v1");
   });
 
   it("cancela una reserva confirmada tras confirmación en modal", async () => {

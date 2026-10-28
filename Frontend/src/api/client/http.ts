@@ -28,6 +28,8 @@ const isAbortError = (error: unknown): boolean =>
 
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
+  /** Descargas binarias; los errores siguen pasando por el manejo JSON central. */
+  responseType?: 'blob';
   params?: Record<string, string | number | boolean | undefined | null>;
   token?: string | null;
 }
@@ -74,7 +76,7 @@ export async function httpClient<T = unknown>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { body, params, token, headers: customHeaders, ...customConfig } = options;
+  const { body, params, token, responseType, headers: customHeaders, ...customConfig } = options;
 
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   let url = `${env.apiBaseUrl}${cleanEndpoint}`;
@@ -133,7 +135,9 @@ export async function httpClient<T = unknown>(
     response = await fetch(url, config);
 
     const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
+    if (response.ok && responseType === 'blob') {
+      responseData = await response.blob();
+    } else if (contentType && contentType.includes('application/json')) {
       responseData = await response.json();
     } else {
       responseData = await response.text();

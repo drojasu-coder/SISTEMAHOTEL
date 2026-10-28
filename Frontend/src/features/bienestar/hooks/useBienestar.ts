@@ -27,10 +27,11 @@ export function useServicioSpaQuery(id: number) {
 }
 
 // Terapeutas Queries
-export function useTerapeutasQuery() {
+export function useTerapeutasQuery(enabled = true) {
   return useQuery({
     queryKey: bienestarQueryKeys.terapeutas,
     queryFn: () => bienestarApi.getTerapeutas(),
+    enabled,
   });
 }
 
@@ -80,6 +81,7 @@ export function useCreateCitaMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateCitaBienestarInput) => bienestarApi.createCita(data),
+    retry: false,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['citas-bienestar'] });
     },

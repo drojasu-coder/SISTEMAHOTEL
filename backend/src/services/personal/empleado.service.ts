@@ -18,12 +18,14 @@ interface CreateEmpleadoData {
   sucursal_id: number;
   area: string;
   fecha_contratacion?: string | null;
+  sedes_adicionales?: number[];
 }
 
 interface UpdateEmpleadoData {
   sucursal_id?: number;
   area?: string;
   fecha_contratacion?: string | null;
+  sedes_adicionales?: number[];
 }
 
 const validateFechaContratacion = (
@@ -141,9 +143,11 @@ const validateSucursal = async (
 };
 
 export const getAll =
-  async () => {
+  async (where: Record<string | symbol, unknown> = {}) => {
     return Empleado.findAll({
+    where,
       include: [
+        { model: db.EmpleadoSede, as: "sedesAdicionales", attributes: ["sucursal_id"] },
         {
           model: Usuario,
           attributes: [
@@ -179,6 +183,7 @@ export const getAll =
       id,
       {
         include: [
+        { model: db.EmpleadoSede, as: "sedesAdicionales", attributes: ["sucursal_id"] },
           {
             model: Usuario,
             attributes: [
@@ -215,81 +220,41 @@ export const getAll =
   return empleado;
 };
 
-export const create = async (
-  data: CreateEmpleadoData
-) => {
-  await validateUsuario(
-    data.usuario_id
-  );
-
-  await validateSucursal(
-    data.sucursal_id
-  );
-
-  validateFechaContratacion(
-    data.fecha_contratacion
-  );
-
-  const empleado =
-    await Empleado.create({
-      usuario_id:
-        data.usuario_id,
-
-      sucursal_id:
-        data.sucursal_id,
-
-      area:
-        data.area,
-
-      fecha_contratacion:
-        data.fecha_contratacion ??
-        null,
-    });
-
-  return getById(
-    empleado.id
-  );
+// User and territory assignment remain exclusive to the general administrator router.
+const validateAdditionalSites = async (ids: number[], principal: number) => {
+  if (new Set(ids).size !== ids.length || ids.includes(principal)) throw new AppError(422, "INVALID_EMPLOYEE_SITES", "No repita la sede principal ni las sedes adicionales");
+  for (const id of ids) await validateSucursal(id);
 };
-
-export const update = async (
-  id: number,
-  data: UpdateEmpleadoData
-) => {
-  const empleado =
-    await Empleado.findByPk(
-      id
-    );
-
-  if (!empleado) {
-    throw new AppError(
-      404,
-      "EMPLOYEE_NOT_FOUND",
-      "El empleado solicitado no existe"
-    );
-  }
-
-  if (
-    data.sucursal_id !==
-    undefined
-  ) {
-    await validateSucursal(
-      data.sucursal_id
-    );
-  }
-
-  if (
-    data.fecha_contratacion !==
-    undefined
-  ) {
-    validateFechaContratacion(
-      data.fecha_contratacion
-    );
-  }
-
-  await empleado.update(
-    data
-  );
-
+export const create = async (data: CreateEmpleadoData) => {
+  await validateUsuario(data.usuario_id);
+  await validateSucursal(data.sucursal_id);
+  validateFechaContratacion(data.fecha_contratacion);
+  const { sedes_adicionales = [], ...fields } = data;
+  await validateAdditionalSites(sedes_adicionales, data.sucursal_id);
+  const id = await db.sequelize.transaction(async (transaction: any) => {
+    const employee = await Empleado.create({ ...fields, fecha_contratacion: fields.fecha_contratacion ?? null }, { transaction });
+    await db.EmpleadoSede.bulkCreate(sedes_adicionales.map(sucursal_id => ({ empleado_id: employee.id, sucursal_id })), { transaction });
+    return employee.id;
+  });
+  return getById(id);
+};
+export const update = async (id: number, data: UpdateEmpleadoData) => {
+  await db.sequelize.transaction(async (transaction: any) => {
+    const employee = await Empleado.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!employee) throw new AppError(404, "EMPLOYEE_NOT_FOUND", "El empleado solicitado no existe");
+    const principal = data.sucursal_id ?? employee.sucursal_id;
+    if (data.sucursal_id !== undefined) await validateSucursal(principal);
+    validateFechaContratacion(data.fecha_contratacion);
+    const { sedes_adicionales, ...fields } = data;
+    if (sedes_adicionales !== undefined) await validateAdditionalSites(sedes_adicionales, principal);
+    await employee.update(fields, { transaction });
+    if (sedes_adicionales !== undefined) {
+      await db.EmpleadoSede.destroy({ where: { empleado_id: id }, transaction });
+      await db.EmpleadoSede.bulkCreate(sedes_adicionales.map(sucursal_id => ({ empleado_id: id, sucursal_id })), { transaction });
+    } else if (data.sucursal_id !== undefined) {
+      await db.EmpleadoSede.destroy({ where: { empleado_id: id, sucursal_id: principal }, transaction });
+    }
+  });
   return getById(id);
 };
 

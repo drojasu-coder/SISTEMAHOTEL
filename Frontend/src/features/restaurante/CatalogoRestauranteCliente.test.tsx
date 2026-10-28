@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   renderPublicWithProviders as renderWithProviders,
@@ -68,6 +68,7 @@ const mockMesas: MesaConSucursal[] = [
 
 describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () => {
   beforeEach(() => {
+    sessionStorage.clear();
     tokenStorage.clear();
     window.localStorage.removeItem('hunahpu.public-site.v1');
     vi.restoreAllMocks();
@@ -175,11 +176,11 @@ describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () 
     setupFetchMock();
     renderWithProviders(<CatalogoRestaurantePage />);
 
-    const reserveBtns = await screen.findAllByRole("button", { name: /Reservar mesa/i });
+    const reserveBtns = await screen.findAllByRole("button", { name: /Ver y reservar/i });
     await user.click(reserveBtns[0]);
 
-    expect(await screen.findByText(/Debe iniciar sesión con una cuenta de cliente/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Inicie sesión para reservar/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Inicie sesión para confirmar su reserva/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Iniciar sesión/i })).toBeInTheDocument();
   });
 
   it("cliente autenticado puede reservar una mesa y recibe confirmación con ID real", async () => {
@@ -188,12 +189,14 @@ describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () 
     setupFetchMock("cliente");
     renderWithProviders(<CatalogoRestaurantePage />);
 
-    const reserveBtns = await screen.findAllByRole("button", { name: /Reservar mesa/i });
+    const reserveBtns = await screen.findAllByRole("button", { name: /Ver y reservar/i });
     await user.click(reserveBtns[0]);
 
     expect(await screen.findByText(/Reservar mesa en el restaurante/i)).toBeInTheDocument();
 
     const submitBtn = screen.getByRole("button", { name: /Confirmar reserva/i });
+    fireEvent.change(screen.getByLabelText(/^Fecha de la reserva/i), { target: { value: '2030-11-20' } });
+    await user.type(screen.getByLabelText(/^Horario de la reserva/i), "13:00");
     await user.click(submitBtn);
 
     const confirmationElements = await screen.findAllByText(/¡Reserva de mesa confirmada!/i);
@@ -214,10 +217,12 @@ describe("Catálogo de Restaurante para Clientes (CatalogoRestaurantePage)", () 
 
     renderWithProviders(<CatalogoRestaurantePage />);
 
-    const reserveBtns = await screen.findAllByRole("button", { name: /Reservar mesa/i });
+    const reserveBtns = await screen.findAllByRole("button", { name: /Ver y reservar/i });
     await user.click(reserveBtns[0]);
 
     const submitBtn = await screen.findByRole("button", { name: /Confirmar reserva/i });
+    fireEvent.change(screen.getByLabelText(/^Fecha de la reserva/i), { target: { value: '2030-11-20' } });
+    await user.type(screen.getByLabelText(/^Horario de la reserva/i), "13:00");
     await user.click(submitBtn);
 
     expect(

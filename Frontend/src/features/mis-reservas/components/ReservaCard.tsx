@@ -1,3 +1,5 @@
+import { MoneyReference } from '@/components/ui/MoneyReference';
+import { commercialRoomName } from '@/features/habitaciones/public/roomCategories';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -8,11 +10,9 @@ import {
 } from '@/features/reservas';
 import {
   calcularNoches,
-  formatFechaCalendario,
-  formatGTQ,
   resolverNombreSede,
 } from '../formato';
-import { textosMisReservas } from '../textos';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { ReservaEstadoBadge } from './ReservaEstadoBadge';
 
 interface ReservaCardProps {
@@ -24,13 +24,14 @@ export const ReservaCard: React.FC<ReservaCardProps> = ({
   reserva,
   sedesPorId,
 }) => {
+  const textosMisReservas = usePublicTexts('misReservas');
+  const { date } = usePublicInterface();
   const habitacion = reserva.Habitacion;
   const tipo = habitacion?.TipoHabitacion;
   const noches = calcularNoches(
     reserva.fecha_entrada,
     reserva.fecha_salida,
   );
-  const importe = formatGTQ(reserva.total);
 
   return (
     <article className="surface flex h-full flex-col gap-4 p-4 sm:p-5">
@@ -45,7 +46,7 @@ export const ReservaCard: React.FC<ReservaCardProps> = ({
               : textosMisReservas.sinHabitacion}
           </h2>
           <p className="text-xs text-neutro-600">
-            {tipo?.nombre ?? textosMisReservas.sinTipo}
+            {tipo ? commercialRoomName(tipo) : textosMisReservas.sinTipo}
           </p>
         </div>
         <ReservaEstadoBadge estado={reserva.estado} />
@@ -55,7 +56,7 @@ export const ReservaCard: React.FC<ReservaCardProps> = ({
         <div className="flex flex-col gap-1">
           <dt className="eyebrow">{textosMisReservas.campos.sede}</dt>
           <dd className="text-neutro-800">
-            {resolverNombreSede(reserva, sedesPorId)}
+            {resolverNombreSede(reserva, sedesPorId, textosMisReservas)}
           </dd>
         </div>
         <div className="flex flex-col gap-1">
@@ -67,13 +68,13 @@ export const ReservaCard: React.FC<ReservaCardProps> = ({
         <div className="flex flex-col gap-1">
           <dt className="eyebrow">{textosMisReservas.campos.entrada}</dt>
           <dd className="text-neutro-800">
-            {formatFechaCalendario(reserva.fecha_entrada)}
+            {date(reserva.fecha_entrada)}
           </dd>
         </div>
         <div className="flex flex-col gap-1">
           <dt className="eyebrow">{textosMisReservas.campos.salida}</dt>
           <dd className="text-neutro-800">
-            {formatFechaCalendario(reserva.fecha_salida)}
+            {date(reserva.fecha_salida)}
           </dd>
         </div>
         {noches !== null && (
@@ -90,7 +91,7 @@ export const ReservaCard: React.FC<ReservaCardProps> = ({
         <div className="flex flex-col gap-1">
           <p className="eyebrow">{textosMisReservas.campos.importe}</p>
           <p className="text-lg font-semibold text-neutro-900">
-            {importe ?? textosMisReservas.noDisponible}
+            <MoneyReference amount={reserva.total} />
           </p>
         </div>
         <Link

@@ -66,4 +66,10 @@ export const pagosApi = {
     const response = await api.get<PagoResponse>(`/pagos/${id}`);
     return response.data;
   },
+
+  /** Verifica un intento ya existente con Stripe desde el servidor. No cobra de nuevo. */
+  verify: async (id: number): Promise<Pago> => {
+    const response = await api.post<PagoResponse>(`/pagos/${id}/verificar`, {});
+    return response.data;
+  },
 };

@@ -8,7 +8,9 @@ import { sedesApi } from '@/features/sedes/api/sedesApi';
 import { habitacionesApi } from '@/features/habitaciones/api/habitacionesApi';
 import { reservasApi } from '@/features/reservas/api/reservasApi';
 import { saveRoomDraft } from './reservationDraft';
-const path = '/habitaciones?sede=1&fecha_entrada=2030-01-01&fecha_salida=2030-01-03&numero_huespedes=3&buscar=1';
+const path = '/reservar?sucursal_id=1&fecha_entrada=2030-01-01&fecha_salida=2030-01-03&numero_huespedes=3&habitacion_id=7&tipo_habitacion_id=1';
+const room = { id: 7, tipo: { id: 1, nombre: 'Suite', capacidad_maxima: 4, tarifa_noche: '1000.00', descripcion: null, imagen_url: null, imagen_creditos: null }, sucursal: { id: 1, nombre: 'Antigua' }, imagen_url: null, imagen_creditos: null, noches: 2, tarifa_noche: '1000.00', total_estimado: '2000.00' };
+async function continueToLogin() { const user = userEvent.setup(); await user.click(await screen.findByRole('button', { name: 'Habitación seleccionada' })); await user.click(screen.getByRole('button', { name: 'Confirmar y reservar' })); }
 function open(pathname: string, state?: unknown) { window.history.replaceState(state ? { usr: state } : null, '', pathname); return render(<App />); }
 function credentials() {
   fireEvent.change(screen.getByLabelText(/^Correo electrónico$/), { target: { value: 'qa@example.test' } });
@@ -18,14 +20,16 @@ beforeEach(() => {
   sessionStorage.clear(); localStorage.clear(); localStorage.setItem('hunahpu.public-site.v1', '1');
   vi.spyOn(sedesApi, 'getAll').mockResolvedValue([{ id: 1, nombre: 'Antigua', ciudad: 'Antigua Guatemala', direccion: null, telefono: null, activa: true }]);
   vi.spyOn(habitacionesApi, 'getAll').mockResolvedValue([]);
-  vi.spyOn(reservasApi, 'getDisponibilidad').mockResolvedValue([]);
-  global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(url.endsWith('/auth/login') ? loginResponse('cliente') : jsonResponse({ data: [] })));
+  vi.spyOn(habitacionesApi, 'getPublicTiposHabitacion').mockResolvedValue([room.tipo]);
+  vi.spyOn(habitacionesApi, 'getPublicDisponibles').mockResolvedValue([room]);
+  vi.spyOn(reservasApi, 'getDisponibilidad').mockResolvedValue([{ ...room, numero: 'privado', estado: 'disponible', sucursal_id: 1, tipo_habitacion_id: 1, TipoHabitacion: room.tipo, Sucursal: room.sucursal }]);
+  global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(url.endsWith('/auth/login') ? loginResponse('cliente') : jsonResponse({ data: [room.tipo] })));
 });
 afterEach(() => { vi.restoreAllMocks(); tokenStorage.clear(); sessionStorage.clear(); localStorage.clear(); window.history.replaceState(null, '', '/'); });
 describe('Acceso público y continuidad (HTTP simulado)', () => {
-  it('va desde 3A a login y registro, conserva selección y vuelve consultando sin POST de negocio', async () => {
+  it('va desde /reservar a login y registro, conserva selección y vuelve consultando sin POST de negocio', async () => {
     const user = userEvent.setup(); open(path);
-    await user.click(await screen.findByRole('link', { name: 'Ingresar y continuar' }));
+    await continueToLogin();
     expect(screen.getByText('Inicie sesión para confirmar su reserva. Su selección se conserva.')).toBeInTheDocument();
     expect(screen.queryByTestId('public-top-bar')).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
@@ -34,7 +38,7 @@ describe('Acceso público y continuidad (HTTP simulado)', () => {
     await user.click(screen.getByRole('link', { name: /Iniciar sesión/i }));
     credentials(); await user.click(screen.getByRole('button', { name: 'Iniciar Sesión' }));
     await waitFor(() => expect(window.location.pathname + window.location.search).toBe(path));
-    await waitFor(() => expect(reservasApi.getDisponibilidad).toHaveBeenCalledWith({ sucursal_id: 1, fecha_entrada: '2030-01-01', fecha_salida: '2030-01-03', numero_huespedes: 3 }));
+    await waitFor(() => expect(reservasApi.getDisponibilidad).toHaveBeenCalledWith({ sucursal_id: 1, fecha_entrada: '2030-01-01', fecha_salida: '2030-01-03', numero_huespedes: 3, tipo_habitacion_id: 1 }));
     const posts = vi.mocked(fetch).mock.calls.filter(([, config]) => config?.method === 'POST');
     expect(posts.map(([url]) => url)).toEqual([expect.stringContaining('/auth/login')]);
     expect(JSON.parse(posts[0][1]!.body as string).password).toBe('  Password123  ');
@@ -42,7 +46,7 @@ describe('Acceso público y continuidad (HTTP simulado)', () => {
   it('el registro crea la cuenta, hace un login separado y vuelve a la selección sin mutaciones de negocio', async () => {
     global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(
       url.endsWith('/auth/register') ? jsonResponse({ data: { id: 7, nombre: 'Prueba', email: 'qa@example.test', telefono: null, rol: 'cliente', activo: true } }, 201)
-      : url.endsWith('/auth/login') ? loginResponse('cliente') : jsonResponse({ data: [] }),
+      : url.endsWith('/auth/login') ? loginResponse('cliente') : jsonResponse({ data: [room.tipo] }),
     ));
     open('/registro', { from: path });
     fireEvent.change(screen.getByLabelText('Nombre completo'), { target: { value: 'Prueba Unicode 李' } });
@@ -70,9 +74,9 @@ describe('Acceso público y continuidad (HTTP simulado)', () => {
   });
   it('una sesión expirada conserva los criterios y presenta el motivo traducible al entrar', async () => {
     tokenStorage.set('expired-test');
-    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(url.endsWith('/auth/me') ? errorResponse(401, 'TOKEN_EXPIRED', 'x') : jsonResponse({ data: [] })));
+    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(url.endsWith('/auth/me') ? errorResponse(401, 'TOKEN_EXPIRED', 'x') : jsonResponse({ data: [room.tipo] })));
     open(path);
-    await userEvent.setup().click(await screen.findByRole('link', { name: 'Ingresar y continuar' }));
+    await continueToLogin();
     expect(screen.getByText(/Su sesión finalizó/)).toBeInTheDocument();
     expect(screen.getByText(/Su selección se conserva/)).toBeInTheDocument();
     await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Idioma' }), 'en');

@@ -48,9 +48,17 @@ const rolesCreacionReservas = [
  *     tags:
  *       - Reservas de Habitación
  *     summary: Listar reservas de habitación
- *     description: Los usuarios administrativos pueden consultar todas las reservas. Los clientes únicamente reciben sus propias reservas.
+ *     description: El personal administrativo consulta las reservas de sus sedes autorizadas (el administrador, todas). Los clientes únicamente reciben sus propias reservas.
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sucursal_id
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Filtra por sede. Debe estar dentro de las sedes autorizadas del usuario (403 si no); un valor inválido devuelve 400.
  *     responses:
  *       200:
  *         description: Reservas de habitación obtenidas correctamente

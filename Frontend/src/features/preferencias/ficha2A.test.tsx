@@ -1,3 +1,4 @@
+import { setStayDates, expectStayDates, changeGuestCount } from '@/test/stayControls';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
@@ -98,17 +99,18 @@ describe('Barra superior y selector único', () => {
   it('buscador y barra comparten sede sin perder fechas ni huéspedes', async () => {
     renderPublic(<BuscadorDisponibilidad />);
     const user = userEvent.setup();
-    await screen.findByRole('option', { name: 'Hotel Hunahpú Atitlán' });
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sede' }), '2');
+    // El buscador no duplica el selector: abre el mismo selector global del encabezado.
+    await user.click(await screen.findByRole('button', { name: /^Sede: .*Cambiar sede$/ }));
+    await user.click(await screen.findByRole('button', { name: /Hotel Hunahpú Atitlán/ }));
     expect(screen.getByRole('button', { name: 'Sede: Atitlán' })).toBeInTheDocument();
-    const arrival = screen.getByLabelText('Llegada');
-    const originalDate = (arrival as HTMLInputElement).value;
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Huéspedes' }), '4');
+    expect(screen.getByRole('button', { name: /^Sede: Hotel Hunahpú Atitlán/ })).toBeInTheDocument();
+    await setStayDates('2030-11-20', '2030-11-23');
+    changeGuestCount('4', 'Huéspedes');
     await user.click(screen.getByRole('button', { name: 'Sede: Atitlán' }));
     await user.click(screen.getByRole('button', { name: /Hotel Hunahpú Antigua Antigua Guatemala/ }));
-    expect(arrival).toHaveValue(originalDate);
-    expect(screen.getByRole('combobox', { name: 'Huéspedes' })).toHaveValue('4');
-    expect(screen.getByRole('combobox', { name: 'Sede' })).toHaveValue('1');
+    await expectStayDates('2030-11-20', '2030-11-23');
+    expect(screen.getByLabelText('Huéspedes')).toHaveValue(4);
+    expect(screen.getByRole('button', { name: /^Sede: Hotel Hunahpú Antigua/ })).toBeInTheDocument();
   });
 });
 
@@ -173,7 +175,7 @@ describe('Contador de artículos del carrito', () => {
 describe('Inventario de interfaces públicas en inglés', () => {
   it.each([
     [CatalogoRestaurantePage, 'Restaurant'], [CatalogoAmenidadesPage, 'Amenities and facilities'],
-    [CatalogoActividadesPage, 'Sports and recreational activities'], [CatalogoBienestarPage, 'Wellness services'],
+    [CatalogoActividadesPage, 'Sports and recreational activities'], [CatalogoBienestarPage, 'Wellness'],
     [CatalogoEventosPage, 'Event venues'], [PublicHabitacionesPage, 'Rooms'], [LoginPage, 'Sign in'], [RegisterPage, 'Create account'],
   ])('%s traduce su encabezado sin recargar', async (Page, title) => {
     renderPublic(<Page />);
@@ -188,11 +190,11 @@ describe('Inventario de interfaces públicas en inglés', () => {
   it('revalida mensajes visibles al cambiar idioma conservando los campos', async () => {
     const submit = vi.fn();
     renderPublic(<CriteriosBusquedaForm sedes={sites} tiposHabitacion={[]} isSearching={false} onSubmitSearch={submit} onCriteriaChange={() => {}} />);
-    const user = userEvent.setup(); await user.type(screen.getByLabelText('Fecha de entrada (check-in)'), '2030-11-20');
+    const user = userEvent.setup(); await setStayDates('2030-11-20', '2030-11-23');
     await user.click(screen.getByRole('button', { name: 'Buscar disponibilidad' }));
     await screen.findByText('Debe seleccionar una sede'); await changeLanguage('en');
     expect(await screen.findByText('Select a location', { selector: 'p' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Arrival date (check-in)')).toHaveValue('2030-11-20');
+    await expectStayDates('2030-11-20', '2030-11-23');
     expect(submit).not.toHaveBeenCalled();
   });
   it('un error local ya visible cambia de idioma; errores desconocidos del servidor conservan español marcado', async () => {

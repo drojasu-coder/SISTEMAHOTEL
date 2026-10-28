@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Bed, Layers, Car, CalendarCheck } from "lucide-react";
+import { Plus, Bed, Layers, Car, CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/features/auth/AuthContext";
 import { hasPermission } from "@/features/auth/permissions";
+import { useAdminScope } from "@/features/admin-core/AdminScopeContext";
 import { es } from "@/i18n/es";
 import { useSedesQuery } from "@/features/sedes/hooks/useSedes";
 import {
@@ -15,6 +16,7 @@ import {
 import { HabitacionesList } from "@/features/habitaciones/components/HabitacionesList";
 import { HabitacionesFilters } from "@/features/habitaciones/components/HabitacionesFilters";
 import { HabitacionFormModal } from "@/features/habitaciones/components/HabitacionFormModal";
+import { EstadoHabitacionModal } from "@/features/habitaciones/components/EstadoHabitacionModal";
 import { textosHabitaciones } from "@/features/habitaciones/textos";
 import type {
   Habitacion,
@@ -24,19 +26,38 @@ import { getApiErrorMessage } from "@/api/errors";
 
 export const HabitacionesPage: React.FC = () => {
   const { user } = useAuth();
+  const stateOnly = user?.rol === 'empleado_operativo';
+  const { selectedSedeId } = useAdminScope();
   const canManageHabitaciones = user
     ? hasPermission(user.rol, "habitaciones.gestionar")
     : false;
 
-  const habitacionesQuery = useHabitacionesQuery();
+  // La sede del selector global se aplica en el servidor; aquí solo se filtra por número y estado.
+  const habitacionesQuery = useHabitacionesQuery(selectedSedeId);
   const tiposQuery = useTiposHabitacionQuery();
   const sedesQuery = useSedesQuery();
 
   const [filters, setFilters] = useState<HabitacionesFiltersState>({
     search: "",
-    sucursalId: "all",
+    sucursalId: selectedSedeId ?? "all",
     estado: "all",
   });
+
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
+  useEffect(() => {
+    if (selectedSedeId !== undefined) {
+      setFilters((prev) => ({
+        ...prev,
+        sucursalId: selectedSedeId,
+      }));
+    }
+  }, [selectedSedeId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedHabitacion, setSelectedHabitacion] =
@@ -65,14 +86,6 @@ export const HabitacionesPage: React.FC = () => {
         return false;
       }
 
-      // Filtro por sede
-      if (
-        filters.sucursalId !== "all" &&
-        hab.sucursal_id !== filters.sucursalId
-      ) {
-        return false;
-      }
-
       // Filtro por estado
       if (filters.estado !== "all" && hab.estado !== filters.estado) {
         return false;
@@ -81,6 +94,23 @@ export const HabitacionesPage: React.FC = () => {
       return true;
     });
   }, [habitaciones, filters]);
+
+  const counts = useMemo(() => {
+    const base = habitaciones;
+    return {
+      total: base.length,
+      disponible: base.filter((h) => h.estado === "disponible").length,
+      ocupada: base.filter((h) => h.estado === "ocupada").length,
+      mantenimiento: base.filter((h) => h.estado === "mantenimiento").length,
+      limpieza: base.filter((h) => h.estado === "limpieza").length,
+    };
+  }, [habitaciones]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredHabitaciones.length / pageSize));
+  const paginatedHabitaciones = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredHabitaciones.slice(start, start + pageSize);
+  }, [filteredHabitaciones, page, pageSize]);
 
   const handleOpenCreate = () => {
     setSelectedHabitacion(null);
@@ -126,6 +156,7 @@ export const HabitacionesPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
+          {!stateOnly && <>
           <Link
             to="/admin/reservas"
             className={buttonStyles({ variant: "ghost" })}
@@ -147,7 +178,8 @@ export const HabitacionesPage: React.FC = () => {
             <Car className="size-4" aria-hidden="true" />
             <span>{es.parqueos.titulo}</span>
           </Link>
-          {canManageHabitaciones && (
+          </>}
+          {canManageHabitaciones && !stateOnly && (
             <Button
               type="button"
               variant="primary"
@@ -159,6 +191,95 @@ export const HabitacionesPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Tarjetas rápidas de estado físico (no equivale a disponibilidad por fechas) */}
+      {!isLoading && !isError && habitaciones.length > 0 && (
+        <p className="max-w-3xl text-xs text-neutro-600">{textosHabitaciones.notaEstadoFisico}</p>
+      )}
+      {!isLoading && !isError && habitaciones.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <button
+            type="button"
+            onClick={() => setFilters((p) => ({ ...p, estado: "all" }))}
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === "all"
+                ? "border-bronce-500 bg-bronce-50/70 shadow-xs ring-1 ring-bronce-500"
+                : "border-neutro-200 bg-white hover:border-neutro-300"
+            }`}
+          >
+            <span className="text-[11px] font-medium text-neutro-500 uppercase tracking-wider">Total</span>
+            <span className="font-serif text-2xl font-bold text-neutro-900">{counts.total}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === "disponible" ? "all" : "disponible",
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === "disponible"
+                ? "border-exito-500 bg-exito-50 shadow-xs ring-1 ring-exito-500"
+                : "border-neutro-200 bg-white hover:border-neutro-300"
+            }`}
+          >
+            <span className="text-[11px] font-medium text-exito-700 uppercase tracking-wider">Libres (estado físico)</span>
+            <span className="font-serif text-2xl font-bold text-exito-800">{counts.disponible}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === "ocupada" ? "all" : "ocupada",
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === "ocupada"
+                ? "border-info-500 bg-info-50 shadow-xs ring-1 ring-info-500"
+                : "border-neutro-200 bg-white hover:border-neutro-300"
+            }`}
+          >
+            <span className="text-[11px] font-medium text-info-700 uppercase tracking-wider">Ocupadas</span>
+            <span className="font-serif text-2xl font-bold text-info-800">{counts.ocupada}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === "mantenimiento" ? "all" : "mantenimiento",
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === "mantenimiento"
+                ? "border-advertencia-500 bg-advertencia-50 shadow-xs ring-1 ring-advertencia-500"
+                : "border-neutro-200 bg-white hover:border-neutro-300"
+            }`}
+          >
+            <span className="text-[11px] font-medium text-advertencia-700 uppercase tracking-wider">Mantenimiento</span>
+            <span className="font-serif text-2xl font-bold text-advertencia-800">{counts.mantenimiento}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === "limpieza" ? "all" : "limpieza",
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === "limpieza"
+                ? "border-bronce-500 bg-bronce-100 shadow-xs ring-1 ring-bronce-500"
+                : "border-neutro-200 bg-white hover:border-neutro-300"
+            }`}
+          >
+            <span className="text-[11px] font-medium text-bronce-800 uppercase tracking-wider">Limpieza</span>
+            <span className="font-serif text-2xl font-bold text-bronce-900">{counts.limpieza}</span>
+          </button>
+        </div>
+      )}
 
       {/* Mensaje de confirmación o alerta temporal */}
       {feedbackMessage && (
@@ -181,7 +302,6 @@ export const HabitacionesPage: React.FC = () => {
         <HabitacionesFilters
           filters={filters}
           onChange={setFilters}
-          sedes={sedes}
           totalResults={filteredHabitaciones.length}
         />
       )}
@@ -241,11 +361,11 @@ export const HabitacionesPage: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={() =>
-                setFilters({
+                setFilters((prev) => ({
+                  ...prev,
                   search: "",
-                  sucursalId: "all",
                   estado: "all",
-                })
+                }))
               }
             >
               {textosHabitaciones.limpiarFiltros}
@@ -255,17 +375,57 @@ export const HabitacionesPage: React.FC = () => {
 
       {/* Listado de habitaciones */}
       {!isLoading && !isError && filteredHabitaciones.length > 0 && (
-        <HabitacionesList
-          habitaciones={filteredHabitaciones}
-          sedesMap={sedesMap}
-          tiposMap={tiposMap}
-          canEdit={canManageHabitaciones}
-          onEdit={handleOpenEdit}
-        />
+        <div className="flex flex-col gap-4">
+          <HabitacionesList
+            habitaciones={paginatedHabitaciones}
+            sedesMap={sedesMap}
+            tiposMap={tiposMap}
+            canEdit={canManageHabitaciones}
+            onEdit={handleOpenEdit}
+          />
+
+          {/* Barra de paginación */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-neutro-200 pt-4 text-xs text-neutro-600">
+              <span>
+                Mostrando {(page - 1) * pageSize + 1} a{" "}
+                {Math.min(page * pageSize, filteredHabitaciones.length)} de{" "}
+                {filteredHabitaciones.length} habitaciones
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 text-xs"
+                >
+                  <ChevronLeft className="size-3.5" aria-hidden="true" />
+                  <span>Anterior</span>
+                </Button>
+                <span className="px-2 font-medium text-neutro-900">
+                  Página {page} de {totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1 text-xs"
+                >
+                  <span>Siguiente</span>
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modal accesible para creación y edición */}
-      {canManageHabitaciones && (
+      {canManageHabitaciones && !stateOnly && (
         <HabitacionFormModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
@@ -275,6 +435,7 @@ export const HabitacionesPage: React.FC = () => {
           onSuccess={handleSuccess}
         />
       )}
+      {stateOnly && <EstadoHabitacionModal open={modalOpen} habitacion={selectedHabitacion} onClose={() => setModalOpen(false)} onSuccess={handleSuccess} />}
     </div>
   );
 };

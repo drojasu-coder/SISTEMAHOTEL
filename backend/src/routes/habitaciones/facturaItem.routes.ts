@@ -16,8 +16,6 @@ import {
 const router = Router();
 const rolesGestionFacturas = [
   ROLES.ADMIN,
-  ROLES.RECEPCIONISTA,
-  ROLES.GERENTE_HABITACIONES,
 ];
 
 /**
@@ -35,7 +33,7 @@ const rolesGestionFacturas = [
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/", authMiddleware, facturaItemController.getAllFacturaItems);
+router.get("/", authMiddleware, requireRole(...rolesGestionFacturas, ROLES.CLIENTE), facturaItemController.getAllFacturaItems);
 
 /**
  * @openapi
@@ -70,6 +68,7 @@ router.get("/", authMiddleware, facturaItemController.getAllFacturaItems);
 router.get(
   "/:id",
   authMiddleware,
+  requireRole(...rolesGestionFacturas, ROLES.CLIENTE),
   validateParams(facturaItemIdSchema),
   facturaItemController.getFacturaItemById
 );
@@ -93,6 +92,7 @@ router.get(
  *               descripcion: { type: string, maxLength: 255 }
  *               cantidad: { type: integer, minimum: 1 }
  *               precio_unitario: { type: number, minimum: 0 }
+ *               tipo_concepto: { type: string, enum: [servicio, hospedaje], default: servicio, description: Hospedaje aplica INGUAT solo en facturas con precios finales. }
  *     responses:
  *       201: { description: Item de factura creado correctamente }
  *       400:
@@ -147,6 +147,7 @@ router.post(
  *               descripcion: { type: string, maxLength: 255 }
  *               cantidad: { type: integer, minimum: 1 }
  *               precio_unitario: { type: number, minimum: 0 }
+ *               tipo_concepto: { type: string, enum: [servicio, hospedaje] }
  *     responses:
  *       200: { description: Item de factura actualizado correctamente }
  *       400:

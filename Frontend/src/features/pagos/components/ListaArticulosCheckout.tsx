@@ -1,3 +1,4 @@
+import { MoneyReference } from '@/components/ui/MoneyReference';
 import { groupItems, itemTypeLabel } from '@/features/compra/itemGroups';
 import { useLocale } from '@/i18n/LocaleContext';
 import { PurchaseItemDetails } from '@/features/compra/PurchaseItemDetails';
@@ -7,7 +8,6 @@ import type { CarritoItem } from '@/features/carrito/types';
 import {
   descripcionItem,
   etiquetaTipoItem,
-  formatearGTQ,
 } from '../textos';
 
 interface ListaArticulosCheckoutProps {
@@ -58,7 +58,7 @@ export const ListaArticulosCheckout: React.FC<
                   {textosCheckout.articulosLista.precio}
                 </dt>
                 <dd className="text-neutro-900">
-                  {formatearGTQ(item.precio)}
+                  <MoneyReference amount={item.precio} />
                 </dd>
               </div>
               <div className="flex flex-col gap-1">

@@ -35,6 +35,9 @@ export const PagoResultadoPage: React.FC = () => {
     isAuthLoading,
     isValidId,
     pollingPaused,
+    verify,
+    isVerifying,
+    verificationError,
   } = usePagoResultado(pagoId);
 
   const currentCart = useQuery({ queryKey: ['purchase-result-current-cart', user?.id, pago?.id], queryFn: carritoApi.getCurrent, enabled: isCliente && Boolean(pago?.carrito_id) && (pago?.estado === 'rechazado' || pago?.estado === 'cancelado'), retry: false, staleTime: 0 });
@@ -145,7 +148,8 @@ export const PagoResultadoPage: React.FC = () => {
       {pago && !isLoading && !isError && (
         <>
           <PagoResultadoCard key={`${user?.id}:${pago.id}`} pago={pago} allowReturnCheckout={allowReturnCheckout} pollingPaused={pollingPaused} />
-          {(pago.estado === 'pendiente' || pago.estado === 'procesando') && <Button variant="ghost" onClick={() => { void refetch(); }} disabled={isFetching}>{textosPagos.botonReintentar}</Button>}
+          {verificationError && <Alert tone="warning"><TranslatedError error={{ api: verificationError }} /></Alert>}
+          {(pago.estado === 'pendiente' || pago.estado === 'procesando') && <Button variant="ghost" onClick={() => { void verify(); }} isLoading={isVerifying} disabled={isFetching || isVerifying}>{textosPagos.botonReintentar}</Button>}
           <PurchaseReservations key={`${user?.id}:${pago.id}`} payment={pago} />
         </>
       )}

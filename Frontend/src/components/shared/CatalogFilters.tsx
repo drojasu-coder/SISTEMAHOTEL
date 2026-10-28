@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { Link2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -34,7 +35,7 @@ export function CatalogFilters({ catalog, searchLabel, placeholder, filters = []
       {selected.map((filter) => <Button key={filter.key} variant="ghost" size="sm" aria-label={p('removeFilter', { value: filter.labels?.[catalog.values[filter.key]] ?? catalog.values[filter.key] })} onClick={() => catalog.setFilter(filter.key, '')}><span lang={filter.lang ?? 'es'}>{filter.labels?.[catalog.values[filter.key]] ?? catalog.values[filter.key]}</span> ×</Button>)}
       {Object.entries(activeFilterLabels).filter(([key]) => catalog.values[key]).map(([key, label]) => <Button key={key} variant="ghost" size="sm" aria-label={p('removeFilter', { value: `${label}: ${catalog.values[key]}` })} onClick={() => catalog.setFilter(key, '')}>{label}: {catalog.values[key]} ×</Button>)}
       {(catalog.q || Object.values(catalog.values).some(Boolean)) && <Button variant="text" size="sm" onClick={catalog.clear}>{p('resetFilters')}</Button>}
-      <Link to={catalog.shareHref} className="ml-auto inline-flex min-h-11 items-center text-sm text-bronce-700 underline">{p('shareResults')}</Link>
+      <Link to={catalog.shareHref} className="ml-auto inline-flex min-h-11 items-center gap-1.5 text-xs text-neutro-500 underline-offset-2 hover:text-bronce-700 hover:underline"><Link2 className="size-3.5" aria-hidden="true" />{p('shareResults')}</Link>
     </div>
     {count !== undefined && <p role="status" className="text-sm text-neutro-600">{resultLabel ?? p(count === 1 ? 'resultOne' : 'resultMany', { count })}</p>}
     <Modal open={open} title={p('filters')} onClose={close} closeLabel={p('closeModal')}><div className="space-y-4">{controls('mobile')}{extraFilters}<Button variant="secondary" className="w-full" onClick={close}>{p('showResults')}</Button></div></Modal>

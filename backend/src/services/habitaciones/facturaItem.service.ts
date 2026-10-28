@@ -3,13 +3,14 @@ import { recalcularTotales } from "./factura.service";
 import { ROLES, Role } from "../../constants/roles";
 
 const db = require("../../models");
-const { Factura, FacturaItem } = db;
+const { sequelize, Factura, FacturaItem } = db;
 
 interface CreateFacturaItemData {
   factura_id: number;
   descripcion: string;
   cantidad: number;
   precio_unitario: number;
+  tipo_concepto?: "servicio" | "hospedaje";
 }
 
 type UpdateFacturaItemData = Partial<CreateFacturaItemData>;
@@ -22,11 +23,12 @@ interface RequestingUser {
 const facturaNotFound = () =>
   new AppError(404, "FACTURA_NOT_FOUND", "La factura no fue encontrada");
 
-const validateFactura = async (facturaId: number) => {
-  const factura = await Factura.findByPk(facturaId);
+const validateFactura = async (facturaId: number, transaction?: any) => {
+  const factura = await Factura.findByPk(facturaId, { transaction, ...(transaction ? { lock: transaction.LOCK.UPDATE } : {}) });
   if (!factura) {
     throw facturaNotFound();
   }
+  return factura;
 };
 
 const calculateSubtotal = (cantidad: number, precioUnitario: number) =>
@@ -45,7 +47,7 @@ const getFacturaItemByIdOrFail = async (id: number) => {
 };
 
 const facturaOwnershipJoin = (requestingUser: RequestingUser) =>
-  requestingUser.rol === ROLES.CLIENTE
+  requestingUser.rol !== ROLES.ADMIN
     ? [
         {
           model: Factura,
@@ -80,8 +82,8 @@ export const getFacturaItemById = async (
   return facturaItem;
 };
 
-export const createFacturaItem = async (data: CreateFacturaItemData) => {
-  await validateFactura(data.factura_id);
+export const createFacturaItem = async (data: CreateFacturaItemData) => sequelize.transaction(async (transaction: any) => {
+  await validateFactura(data.factura_id, transaction);
   const subtotal = calculateSubtotal(data.cantidad, data.precio_unitario);
   const facturaItem = await FacturaItem.create({
     factura_id: data.factura_id,
@@ -89,42 +91,43 @@ export const createFacturaItem = async (data: CreateFacturaItemData) => {
     cantidad: data.cantidad,
     precio_unitario: data.precio_unitario,
     subtotal,
-  });
-  await recalcularTotales(data.factura_id);
+    tipo_concepto: data.tipo_concepto ?? "servicio",
+  }, { transaction });
+  await recalcularTotales(data.factura_id, transaction);
   return facturaItem;
-};
+});
 
 export const updateFacturaItem = async (
   id: number,
   data: UpdateFacturaItemData
 ) => {
-  const facturaItem = await getFacturaItemByIdOrFail(id);
-  const oldFacturaId = Number(facturaItem.factura_id);
+  const discovered = await getFacturaItemByIdOrFail(id);
+  const oldFacturaId = Number(discovered.factura_id);
   const newFacturaId = data.factura_id ?? oldFacturaId;
-
-  if (data.factura_id !== undefined) {
-    await validateFactura(data.factura_id);
-  }
-
-  const cantidad = data.cantidad ?? Number(facturaItem.cantidad);
-  const precioUnitario =
-    data.precio_unitario ?? Number(facturaItem.precio_unitario);
-  await facturaItem.update({
-    ...data,
-    subtotal: calculateSubtotal(cantidad, precioUnitario),
+  return sequelize.transaction(async (transaction: any) => {
+    // Orden fijo de padres antes del concepto: evita actualizaciones perdidas
+    // y deadlocks cuando dos solicitudes trasladan conceptos entre facturas.
+    for (const parentId of [...new Set([oldFacturaId, newFacturaId])].sort((a, b) => a - b)) await validateFactura(parentId, transaction);
+    const facturaItem = await FacturaItem.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!facturaItem || Number(facturaItem.factura_id) !== oldFacturaId) throw new AppError(409, "INVOICE_ITEM_CHANGED", "El concepto cambió; actualice la factura antes de continuar");
+    const cantidad = data.cantidad ?? Number(facturaItem.cantidad);
+    const precioUnitario = data.precio_unitario ?? Number(facturaItem.precio_unitario);
+    await facturaItem.update({ ...data, subtotal: calculateSubtotal(cantidad, precioUnitario) }, { transaction });
+    await recalcularTotales(oldFacturaId, transaction);
+    if (newFacturaId !== oldFacturaId) await recalcularTotales(newFacturaId, transaction);
+    return facturaItem;
   });
-
-  await recalcularTotales(oldFacturaId);
-  if (newFacturaId !== oldFacturaId) {
-    await recalcularTotales(newFacturaId);
-  }
-  return facturaItem;
 };
 
 export const deleteFacturaItem = async (id: number) => {
-  const facturaItem = await getFacturaItemByIdOrFail(id);
-  const facturaId = Number(facturaItem.factura_id);
-  await facturaItem.destroy();
-  await recalcularTotales(facturaId);
-  return facturaItem;
+  const discovered = await getFacturaItemByIdOrFail(id);
+  const facturaId = Number(discovered.factura_id);
+  return sequelize.transaction(async (transaction: any) => {
+    await validateFactura(facturaId, transaction);
+    const facturaItem = await FacturaItem.findByPk(id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!facturaItem || Number(facturaItem.factura_id) !== facturaId) throw new AppError(409, "INVOICE_ITEM_CHANGED", "El concepto cambió; actualice la factura antes de continuar");
+    await facturaItem.destroy({ transaction });
+    await recalcularTotales(facturaId, transaction);
+    return facturaItem;
+  });
 };

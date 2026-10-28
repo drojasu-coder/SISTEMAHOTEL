@@ -11,8 +11,6 @@ export interface RequesterContext {
 
 export const PAYMENT_ADMINISTRATIVE_ROLES: Role[] = [
   ROLES.ADMIN,
-  ROLES.RECEPCIONISTA,
-  ROLES.GERENTE_HABITACIONES,
 ];
 
 export const isPaymentAdministrator = (requester: RequesterContext) =>

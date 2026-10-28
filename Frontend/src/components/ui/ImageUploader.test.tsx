@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ImageUploader } from './ImageUploader';
+import { LocaleProvider } from '@/i18n/LocaleContext';
+import { LANGUAGE_KEY } from '@/features/preferencias/storage';
 
 describe('ImageUploader', () => {
   beforeEach(() => {
@@ -80,5 +82,14 @@ describe('ImageUploader', () => {
     const cancelBtn = screen.getByLabelText('Cancelar selección');
     fireEvent.click(cancelBtn);
     expect(handleSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('ofrece un selector accesible y controles de imagen en inglés', () => {
+    localStorage.setItem(LANGUAGE_KEY, 'en');
+    render(<LocaleProvider><ImageUploader selectedFile={null} removeMarked={false} onFileSelect={vi.fn()} onRemoveCurrent={vi.fn()} /></LocaleProvider>);
+    expect(screen.getByRole('button', { name: /Upload file/ })).toBeEnabled();
+    expect(screen.getByText('Photograph')).toBeInTheDocument();
+    expect(screen.queryByText('Subir archivo')).not.toBeInTheDocument();
+    localStorage.removeItem(LANGUAGE_KEY);
   });
 });

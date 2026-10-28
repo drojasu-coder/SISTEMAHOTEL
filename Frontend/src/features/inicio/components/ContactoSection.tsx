@@ -1,22 +1,28 @@
 import { usePublicInterface } from '@/i18n/public';
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Phone, Mail, MapPin, Calendar } from 'lucide-react';
-import { buttonStyles } from '@/components/ui/Button';
+import { Phone, Mail, MapPin } from 'lucide-react';
 import type { InicioData } from '../types';
+import { Link } from 'react-router-dom';
+import { publicContactPhone, publicContactEmail, publicContactAddress } from '@/lib/contact';
 
 interface ContactoSectionProps {
   data: InicioData;
 }
 
 export const ContactoSection: React.FC<ContactoSectionProps> = ({ data }) => {
-  const { p } = usePublicInterface();
+  const { p, locale } = usePublicInterface();
   if (!data.contacto_visible) return null;
+  const phone = publicContactPhone(data.contacto_telefono);
+  const email = publicContactEmail(data.contacto_email);
+  const address = publicContactAddress(data.contacto_direccion);
+  const count = Number(Boolean(phone)) + Number(Boolean(email)) + Number(Boolean(address));
 
   return (
     <section
+      id="contacto"
+      tabIndex={-1}
       aria-label={p('contactInformation')}
-      className="border-t border-neutro-200 bg-neutro-100/50 py-16 sm:py-24"
+      className="scroll-mt-24 border-t border-neutro-200 bg-neutro-100/50 py-16 focus:outline-none sm:py-24"
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
@@ -30,9 +36,9 @@ export const ContactoSection: React.FC<ContactoSectionProps> = ({ data }) => {
           </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3 max-w-4xl mx-auto">
+        {count > 0 ? <div className={`mt-12 grid grid-cols-1 gap-6 ${count === 3 ? 'sm:grid-cols-3' : count === 2 ? 'sm:grid-cols-2' : ''} max-w-4xl mx-auto`}>
           {/* Teléfono */}
-          <div className="flex flex-col items-center rounded-2xl border border-neutro-200 bg-white p-6 text-center shadow-sm">
+          {phone && <div className="flex flex-col items-center rounded-2xl border border-neutro-200 bg-white p-6 text-center shadow-sm">
             <div className="flex size-12 items-center justify-center rounded-full bg-bronce-50 text-bronce-700">
               <Phone className="size-5" aria-hidden="true" />
             </div>
@@ -41,15 +47,15 @@ export const ContactoSection: React.FC<ContactoSectionProps> = ({ data }) => {
             <p className="mt-1 text-xs text-neutro-500">
               {' '}{p('centralReception')}{' '}</p>
             <a
-              href={`tel:${data.contacto_telefono.replace(/[^+\d]/g, '')}`}
-              className="mt-3 text-sm font-semibold text-bronce-700 hover:underline"
+              href={phone.href}
+              className="mt-3 inline-flex min-h-11 items-center break-words text-sm font-semibold text-bronce-700 hover:underline"
             >
-              {data.contacto_telefono}
+              {phone.display}
             </a>
-          </div>
+          </div>}
 
           {/* Correo Electrónico */}
-          <div className="flex flex-col items-center rounded-2xl border border-neutro-200 bg-white p-6 text-center shadow-sm">
+          {email && <div className="flex flex-col items-center rounded-2xl border border-neutro-200 bg-white p-6 text-center shadow-sm">
             <div className="flex size-12 items-center justify-center rounded-full bg-bronce-50 text-bronce-700">
               <Mail className="size-5" aria-hidden="true" />
             </div>
@@ -58,48 +64,29 @@ export const ContactoSection: React.FC<ContactoSectionProps> = ({ data }) => {
             <p className="mt-1 text-xs text-neutro-500">
               {' '}{p('enquiries')}{' '}</p>
             <a
-              href={`mailto:${data.contacto_email}`}
-              className="mt-3 text-sm font-semibold text-bronce-700 hover:underline"
+              href={`mailto:${email}`}
+              className="mt-3 inline-flex min-h-11 items-center break-all text-sm font-semibold text-bronce-700 hover:underline"
             >
-              {data.contacto_email}
+              {email}
             </a>
-          </div>
+          </div>}
 
           {/* Ubicación Central */}
-          <div className="flex flex-col items-center rounded-2xl border border-neutro-200 bg-white p-6 text-center shadow-sm">
+          {address && <div className="flex flex-col items-center rounded-2xl border border-neutro-200 bg-white p-6 text-center shadow-sm">
             <div className="flex size-12 items-center justify-center rounded-full bg-bronce-50 text-bronce-700">
               <MapPin className="size-5" aria-hidden="true" />
             </div>
             <h3 className="mt-4 font-serif text-base font-bold text-neutro-900">
               {' '}{p('location')}{' '}</h3>
-            <p className="mt-1 text-xs text-neutro-500">
-              {' '}{p('centralOffices')}{' '}</p>
             <span className="mt-3 text-sm font-semibold text-neutro-800">
-              {data.contacto_direccion}
+              <span lang="es">{address}</span>
             </span>
-          </div>
-        </div>
+          </div>}
+        </div> : <div className="mx-auto mt-8 max-w-xl text-center">
+          <p className="text-sm text-neutro-600">{locale === 'en' ? 'Find the information for each location and choose where to visit us.' : 'Encuentre la información de cada ubicación y elija la sede de su visita.'}</p>
+          <Link to="/sedes" className="mt-3 inline-flex min-h-11 items-center font-semibold text-bronce-700 underline">{locale === 'en' ? 'View locations and contact details' : 'Consultar sedes y contacto'}</Link>
+        </div>}
 
-        {/* Banner de llamada a la acción */}
-        <div className="mt-12 rounded-2xl bg-neutro-900 px-6 py-8 sm:px-12 sm:py-10 text-center max-w-4xl mx-auto shadow-xl">
-          <h3 className="font-serif text-xl sm:text-2xl font-bold text-white">
-            {' '}{p('readyTitle')}{' '}</h3>
-          <p className="mt-2 text-sm text-neutro-300 max-w-xl mx-auto">
-            {' '}{p('readyDescription')}{' '}</p>
-          <div className="mt-6 flex justify-center">
-            <Link
-              to="/crear-reserva"
-              className={buttonStyles({
-                variant: 'primary',
-                size: 'lg',
-                className: 'font-semibold shadow-md',
-              })}
-            >
-              <Calendar className="size-4 mr-2" aria-hidden="true" />
-              <span>{p('startReservation')}</span>
-            </Link>
-          </div>
-        </div>
       </div>
     </section>
   );

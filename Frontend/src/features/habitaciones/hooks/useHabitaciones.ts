@@ -5,10 +5,10 @@ import type { CreateHabitacionInput, UpdateHabitacionInput } from "../types";
 export const HABITACIONES_QUERY_KEY = ["habitaciones"] as const;
 export const TIPOS_HABITACION_QUERY_KEY = ["tipos-habitacion"] as const;
 
-export function useHabitacionesQuery() {
+export function useHabitacionesQuery(sucursalId: number | "all" = "all") {
   return useQuery({
-    queryKey: HABITACIONES_QUERY_KEY,
-    queryFn: habitacionesApi.getAll,
+    queryKey: [...HABITACIONES_QUERY_KEY, sucursalId],
+    queryFn: () => habitacionesApi.getAll(sucursalId === "all" ? undefined : sucursalId),
   });
 }
 
@@ -25,6 +25,7 @@ export function useCreateHabitacionMutation() {
     mutationFn: (data: CreateHabitacionInput) => habitacionesApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     },
   });
 }
@@ -36,6 +37,7 @@ export function useUpdateHabitacionMutation() {
       habitacionesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     },
   });
 }

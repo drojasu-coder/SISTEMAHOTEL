@@ -19,6 +19,7 @@ export const createFacturaSchema = z
     subtotal: z.literal(0, {
       message: "El subtotal inicial debe ser 0",
     }),
+    precios_incluyen_impuestos: z.boolean().optional(),
     estado: z.enum(estadosFactura).optional(),
     fecha_emision: fechaEmision.optional(),
   })

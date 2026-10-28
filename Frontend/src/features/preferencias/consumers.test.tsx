@@ -1,4 +1,4 @@
-import { formatReferenceMoney } from '@/lib/money';
+import { expectStayDates, setStayDates, changeGuestCount } from '@/test/stayControls';
 import { pagosApi } from '@/features/pagos/api/pagosApi';
 import App from '@/App';
 import React from 'react';
@@ -63,7 +63,7 @@ describe('Consumidores reales de sede pública', () => {
     vi.spyOn(amenidadesApi, 'getAll').mockResolvedValue([{ id: 99, nombre: 'Piscina QA', sucursal_id: 1, aforo_maximo: 10, createdAt: '2026-10-26', updatedAt: '2026-10-26' }]);
     const create = vi.spyOn(reservasAmenidadApi, 'create');
     scope(<CatalogoAmenidadesPage />);
-    await userEvent.setup().click(await screen.findByRole('button', { name: /Reservar acceso/i }));
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Ver y reservar/i }));
     const dialog = screen.getByRole('dialog');
     const date = within(dialog).getByLabelText(/^Fecha/i);
     await userEvent.setup().clear(date);
@@ -79,15 +79,13 @@ describe('Consumidores reales de sede pública', () => {
     const old = deferred<HabitacionDisponible[]>();
     vi.spyOn(reservasApi, 'getDisponibilidad').mockReturnValue(old.promise);
     scope(<CrearReservaPage />);
-    const date = await screen.findByLabelText('Fecha de entrada (check-in)');
     const user = userEvent.setup();
-    await user.type(date, '2030-11-20');
-    await user.type(screen.getByLabelText('Fecha de salida (check-out)'), '2030-11-22');
-    await user.type(screen.getByLabelText('Número de huéspedes'), '2');
+    await setStayDates('2030-11-20', '2030-11-22');
+    changeGuestCount('2');
     await user.click(screen.getByRole('button', { name: 'Buscar disponibilidad' }));
     await waitFor(() => expect(reservasApi.getDisponibilidad).toHaveBeenCalledWith(expect.objectContaining({ sucursal_id: 1 })));
     await user.selectOptions(screen.getByLabelText('Sede', { exact: true }), '2');
-    expect(date).toHaveValue('2030-11-20');
+    expect(screen.getByRole('button', { name: /^Fechas de estancia/ })).toHaveTextContent('20 nov 2030');
     expect(screen.getByLabelText('Número de huéspedes')).toHaveValue(2);
     await act(async () => old.resolve([{ id: 101, sucursal_id: 1, tipo_habitacion_id: 1, numero: 'Anterior', estado: 'disponible', tarifa_noche: '100', total_estimado: '200', noches: 2 }]));
     expect(screen.queryByRole('button', { name: 'Seleccionar habitación' })).not.toBeInTheDocument();
@@ -102,7 +100,7 @@ describe('Consumidores reales de sede pública', () => {
     await userEvent.setup().selectOptions(screen.getByRole('combobox'), '2');
     expect(screen.getByText('Compra sede Antigua')).toBeInTheDocument();
     expect(screen.getByText('Compra sede Atitlán')).toBeInTheDocument();
-    expect(screen.getAllByText(formatReferenceMoney(999.99, 'es')!).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Q999.99').length).toBeGreaterThan(0);
     expect(vi.mocked(global.fetch).mock.calls.every(([, config]) => !config?.method || config.method === 'GET')).toBe(true);
   });
   it('Mis reservas mantiene las reservas de otras sedes y no añade filtro de sede a la consulta privada', async () => {
@@ -135,12 +133,12 @@ describe('Rutas públicas reales y compatibilidad', () => {
     const availability = vi.spyOn(reservasApi, 'getDisponibilidad').mockResolvedValue([]);
     window.history.replaceState(null, '', route + '?sucursal_id=2&fecha_entrada=2030-11-20&fecha_salida=2030-11-22&numero_huespedes=3');
     render(<App />);
-    expect(await screen.findByLabelText('Fecha de entrada (check-in)')).toHaveValue('2030-11-20');
-    await waitFor(() => expect(screen.getByLabelText('Sede del hotel')).toHaveValue('2'));
+    await expectStayDates('2030-11-20', '2030-11-22');
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Sede del hotel: Sede 2\./ })).toBeInTheDocument());
     expect(screen.getByLabelText('Número de huéspedes')).toHaveValue(3);
     await waitFor(() => expect(availability).toHaveBeenCalledWith({ sucursal_id: 2, fecha_entrada: '2030-11-20', fecha_salida: '2030-11-22', numero_huespedes: 3 }));
     expect(await screen.findByText('No hay habitaciones disponibles')).toBeInTheDocument();
-    expect(window.location.pathname).toBe(route);
+    expect(window.location.pathname).toBe('/reservar');
     expect(window.location.search).toContain('sucursal_id=2');
   });
   it('un módulo administrativo sin permiso conserva el layout del panel y no añade encabezado público', async () => {

@@ -7,17 +7,22 @@ export interface AssetCreditInfo {
   url?: string;
 }
 
-export type ServicioBienestar = components['schemas']['ServicioBienestar'] & {
+// Sequelize DECIMAL se serializa también como cadena; OpenAPI aún lo declara number.
+export type ServicioBienestar = Omit<components['schemas']['ServicioBienestar'], 'precio'> & {
+  precio?: number | string;
   imagen_key?: string | null;
   imagen_url?: string | null;
   imagen_expires_at?: string | null;
   imagen_creditos?: AssetCreditInfo | null;
+  /** Sede del servicio; null en los servicios generales anteriores. */
+  sucursal_id?: number | null;
+  activo?: boolean;
 };
 
 export type CreateServicioBienestarInput = components['schemas']['CreateServicioBienestarRequest'];
 export type UpdateServicioBienestarInput = components['schemas']['UpdateServicioBienestarRequest'];
 
-export type Terapeuta = components['schemas']['Terapeuta'];
+export type Terapeuta = components['schemas']['Terapeuta'] & { sucursal_id?: number | null };
 export type CreateTerapeutaInput = components['schemas']['CreateTerapeutaRequest'];
 export type UpdateTerapeutaInput = components['schemas']['UpdateTerapeutaRequest'];
 

@@ -51,6 +51,9 @@ export function useCreateReservaActividadMutation(userId?: number) {
       void queryClient.invalidateQueries({
         queryKey: actividadesQueryKeys.reservas.adminList(),
       });
+      void queryClient.invalidateQueries({
+        queryKey: [...actividadesQueryKeys.all, 'salidas'],
+      });
     },
   });
 }

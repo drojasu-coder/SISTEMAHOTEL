@@ -5,7 +5,7 @@ import { AccountContact } from '@/features/compra/AccountContact';
 import { CartExpiry } from '@/features/compra/CartExpiry';
 import { usePublicTexts, TranslatedError, usePublicInterface } from '@/i18n/public';
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarDays,
@@ -14,6 +14,7 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { ApiError } from '@/api/client/http';
+import { pagosApi } from '@/features/pagos/api/pagosApi';
 
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -42,6 +43,7 @@ import {
   getStoredCheckoutAttempt,
 } from '@/features/pagos/utils/idempotency';
 import { getStripe } from '@/features/pagos/utils/stripe';
+import { LegalNotice } from '@/features/legal';
 
 const MONTO_TOLERANCIA = 0.005;
 
@@ -244,6 +246,9 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   const textosCheckout = usePublicTexts('checkout');
   const { p } = usePublicInterface();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const carritoQuery = useCarritoActualQuery(userId);
   const carrito = carritoQuery.data;
   const carritoValido =
@@ -288,6 +293,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   const [mensaje, setMensaje] = useState<MensajeCheckout | null>(null);
   const [estadoIncierto, setEstadoIncierto] = useState(false);
   const [preparandoStripe, setPreparandoStripe] = useState(false);
+  const [verificandoPago, setVerificandoPago] = useState(false);
+  const verificandoRef = useRef(false);
   const ultimoCarrito = useRef<number | null>(null);
   const preparandoRef = useRef(false);
   const expiryCheckRef = useRef(false);
@@ -615,6 +622,33 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
     }
   };
 
+  const verificarEstadoPago = async () => {
+    if (verificandoRef.current) return;
+    if (pagoId === null || !Number.isSafeInteger(pagoId) || pagoId <= 0) {
+      await consultarEstado();
+      return;
+    }
+    verificandoRef.current = true;
+    setVerificandoPago(true);
+    const expectedCartId = carritoId ?? ultimoCarrito.current;
+    try {
+      const verified = await pagosApi.verify(pagoId);
+      if (!mounted.current) return;
+      if (expectedCartId === null || verified.id !== pagoId || verified.carrito_id !== expectedCartId) throw new Error('Payment identity mismatch');
+      await consultarEstado();
+      const freshPayment = await pagoQuery.refetch();
+      if (mounted.current && freshPayment.isSuccess && freshPayment.data?.id === pagoId && freshPayment.data.carrito_id === expectedCartId && freshPayment.data.estado === 'aprobado') {
+        navigate(PAGOS_ROUTES.RESULTADO(pagoId), { replace: true });
+      }
+    } catch (error) {
+      setEstadoIncierto(true);
+      setMensaje({ tono: 'warning', texto: 'errores.recuperacionDescripcion', apiError: error, comprobar: true });
+    } finally {
+      verificandoRef.current = false;
+      setVerificandoPago(false);
+    }
+  };
+
   const confirmacionEnviadaAlServidor = () => {
     setConfirmacionEnviada(true);
     setEstadoIncierto(false);
@@ -622,9 +656,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
       tono: 'info',
       texto: 'estados.confirmacionEnviada',
     });
-    void intentoQuery.refetch();
-    void resumenQuery.refetch();
-    void pagoQuery.refetch();
+    void verificarEstadoPago();
   };
 
   const estadoConfirmacionIncierto = () => {
@@ -635,7 +667,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   };
 
   const comprobarEstado = () => {
-    void consultarEstado();
+    void verificarEstadoPago();
   };
 
   const errorCarrito = carritoQuery.isError
@@ -701,7 +733,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
       intentoParaFormulario.moneda === 'GTQ' &&
       intentoParaFormulario.puedeConfirmar &&
       intentoParaFormulario.clientSecret &&
-      !confirmacionEnviada &&
+      !confirmacionEnviada && !verificandoPago &&
       !estadoIncierto &&
       !pagoAprobado &&
       !pagoRechazado &&
@@ -931,6 +963,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                           variant="ghost"
                           size="sm"
                           onClick={comprobarEstado}
+                          disabled={verificandoPago}
                         >
                           <RefreshCw
                             className="size-4"
@@ -972,6 +1005,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="ghost"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         <RefreshCw className="size-4" aria-hidden="true" />
                         {textosCheckout.comprobarEstado}
@@ -1005,6 +1039,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="ghost"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         <RefreshCw className="size-4" aria-hidden="true" />
                         {textosCheckout.comprobarEstado}
@@ -1024,8 +1059,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                       type="button"
                       variant="primary"
                       onClick={comprobarEstado}
-                      isLoading={intentoQuery.isFetching || pagoQuery.isFetching}
-                      disabled={intentoQuery.isFetching || pagoQuery.isFetching}
+                          isLoading={verificandoPago || intentoQuery.isFetching || pagoQuery.isFetching}
+                      disabled={verificandoPago || intentoQuery.isFetching || pagoQuery.isFetching}
                     >
                       {textosCheckout.comprobarEstado}
                     </Button>
@@ -1093,6 +1128,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                           variant="primary"
                           size="sm"
                           onClick={comprobarEstado}
+                          disabled={verificandoPago}
                         >
                           <RefreshCw className="size-4" aria-hidden="true" />
                           {textosCheckout.comprobarEstado}
@@ -1128,8 +1164,8 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
-                        isLoading={pagoQuery.isFetching || intentoQuery.isFetching}
-                        disabled={pagoQuery.isFetching || intentoQuery.isFetching}
+                          isLoading={verificandoPago || pagoQuery.isFetching || intentoQuery.isFetching}
+                        disabled={verificandoPago || pagoQuery.isFetching || intentoQuery.isFetching}
                       >
                         {textosCheckout.comprobarEstado}
                       </Button>
@@ -1155,6 +1191,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         <RefreshCw className="size-4" aria-hidden="true" />
                         {textosCheckout.comprobarEstado}
@@ -1184,6 +1221,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                           variant="primary"
                           size="sm"
                           onClick={comprobarEstado}
+                          disabled={verificandoPago}
                         >
                           <RefreshCw className="size-4" aria-hidden="true" />
                           {textosCheckout.comprobarEstado}
@@ -1221,6 +1259,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         {textosCheckout.comprobarEstado}
                       </Button>
@@ -1247,6 +1286,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         {textosCheckout.comprobarEstado}
                       </Button>
@@ -1285,6 +1325,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                           variant="primary"
                           size="sm"
                           onClick={comprobarEstado}
+                          disabled={verificandoPago}
                         >
                           <RefreshCw className="size-4" aria-hidden="true" />
                           {textosCheckout.comprobarEstado}
@@ -1321,6 +1362,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         {textosCheckout.comprobarEstado}
                       </Button>
@@ -1330,7 +1372,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                 {mostrarFormulario && intentoParaFormulario && (
                   <div className="flex flex-col gap-3">
                     <StripePaymentForm
-                      blocked={expiryChecking}
+                      blocked={expiryChecking || verificandoPago}
                       clientSecret={intentoParaFormulario.clientSecret}
                       monto={intentoParaFormulario.monto}
                       moneda={intentoParaFormulario.moneda}
@@ -1338,6 +1380,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                       onConfirmacionEnviada={confirmacionEnviadaAlServidor}
                       onEstadoIncierto={estadoConfirmacionIncierto}
                     />
+                    <LegalNotice />
                   </div>
                 )}
 
@@ -1362,6 +1405,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         {textosCheckout.comprobarEstado}
                       </Button>
@@ -1453,6 +1497,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                         variant="primary"
                         size="sm"
                         onClick={comprobarEstado}
+                          disabled={verificandoPago}
                       >
                         <RefreshCw className="size-4" aria-hidden="true" />
                         {textosCheckout.comprobarEstado}

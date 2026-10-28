@@ -1,6 +1,7 @@
 import { AppError } from "../../utils/AppError";
 import { getIvaValue } from "../configuracion.service";
 import { ROLES, Role } from "../../constants/roles";
+import { splitInclusivePrice } from "./inclusivePrices";
 
 const db = require("../../models");
 const { Factura, FacturaItem, Usuario } = db;
@@ -11,6 +12,7 @@ interface CreateFacturaData {
   nombre_fiscal: string;
   direccion_fiscal?: string | null;
   subtotal: number;
+  precios_incluyen_impuestos?: boolean;
   fecha_emision?: string;
 }
 
@@ -36,8 +38,8 @@ const calculateTotals = (subtotal: number, porcentajeIva: number) => {
   return { subtotal, iva, total, porcentaje_iva: porcentajeIva };
 };
 
-const getFacturaByIdOrFail = async (id: number) => {
-  const factura = await Factura.findByPk(id);
+const getFacturaByIdOrFail = async (id: number, transaction?: any) => {
+  const factura = await Factura.findByPk(id, { transaction });
   if (!factura) {
     throw new AppError(404, "FACTURA_NOT_FOUND", "La factura no fue encontrada");
   }
@@ -47,7 +49,7 @@ const getFacturaByIdOrFail = async (id: number) => {
 export const getAllFacturas = async (requestingUser: RequestingUser) =>
   Factura.findAll({
     where:
-      requestingUser.rol === ROLES.CLIENTE
+      requestingUser.rol !== ROLES.ADMIN
         ? { usuario_id: requestingUser.id }
         : undefined,
     order: [["id", "ASC"]],
@@ -60,7 +62,7 @@ export const getFacturaById = async (
   const factura = await Factura.findOne({
     where: {
       id,
-      ...(requestingUser.rol === ROLES.CLIENTE
+      ...(requestingUser.rol !== ROLES.ADMIN
         ? { usuario_id: requestingUser.id }
         : {}),
     },
@@ -81,12 +83,18 @@ export const createFactura = async (data: CreateFacturaData) => {
     direccion_fiscal: data.direccion_fiscal,
     fecha_emision: data.fecha_emision,
     ...calculateTotals(data.subtotal, porcentajeIva),
+    precios_incluyen_impuestos: data.precios_incluyen_impuestos ?? false,
+    porcentaje_inguat: data.precios_incluyen_impuestos ? 10 : 0,
+    inguat: 0,
     estado: "pendiente",
   });
 };
 
 export const updateFactura = async (id: number, data: UpdateFacturaData) => {
   const factura = await getFacturaByIdOrFail(id);
+  if (factura.precios_incluyen_impuestos && data.subtotal !== undefined) {
+    throw new AppError(422, "INVOICE_TOTAL_DERIVED", "El importe de esta factura se calcula a partir de sus conceptos");
+  }
   if (data.usuario_id !== undefined) {
     await validateUsuario(data.usuario_id);
   }
@@ -121,11 +129,21 @@ export const deleteFactura = async (id: number) => {
   return factura;
 };
 
-export const recalcularTotales = async (facturaId: number) => {
-  const factura = await getFacturaByIdOrFail(facturaId);
+export const recalcularTotales = async (facturaId: number, transaction?: any) => {
+  const factura = await getFacturaByIdOrFail(facturaId, transaction);
   const facturaItems = await FacturaItem.findAll({
     where: { factura_id: facturaId },
+    transaction,
   });
+  if (factura.precios_incluyen_impuestos) {
+    const cents = { subtotal: 0, iva: 0, inguat: 0, total: 0 };
+    for (const item of facturaItems) {
+      const split = splitInclusivePrice(Number(item.subtotal), Number(factura.porcentaje_iva), item.tipo_concepto === "hospedaje" ? Number(factura.porcentaje_inguat) : 0);
+      for (const key of Object.keys(cents) as Array<keyof typeof cents>) cents[key] += Math.round(split[key] * 100);
+    }
+    await factura.update(Object.fromEntries(Object.entries(cents).map(([key, value]) => [key, value / 100])), { transaction });
+    return factura;
+  }
   const subtotal = facturaItems.reduce(
     (sum: number, item: any) => sum + Number(item.subtotal),
     0
@@ -135,7 +153,8 @@ export const recalcularTotales = async (facturaId: number) => {
     calculateTotals(
       Math.round(subtotal * 100) / 100,
       Number(factura.porcentaje_iva)
-    )
+    ),
+    { transaction }
   );
   return factura;
 };

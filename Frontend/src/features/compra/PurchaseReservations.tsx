@@ -19,7 +19,7 @@ export function PurchaseReservations({ payment }: { payment: Pago }) {
       <h3 className="font-semibold" lang="es">{item.descripcion || `${p('purchaseItem', { id: item.id })} · #${item.referencia_id}`}</h3>
       <p className="text-xs text-neutro-600">{p('purchaseView')} #{item.referencia_id}</p>
       <PurchaseItemDetails item={item} />
-      <div className="mt-2 text-sm"><MoneyReference amount={item.precio} /> · {item.cantidad}</div>
+      <div className="mt-2 text-sm"><MoneyReference currency="GTQ" amount={item.precio} /> · {item.cantidad}</div>
     </li>)}</ul>}
     {cartId === null && payment.reserva_habitacion_id !== null && <PurchaseItemDetails item={{ tipo_item: 'habitacion', referencia_id: payment.reserva_habitacion_id }} />}
     <p className="text-xs text-neutro-600">{p('purchaseHistorical')}</p>

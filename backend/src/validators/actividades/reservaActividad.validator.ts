@@ -72,15 +72,24 @@ export const createReservaActividadSchema =
           "La hora de inicio debe tener formato HH:MM o HH:MM:SS"
         ),
 
+      // Obligatoria para recursos por hora; en experiencias se calcula en el servidor.
       hora_fin: z
         .string()
         .regex(
           timeRegex,
           "La hora de fin debe tener formato HH:MM o HH:MM:SS"
-        ),
+        )
+        .optional(),
 
       con_equipo: z
         .boolean()
+        .optional(),
+
+      numero_participantes: z
+        .number()
+        .int("El número de participantes debe ser un número entero")
+        .min(1, "Debe haber al menos un participante")
+        .max(100, "El número de participantes no puede superar 100")
         .optional(),
     })
     .strict();

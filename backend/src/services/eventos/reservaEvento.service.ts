@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import { assertSedeAccess, getSedeScope, sedeWhere } from "../../utils/sedeScope";
 
 import { AppError }
   from "../../utils/AppError";
@@ -252,15 +253,22 @@ const validateCapacity = (
 
 export const getAll = async (
   requesterId: number,
-  requesterRole: Role
+  requesterRole: Role,
+  extraWhere: Record<string | symbol, unknown> = {}
 ) => {
-  const where =
+  let where: Record<string | symbol, unknown> =
     requesterRole === ROLES.ADMIN
       ? {}
       : {
           usuario_id:
             requesterId,
         };
+
+  if (requesterRole === ROLES.GERENTE_HABITACIONES) {
+    const scope = await getSedeScope({ id: requesterId, rol: requesterRole });
+    const halls = await Salon.findAll({ where: sedeWhere(scope), attributes: ["id"], raw: true });
+    where = { [Op.and]: [{ salon_id: { [Op.in]: halls.map((hall: { id: number }) => hall.id) } }, extraWhere] };
+  }
 
   return ReservaEvento.findAll({
     where,
@@ -273,6 +281,7 @@ export const getAll = async (
           "nombre",
           "capacidad_maxima",
           "tarifa_base",
+          "sucursal_id",
         ],
       },
 
@@ -312,6 +321,7 @@ export const getById = async (
               "nombre",
               "capacidad_maxima",
               "tarifa_base",
+          "sucursal_id",
             ],
           },
 
@@ -335,8 +345,12 @@ export const getById = async (
     );
   }
 
+  if (requesterRole === ROLES.GERENTE_HABITACIONES) {
+    const hall = await Salon.findByPk(reserva.salon_id, { transaction });
+    assertSedeAccess(await getSedeScope({ id: requesterId, rol: requesterRole }), hall?.sucursal_id);
+  }
   if (
-    requesterRole !==
+    requesterRole !== ROLES.GERENTE_HABITACIONES && requesterRole !==
       ROLES.ADMIN &&
     reserva.usuario_id !==
       requesterId
@@ -740,7 +754,10 @@ export const updateStatus = async (
       );
     }
 
-    if (requesterRole !== ROLES.ADMIN) {
+    if (requesterRole === ROLES.GERENTE_HABITACIONES) {
+      const hall = await Salon.findByPk(reserva.salon_id, { transaction });
+      assertSedeAccess(await getSedeScope({ id: requesterId, rol: requesterRole }), hall?.sucursal_id);
+    } else if (requesterRole !== ROLES.ADMIN) {
       throw new AppError(
         403,
         "INSUFFICIENT_PERMISSIONS",

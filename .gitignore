@@ -6,3 +6,4 @@ build/
 coverage/
 /backend/openapi.json
 backend/backups/
+graphify-out/

@@ -17,6 +17,13 @@ export function usePagoResultado(pagoId: number) {
   const pollingDeadline = useRef(Date.now() + 60000);
   const [pollingPaused, setPollingPaused] = useState(false);
   const [pollWindow, setPollWindow] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationError, setVerificationError] = useState<unknown>(null);
+  const verificationLock = useRef<string | null>(null);
+  const context = `${user?.id}:${pagoId}`;
+  const currentContext = useRef(context);
+  currentContext.current = context;
+  useEffect(() => { setVerificationError(null); setIsVerifying(false); }, [context]);
   useEffect(() => {
     pollingDeadline.current = Date.now() + 60000;
     setPollingPaused(false);
@@ -48,6 +55,30 @@ export function usePagoResultado(pagoId: number) {
   });
 
   const pago = query.data;
+
+  const verify = async () => {
+    if (!isEnabled || verificationLock.current === context) return;
+    if (!pago || pago.metodo !== 'tarjeta' || !['pendiente', 'procesando', 'rechazado'].includes(pago.estado)) {
+      await query.refetch();
+      return;
+    }
+    verificationLock.current = context;
+    setIsVerifying(true);
+    setVerificationError(null);
+    try {
+      const verified = await pagosApi.verify(pagoId);
+      if (currentContext.current !== context) return;
+      if (verified.id !== pagoId || verified.carrito_id !== pago.carrito_id || verified.reserva_habitacion_id !== pago.reserva_habitacion_id) throw new Error('Payment identity mismatch');
+      await query.refetch();
+      pollingDeadline.current = Date.now() + 60000;
+      setPollWindow((value) => value + 1);
+    } catch (error) {
+      if (currentContext.current === context) setVerificationError(error);
+    } finally {
+      if (verificationLock.current === context) verificationLock.current = null;
+      if (currentContext.current === context) setIsVerifying(false);
+    }
+  };
 
   // Manejo de efectos colaterales al alcanzar estados terminales verificados
   useEffect(() => {
@@ -114,6 +145,9 @@ export function usePagoResultado(pagoId: number) {
     ...query,
     refetch: () => { pollingDeadline.current = Date.now() + 60000; setPollWindow((value) => value + 1); return query.refetch(); },
     pollingPaused,
+    verify,
+    isVerifying,
+    verificationError,
     pago,
     isCliente,
     isAuthLoading: status === 'loading',

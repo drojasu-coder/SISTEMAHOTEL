@@ -199,3 +199,23 @@ export const createParqueo =
         "disponible",
     });
   };
+/**
+ * Ficha de empleado con sede principal (y sedes adicionales) para el personal
+ * de pruebas: sin ella el personal no tiene ninguna sede autorizada.
+ */
+export const assignEmpleadoSede = async (
+  usuarioId: number,
+  sucursalId: number,
+  adicionales: number[] = []
+) => {
+  const { Empleado, EmpleadoSede } = require("../../src/models");
+  const empleado = await Empleado.create({
+    usuario_id: usuarioId,
+    sucursal_id: sucursalId,
+    area: "QA",
+  });
+  for (const sucursal_id of adicionales) {
+    await EmpleadoSede.create({ empleado_id: empleado.id, sucursal_id });
+  }
+  return empleado;
+};

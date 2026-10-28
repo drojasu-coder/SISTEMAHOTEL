@@ -235,8 +235,9 @@ const validateAvailability =
   };
 
   export const getAll =
-  async () => {
+  async (where: Record<string | symbol, unknown> = {}) => {
     return Turno.findAll({
+    where,
       include: [
         {
           model: Empleado,

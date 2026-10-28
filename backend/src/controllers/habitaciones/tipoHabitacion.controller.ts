@@ -6,15 +6,27 @@ import {
 
 import * as tipoHabitacionService
   from "../../services/habitaciones/tipoHabitacion.service";
+import { ROLES } from "../../constants/roles";
+import { getSedeScope, parseSucursalIdQuery } from "../../utils/sedeScope";
+
+/**
+ * Alcance por sede del personal. El cliente conserva la consulta de solo
+ * lectura del catálogo (la usa al crear su reserva) y no recibe alcance.
+ */
+const staffScope = async (req: Request) =>
+  req.user!.rol === ROLES.CLIENTE ? undefined : getSedeScope(req.user!);
 
 export const getAllTipoHabitaciones = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
     const tiposHabitacion =
-      await tipoHabitacionService.getAllTipoHabitaciones();
+      await tipoHabitacionService.getAllTipoHabitaciones(
+        await staffScope(req),
+        parseSucursalIdQuery(req.query.sucursal_id)
+      );
 
     res.status(200).json({
       success: true,
@@ -35,7 +47,8 @@ export const getTipoHabitacionById = async (
   try {
     const tipoHabitacion =
       await tipoHabitacionService.getTipoHabitacionById(
-        Number(req.params.id)
+        Number(req.params.id),
+        await staffScope(req)
       );
 
     res.status(200).json({
@@ -56,7 +69,7 @@ export const createTipoHabitacion = async (
 ) => {
   try {
     const tipoHabitacion =
-      await tipoHabitacionService.createTipoHabitacion(req.body);
+      await tipoHabitacionService.createTipoHabitacion(req.body, await getSedeScope(req.user!));
 
     res.status(201).json({
       success: true,
@@ -78,7 +91,8 @@ export const updateTipoHabitacion = async (
     const tipoHabitacion =
       await tipoHabitacionService.updateTipoHabitacion(
         Number(req.params.id),
-        req.body
+        req.body,
+        await getSedeScope(req.user!)
       );
 
     res.status(200).json({
@@ -99,7 +113,8 @@ export const deleteTipoHabitacion = async (
 ) => {
   try {
     await tipoHabitacionService.deleteTipoHabitacion(
-      Number(req.params.id)
+      Number(req.params.id),
+      await getSedeScope(req.user!)
     );
 
     res.status(200).json({
@@ -122,7 +137,8 @@ export const presignImage = async (
     const result = await tipoHabitacionService.requestImageUpload(
       Number(req.params.id),
       req.user!.id,
-      req.body.contentType
+      req.body.contentType,
+      await getSedeScope(req.user!)
     );
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
@@ -140,7 +156,8 @@ export const confirmImage = async (
       Number(req.params.id),
       req.user!.id,
       req.body.uploadToken,
-      req.body.tempKey
+      req.body.tempKey,
+      await getSedeScope(req.user!)
     );
     res.status(200).json({ status: "success", data: tipo });
   } catch (error) {
@@ -155,7 +172,8 @@ export const deleteImage = async (
 ) => {
   try {
     const tipo = await tipoHabitacionService.removeImage(
-      Number(req.params.id)
+      Number(req.params.id),
+      await getSedeScope(req.user!)
     );
     res.status(200).json({ status: "success", data: tipo });
   } catch (error) {

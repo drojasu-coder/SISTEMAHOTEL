@@ -32,6 +32,12 @@ const estadoBadges: Record<EstadoParqueo, { badge: string; label: string }> = {
  * Listado de espacios de parqueo: tabla en escritorio (md y superior) y
  * tarjetas en móvil, siguiendo el patrón de los módulos existentes.
  */
+/** Un estado no reconocido se muestra como tal; nunca se asume «Disponible». */
+const estadoDesconocido = {
+  badge: "border-neutro-300 bg-neutro-100 text-neutro-700",
+  label: "Desconocido",
+};
+
 export const ParqueosList: React.FC<ParqueosListProps> = ({
   parqueos,
   sedesMap,
@@ -66,7 +72,7 @@ export const ParqueosList: React.FC<ParqueosListProps> = ({
               {parqueos.map((parqueo) => {
                 const sede = parqueo.Sucursal ?? sedesMap.get(parqueo.sucursal_id);
                 const estadoConfig =
-                  estadoBadges[parqueo.estado] ?? estadoBadges.disponible;
+                  estadoBadges[parqueo.estado] ?? estadoDesconocido;
 
                 return (
                   <tr
@@ -112,7 +118,7 @@ export const ParqueosList: React.FC<ParqueosListProps> = ({
         {parqueos.map((parqueo) => {
           const sede = parqueo.Sucursal ?? sedesMap.get(parqueo.sucursal_id);
           const estadoConfig =
-            estadoBadges[parqueo.estado] ?? estadoBadges.disponible;
+            estadoBadges[parqueo.estado] ?? estadoDesconocido;
 
           return (
             <Card key={parqueo.id} className="flex flex-col gap-3">

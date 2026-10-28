@@ -1,4 +1,7 @@
+import type { DisplayCurrency } from '@/lib/money';
 export const SITE_KEY = 'hunahpu.public-site.v1';
+export const CURRENCY_KEY = 'hunahpu.currency.v1';
+export function initialCurrency(saved: string | null): DisplayCurrency { return saved === 'USD' ? 'USD' : 'GTQ'; }
 export const LANGUAGE_KEY = 'hunahpu.language.v1';
 export type PublicSite = number | 'all';
 export function readPreference(key: string): string | null {

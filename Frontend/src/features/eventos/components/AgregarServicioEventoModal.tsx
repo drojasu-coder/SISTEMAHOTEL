@@ -12,7 +12,8 @@ import {
   addReservaEventoServicioFormSchema,
   type AddReservaEventoServicioFormData,
 } from '../schemas/evento.schemas';
-import { textosEventos, formatearGTQ } from '../textos';
+import { usePublicInterface } from '@/i18n/public';
+import { textosEventos } from '../textos';
 import { getApiErrorMessage } from '@/api/errors';
 
 interface AgregarServicioEventoModalProps {
@@ -26,6 +27,7 @@ export const AgregarServicioEventoModal: React.FC<AgregarServicioEventoModalProp
   isOpen,
   onClose,
 }) => {
+  const { money } = usePublicInterface();
   const serviciosQuery = useServiciosEventoQuery();
   const addMutation = useAddServicioToReservaMutation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -110,7 +112,7 @@ export const AgregarServicioEventoModal: React.FC<AgregarServicioEventoModalProp
             >
               {servicios.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.nombre} — {formatearGTQ(s.precio)}
+                  {s.nombre} — {money(s.precio)}
                 </option>
               ))}
             </select>

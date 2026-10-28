@@ -1,4 +1,5 @@
 import { z } from "zod";
+const additionalSites = z.array(z.number().int().positive()).max(50).refine(ids => new Set(ids).size === ids.length, "No repita sedes adicionales").optional();
 
 const fechaSchema = z
   .string()
@@ -9,6 +10,7 @@ const fechaSchema = z
 
 export const createEmpleadoSchema = z
   .object({
+    sedes_adicionales: additionalSites,
     usuario_id: z
       .number()
       .int()
@@ -44,6 +46,7 @@ export const createEmpleadoSchema = z
 
 export const updateEmpleadoSchema = z
   .object({
+    sedes_adicionales: additionalSites,
     sucursal_id: z
       .number()
       .int()

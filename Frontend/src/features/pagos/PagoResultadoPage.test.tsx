@@ -1,4 +1,3 @@
-import { formatReferenceMoney } from '@/lib/money';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
@@ -221,7 +220,7 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
     await waitFor(() => {
       expect(screen.getByText('Pago aprobado')).toBeInTheDocument();
       expect(screen.getByText('#10')).toBeInTheDocument();
-      expect(screen.getByText(formatReferenceMoney(2500, 'es')!)).toBeInTheDocument();
+      expect(screen.getByText('Q2,500.00')).toBeInTheDocument();
     });
 
     const pagoFetch = fetchCalls.find((c) => c.url.includes('/pagos/10'));
@@ -242,7 +241,7 @@ describe('Pantalla de resultado del pago (PagoResultadoPage)', () => {
       screen.getByText('Este intento de pago ha sido cancelado o ha expirado sin completarse.')
     ).toBeInTheDocument();
     expect(screen.getByText('#12')).toBeInTheDocument();
-    expect(screen.getByText(formatReferenceMoney(2500, 'es')!)).toBeInTheDocument();
+    expect(screen.getByText('Q2,500.00')).toBeInTheDocument();
     expect(screen.getByText('cancelado')).toBeInTheDocument();
   });
 

@@ -11,7 +11,7 @@ export function useAuthReturn() {
     return { from, draft: validatedRoomDraft(from) };
   }, [state]);
   useEffect(() => {
-    if (context.from?.startsWith('/habitaciones')) saveRoomDraft(context.from);
+    if (context.draft) saveRoomDraft(context.draft);
   }, [context.from]);
   return { ...context, state: { from: context.from } };
 }

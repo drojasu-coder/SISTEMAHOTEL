@@ -12,6 +12,8 @@ export type Amenidad = components["schemas"]["Amenidad"] & {
   imagen_url?: string | null;
   imagen_expires_at?: string | number | null;
   imagen_creditos?: AssetCreditInfo | null;
+  /** false = espacio compartido de libre acceso: el backend rechaza reservas (AMENITY_NOT_RESERVABLE). */
+  reservable?: boolean;
 };
 
 export type AmenidadesResponse = components["schemas"]["AmenidadesResponse"];

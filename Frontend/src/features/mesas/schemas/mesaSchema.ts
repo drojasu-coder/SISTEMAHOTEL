@@ -10,6 +10,8 @@ import type { CreateMesaInput, UpdateMesaInput } from '../types';
  * cliente y los límites coincidan con los del servidor.
  */
 
+export type MensajesMesa = typeof mensajesMesa;
+
 export const mensajesMesa = {
   sede: 'Seleccione la sede donde se ubicará la mesa.',
   zonaVacia: 'La zona no puede estar vacía',
@@ -20,41 +22,45 @@ export const mensajesMesa = {
   estadoVacioEnEdicion: 'Conserve el estado actual o ingrese otro valor.',
 };
 
+export const mensajesMesaEn: MensajesMesa = {
+  sede: 'Select the site where the table will be located.',
+  zonaVacia: 'The area cannot be empty',
+  zonaLarga: 'The area cannot exceed 30 characters',
+  capacidadVacia: 'Capacity is required',
+  capacidadInvalida: 'Capacity must be a whole number greater than 0',
+  estadoLargo: 'The status cannot exceed 20 characters',
+  estadoVacioEnEdicion: 'Keep the current status or enter another value.',
+};
+
+/** Esquema del formulario con los mensajes del idioma activo. */
+export function createMesaFormSchema(m: MensajesMesa = mensajesMesa) {
 const zonas = z
-  .string({ required_error: mensajesMesa.zonaVacia })
+  .string({ required_error: m.zonaVacia })
   .trim()
-  .min(1, mensajesMesa.zonaVacia)
-  .max(30, mensajesMesa.zonaLarga);
+  .min(1, m.zonaVacia)
+  .max(30, m.zonaLarga);
 
 const capacidades = z
-  .string({ required_error: mensajesMesa.capacidadVacia })
+  .string({ required_error: m.capacidadVacia })
   .trim()
-  .min(1, mensajesMesa.capacidadVacia)
+  .min(1, m.capacidadVacia)
   .refine(
     (value) => /^\d+$/.test(value) && Number(value) > 0,
-    mensajesMesa.capacidadInvalida,
+    m.capacidadInvalida,
   );
 
-/** Estado: texto libre de hasta 20 caracteres, igual que en el backend. */
-const estados = z.string().trim().max(20, mensajesMesa.estadoLargo);
+const estados = z.string().trim().max(20, m.estadoLargo);
 
 const sedes = z
-  .string({ required_error: mensajesMesa.sede })
+  .string({ required_error: m.sede })
   .trim()
-  .min(1, mensajesMesa.sede)
+  .min(1, m.sede)
   .refine(
     (value) => /^\d+$/.test(value) && Number(value) > 0,
-    mensajesMesa.sede,
+    m.sede,
   );
 
-/**
- * Un único esquema para alta y edición.
- *
- * `originalEstado` es un auxiliar de validación (no se envía al servidor): permite
- * impedir que en edición se vacíe un estado existente, porque omitirlo en el PATCH
- * lo conservaría en el servidor y se vería como un borrado que nunca ocurrió.
- */
-export const mesaFormSchema = z
+return z
   .object({
     sucursal_id: sedes,
     zona: zonas,
@@ -68,10 +74,20 @@ export const mesaFormSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['estado'],
-        message: mensajesMesa.estadoVacioEnEdicion,
+        message: m.estadoVacioEnEdicion,
       });
     }
   });
+}
+
+/**
+ * Un único esquema para alta y edición.
+ *
+ * `originalEstado` es un auxiliar de validación (no se envía al servidor): permite
+ * impedir que en edición se vacíe un estado existente, porque omitirlo en el PATCH
+ * lo conservaría en el servidor y se vería como un borrado que nunca ocurrió.
+ */
+export const mesaFormSchema = createMesaFormSchema();
 
 export type MesaFormValues = z.infer<typeof mesaFormSchema>;
 

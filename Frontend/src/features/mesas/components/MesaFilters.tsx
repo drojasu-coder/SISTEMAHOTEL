@@ -3,30 +3,35 @@ import { Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { Sucursal } from '@/features/sedes/types';
 import { SelectField } from './SelectField';
-import { textosMesas } from '../texts';
+import { useTextosMesas } from '../texts';
 
 interface MesaFiltersProps {
-  /** Catálogo real de sedes (GET /api/sucursales). */
-  sedes: Sucursal[];
+  /**
+   * Catálogo real de sedes (GET /api/sucursales). El selector local de sede solo
+   * se muestra si se recibe onSedeChange; en el panel la sede la decide el
+   * selector global.
+   */
+  sedes?: Sucursal[];
   /** Zonas presentes en las mesas cargadas: no hay catálogo de zonas en el backend. */
   zonas: string[];
-  sedeSeleccionada: string;
+  sedeSeleccionada?: string;
   zonaSeleccionada: string;
-  onSedeChange: (value: string) => void;
+  onSedeChange?: (value: string) => void;
   onZonaChange: (value: string) => void;
   onClear: () => void;
 }
 
 /** Filtros por sede y zona. El filtrado ocurre en el cliente: el backend no admite parámetros. */
 export const MesaFilters: React.FC<MesaFiltersProps> = ({
-  sedes,
+  sedes = [],
   zonas,
-  sedeSeleccionada,
+  sedeSeleccionada = '',
   zonaSeleccionada,
   onSedeChange,
   onZonaChange,
   onClear,
 }) => {
+  const textosMesas = useTextosMesas();
   const hayFiltros = sedeSeleccionada !== '' || zonaSeleccionada !== '';
 
   return (
@@ -34,6 +39,7 @@ export const MesaFilters: React.FC<MesaFiltersProps> = ({
       aria-label={textosMesas.filtros}
       className="flex flex-col gap-4 rounded-xl border border-neutro-200 bg-white p-4 sm:flex-row sm:items-end sm:p-5"
     >
+      {onSedeChange && (
       <div className="flex-1">
         <SelectField
           label={textosMesas.filtroSede}
@@ -49,6 +55,7 @@ export const MesaFilters: React.FC<MesaFiltersProps> = ({
           ))}
         </SelectField>
       </div>
+      )}
 
       <div className="flex-1">
         <SelectField

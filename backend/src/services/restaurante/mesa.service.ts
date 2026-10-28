@@ -1,7 +1,8 @@
 import { AppError } from "../../utils/AppError";
+import { SedeScope, assertSedeAccess } from "../../utils/sedeScope";
 const db = require("../../models");
 
-const { Mesa, Sucursal, ReservaMesa } = db;
+const { Mesa, Sucursal, ReservaMesa, Restaurante } = db;
 
 interface CreateMesaData {
   sucursal_id: number;
@@ -16,9 +17,13 @@ interface UpdateMesaData {
   estado?: string;
 }
 
-export const getAll = async () => {
+export const getAll = async (where: Record<string | symbol, unknown> = {}) => {
   const mesas = await Mesa.findAll({
-    include: [{ model: Sucursal, attributes: ['nombre'] }],
+    where,
+    include: [
+      { model: Sucursal, attributes: ['nombre'] },
+      { model: Restaurante, attributes: ['id', 'nombre'] },
+    ],
     order: [["zona", "ASC"]],
   });
   return mesas;
@@ -38,7 +43,12 @@ export const getById = async (id: number) => {
   return mesa;
 };
 
-export const create = async (data: CreateMesaData) => {
+// Las mutaciones reciben el alcance por sede del solicitante (ver utils/sedeScope).
+const GLOBAL_SCOPE: SedeScope = { global: true };
+
+export const create = async (data: CreateMesaData, scope: SedeScope = GLOBAL_SCOPE) => {
+  assertSedeAccess(scope, data.sucursal_id);
+
   // Validar que la sucursal exista
   const sucursal = await Sucursal.findByPk(data.sucursal_id);
   if (!sucursal) {
@@ -49,24 +59,30 @@ export const create = async (data: CreateMesaData) => {
     );
   }
 
+  // Cada mesa nueva pertenece al restaurante principal de su sede, si existe.
+  const restaurante = await Restaurante.findOne({ where: { sucursal_id: data.sucursal_id } });
+
   const mesa = await Mesa.create({
     sucursal_id: data.sucursal_id,
     zona: data.zona,
     capacidad: data.capacidad,
     estado: data.estado || 'disponible',
+    restaurante_id: restaurante?.id ?? null,
   });
 
   return mesa;
 };
 
-export const update = async (id: number, data: UpdateMesaData) => {
+export const update = async (id: number, data: UpdateMesaData, scope: SedeScope = GLOBAL_SCOPE) => {
   const mesa = await getById(id);
+  assertSedeAccess(scope, mesa.sucursal_id);
   await mesa.update(data);
   return mesa;
 };
 
-export const remove = async (id: number) => {
+export const remove = async (id: number, scope: SedeScope = GLOBAL_SCOPE) => {
   const mesa = await getById(id);
+  assertSedeAccess(scope, mesa.sucursal_id);
 
   // Evitamos destruir información histórica
   const usos = await ReservaMesa.count({

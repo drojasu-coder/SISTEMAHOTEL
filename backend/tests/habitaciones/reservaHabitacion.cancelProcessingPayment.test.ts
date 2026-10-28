@@ -180,7 +180,7 @@ import request from "supertest";
 
 import app from "../../src/app";
 import { ROLES } from "../../src/constants/roles";
-import { createHotelFixture } from "../fixtures/hotel";
+import { assignEmpleadoSede, createHotelFixture } from "../fixtures/hotel";
 import { createAuthenticatedUser } from "../helpers/auth";
 import { sequelize } from "../helpers/db";
 
@@ -290,6 +290,8 @@ describe("Cancelación financiera de ReservaHabitacion", () => {
         rol: ROLES.GERENTE_HABITACIONES,
       });
       const hotel = await createHotelFixture({ capacidad: 2, tarifa: 100 });
+      // El gerente opera en la sede del hotel de la prueba.
+      await assignEmpleadoSede(gerente.usuario.id, hotel.sucursal.id);
       const clientAuthorization = `Bearer ${cliente.token}`;
       const managerAuthorization = `Bearer ${gerente.token}`;
 

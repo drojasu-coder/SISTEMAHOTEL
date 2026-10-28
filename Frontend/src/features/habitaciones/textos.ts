@@ -32,9 +32,13 @@ export const textosHabitaciones = {
   sedePlaceholder: "Seleccione una sede",
   tipo: "Tipo de habitación",
   tipoPlaceholder: "Seleccione el tipo de habitación",
-  estado: "Estado de la habitación",
-  estadoAbrev: "Estado",
-  tarifaNoche: "Tarifa por noche",
+  estado: "Estado físico de la habitación",
+  estadoAbrev: "Estado físico",
+  tarifaNoche: "Tarifa actual por noche",
+  estadoDesconocido: "Desconocido",
+  importeNoDisponible: "No disponible",
+  notaEstadoFisico:
+    "El estado físico describe la condición actual de cada habitación (libre, ocupada, en limpieza o mantenimiento). No confirma que esté libre para unas fechas concretas: la disponibilidad por estancia se calcula con las reservas.",
   capacidad: "Capacidad",
   capacidadPersonas: (n: number) => `${n} ${n === 1 ? "persona" : "personas"}`,
   acciones: "Acciones",
@@ -84,10 +88,11 @@ export const textosHabitaciones = {
 /**
  * Formato de moneda GTQ con símbolo de Quetzal: Q1,234.00
  */
+/** Importe ausente o inválido: «No disponible», nunca Q0.00 como si fuera un importe real. */
 export function formatGTQ(monto: number | string | null | undefined): string {
-  if (monto === null || monto === undefined || monto === "") return "Q0.00";
+  if (monto === null || monto === undefined || monto === "") return "No disponible";
   const num = typeof monto === "number" ? monto : parseFloat(monto);
-  if (Number.isNaN(num)) return "Q0.00";
+  if (!Number.isFinite(num)) return "No disponible";
   return `Q${num.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

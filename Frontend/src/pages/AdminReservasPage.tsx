@@ -1,26 +1,46 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BedDouble, CalendarX, ArrowLeft, Bed } from 'lucide-react';
+import { BedDouble, CalendarX, ArrowLeft, Bed, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { getApiErrorMessage } from '@/api/errors';
+import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import { useAdminReservasQuery } from '@/features/reservas/admin/hooks/useAdminReservas';
 import { AdminReservasFilters } from '@/features/reservas/admin/components/AdminReservasFilters';
 import { AdminReservasList } from '@/features/reservas/admin/components/AdminReservasList';
-import { textosAdminReservas } from '@/features/reservas/admin/textos';
+import { useTextosAdminReservas } from '@/features/reservas/admin/textos';
 import type { ReservasAdminFiltersState } from '@/features/reservas/admin/types';
 
 export const AdminReservasPage: React.FC = () => {
-  const reservasQuery = useAdminReservasQuery();
+  const textosAdminReservas = useTextosAdminReservas();
+  const { selectedSedeId } = useAdminScope();
+  // La sede del selector global se aplica en el servidor; aquí solo se filtra por búsqueda y estado.
+  const reservasQuery = useAdminReservasQuery(selectedSedeId);
   const sedesQuery = useSedesQuery();
 
   const [filters, setFilters] = useState<ReservasAdminFiltersState>({
     search: '',
-    sucursalId: 'all',
+    sucursalId: selectedSedeId ?? 'all',
     estado: 'all',
   });
+
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  useEffect(() => {
+    if (selectedSedeId !== undefined) {
+      setFilters((prev) => ({
+        ...prev,
+        sucursalId: selectedSedeId,
+      }));
+    }
+  }, [selectedSedeId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
 
   const sedes = sedesQuery.data ?? [];
   const reservas = reservasQuery.data ?? [];
@@ -48,14 +68,6 @@ export const AdminReservasPage: React.FC = () => {
         }
       }
 
-      // Filtro por sede
-      if (filters.sucursalId !== 'all') {
-        const sucursalId = reserva.Habitacion?.sucursal_id;
-        if (sucursalId !== filters.sucursalId) {
-          return false;
-        }
-      }
-
       // Filtro por estado
       if (filters.estado !== 'all' && reserva.estado !== filters.estado) {
         return false;
@@ -71,6 +83,23 @@ export const AdminReservasPage: React.FC = () => {
     reservasQuery.refetch();
     sedesQuery.refetch();
   };
+
+  const counts = useMemo(() => {
+    const base = reservas;
+    return {
+      total: base.length,
+      pendiente: base.filter((r) => r.estado === 'pendiente').length,
+      confirmada: base.filter((r) => r.estado === 'confirmada').length,
+      finalizada: base.filter((r) => r.estado === 'finalizada').length,
+      cancelada: base.filter((r) => r.estado === 'cancelada').length,
+    };
+  }, [reservas]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReservas.length / pageSize));
+  const paginatedReservas = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredReservas.slice(start, start + pageSize);
+  }, [filteredReservas, page, pageSize]);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12">
@@ -103,6 +132,92 @@ export const AdminReservasPage: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Tarjetas rápidas de estado de reservas */}
+      {!isLoading && !isError && reservas.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <button
+            type="button"
+            onClick={() => setFilters((p) => ({ ...p, estado: 'all' }))}
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === 'all'
+                ? 'border-bronce-500 bg-bronce-50/70 shadow-xs ring-1 ring-bronce-500'
+                : 'border-neutro-200 bg-white hover:border-neutro-300'
+            }`}
+          >
+            <span className="text-[11px] font-medium text-neutro-500 uppercase tracking-wider">{textosAdminReservas.tarjetas.total}</span>
+            <span className="font-serif text-2xl font-bold text-neutro-900">{counts.total}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === 'pendiente' ? 'all' : 'pendiente',
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === 'pendiente'
+                ? 'border-advertencia-500 bg-advertencia-50 shadow-xs ring-1 ring-advertencia-500'
+                : 'border-neutro-200 bg-white hover:border-neutro-300'
+            }`}
+          >
+            <span className="text-[11px] font-medium text-advertencia-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.pendientes}</span>
+            <span className="font-serif text-2xl font-bold text-advertencia-800">{counts.pendiente}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === 'confirmada' ? 'all' : 'confirmada',
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === 'confirmada'
+                ? 'border-exito-500 bg-exito-50 shadow-xs ring-1 ring-exito-500'
+                : 'border-neutro-200 bg-white hover:border-neutro-300'
+            }`}
+          >
+            <span className="text-[11px] font-medium text-exito-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.confirmadas}</span>
+            <span className="font-serif text-2xl font-bold text-exito-800">{counts.confirmada}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === 'finalizada' ? 'all' : 'finalizada',
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === 'finalizada'
+                ? 'border-info-500 bg-info-50 shadow-xs ring-1 ring-info-500'
+                : 'border-neutro-200 bg-white hover:border-neutro-300'
+            }`}
+          >
+            <span className="text-[11px] font-medium text-info-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.finalizadas}</span>
+            <span className="font-serif text-2xl font-bold text-info-800">{counts.finalizada}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setFilters((p) => ({
+                ...p,
+                estado: p.estado === 'cancelada' ? 'all' : 'cancelada',
+              }))
+            }
+            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
+              filters.estado === 'cancelada'
+                ? 'border-error-500 bg-error-50 shadow-xs ring-1 ring-error-500'
+                : 'border-neutro-200 bg-white hover:border-neutro-300'
+            }`}
+          >
+            <span className="text-[11px] font-medium text-error-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.canceladas}</span>
+            <span className="font-serif text-2xl font-bold text-error-800">{counts.cancelada}</span>
+          </button>
+        </div>
+      )}
 
       {/* Estados de carga y error */}
       {isLoading && (
@@ -151,7 +266,6 @@ export const AdminReservasPage: React.FC = () => {
           <AdminReservasFilters
             filters={filters}
             onChange={setFilters}
-            sedes={sedes}
             totalResults={filteredReservas.length}
             totalCatalog={reservas.length}
           />
@@ -167,10 +281,49 @@ export const AdminReservasPage: React.FC = () => {
               </p>
             </Card>
           ) : (
-            <AdminReservasList
-              reservas={filteredReservas}
-              sedesPorId={sedesMap}
-            />
+            <div className="flex flex-col gap-4">
+              <AdminReservasList
+                reservas={paginatedReservas}
+                sedesPorId={sedesMap}
+              />
+
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-neutro-200 pt-4 text-xs text-neutro-600">
+                  <span>
+                    Mostrando {(page - 1) * pageSize + 1} a{' '}
+                    {Math.min(page * pageSize, filteredReservas.length)} de{' '}
+                    {filteredReservas.length} reservas
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1 text-xs"
+                    >
+                      <ChevronLeft className="size-3.5" aria-hidden="true" />
+                      <span>{textosAdminReservas.paginacion.anterior}</span>
+                    </Button>
+                    <span className="px-2 font-medium text-neutro-900">
+                      {textosAdminReservas.paginacion.pagina(page, totalPages)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      className="px-2.5 py-1 text-xs"
+                    >
+                      <span>{textosAdminReservas.paginacion.siguiente}</span>
+                      <ChevronRight className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { ROLES, Role } from "../../constants/roles";
 
-const roleValues = Object.values(ROLES) as [
+// Historical roles remain valid for existing records, but new assignments use the final matrix.
+const roleValues = [ROLES.ADMIN, ROLES.GERENTE_HABITACIONES, ROLES.RECEPCIONISTA, ROLES.EMPLEADO_OPERATIVO, ROLES.CLIENTE] as [
   Role,
   ...Role[]
 ];

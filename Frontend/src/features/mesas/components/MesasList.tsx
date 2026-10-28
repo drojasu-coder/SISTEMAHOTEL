@@ -3,7 +3,7 @@ import { Edit2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import type { Mesa } from '../types';
-import { textosMesas } from '../texts';
+import { useTextosMesas } from '../texts';
 
 interface MesasListProps {
   mesas: Mesa[];
@@ -23,6 +23,7 @@ export const MesasList: React.FC<MesasListProps> = ({
   onEdit,
   sedeNombrePorId,
 }) => {
+  const textosMesas = useTextosMesas();
   const nombreSede = (mesa: Mesa): string =>
     mesa.Sucursal?.nombre?.trim() ||
     sedeNombrePorId.get(mesa.sucursal_id) ||

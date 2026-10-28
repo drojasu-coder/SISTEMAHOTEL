@@ -1,3 +1,4 @@
+import { CurrencySelector } from '@/features/preferencias/CurrencySelector';
 import React from 'react';
 import { MapPin, ChevronDown } from 'lucide-react';
 import { LanguageSelector, useLocale } from '@/i18n/LocaleContext';
@@ -12,7 +13,7 @@ export const PublicTopBar: React.FC = () => {
       <button type="button" aria-label={`${t('site')}: ${label}`} aria-haspopup="dialog" aria-expanded={selectionOpen} onClick={(event) => openSelection(event.currentTarget)} className="flex min-h-11 min-w-0 items-center gap-2 rounded-md text-xs font-medium">
         <MapPin className="size-4 shrink-0 text-bronce-700" aria-hidden="true" /><span className="truncate" lang={site ? 'es' : locale}>{label}</span><ChevronDown className="size-3 shrink-0" aria-hidden="true" />
       </button>
-      <LanguageSelector compact />
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2"><CurrencySelector /><LanguageSelector compact /></div>
     </div>
   </div>;
 };

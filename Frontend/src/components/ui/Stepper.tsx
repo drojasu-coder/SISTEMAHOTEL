@@ -69,7 +69,7 @@ export function Stepper({
               disabled={disabled}
               onClick={!disabled && onChange ? () => onChange(i) : undefined}
               className={cn(
-                'flex min-h-11 items-center gap-3 text-xs',
+                'flex min-h-11 items-center gap-3 rounded-full border px-3 py-2 text-xs',
                 isCompleted
                   ? 'border-selva-600 bg-selva-600 text-white'
                   : isError
@@ -80,7 +80,7 @@ export function Stepper({
               )}
             >
               {icon}
-              <span className={cn(isCurrent ? 'font-semibold' : 'text-neutro-600')}>
+              <span className={cn(isCurrent && 'font-semibold', isCompleted ? 'text-white' : 'text-neutro-600')}>
                 {label}
               </span>
             </button>

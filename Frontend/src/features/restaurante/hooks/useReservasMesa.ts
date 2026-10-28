@@ -16,6 +16,23 @@ export const useMesasQuery = () => {
   });
 };
 
+/** Restaurantes públicos (uno por sede). */
+export const useRestaurantesQuery = () => {
+  return useQuery({
+    queryKey: restauranteQueryKeys.restaurantes(),
+    queryFn: restauranteApi.getRestaurantes,
+  });
+};
+
+/** Carta del restaurante, incluidos los productos marcados como no disponibles. */
+export const useMenuQuery = (restauranteId?: number) => {
+  return useQuery({
+    queryKey: restauranteQueryKeys.menu(restauranteId ?? 0),
+    queryFn: () => restauranteApi.getMenu(restauranteId!),
+    enabled: Boolean(restauranteId),
+  });
+};
+
 /**
  * Mutación para crear una reserva de mesa por el cliente.
  * Invalida las listas de reservas al confirmarse.
@@ -72,10 +89,14 @@ export const useMiReservaMesaDetalleQuery = (
 /**
  * Consulta administrativa de todas las reservas de restaurante del hotel.
  */
-export const useAdminReservasMesaQuery = (userId?: number, isAdmin = false) => {
+export const useAdminReservasMesaQuery = (
+  userId?: number,
+  isAdmin = false,
+  sucursalId: number | "all" = "all"
+) => {
   return useQuery({
-    queryKey: restauranteQueryKeys.reservas.adminList(userId),
-    queryFn: restauranteApi.getAdminReservas,
+    queryKey: restauranteQueryKeys.reservas.adminList(userId, sucursalId),
+    queryFn: () => restauranteApi.getAdminReservas(sucursalId === "all" ? undefined : sucursalId),
     enabled: isAdmin && typeof userId === "number" && userId > 0,
     staleTime: 1000 * 30,
   });

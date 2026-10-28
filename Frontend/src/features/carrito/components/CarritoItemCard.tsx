@@ -1,3 +1,4 @@
+import { MoneyReference } from '@/components/ui/MoneyReference';
 import { itemTypeLabel } from '@/features/compra/itemGroups';
 import { PurchaseItemDetails } from '@/features/compra/PurchaseItemDetails';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
@@ -14,7 +15,6 @@ import {
   esItemHabitacion,
   etiquetaTipoItem,
   formatearCantidad,
-  formatearGTQ,
 } from '../textos';
 
 interface CarritoItemCardProps {
@@ -42,7 +42,7 @@ export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
   const esBienestar = item.tipo_item === 'bienestar';
   const esEvento = item.tipo_item === 'evento';
   const descripcion = item.descripcion?.trim() || textosCarrito.sinDescripcion(item.id);
-  const precio = formatearGTQ(item.precio);
+  const precio = <MoneyReference amount={item.precio} />;
   const cantidad = formatearCantidad(item.cantidad);
 
   return (

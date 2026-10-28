@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+// NULL = servicio general (registros anteriores a la vinculación por sede).
+const sucursalId = z.number().int().positive("La sucursal debe ser válida").nullable();
+
+export const listServiciosSpaQuerySchema = z
+  .object({
+    sucursal_id: z.coerce.number().int().positive().optional(),
+    incluir_inactivos: z.enum(["true", "false"]).optional(),
+  })
+  .strict();
+
 export const createServicioSpaSchema =
   z.object({
     nombre: z
@@ -23,6 +33,10 @@ export const createServicioSpaSchema =
       .positive(
         "El precio debe ser mayor a 0"
       ),
+
+    sucursal_id: sucursalId.optional(),
+
+    activo: z.boolean().optional(),
   })
   .strict();
 
@@ -45,6 +59,10 @@ export const updateServicioSpaSchema =
       .number()
       .positive()
       .optional(),
+
+    sucursal_id: sucursalId.optional(),
+
+    activo: z.boolean().optional(),
   })
   .strict()
   .refine(

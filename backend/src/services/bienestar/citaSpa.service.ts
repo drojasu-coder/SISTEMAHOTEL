@@ -20,6 +20,7 @@ export const citaInclude = [
       "id",
       "nombre",
       "activo",
+      "sucursal_id",
     ],
   },
   {
@@ -29,6 +30,7 @@ export const citaInclude = [
       "nombre",
       "duracion_minutos",
       "precio",
+      "sucursal_id",
     ],
   },
   {
@@ -45,8 +47,9 @@ export const citaInclude = [
 // OBTENER TODAS LAS CITAS (ADMIN)
 // ======================================================
 
-export const getAll = async () => {
+export const getAll = async (where: Record<string | symbol, unknown> = {}) => {
   return CitaBienestar.findAll({
+    where,
     include: citaInclude,
     order: [
       ["fecha", "DESC"],
@@ -304,6 +307,27 @@ export const create = async (data: any) => {
         404,
         "WELLNESS_SERVICE_NOT_FOUND",
         "El servicio de bienestar no existe"
+      );
+    }
+
+    if (servicio.activo === false) {
+      throw new AppError(
+        422,
+        "WELLNESS_SERVICE_INACTIVE",
+        "El servicio de bienestar no está disponible para nuevas citas"
+      );
+    }
+
+    // Un servicio de sede solo puede atenderlo un terapeuta de esa misma sede.
+    // Los servicios generales (sin sede) conservan el comportamiento anterior.
+    if (
+      servicio.sucursal_id != null &&
+      terapeuta.sucursal_id !== servicio.sucursal_id
+    ) {
+      throw new AppError(
+        422,
+        "THERAPIST_BRANCH_MISMATCH",
+        "El terapeuta seleccionado no atiende en la sede de este servicio"
       );
     }
 

@@ -120,11 +120,11 @@ describe("Catálogo de Amenidades para Clientes (CatalogoAmenidadesPage)", () =>
     expect(screen.queryByText(/\$/i)).not.toBeInTheDocument();
 
     // Al pulsar 'Reservar acceso' sin sesión, el modal solicita inicio de sesión
-    const reservarBtns = screen.getAllByRole("button", { name: /Reservar acceso/i });
+    const reservarBtns = screen.getAllByRole("button", { name: /Ver y reservar/i });
     await user.click(reservarBtns[0]);
 
     expect(await screen.findByRole("dialog", { name: /Reservar acceso a amenidad/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Inicie sesión para reservar/i })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: /Iniciar sesión/i })).toHaveAttribute("href", "/login");
   });
 
   it("filtra amenidades por nombre y por sede", async () => {
@@ -158,7 +158,7 @@ describe("Catálogo de Amenidades para Clientes (CatalogoAmenidadesPage)", () =>
 
     renderWithProviders(<CatalogoAmenidadesPage />);
 
-    const reservarBtns = await screen.findAllByRole("button", { name: /Reservar acceso/i });
+    const reservarBtns = await screen.findAllByRole("button", { name: /Ver y reservar/i });
     await user.click(reservarBtns[0]);
 
     // Modal abierto con formulario de reserva
@@ -200,7 +200,7 @@ describe("Catálogo de Amenidades para Clientes (CatalogoAmenidadesPage)", () =>
 
     renderWithProviders(<CatalogoAmenidadesPage />);
 
-    const reservarBtns = await screen.findAllByRole("button", { name: /Reservar acceso/i });
+    const reservarBtns = await screen.findAllByRole("button", { name: /Ver y reservar/i });
     await user.click(reservarBtns[0]);
 
     expect(await screen.findByRole("dialog", { name: /Reservar acceso a amenidad/i })).toBeInTheDocument();

@@ -5,6 +5,34 @@ const tarifa = z
   .finite("La tarifa debe ser un numero valido")
   .nonnegative("La tarifa no puede ser negativa");
 
+const modalidadFields = {
+  modalidad: z.enum(["por_hora", "experiencia"]).optional(),
+  duracion_minutos: z.number().int().min(30).max(720).nullable().optional(),
+  cupo_maximo: z.number().int().positive().max(500).nullable().optional(),
+  precio_persona: tarifa.nullable().optional(),
+};
+
+/** Una experiencia necesita duración, cupo y precio por persona. */
+export const assertExperienciaCompleta = (data: {
+  modalidad?: string;
+  duracion_minutos?: number | null;
+  cupo_maximo?: number | null;
+  precio_persona?: number | string | null;
+}) =>
+  data.modalidad !== "experiencia" ||
+  (data.duracion_minutos != null && data.cupo_maximo != null && data.precio_persona != null);
+
+const experienciaMessage = {
+  message: "Una experiencia requiere duracion_minutos, cupo_maximo y precio_persona",
+  path: ["modalidad"],
+};
+
+export const salidasQuerySchema = z
+  .object({
+    fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha debe tener formato YYYY-MM-DD"),
+  })
+  .strict();
+
 export const createRecursoActividadSchema = z
   .object({
     sucursal_id: z
@@ -24,8 +52,10 @@ export const createRecursoActividadSchema = z
     precio_hora: tarifa.optional(),
     precio_equipo: tarifa.optional(),
     precio_instructor_hora: tarifa.optional(),
+    ...modalidadFields,
   })
-  .strict();
+  .strict()
+  .refine(assertExperienciaCompleta, experienciaMessage);
 
 export const updateRecursoActividadSchema = z
   .object({
@@ -34,6 +64,7 @@ export const updateRecursoActividadSchema = z
     precio_hora: tarifa.optional(),
     precio_equipo: tarifa.optional(),
     precio_instructor_hora: tarifa.optional(),
+    ...modalidadFields,
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {

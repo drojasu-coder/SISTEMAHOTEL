@@ -1,4 +1,5 @@
 import { roomCalendar } from './calendar';
+import { commercialRoomName } from '@/features/habitaciones/public/roomCategories';
 import { Button } from '@/components/ui/Button';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -49,7 +50,7 @@ export function PurchaseItemDetails({ item, allowNewSearch = false, showLink = t
   const siteId = room?.sucursal_id ?? activity?.sucursal_id ?? venue?.sucursal_id;
   const site = sites.find((entry) => entry.id === siteId);
   const siteName = room?.Sucursal?.nombre ?? site?.nombre;
-  const title = room?.TipoHabitacion?.nombre ?? activity?.nombre ?? venue?.nombre ?? wellness?.nombre;
+  const title = (room?.TipoHabitacion ? commercialRoomName(room.TipoHabitacion) : undefined) ?? activity?.nombre ?? venue?.nombre ?? wellness?.nombre;
   const image = activity?.imagen_url ?? venue?.imagen_url ?? wellness?.imagen_url;
   const credits = activity?.imagen_creditos ?? venue?.imagen_creditos ?? wellness?.imagen_creditos;
   const phone = publicPhone(site?.telefono ?? '');
@@ -61,7 +62,7 @@ export function PurchaseItemDetails({ item, allowNewSearch = false, showLink = t
   const end = 'hora_fin' in data ? data.hora_fin : undefined;
   const nights = arrival && departure ? calendarNights(arrival, departure) : null;
   const calendar = arrival && departure && data.id && data.estado ? roomCalendar({ id: data.id, arrival, departure, title: `${p('purchaseRoom')} #${item.referencia_id}${title ? ` · ${title}` : ''}`, state: data.estado }) : null;
-  const params = new URLSearchParams({ ...(arrival ? { fecha_entrada: arrival } : {}), ...(departure ? { fecha_salida: departure } : {}), ...(guests ? { numero_huespedes: String(guests) } : {}), ...(siteId ? { sede: String(siteId) } : {}), buscar: '1' });
+  const params = new URLSearchParams({ ...(arrival ? { fecha_entrada: arrival } : {}), ...(departure ? { fecha_salida: departure } : {}), ...(guests ? { numero_huespedes: String(guests) } : {}), ...(siteId ? { sucursal_id: String(siteId) } : {}) });
   return <div className="flex flex-col gap-2 text-sm">
     {image && <div className="max-w-xs overflow-hidden rounded-lg"><ServiceMedia src={image} alt={title} credits={credits} /></div>}
     {title && <p lang="es" className="font-semibold">{title}{room?.numero ? ` · ${room.numero}` : ''}</p>}
@@ -76,6 +77,6 @@ export function PurchaseItemDetails({ item, allowNewSearch = false, showLink = t
       const href = URL.createObjectURL(new Blob([calendar], { type: 'text/calendar;charset=utf-8' }));
       const link = document.createElement('a'); link.href = href; link.download = `reserva-habitacion-${item.referencia_id}.ics`; link.click(); URL.revokeObjectURL(href);
     }}>{p('purchaseCalendar')}</Button>}
-    {allowNewSearch && arrival && departure && <div><Link to={`/habitaciones?${params}`} className="inline-flex min-h-11 items-center underline">{p('purchaseNewSearch')}</Link><p className="text-xs text-neutro-600">{p('purchaseNewSearchNote')}</p></div>}
+    {allowNewSearch && arrival && departure && <div><Link to={`/reservar?${params}`} className="inline-flex min-h-11 items-center underline">{p('purchaseNewSearch')}</Link><p className="text-xs text-neutro-600">{p('purchaseNewSearchNote')}</p></div>}
   </div>;
 }

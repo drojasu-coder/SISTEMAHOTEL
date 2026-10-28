@@ -34,6 +34,13 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
       },
+      precios_incluyen_impuestos: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      inguat: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+      porcentaje_inguat: { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
       iva: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,

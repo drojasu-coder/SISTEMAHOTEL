@@ -19,9 +19,10 @@ import { ReservaCard } from '@/features/mis-reservas/components/ReservaCard';
 import { reservaNecesitaCatalogoSedes } from '@/features/mis-reservas/formato';
 import { useMisReservasQuery } from '@/features/mis-reservas/hooks/useMisReservas';
 import { useSedesFallback } from '@/features/mis-reservas/hooks/useSedesFallback';
-import { textosMisReservas } from '@/features/mis-reservas/textos';
+import { usePublicTexts } from '@/i18n/public';
 
 const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
+  const textosMisReservas = usePublicTexts('misReservas');
   const reservasQuery = useMisReservasQuery(userId);
   const reservas = reservasQuery.data ?? [];
 
@@ -52,42 +53,42 @@ const MisReservasContenido: React.FC<{ userId: number }> = ({ userId }) => {
           aria-current="page"
         >
           <BedDouble className="size-4" aria-hidden="true" />
-          <span>Reservas de Habitación</span>
+          <span>{textosMisReservas.tabs.habitaciones}</span>
         </Link>
         <Link
           to={RESTAURANTE_ROUTES.MIS_RESERVAS}
           className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <UtensilsCrossed className="size-4" aria-hidden="true" />
-          <span>Reservas de Mesa</span>
+          <span>{textosMisReservas.tabs.restaurante}</span>
         </Link>
         <Link
           to={AMENIDADES_ROUTES.MIS_RESERVAS}
           className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Sparkles className="size-4" aria-hidden="true" />
-          <span>Pases de Amenidades</span>
+          <span>{textosMisReservas.tabs.amenidades}</span>
         </Link>
         <Link
           to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
           className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Compass className="size-4" aria-hidden="true" />
-          <span>Actividades Recreativas</span>
+          <span>{textosMisReservas.tabs.actividades}</span>
         </Link>
         <Link
           to={BIENESTAR_ROUTES.MIS_RESERVAS}
           className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Heart className="size-4" aria-hidden="true" />
-          <span>Bienestar y Spa</span>
+          <span>{textosMisReservas.tabs.bienestar}</span>
         </Link>
         <Link
           to={EVENTOS_ROUTES.MIS_RESERVAS}
           className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
         >
           <Building2 className="size-4" aria-hidden="true" />
-          <span>Eventos y Salones</span>
+          <span>{textosMisReservas.tabs.eventos}</span>
         </Link>
       </div>
 

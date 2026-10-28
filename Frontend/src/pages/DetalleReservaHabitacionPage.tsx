@@ -16,7 +16,7 @@ import {
 } from '@/features/mis-reservas/formato';
 import { useReservaHabitacionQuery } from '@/features/mis-reservas/hooks/useMisReservas';
 import { useSedesFallback } from '@/features/mis-reservas/hooks/useSedesFallback';
-import { textosMisReservas } from '@/features/mis-reservas/textos';
+import { usePublicTexts } from '@/i18n/public';
 
 interface EstadoErrorProps {
   titulo: string;
@@ -28,7 +28,7 @@ const EstadoError: React.FC<EstadoErrorProps> = ({
   titulo,
   descripcion,
   onRetry,
-}) => (
+}) => { const textosMisReservas = usePublicTexts('misReservas'); return (
   <Card className="flex flex-col items-start gap-4">
     <Alert tone="error">
       <div className="flex flex-col gap-1">
@@ -51,7 +51,7 @@ const EstadoError: React.FC<EstadoErrorProps> = ({
       </Link>
     </div>
   </Card>
-);
+); };
 
 interface ErrorDetalle {
   titulo: string;
@@ -59,7 +59,7 @@ interface ErrorDetalle {
   puedeReintentar: boolean;
 }
 
-function describirError(error: unknown): ErrorDetalle {
+function describirError(error: unknown, textosMisReservas: ReturnType<typeof usePublicTexts<'misReservas'>>): ErrorDetalle {
   if (error instanceof ApiError) {
     if (error.status === 403) {
       return {
@@ -97,6 +97,7 @@ const DetalleContenido: React.FC<{ id: number; userId: number }> = ({
   id,
   userId,
 }) => {
+  const textosMisReservas = usePublicTexts('misReservas');
   const reservaQuery = useReservaHabitacionQuery(id, userId);
 
   // La clave de consulta incluye el ID, pero se comprueba también el dato para
@@ -120,7 +121,7 @@ const DetalleContenido: React.FC<{ id: number; userId: number }> = ({
 
   const avisoSedes = necesitaCatalogo && sedesQuery.isError;
   const error = reservaQuery.isError
-    ? describirError(reservaQuery.error)
+    ? describirError(reservaQuery.error, textosMisReservas)
     : null;
   const noEncontrada =
     !reservaQuery.isPending && !reservaQuery.isError && !reserva;
@@ -185,7 +186,7 @@ const DetalleContenido: React.FC<{ id: number; userId: number }> = ({
   );
 };
 
-const IdInvalido: React.FC = () => (
+const IdInvalido: React.FC = () => { const textosMisReservas = usePublicTexts('misReservas'); return (
   <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
     <div className="flex flex-col gap-2">
       <p className="eyebrow">{textosMisReservas.detalleEtiqueta}</p>
@@ -198,7 +199,7 @@ const IdInvalido: React.FC = () => (
       descripcion={textosMisReservas.idInvalidoDescripcion}
     />
   </section>
-);
+); };
 
 /**
  * Detalle de una reserva propia.

@@ -16,6 +16,7 @@ import type {
   UpdateRecursoActividadInput,
   CreateInstructorInput,
   UpdateInstructorInput,
+  SalidasActividad,
 } from '../types';
 
 export const actividadesApi = {
@@ -23,6 +24,12 @@ export const actividadesApi = {
    * Consulta pública de instalaciones y recursos deportivos y recreativos.
    * GET /api/recursos-actividad
    */
+  /** Salidas confirmadas de una fecha con lugares disponibles (público). */
+  getSalidas: async (recursoId: number, fecha: string): Promise<SalidasActividad> => {
+    const response = await api.get<{ status: string; data: SalidasActividad }>(`/recursos-actividad/${recursoId}/salidas?fecha=${encodeURIComponent(fecha)}`);
+    return response.data;
+  },
+
   getRecursos: async (): Promise<RecursoActividad[]> => {
     const response = await api.get<RecursosActividadResponse>('/recursos-actividad');
     return response.data;

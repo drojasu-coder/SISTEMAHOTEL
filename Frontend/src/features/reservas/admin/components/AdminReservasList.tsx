@@ -7,11 +7,12 @@ import type { ReservaHabitacion } from '../../types';
 import { ReservaEstadoBadge } from '@/features/mis-reservas/components/ReservaEstadoBadge';
 import {
   calcularNoches,
-  formatFechaCalendario,
   formatGTQ,
   resolverNombreSede,
 } from '@/features/mis-reservas/formato';
-import { textosAdminReservas } from '../textos';
+import { useTextosAdminReservas } from '../textos';
+import { useLocale } from '@/i18n/LocaleContext';
+import { formatAdminCalendarDate, formatAdminTimestamp } from '@/features/admin-core/adminDates';
 
 interface AdminReservasListProps {
   reservas: ReservaHabitacion[];
@@ -22,6 +23,8 @@ export const AdminReservasList: React.FC<AdminReservasListProps> = ({
   reservas,
   sedesPorId,
 }) => {
+  const textosAdminReservas = useTextosAdminReservas();
+  const { locale } = useLocale();
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {reservas.map((reserva) => {
@@ -47,7 +50,7 @@ export const AdminReservasList: React.FC<AdminReservasListProps> = ({
                   {textosAdminReservas.detalle.reservaId(reserva.id)}
                 </span>
                 <span className="text-xs text-neutro-500">
-                  {formatFechaCalendario(reserva.createdAt)}
+                  {formatAdminTimestamp(reserva.createdAt, locale)}
                 </span>
               </div>
               <ReservaEstadoBadge estado={reserva.estado} />
@@ -61,7 +64,7 @@ export const AdminReservasList: React.FC<AdminReservasListProps> = ({
                 <div className="flex flex-col min-w-0">
                   <span className="eyebrow">{textosAdminReservas.columnas.cliente}</span>
                   <span className="font-medium text-neutro-900 truncate">
-                    {cliente?.nombre ?? 'Cliente no registrado'}
+                    {cliente?.nombre ?? textosAdminReservas.detalle.valores.clienteNoRegistrado}
                   </span>
                   {cliente?.email && (
                     <span className="text-neutro-500 truncate">{cliente.email}</span>
@@ -86,7 +89,7 @@ export const AdminReservasList: React.FC<AdminReservasListProps> = ({
                 <div className="flex flex-col min-w-0">
                   <span className="eyebrow">{textosAdminReservas.columnas.habitacion}</span>
                   <span className="font-medium text-neutro-900">
-                    {habitacion ? `Hab. ${habitacion.numero}` : textosAdminReservas.detalle.valores.sinHabitacion}
+                    {habitacion ? textosAdminReservas.detalle.valores.habitacion(habitacion.numero) : textosAdminReservas.detalle.valores.sinHabitacion}
                   </span>
                   {tipo?.nombre && (
                     <span className="text-neutro-500 truncate">{tipo.nombre}</span>
@@ -110,7 +113,7 @@ export const AdminReservasList: React.FC<AdminReservasListProps> = ({
             <div className="flex items-center gap-2 rounded-lg bg-neutro-50 p-2.5 text-xs text-neutro-700">
               <Calendar className="size-4 shrink-0 text-neutro-400" aria-hidden="true" />
               <span className="font-medium">
-                {formatFechaCalendario(reserva.fecha_entrada)} — {formatFechaCalendario(reserva.fecha_salida)}
+                {formatAdminCalendarDate(reserva.fecha_entrada, locale)} — {formatAdminCalendarDate(reserva.fecha_salida, locale)}
               </span>
               {noches !== null && (
                 <span className="text-neutro-500">
@@ -124,7 +127,7 @@ export const AdminReservasList: React.FC<AdminReservasListProps> = ({
               <div className="flex flex-col">
                 <span className="eyebrow">{textosAdminReservas.columnas.importe}</span>
                 <span className="font-serif text-lg font-semibold text-neutro-900">
-                  {importe ?? 'Q0.00'}
+                  {importe ?? textosAdminReservas.detalle.campos.importeNoDisponible}
                 </span>
               </div>
 

@@ -24,8 +24,9 @@ interface CreateReservaActividadData {
   instructor_id?: number | null;
   fecha: string;
   hora_inicio: string;
-  hora_fin: string;
+  hora_fin?: string;
   con_equipo?: boolean;
+  numero_participantes?: number;
 }
 
 interface UpdateReservaActividadData {
@@ -44,6 +45,10 @@ const reservaActividadInclude = [
       "precio_hora",
       "precio_equipo",
       "precio_instructor_hora",
+      "modalidad",
+      "duracion_minutos",
+      "cupo_maximo",
+      "precio_persona",
     ],
     include: [
       {
@@ -258,6 +263,149 @@ const getResourceOrFail =
 
     return recurso;
   };
+
+const secondsToTime = (
+  totalSeconds: number
+) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds]
+    .map((n) => String(n).padStart(2, "0"))
+    .join(":");
+};
+
+const isExperiencia = (
+  recurso: any
+) =>
+  recurso?.modalidad ===
+  "experiencia";
+
+/**
+ * Una experiencia tiene duración fija: la hora de fin
+ * se calcula en el servidor y debe caer el mismo día.
+ */
+const getExperienceEndTime = (
+  recurso: any,
+  horaInicio: string,
+  horaFinSolicitada?: string
+) => {
+  const duracionMinutos =
+    Number(recurso.duracion_minutos);
+
+  const fin =
+    timeToSeconds(horaInicio) +
+    duracionMinutos * 60;
+
+  if (fin >= 24 * 3600) {
+    throw new AppError(
+      422,
+      "INVALID_ACTIVITY_DURATION",
+      `La experiencia dura ${duracionMinutos} minutos y debe terminar el mismo día`
+    );
+  }
+
+  const horaFin =
+    secondsToTime(fin);
+
+  if (
+    horaFinSolicitada !== undefined &&
+    normalizeTime(horaFinSolicitada) !== horaFin
+  ) {
+    throw new AppError(
+      422,
+      "INVALID_ACTIVITY_DURATION",
+      `La experiencia dura ${duracionMinutos} minutos; con inicio a las ${horaInicio.slice(0, 5)} termina a las ${horaFin.slice(0, 5)}`
+    );
+  }
+
+  return horaFin;
+};
+
+/**
+ * Las reservas de una experiencia comparten la misma salida
+ * (misma hora de inicio) y su cupo. Dos salidas distintas
+ * del mismo recurso no pueden superponerse.
+ */
+const validateExperienceCapacity =
+  async (
+    recurso: any,
+    fecha: string,
+    horaInicio: string,
+    horaFin: string,
+    participantes: number,
+    reservaId: number | undefined,
+    transaction: any
+  ) => {
+    const where: any = {
+      recurso_id: recurso.id,
+      fecha,
+      estado: "confirmada",
+      hora_inicio: { [Op.lt]: horaFin },
+      hora_fin: { [Op.gt]: horaInicio },
+    };
+
+    if (reservaId !== undefined) {
+      where.id = { [Op.ne]: reservaId };
+    }
+
+    const reservas =
+      await ReservaActividad.findAll({
+        where,
+        attributes: ["hora_inicio", "numero_participantes"],
+        transaction,
+      });
+
+    if (
+      reservas.some(
+        (r: any) =>
+          normalizeTime(r.hora_inicio) !== horaInicio
+      )
+    ) {
+      throw new AppError(
+        409,
+        "RESOURCE_OVERLAP",
+        "Ya existe otra salida de esta experiencia que se superpone con ese horario. Por favor elija otro horario."
+      );
+    }
+
+    const ocupados =
+      reservas.reduce(
+        (sum: number, r: any) =>
+          sum + Number(r.numero_participantes),
+        0
+      );
+
+    const cupo =
+      Number(recurso.cupo_maximo);
+
+    if (ocupados + participantes > cupo) {
+      throw new AppError(
+        409,
+        "ACTIVITY_CAPACITY_EXCEEDED",
+        `La salida tiene cupo para ${cupo} participantes y quedan ${Math.max(0, cupo - ocupados)} lugares disponibles`
+      );
+    }
+  };
+
+/**
+ * El equipamiento tiene una tarifa sin unidad de cobro definida (por reserva,
+ * por hora o por persona). Mientras esa regla no exista, no se acepta como
+ * suplemento: así el total nunca difiere de lo comunicado al cliente.
+ * Si su tarifa es 0 se puede solicitar sin cargo.
+ */
+const assertEquipmentAllowed = (
+  recurso: any,
+  conEquipo: boolean | undefined
+) => {
+  if (conEquipo && Number(recurso.precio_equipo) > 0) {
+    throw new AppError(
+      422,
+      "EQUIPMENT_NOT_BOOKABLE",
+      "El equipamiento de este recurso no se puede añadir en línea porque su forma de cobro no está definida"
+    );
+  }
+};
 
 /**
  * Variante transaccional de getResourceOrFail.
@@ -504,9 +652,10 @@ const validateInstructorOverlap =
   };
 
 export const getAll =
-  async () => {
+  async (where: Record<string | symbol, unknown> = {}) => {
     return ReservaActividad.findAll(
       {
+    where,
         include:
           reservaActividadInclude,
 
@@ -621,11 +770,6 @@ export const create =
         data.hora_inicio
       );
 
-    const horaFin =
-      normalizeTime(
-        data.hora_fin
-      );
-
     /**
      * Validaciones puras antes de abrir la transacción.
      */
@@ -634,10 +778,55 @@ export const create =
       horaInicio
     );
 
-    validateTimeRange(
-      horaInicio,
-      horaFin
-    );
+    /**
+     * La modalidad del recurso determina cómo se valida
+     * la duración. Si el recurso no existe se conserva el
+     * orden de validación anterior y el 404 llega dentro
+     * de la transacción.
+     */
+    const recursoPrevio =
+      await RecursoActividad.findByPk(
+        data.recurso_id
+      );
+
+    const participantes =
+      data.numero_participantes ?? 1;
+
+    let horaFin: string;
+
+    if (isExperiencia(recursoPrevio)) {
+      horaFin = getExperienceEndTime(
+        recursoPrevio,
+        horaInicio,
+        data.hora_fin
+      );
+
+      // El guía forma parte de la salida, no de cada reserva individual.
+      if (data.instructor_id != null) {
+        throw new AppError(
+          422,
+          "INSTRUCTOR_NOT_APPLICABLE",
+          "Las experiencias guiadas no admiten elegir instructor por reserva"
+        );
+      }
+    } else {
+      if (data.hora_fin === undefined) {
+        throw new AppError(
+          400,
+          "ACTIVITY_END_TIME_REQUIRED",
+          "Debe indicar la hora de fin de la actividad"
+        );
+      }
+
+      horaFin = normalizeTime(
+        data.hora_fin
+      );
+
+      validateTimeRange(
+        horaInicio,
+        horaFin
+      );
+    }
 
     /**
      * La comprobación de disponibilidad del recurso
@@ -659,6 +848,60 @@ export const create =
               transaction
             );
 
+          assertEquipmentAllowed(recurso, data.con_equipo);
+
+          if (
+            isExperiencia(recurso) !==
+            isExperiencia(recursoPrevio)
+          ) {
+            throw new AppError(
+              409,
+              "ACTIVITY_RESOURCE_CHANGED",
+              "La configuración de la actividad cambió. Vuelva a intentarlo."
+            );
+          }
+
+          if (isExperiencia(recurso)) {
+            await validateExperienceCapacity(
+              recurso,
+              data.fecha,
+              horaInicio,
+              horaFin,
+              participantes,
+              undefined,
+              transaction
+            );
+
+            const totalExperiencia =
+              Math.round(
+                (Number(recurso.precio_persona) *
+                  participantes +
+                  Number.EPSILON) *
+                  100
+              ) / 100;
+
+            const reservaExperiencia =
+              await ReservaActividad.create(
+                {
+                  usuario_id: data.usuario_id,
+                  recurso_id: data.recurso_id,
+                  instructor_id: null,
+                  fecha: data.fecha,
+                  hora_inicio: horaInicio,
+                  hora_fin: horaFin,
+                  con_equipo: data.con_equipo ?? false,
+                  numero_participantes: participantes,
+                  total: totalExperiencia,
+                  estado: "confirmada",
+                },
+                {
+                  transaction,
+                }
+              );
+
+            return reservaExperiencia.id;
+          }
+
           const duracionHoras =
             (timeToSeconds(
               horaFin
@@ -668,11 +911,17 @@ export const create =
               )) /
             3600;
 
+          // Total = (tarifa del recurso + tarifa por hora del instructor, si se eligió) × horas.
+          // El equipamiento no suma: solo se acepta si su tarifa es 0 (ver assertEquipmentAllowed).
+          const tarifaHora =
+            Number(recurso.precio_hora) +
+            (data.instructor_id != null
+              ? Number(recurso.precio_instructor_hora)
+              : 0);
+
           const total =
             Math.round(
-              (Number(
-                recurso.precio_hora
-              ) *
+              (tarifaHora *
                 duracionHoras +
                 Number.EPSILON) *
                 100
@@ -744,6 +993,9 @@ export const create =
                 con_equipo:
                   data.con_equipo ??
                   false,
+
+                numero_participantes:
+                  participantes,
 
                 total,
 
@@ -867,11 +1119,6 @@ export const update =
               horaInicio
             );
 
-            validateTimeRange(
-              horaInicio,
-              horaFin
-            );
-
             /**
              * Bloqueamos el recurso antes de comprobar
              * disponibilidad.
@@ -881,19 +1128,37 @@ export const update =
              * solamente una puede validar e ingresar
              * al UPDATE inmediatamente.
              */
-            await getLockedResourceOrFail(
-              reserva.recurso_id,
-              transaction
-            );
+            const recursoReserva =
+              await getLockedResourceOrFail(
+                reserva.recurso_id,
+                transaction
+              );
 
-            await validateResourceOverlap(
-              reserva.recurso_id,
-              reserva.fecha,
-              horaInicio,
-              horaFin,
-              id,
-              transaction
-            );
+            if (isExperiencia(recursoReserva)) {
+              await validateExperienceCapacity(
+                recursoReserva,
+                reserva.fecha,
+                horaInicio,
+                horaFin,
+                Number(reserva.numero_participantes),
+                id,
+                transaction
+              );
+            } else {
+              validateTimeRange(
+                horaInicio,
+                horaFin
+              );
+
+              await validateResourceOverlap(
+                reserva.recurso_id,
+                reserva.fecha,
+                horaInicio,
+                horaFin,
+                id,
+                transaction
+              );
+            }
 
             /**
              * Si existe instructor, se bloquea después
@@ -918,6 +1183,12 @@ export const update =
                 transaction
               );
             }
+          }
+
+          // Activar el equipo después no puede cambiar lo cobrado sin recalcular el total.
+          if (data.con_equipo === true && !reserva.con_equipo) {
+            const recursoEquipo = await RecursoActividad.findByPk(reserva.recurso_id, { transaction });
+            if (recursoEquipo) assertEquipmentAllowed(recursoEquipo, true);
           }
 
           /**

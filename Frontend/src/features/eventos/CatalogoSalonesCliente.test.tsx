@@ -79,8 +79,8 @@ describe('Catálogo de Salones y Eventos (CatalogoEventosPage)', () => {
 
     expect(await screen.findByText('Gran Salón Hunahpú')).toBeInTheDocument();
     expect(screen.getByText('Salón Ejecutivo Atitlán')).toBeInTheDocument();
-    expect(screen.getByText('Hasta 250 personas')).toBeInTheDocument();
-    expect(screen.getByText(/Q\s*4,500\.00.*US\$/)).toBeInTheDocument();
+    expect(screen.getByText(/Hasta 250 personas/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*4,500\.00/)).toBeInTheDocument();
   });
 
   it('permite filtrar los salones por nombre', async () => {
@@ -103,7 +103,7 @@ describe('Catálogo de Salones y Eventos (CatalogoEventosPage)', () => {
     renderWithProviders(<CatalogoEventosPage />);
 
     expect(await screen.findByText('Gran Salón Hunahpú')).toBeInTheDocument();
-    const botonesCotizar = screen.getAllByRole('button', { name: /cotizar evento/i });
+    const botonesCotizar = screen.getAllByRole('button', { name: /Solicitar cotización/i });
     await user.click(botonesCotizar[0]);
 
     expect(await screen.findByRole('heading', { name: /solicitud de cotización de evento/i })).toBeInTheDocument();

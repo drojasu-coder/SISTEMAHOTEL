@@ -1,11 +1,11 @@
 import { presignImageSchema, confirmImageSchema } from "../../validators/sucursales/sucursal.validator";
 import { Router } from "express";
 import * as controller from "../../controllers/bienestar/servicioSpa.controller";
-import { validateBody, validateParams } from "../../middlewares/validate.middleware";
+import { validateBody, validateParams, validateQuery } from "../../middlewares/validate.middleware";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { requireRole } from "../../middlewares/role.middleware";
 import { ROLES } from "../../constants/roles";
-import { createServicioSpaSchema, updateServicioSpaSchema } from "../../validators/bienestar/servicioSpa.validator";
+import { createServicioSpaSchema, listServiciosSpaQuerySchema, updateServicioSpaSchema } from "../../validators/bienestar/servicioSpa.validator";
 import { idParamSchema } from "../../validators/common.validator";
 
 const router = Router();
@@ -34,7 +34,7 @@ const router = Router();
  *                   items:
  *                     $ref: '#/components/schemas/ServicioBienestar'
  */
-router.get("/", controller.getAll);
+router.get("/", validateQuery(listServiciosSpaQuerySchema), controller.getAll);
 /**
  * @openapi
  * /api/servicios-spa/{id}:

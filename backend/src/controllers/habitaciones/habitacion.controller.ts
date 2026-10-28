@@ -5,15 +5,19 @@ import {
 } from "express";
 
 import * as habitacionService from "../../services/habitaciones/habitacion.service";
+import { getSedeScope, parseSucursalIdQuery } from "../../utils/sedeScope";
 
 export const getAllHabitaciones = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
     const habitaciones =
-      await habitacionService.getAllHabitaciones();
+      await habitacionService.getAllHabitaciones(
+        await getSedeScope(req.user!),
+        parseSucursalIdQuery(req.query.sucursal_id)
+      );
 
     res.status(200).json({
       success: true,
@@ -34,7 +38,8 @@ export const getHabitacionById = async (
   try {
     const habitacion =
       await habitacionService.getHabitacionById(
-        Number(req.params.id)
+        Number(req.params.id),
+        await getSedeScope(req.user!)
       );
 
     res.status(200).json({
@@ -56,7 +61,8 @@ export const createHabitacion = async (
   try {
     const habitacion =
       await habitacionService.createHabitacion(
-        req.body
+        req.body,
+        await getSedeScope(req.user!)
       );
 
     res.status(201).json({
@@ -79,7 +85,8 @@ export const updateHabitacion = async (
     const habitacion =
       await habitacionService.updateHabitacion(
         Number(req.params.id),
-        req.body
+        req.body,
+        await getSedeScope(req.user!)
       );
 
     res.status(200).json({
@@ -100,7 +107,8 @@ export const deleteHabitacion = async (
 ) => {
   try {
     await habitacionService.deleteHabitacion(
-      Number(req.params.id)
+      Number(req.params.id),
+      await getSedeScope(req.user!)
     );
 
     res.status(200).json({
@@ -144,7 +152,8 @@ export const presignImage = async (
     const result = await habitacionService.requestImageUpload(
       Number(req.params.id),
       req.user!.id,
-      req.body.contentType
+      req.body.contentType,
+      await getSedeScope(req.user!)
     );
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
@@ -162,7 +171,8 @@ export const confirmImage = async (
       Number(req.params.id),
       req.user!.id,
       req.body.uploadToken,
-      req.body.tempKey
+      req.body.tempKey,
+      await getSedeScope(req.user!)
     );
     res.status(200).json({ status: "success", data: habitacion });
   } catch (error) {
@@ -177,7 +187,8 @@ export const deleteImage = async (
 ) => {
   try {
     const habitacion = await habitacionService.removeImage(
-      Number(req.params.id)
+      Number(req.params.id),
+      await getSedeScope(req.user!)
     );
     res.status(200).json({ status: "success", data: habitacion });
   } catch (error) {

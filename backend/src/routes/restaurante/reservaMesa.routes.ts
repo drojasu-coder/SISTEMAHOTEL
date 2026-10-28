@@ -186,6 +186,14 @@ router.get(
  *     description: Operación administrativa disponible únicamente para administradores.
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sucursal_id
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Filtra por sede. Debe estar dentro de las sedes autorizadas del usuario (403 si no); un valor inválido devuelve 400.
  *     responses:
  *       200:
  *         description: Reservas obtenidas correctamente

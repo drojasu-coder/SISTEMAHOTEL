@@ -1,6 +1,6 @@
 import React from "react";
 import { Search, X } from "lucide-react";
-import { textosTiposHabitacion } from "../textos";
+import { useTiposHabitacionTexts } from "../textos";
 import type { TiposHabitacionFiltersState } from "../types";
 
 interface TiposHabitacionFiltersProps {
@@ -14,6 +14,7 @@ export const TiposHabitacionFilters: React.FC<TiposHabitacionFiltersProps> = ({
   onChange,
   totalResults,
 }) => {
+  const textosTiposHabitacion = useTiposHabitacionTexts();
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-neutro-200 bg-white p-4 shadow-soft">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

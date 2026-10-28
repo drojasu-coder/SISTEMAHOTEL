@@ -6,9 +6,31 @@ import type {
   ReservasMesaResponse,
   CreateReservaMesaInput,
   UpdateReservaMesaEstadoInput,
+  ProductoMenu,
+  Restaurante,
 } from "../types";
 
 export const restauranteApi = {
+  /**
+   * Restaurantes activos, uno por sede, con resumen de mesas.
+   * GET /api/restaurantes
+   */
+  getRestaurantes: async (): Promise<Restaurante[]> => {
+    const response = await api.get<{ status: string; data: Restaurante[] }>("/restaurantes");
+    return response.data;
+  },
+
+  /**
+   * Carta completa del restaurante; los productos no disponibles llegan marcados.
+   * GET /api/restaurantes/:id/menu?incluir_no_disponibles=true
+   */
+  getMenu: async (restauranteId: number): Promise<ProductoMenu[]> => {
+    const response = await api.get<{ status: string; data: ProductoMenu[] }>(
+      `/restaurantes/${restauranteId}/menu?incluir_no_disponibles=true`
+    );
+    return response.data;
+  },
+
   /**
    * Consulta pública de mesas del restaurante con su sucursal.
    * GET /api/mesas
@@ -49,8 +71,11 @@ export const restauranteApi = {
    * Consulta administrativa de todas las reservas de restaurante del hotel.
    * GET /api/reservas-mesa (exclusivo admin).
    */
-  getAdminReservas: async (): Promise<ReservaMesa[]> => {
-    const response = await api.get<ReservasMesaResponse>("/reservas-mesa");
+  getAdminReservas: async (sucursalId?: number): Promise<ReservaMesa[]> => {
+    // La sede se filtra en el servidor, dentro del alcance autorizado del usuario.
+    const response = await api.get<ReservasMesaResponse>("/reservas-mesa", {
+      params: { sucursal_id: sucursalId },
+    });
     return response.data;
   },
 

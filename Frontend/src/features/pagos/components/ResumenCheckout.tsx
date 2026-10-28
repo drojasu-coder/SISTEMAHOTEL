@@ -3,7 +3,8 @@ import { usePublicTexts } from '@/i18n/public';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import type { ResumenPagoData } from '../types';
-import { formatearGTQ } from '../textos';
+import { useLocale } from '@/i18n/LocaleContext';
+import { MONEY_PRESENTATION } from '@/lib/money';
 
 interface ResumenCheckoutProps {
   resumen: ResumenPagoData;
@@ -17,10 +18,12 @@ interface ResumenCheckoutProps {
 export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
   resumen,
   cantidadArticulos,
-}) => { const textosCheckout = usePublicTexts('checkout'); return (
+}) => { const { t } = useLocale(); const textosCheckout = usePublicTexts('checkout'); return (
   <Card className="flex flex-col gap-4 bg-bronce-50 lg:sticky lg:top-6">
     <div className="flex flex-col gap-1">
       <p className="eyebrow">{textosCheckout.resumen.titulo}</p>
+      <p className="rounded-lg border border-bronce-200 bg-white p-3 text-xs text-neutro-700">{t('currencyCharge').replace('{rate}', MONEY_PRESENTATION.gtqPerUsd.toFixed(2))}</p>
+      <p className="text-xs text-neutro-600">{t('finalPricesPolicy')}</p>
       <p className="text-xs text-neutro-600">
         {textosCheckout.articulos(cantidadArticulos)}
       </p>
@@ -40,7 +43,7 @@ export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
             {textosCheckout.resumen.anticipo}
           </dt>
           <dd className="font-semibold text-neutro-900">
-            {formatearGTQ(resumen.anticipo_requerido)}
+            <MoneyReference amount={resumen.anticipo_requerido} />
           </dd>
         </div>
       )}
@@ -50,7 +53,7 @@ export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
           {textosCheckout.resumen.aprobado}
         </dt>
         <dd className="font-semibold text-neutro-900">
-          {formatearGTQ(resumen.aprobado)}
+          <MoneyReference amount={resumen.aprobado} />
         </dd>
       </div>
 

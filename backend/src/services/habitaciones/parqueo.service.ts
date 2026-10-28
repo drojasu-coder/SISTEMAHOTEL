@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/AppError";
+import { SedeScope, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
 
 const db = require("../../models");
 const { Parqueo, Sucursal, ReservaParqueo } = db;
@@ -15,16 +16,23 @@ interface UpdateParqueoData {
   estado?: "disponible" | "ocupado" | "mantenimiento";
 }
 
-export const getAllParqueos = async () =>
-  await Parqueo.findAll({ order: [["id", "ASC"]] });
+/** Las operaciones reciben el alcance por sede del solicitante (ver utils/sedeScope). */
+const GLOBAL_SCOPE: SedeScope = { global: true };
 
-export const getParqueoById = async (id: number) => {
+export const getAllParqueos = async (scope: SedeScope = GLOBAL_SCOPE, sucursalId?: number) =>
+  await Parqueo.findAll({ where: sedeWhere(scope, sucursalId), order: [["id", "ASC"]] });
+
+const findParqueo = async (id: number, scope: SedeScope) => {
   const parqueo = await Parqueo.findByPk(id);
   if (!parqueo) {
     throw new AppError(404, "PARQUEO_NOT_FOUND", "El parqueo no fue encontrado");
   }
+  assertSedeAccess(scope, parqueo.sucursal_id);
   return parqueo;
 };
+
+export const getParqueoById = async (id: number, scope: SedeScope = GLOBAL_SCOPE) =>
+  findParqueo(id, scope);
 
 const validateSucursal = async (sucursalId: number) => {
   const sucursal = await Sucursal.findByPk(sucursalId);
@@ -50,19 +58,19 @@ const validateDuplicate = async (
   }
 };
 
-export const createParqueo = async (data: CreateParqueoData) => {
+export const createParqueo = async (data: CreateParqueoData, scope: SedeScope = GLOBAL_SCOPE) => {
+  assertSedeAccess(scope, data.sucursal_id);
   await validateSucursal(data.sucursal_id);
   await validateDuplicate(data.sucursal_id, data.numero);
   return await Parqueo.create(data);
 };
 
-export const updateParqueo = async (id: number, data: UpdateParqueoData) => {
-  const parqueo = await Parqueo.findByPk(id);
-  if (!parqueo) {
-    throw new AppError(404, "PARQUEO_NOT_FOUND", "El parqueo no fue encontrado");
-  }
+export const updateParqueo = async (id: number, data: UpdateParqueoData, scope: SedeScope = GLOBAL_SCOPE) => {
+  // Sede actual y sede de destino deben estar autorizadas.
+  const parqueo = await findParqueo(id, scope);
 
   if (data.sucursal_id !== undefined) {
+    assertSedeAccess(scope, data.sucursal_id);
     await validateSucursal(data.sucursal_id);
   }
   if (data.sucursal_id !== undefined || data.numero !== undefined) {
@@ -77,11 +85,8 @@ export const updateParqueo = async (id: number, data: UpdateParqueoData) => {
   return parqueo;
 };
 
-export const deleteParqueo = async (id: number) => {
-  const parqueo = await Parqueo.findByPk(id);
-  if (!parqueo) {
-    throw new AppError(404, "PARQUEO_NOT_FOUND", "El parqueo no fue encontrado");
-  }
+export const deleteParqueo = async (id: number, scope: SedeScope = GLOBAL_SCOPE) => {
+  const parqueo = await findParqueo(id, scope);
 
   const reservaParqueo = await ReservaParqueo.findOne({
     where: { parqueo_id: id },

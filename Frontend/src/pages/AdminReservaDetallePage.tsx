@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -9,6 +9,9 @@ import {
   Phone,
   User,
   Users,
+  CheckCircle2,
+  XCircle,
+  LogOut,
 } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -17,14 +20,19 @@ import { getApiErrorMessage } from '@/api/errors';
 import { ReservaEstadoBadge } from '@/features/mis-reservas/components/ReservaEstadoBadge';
 import {
   calcularNoches,
-  formatFechaCalendario,
   formatGTQ,
   parseReservaId,
   resolverNombreSede,
 } from '@/features/mis-reservas/formato';
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
-import { useAdminReservaDetalleQuery } from '@/features/reservas/admin/hooks/useAdminReservas';
-import { textosAdminReservas } from '@/features/reservas/admin/textos';
+import {
+  useAdminReservaDetalleQuery,
+  useUpdateAdminReservaMutation,
+  useCancelAdminReservaMutation,
+} from '@/features/reservas/admin/hooks/useAdminReservas';
+import { useTextosAdminReservas } from '@/features/reservas/admin/textos';
+import { useLocale } from '@/i18n/LocaleContext';
+import { formatAdminCalendarDate, formatAdminTimestamp } from '@/features/admin-core/adminDates';
 
 interface DatoFilaProps {
   etiqueta: string;
@@ -43,15 +51,49 @@ const DatoFila: React.FC<DatoFilaProps> = ({ etiqueta, children, icono: Icono })
 );
 
 export const AdminReservaDetallePage: React.FC = () => {
+  const textosAdminReservas = useTextosAdminReservas();
+  const { locale } = useLocale();
   const params = useParams();
   const rawId = params.id;
   const reservaId = parseReservaId(rawId);
 
   const reservaQuery = useAdminReservaDetalleQuery(reservaId);
   const sedesQuery = useSedesQuery();
+  const updateMutation = useUpdateAdminReservaMutation();
+  const cancelMutation = useCancelAdminReservaMutation();
+
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const reserva = reservaQuery.data;
   const sedes = sedesQuery.data ?? [];
+
+  const handleUpdateEstado = async (nuevoEstado: string, label: string) => {
+    if (!reservaId) return;
+    setActionError(null);
+    setActionFeedback(null);
+    try {
+      await updateMutation.mutateAsync({ id: reservaId, data: { estado: nuevoEstado } });
+      setActionFeedback(textosAdminReservas.acciones.estadoActualizado(label));
+      reservaQuery.refetch();
+    } catch (err: any) {
+      setActionError(getApiErrorMessage(err) || textosAdminReservas.acciones.errorActualizar);
+    }
+  };
+
+  const handleCancelar = async () => {
+    if (!reservaId) return;
+    if (!window.confirm(textosAdminReservas.acciones.preguntaCancelar)) return;
+    setActionError(null);
+    setActionFeedback(null);
+    try {
+      await cancelMutation.mutateAsync(reservaId);
+      setActionFeedback(textosAdminReservas.acciones.canceladaOk);
+      reservaQuery.refetch();
+    } catch (err: any) {
+      setActionError(getApiErrorMessage(err) || textosAdminReservas.acciones.errorCancelar);
+    }
+  };
 
   const sedesMap = useMemo(() => {
     const mapa = new Map<number, string>();
@@ -104,6 +146,37 @@ export const AdminReservaDetallePage: React.FC = () => {
         {reserva && <ReservaEstadoBadge estado={reserva.estado} />}
       </div>
 
+      {/* Alertas de acción */}
+      {actionFeedback && (
+        <Alert tone="success">
+          <div className="flex items-center justify-between gap-4">
+            <span>{actionFeedback}</span>
+            <button
+              type="button"
+              onClick={() => setActionFeedback(null)}
+              className="text-xs font-semibold underline hover:no-underline"
+            >
+              {textosAdminReservas.acciones.cerrar}
+            </button>
+          </div>
+        </Alert>
+      )}
+
+      {actionError && (
+        <Alert tone="error">
+          <div className="flex items-center justify-between gap-4">
+            <span>{actionError}</span>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              className="text-xs font-semibold underline hover:no-underline"
+            >
+              {textosAdminReservas.acciones.cerrar}
+            </button>
+          </div>
+        </Alert>
+      )}
+
       {/* Estados de carga y error */}
       {reservaQuery.isLoading && (
         <div className="flex justify-center py-16">
@@ -131,14 +204,59 @@ export const AdminReservaDetallePage: React.FC = () => {
       {!reservaQuery.isLoading && !reservaQuery.isError && reserva && (
         <div className="flex flex-col gap-6">
           {/* Encabezado del detalle */}
-          <div className="flex flex-col gap-1 border-b border-neutro-200 pb-4">
-            <p className="eyebrow">{textosAdminReservas.detalle.subtitulo}</p>
-            <h1 className="text-[2rem] leading-tight text-neutro-900 font-serif font-semibold">
-              {textosAdminReservas.detalle.reservaId(reserva.id)}
-            </h1>
-            <p className="text-xs text-neutro-500">
-              {textosAdminReservas.detalle.campos.fechaRegistro}: {formatFechaCalendario(reserva.createdAt)}
-            </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-neutro-200 pb-4">
+            <div className="flex flex-col gap-1">
+              <p className="eyebrow">{textosAdminReservas.detalle.subtitulo}</p>
+              <h1 className="text-[2rem] leading-tight text-neutro-900 font-serif font-semibold">
+                {textosAdminReservas.detalle.reservaId(reserva.id)}
+              </h1>
+              <p className="text-xs text-neutro-500">
+                {textosAdminReservas.detalle.campos.fechaRegistro}: {formatAdminTimestamp(reserva.createdAt, locale)}
+              </p>
+            </div>
+
+            {/* Barra de acciones operativas */}
+            <div className="flex flex-wrap items-center gap-2">
+              {reserva.estado === 'pendiente' && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  isLoading={updateMutation.isPending}
+                  onClick={() => handleUpdateEstado('confirmada', textosAdminReservas.estados.confirmada)}
+                >
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
+                  <span>{textosAdminReservas.acciones.confirmar}</span>
+                </Button>
+              )}
+
+              {reserva.estado === 'confirmada' && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  isLoading={updateMutation.isPending}
+                  onClick={() => handleUpdateEstado('finalizada', textosAdminReservas.acciones.etiquetaFinalizada)}
+                >
+                  <LogOut className="size-4" aria-hidden="true" />
+                  <span>{textosAdminReservas.acciones.finalizar}</span>
+                </Button>
+              )}
+
+              {reserva.estado !== 'cancelada' && reserva.estado !== 'finalizada' && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  isLoading={cancelMutation.isPending}
+                  onClick={handleCancelar}
+                  className="text-error-600 hover:bg-error-50 hover:text-error-700"
+                >
+                  <XCircle className="size-4" aria-hidden="true" />
+                  <span>{textosAdminReservas.acciones.cancelar}</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -188,7 +306,7 @@ export const AdminReservaDetallePage: React.FC = () => {
                   {textosAdminReservas.detalle.valores.formatoHuespedes(reserva.numero_huespedes)}
                 </DatoFila>
                 <DatoFila etiqueta={textosAdminReservas.detalle.campos.habitacionNumero}>
-                  {habitacion ? `Hab. ${habitacion.numero}` : textosAdminReservas.detalle.valores.sinHabitacion}
+                  {habitacion ? textosAdminReservas.detalle.valores.habitacion(habitacion.numero) : textosAdminReservas.detalle.valores.sinHabitacion}
                 </DatoFila>
                 <DatoFila etiqueta={textosAdminReservas.detalle.campos.habitacionTipo}>
                   {tipo?.nombre ?? textosAdminReservas.detalle.valores.sinTipo}
@@ -197,13 +315,13 @@ export const AdminReservaDetallePage: React.FC = () => {
                   etiqueta={textosAdminReservas.detalle.campos.fechaEntrada}
                   icono={Calendar}
                 >
-                  {formatFechaCalendario(reserva.fecha_entrada)}
+                  {formatAdminCalendarDate(reserva.fecha_entrada, locale)}
                 </DatoFila>
                 <DatoFila
                   etiqueta={textosAdminReservas.detalle.campos.fechaSalida}
                   icono={Calendar}
                 >
-                  {formatFechaCalendario(reserva.fecha_salida)}
+                  {formatAdminCalendarDate(reserva.fecha_salida, locale)}
                 </DatoFila>
                 {noches !== null && (
                   <div className="sm:col-span-2">
@@ -229,12 +347,25 @@ export const AdminReservaDetallePage: React.FC = () => {
                 {textosAdminReservas.detalle.campos.importeTotal}
               </p>
               <p className="font-serif text-[2.25rem] font-bold text-neutro-900 leading-tight">
-                {importe ?? 'Q0.00'}
+                {importe ?? textosAdminReservas.detalle.campos.importeNoDisponible}
               </p>
               <p className="text-xs text-neutro-600 mt-1">
                 {textosAdminReservas.detalle.campos.importeNota}
               </p>
             </div>
+            {formatGTQ(tipo?.tarifa_noche) && (
+              <div className="flex flex-col gap-1 border-t border-bronce-200/80 pt-3">
+                <p className="eyebrow text-neutro-600">
+                  {textosAdminReservas.detalle.campos.tarifaActual}
+                </p>
+                <p className="text-base font-semibold text-neutro-800">
+                  {formatGTQ(tipo?.tarifa_noche)} / noche
+                </p>
+                <p className="text-xs text-neutro-600">
+                  {textosAdminReservas.detalle.campos.tarifaActualNota}
+                </p>
+              </div>
+            )}
           </Card>
         </div>
       )}

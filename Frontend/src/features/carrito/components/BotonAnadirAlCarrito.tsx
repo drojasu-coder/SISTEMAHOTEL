@@ -121,7 +121,7 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
         <div className="flex flex-col gap-1.5 pt-1">
           <Alert tone={feedback.tono}>
             <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium">{publicInterface && feedback.tono === 'success' ? p('addedCart') : <span lang="es">{feedback.texto}</span>}</p>
+              <p className="text-xs font-medium">{publicInterface && feedback.publicKey ? p(feedback.publicKey) : <span lang="es">{feedback.texto}</span>}</p>
               {feedback.tono === 'success' && (
                 <p className="text-[0.6875rem] text-neutro-500">
                   {(publicInterface ? p('addedCartNote') : textosCarrito.anadirExitoNota)}

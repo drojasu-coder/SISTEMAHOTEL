@@ -4,6 +4,16 @@ import { Building2 } from 'lucide-react';
 import { LanguageSelector, useLocale } from '@/i18n/LocaleContext';
 import { usePublicPreferences } from './PublicPreferences';
 import { SiteSelector } from './SiteSelector';
+
+/** Portada decorativa: el nombre visible del botón ya identifica la sede. */
+const SiteCover: React.FC<{ src?: string | null }> = ({ src }) => {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (!src || failedSrc === src) {
+    return <span className="flex h-24 items-center justify-center bg-neutro-100"><Building2 aria-hidden="true" /></span>;
+  }
+  return <img src={src} alt="" loading="lazy" onError={() => setFailedSrc(src)} className="h-24 w-full object-cover" />;
+};
+
 /** Invitación no modal: no compite por foco con login, pago ni formularios. */
 export const FirstVisit: React.FC = () => {
   const { pathname } = useLocation();
@@ -26,12 +36,12 @@ export const FirstVisit: React.FC = () => {
         <div className="grid gap-3 sm:grid-cols-2"><SiteSelector /><LanguageSelector /></div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {sites.map((site) => <button type="button" key={site.id} onClick={() => choose(site.id)} className="overflow-hidden rounded-lg border bg-white text-left hover:border-bronce-600">
-            {site.imagen_url ? <img src={site.imagen_url} alt={site.nombre} className="h-24 w-full object-cover" /> : <span className="flex h-24 items-center justify-center bg-neutro-100"><Building2 aria-hidden="true" /></span>}
+            <SiteCover src={site.imagen_url} />
             <span lang="es" className="block p-3 text-xs"><strong className="block">{site.nombre}</strong>{site.ciudad}</span>
           </button>)}
         </div>
         {sites.filter((s) => s.imagen_url && s.imagen_creditos).map((s) => <p key={s.id} className="text-xs">
-          {t('photoCredit')}: {s.imagen_creditos.url ? <a className="underline" href={s.imagen_creditos.url} target="_blank" rel="noreferrer">{s.imagen_creditos.texto || s.imagen_creditos.autor} {s.imagen_creditos.licencia}</a> : s.imagen_creditos.texto || s.imagen_creditos.autor}
+          {t('photoCredit')} (<span lang="es">{s.nombre}</span>): {s.imagen_creditos.url ? <a className="underline" href={s.imagen_creditos.url} target="_blank" rel="noopener noreferrer">{s.imagen_creditos.texto || `${s.imagen_creditos.autor} ${s.imagen_creditos.licencia ?? ''}`.trim()}</a> : s.imagen_creditos.texto || s.imagen_creditos.autor}
         </p>)}
       </>}
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import { GuestLayout } from '@/layouts/GuestLayout';
 import { PublicSedesPage } from '@/pages/PublicSedesPage';
 import { PublicHabitacionesPage } from '@/pages/PublicHabitacionesPage';
@@ -11,6 +11,7 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { AccountPage } from '@/pages/AccountPage';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { AdminPage } from '@/pages/AdminPage';
+import { ReportesPage } from '@/features/reportes/ReportesPage';
 import { SedesPage } from '@/pages/SedesPage';
 import { BrandingPage } from '@/pages/BrandingPage';
 import { AdminInicioPage } from '@/pages/AdminInicioPage';
@@ -24,6 +25,9 @@ import { AdminDetalleReservaAmenidadPage } from '@/pages/AdminDetalleReservaAmen
 import { ParqueosPage } from '@/pages/ParqueosPage';
 import { AdminReservasPage } from '@/pages/AdminReservasPage';
 import { AdminReservaDetallePage } from '@/pages/AdminReservaDetallePage';
+import { FacturacionPage } from '@/pages/FacturacionPage';
+import { PagosAdminPage } from '@/pages/PagosAdminPage';
+import { PersonalPage } from '@/pages/PersonalPage';
 import { ModulePlaceholderPage } from '@/pages/ModulePlaceholderPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RESERVAS_ROUTES } from '@/features/reservas';
@@ -72,6 +76,11 @@ import { AdminReservasEventosPage } from '@/pages/AdminReservasEventosPage';
 import { AdminDetalleReservaEventoPage } from '@/pages/AdminDetalleReservaEventoPage';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
+
+export function LegacyReservaRedirect() {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: '/reservar', search, hash }} replace />;
+}
 
 export const AppRouter: React.FC = () => {
   return (
@@ -133,7 +142,13 @@ export const AppRouter: React.FC = () => {
 
           {/* Flujo de reservas de habitación del cliente */}
           <Route path={RESERVAS_ROUTES.NUEVA} element={<CrearReservaPage />} />
-          <Route path="/crear-reserva" element={<CrearReservaPage />} />
+          {/* Redirección de compatibilidad: /crear-reserva → /reservar preservando parámetros */}
+          <Route
+            path="/crear-reserva"
+            element={
+              <LegacyReservaRedirect />
+            }
+          />
           <Route path={RESERVAS_ROUTES.MIS_RESERVAS} element={<MisReservasPage />} />
           <Route path="/mis-reservas/:id" element={<DetalleReservaHabitacionPage />} />
 
@@ -146,12 +161,19 @@ export const AppRouter: React.FC = () => {
             <Route path="403" element={<ForbiddenPage />} />
             <Route path="*" element={<NotFoundPage />} />
             <Route index element={<AdminPage />} />
+            <Route path="reportes" element={<ReportesPage />} />
             {PANEL_MODULES.map((module) => (
               <Route key={module.id} element={<RequireAuth permission={module.permission} />}>
                 <Route
                   path={module.path.replace('/admin/', '')}
                   element={
-                    module.id === 'configuracion' ? (
+                    module.id === 'facturacion' ? (
+                      <FacturacionPage />
+                    ) : module.id === 'pagos' ? (
+                      <PagosAdminPage />
+                    ) : module.id === 'personal' ? (
+                      <PersonalPage />
+                    ) : module.id === 'configuracion' ? (
                       <SedesPage />
                     ) : module.id === 'habitaciones' ? (
                       <HabitacionesPage />
@@ -175,12 +197,12 @@ export const AppRouter: React.FC = () => {
             </Route>
 
             {/* Tipos de habitación */}
-            <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
+            <Route element={<RequireAuth permission="habitaciones.configurar" />}>
               <Route path="tipos-habitacion" element={<TiposHabitacionPage />} />
             </Route>
 
             {/* Reservas de Restaurante (Exclusivo Admin) */}
-            <Route element={<RequireAuth permission="configuracion.administrar" />}>
+            <Route element={<RequireAuth permission="restaurante.gestionar" />}>
               <Route path="reservas-restaurante" element={<AdminReservasRestaurantePage />} />
               <Route path="reservas-restaurante/:id" element={<AdminDetalleReservaRestaurantePage />} />
             </Route>
@@ -195,7 +217,7 @@ export const AppRouter: React.FC = () => {
             {/* Actividades Recreativas (Exclusivo Admin) */}
             <Route element={<RequireAuth permission="servicios.administrar" />}>
               <Route path="recursos-actividad" element={<AdminRecursosActividadPage />} />
-              <Route path="instructores" element={<AdminInstructoresPage />} />
+              <Route element={<RequireAuth permission="configuracion.administrar" />}><Route path="instructores" element={<AdminInstructoresPage />} /></Route>
               <Route path="reservas-actividades" element={<AdminReservasActividadesPage />} />
               <Route path="reservas-actividades/:id" element={<AdminDetalleReservaActividadPage />} />
             </Route>
@@ -211,18 +233,18 @@ export const AppRouter: React.FC = () => {
             {/* Eventos y Salones (Exclusivo Admin) */}
             <Route element={<RequireAuth permission="servicios.administrar" />}>
               <Route path="salones" element={<AdminSalonesPage />} />
-              <Route path="servicios-evento" element={<AdminServiciosEventoPage />} />
+              <Route element={<RequireAuth permission="configuracion.administrar" />}><Route path="servicios-evento" element={<AdminServiciosEventoPage />} /></Route>
               <Route path="reservas-evento" element={<AdminReservasEventosPage />} />
               <Route path="reservas-evento/:id" element={<AdminDetalleReservaEventoPage />} />
             </Route>
 
             {/* Espacios de parqueo */}
-            <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
+            <Route element={<RequireAuth permission="reservas.gestionar" />}>
               <Route path="parqueos" element={<ParqueosPage />} />
             </Route>
 
             {/* Consulta administrativa de reservas de habitación */}
-            <Route element={<RequireAuth permission="habitaciones.gestionar" />}>
+            <Route element={<RequireAuth permission="reservas.gestionar" />}>
               <Route path="reservas" element={<AdminReservasPage />} />
               <Route path="reservas/:id" element={<AdminReservaDetallePage />} />
             </Route>

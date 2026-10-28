@@ -13,12 +13,14 @@ interface CreateAmenidadData {
   nombre: string;
   aforo_maximo: number;
   imagen_key?: string | null;
+  reservable?: boolean;
 }
 
 interface UpdateAmenidadData {
   nombre?: string;
   aforo_maximo?: number;
   imagen_key?: string | null;
+  reservable?: boolean;
 }
 
 export async function serializeAmenidad(amenidad: any): Promise<any> {
@@ -31,8 +33,9 @@ export async function serializeAmenidad(amenidad: any): Promise<any> {
   return plain;
 }
 
-export const getAll = async () => {
+export const getAll = async (where: Record<string | symbol, unknown> = {}) => {
   const amenidades = await Amenidad.findAll({
+    where,
     include: [{ model: Sucursal, attributes: ['id', 'nombre'] }],
     order: [["nombre", "ASC"]],
   });

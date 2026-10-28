@@ -9,7 +9,9 @@ import {
   useAdminReservaMesaDetalleQuery,
   useUpdateEstadoReservaMesaMutation,
 } from "../hooks/useReservasMesa";
-import { textosRestaurante } from "../textos";
+import { useTextosAdminRestaurante } from "../adminTextos";
+import { useLocale } from "@/i18n/LocaleContext";
+import { formatAdminCalendarDate, formatAdminTimeOfDay, formatAdminTimestamp } from "@/features/admin-core/adminDates";
 import { RESTAURANTE_ROUTES } from "../constants/routes";
 import { ApiError } from "@/api/client/http";
 import {
@@ -25,14 +27,16 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import { estadoReservaMesa } from "../estadoReservaMesa";
 
 export const AdminDetalleReservaRestaurante: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const numericId = id ? parseInt(id, 10) : NaN;
   const { status, user } = useAuth();
-  const t = textosRestaurante.adminReservas;
+  const t = useTextosAdminRestaurante();
+  const { locale } = useLocale();
 
-  const isAdmin = status === "authenticated" && user?.rol === "admin";
+  const isAdmin = status === "authenticated" && (user?.rol === "admin" || user?.rol === "gerente_habitaciones");
   const reservaQuery = useAdminReservaMesaDetalleQuery(numericId, user?.id, isAdmin);
   const reserva = reservaQuery.data;
 
@@ -53,9 +57,9 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
       <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-10 sm:px-6">
         <Card className="flex flex-col items-center justify-center p-12 text-center border-rojo-200 bg-rojo-50">
           <AlertCircle className="size-12 text-rojo-500 mb-4" aria-hidden="true" />
-          <h1 className="text-xl font-bold text-neutro-900 mb-2">Identificador inválido</h1>
+          <h1 className="text-xl font-bold text-neutro-900 mb-2">{t.idInvalidoTitulo}</h1>
           <p className="text-sm text-neutro-600 mb-6">
-            El identificador proporcionado para la reserva administrativa no es válido.
+            {t.idInvalidoDesc}
           </p>
           <Link
             to={RESTAURANTE_ROUTES.ADMIN_RESERVAS}
@@ -158,7 +162,7 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
           <AlertCircle className="size-12 text-rojo-500 mb-4" aria-hidden="true" />
           <h1 className="text-xl font-bold text-neutro-900 mb-2">{t.errorCargar}</h1>
           <p className="text-sm text-neutro-600 max-w-md mb-6">
-            No fue posible cargar el detalle de la reserva solicitada.
+            {t.errorCargarDetalle}
           </p>
           <div className="flex gap-4">
             <Button type="button" variant="secondary" onClick={() => reservaQuery.refetch()}>
@@ -187,13 +191,9 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
               <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${
-                  reserva.estado === "cancelada"
-                    ? "bg-error-50 text-error-700 border-error-600/20"
-                    : "bg-exito-50 text-exito-700 border-exito-600/20"
-                }`}
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${estadoReservaMesa(reserva.estado, t.estados).className}`}
               >
-                {reserva.estado === "cancelada" ? "Cancelada" : "Confirmada"}
+                {estadoReservaMesa(reserva.estado, t.estados).label}
               </span>
 
               {reserva.estado === "confirmada" ? (
@@ -206,7 +206,7 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
                   <XCircle className="size-4 mr-1.5" aria-hidden="true" />
                   <span>{t.cancelarReserva}</span>
                 </Button>
-              ) : (
+              ) : reserva.estado === "cancelada" ? (
                 <Button
                   type="button"
                   variant="primary"
@@ -215,7 +215,7 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
                   <CheckCircle2 className="size-4 mr-1.5" aria-hidden="true" />
                   <span>{t.reactivarReserva}</span>
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -227,44 +227,43 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
               </span>
               <p className="text-base font-bold text-neutro-900 flex items-center gap-1.5">
                 <User className="size-4 text-bronce-600 shrink-0" aria-hidden="true" />
-                <span>{reserva.Usuario?.nombre || "Cliente"}</span>
+                <span>{reserva.Usuario?.nombre || t.clienteSinNombre}</span>
               </p>
               <p className="text-xs text-neutro-600 flex items-center gap-1.5 pl-5">
                 <Mail className="size-3.5 text-neutro-400 shrink-0" aria-hidden="true" />
-                <span>{reserva.Usuario?.email || `ID Usuario: ${reserva.usuario_id}`}</span>
+                <span>{reserva.Usuario?.email || t.usuarioId(reserva.usuario_id)}</span>
               </p>
             </div>
 
             <div className="rounded-lg bg-neutro-50 p-4 border border-neutro-200 space-y-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-neutro-500">
-                {t.colSede} y {t.colMesa}
+                {t.sedeYMesa}
               </span>
               <p className="text-base font-bold text-neutro-900 flex items-center gap-1.5">
                 <MapPin className="size-4 text-bronce-600 shrink-0" aria-hidden="true" />
                 <span>
-                  {reserva.Mesa?.Sucursal?.nombre || `Sede #${reserva.Mesa?.sucursal_id ?? ""}`}
+                  {reserva.Mesa?.Sucursal?.nombre || t.sedeId(reserva.Mesa?.sucursal_id ?? "")}
                 </span>
               </p>
               <p className="text-xs text-neutro-600 flex items-center gap-1.5 pl-5">
                 <UtensilsCrossed className="size-3.5 text-neutro-400 shrink-0" aria-hidden="true" />
                 <span>
-                  Mesa #{reserva.mesa_id} — {reserva.Mesa?.zona || "Salón"} (Aforo:{" "}
-                  {reserva.Mesa?.capacidad || 4} comensales)
+                  {t.mesa(reserva.mesa_id)} — {reserva.Mesa?.zona || t.zonaNoRegistrada} ({t.aforo(reserva.Mesa?.capacidad)})
                 </span>
               </p>
             </div>
 
             <div className="rounded-lg bg-neutro-50 p-4 border border-neutro-200 space-y-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-neutro-500">
-                {t.colFecha} y {t.colHorario}
+                {t.fechaYHorario}
               </span>
               <p className="text-base font-bold text-neutro-900 flex items-center gap-1.5">
                 <Calendar className="size-4 text-bronce-600 shrink-0" aria-hidden="true" />
-                <span>{reserva.fecha}</span>
+                <span>{formatAdminCalendarDate(reserva.fecha, locale)}</span>
               </p>
               <p className="text-xs text-neutro-600 flex items-center gap-1.5 pl-5">
                 <Clock className="size-3.5 text-neutro-400 shrink-0" aria-hidden="true" />
-                <span>{reserva.hora} hrs</span>
+                <span>{formatAdminTimeOfDay(reserva.hora, locale)}</span>
               </p>
             </div>
 
@@ -275,12 +274,12 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
               <p className="text-base font-bold text-neutro-900 flex items-center gap-1.5">
                 <Users className="size-4 text-bronce-600 shrink-0" aria-hidden="true" />
                 <span>
-                  {textosRestaurante.capacidadPersonas(reserva.numero_comensales)}
+                  {t.personas(reserva.numero_comensales)}
                 </span>
               </p>
               {reserva.createdAt && (
                 <p className="text-xs text-neutro-500 pl-5">
-                  Registrada el {new Date(reserva.createdAt).toLocaleDateString()}
+                  {t.registradaEl(formatAdminTimestamp(reserva.createdAt, locale))}
                 </p>
               )}
             </div>
@@ -325,11 +324,11 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
                 {reserva.Usuario?.nombre}
               </p>
               <p>
-                <span className="font-semibold">{t.colMesa}:</span> Mesa #{reserva.mesa_id}
+                <span className="font-semibold">{t.colMesa}:</span> {t.mesa(reserva.mesa_id)}
               </p>
               <p>
-                <span className="font-semibold">{t.colFecha} y {t.colHorario}:</span>{" "}
-                {reserva.fecha} a las {reserva.hora} hrs
+                <span className="font-semibold">{t.fechaYHorario}:</span>{" "}
+                {t.fechaHora(formatAdminCalendarDate(reserva.fecha, locale), formatAdminTimeOfDay(reserva.hora, locale))}
               </p>
             </div>
           )}

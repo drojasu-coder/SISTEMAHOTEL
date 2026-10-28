@@ -6,6 +6,7 @@ import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/features/auth/AuthContext";
 import { hasPermission } from "@/features/auth/permissions";
+import { useAdminScope } from "@/features/admin-core/AdminScopeContext";
 import { es } from "@/i18n/es";
 import { useSedesQuery } from "@/features/sedes/hooks/useSedes";
 import { useParqueosQuery } from "@/features/parqueos/hooks/useParqueos";
@@ -18,6 +19,7 @@ import { getApiErrorMessage } from "@/api/errors";
 
 export const ParqueosPage: React.FC = () => {
   const { user } = useAuth();
+  const { selectedSedeId } = useAdminScope();
   // El backend exige admin, recepcionista o gerente_habitaciones para crear y
   // editar parqueos; la lectura solo exige sesión iniciada.
   const canManageParqueos = user
@@ -29,9 +31,19 @@ export const ParqueosPage: React.FC = () => {
 
   const [filters, setFilters] = useState<ParqueosFiltersState>({
     search: "",
-    sucursalId: "all",
+    sucursalId: selectedSedeId ?? "all",
     estado: "all",
   });
+
+  React.useEffect(() => {
+    if (selectedSedeId !== undefined) {
+      setFilters((prev) => ({
+        ...prev,
+        sucursalId: selectedSedeId,
+      }));
+    }
+  }, [selectedSedeId]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedParqueo, setSelectedParqueo] = useState<Parqueo | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);

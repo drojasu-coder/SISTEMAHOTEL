@@ -79,9 +79,11 @@ export const reservasApi = {
    * Para roles administrativos (admin, recepcionista, gerente_habitaciones),
    * el backend no restringe por usuario_id y retorna el catálogo completo con relaciones.
    */
-  getAllAdmin: async (): Promise<ReservaHabitacion[]> => {
+  getAllAdmin: async (sucursalId?: number): Promise<ReservaHabitacion[]> => {
+    // La sede se filtra en el servidor, dentro del alcance autorizado del usuario.
     const response = await api.get<ReservasHabitacionResponse>(
-      '/reservas-habitacion'
+      '/reservas-habitacion',
+      { params: { sucursal_id: sucursalId } }
     );
     return response.data;
   },
@@ -98,5 +100,28 @@ export const reservasApi = {
       `/reservas-habitacion/${id}`
     );
     return response.data;
+  },
+
+  /**
+   * Actualiza el estado u otros campos de una reserva (operación administrativa).
+   * Endpoint: PATCH /api/reservas-habitacion/:id.
+   */
+  updateAdmin: async (
+    id: number,
+    data: { estado?: string; habitacion_id?: number; fecha_entrada?: string; fecha_salida?: string; numero_huespedes?: number }
+  ): Promise<ReservaHabitacion> => {
+    const response = await api.patch<ReservaHabitacionResponse>(
+      `/reservas-habitacion/${id}`,
+      data
+    );
+    return response.data;
+  },
+
+  /**
+   * Cancela lógicamente una reserva de habitación.
+   * Endpoint: DELETE /api/reservas-habitacion/:id.
+   */
+  cancelAdmin: async (id: number): Promise<void> => {
+    await api.delete(`/reservas-habitacion/${id}`);
   },
 };

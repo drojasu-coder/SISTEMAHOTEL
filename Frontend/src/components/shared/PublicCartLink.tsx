@@ -12,7 +12,7 @@ export const PublicCartLink: React.FC = () => {
   const cart = useCarritoActualQuery(clientId);
   const items = useCarritoItemsQuery(cart.isSuccess ? cart.data?.id : undefined, clientId);
   if (!clientId) return null;
-  const empty = esErrorHttp(cart.error, 404) && (cart.error as { code?: string }).code === 'CART_NOT_FOUND';
+  const empty = esErrorHttp(cart.error, 404) && ['ACTIVE_CART_NOT_FOUND', 'CART_NOT_FOUND'].includes((cart.error as { code?: string }).code ?? '');
   const malformed = items.isSuccess && !Array.isArray(items.data?.items);
   const error = (!empty && cart.isError) || items.isError || malformed;
   const loading = !error && !empty && (cart.isPending || items.isPending);

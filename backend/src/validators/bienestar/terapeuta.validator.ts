@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+const sucursalId = z.number().int().positive("La sucursal debe ser válida").nullable();
+
+export const listTerapeutasQuerySchema = z
+  .object({
+    sucursal_id: z.coerce.number().int().positive().optional(),
+  })
+  .strict();
+
 export const createTerapeutaSchema = z
   .object({
     nombre: z
@@ -14,6 +22,8 @@ export const createTerapeutaSchema = z
     activo: z
       .boolean()
       .optional(),
+
+    sucursal_id: sucursalId.optional(),
   })
   .strict();
 
@@ -29,6 +39,8 @@ export const updateTerapeutaSchema = z
     activo: z
       .boolean()
       .optional(),
+
+    sucursal_id: sucursalId.optional(),
   })
   .strict()
   .refine(

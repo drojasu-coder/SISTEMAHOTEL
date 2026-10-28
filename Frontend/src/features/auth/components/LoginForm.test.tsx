@@ -4,10 +4,12 @@ import userEvent from '@testing-library/user-event';
 import App from '@/App';
 import { tokenStorage } from '@/api/session';
 import { errorResponse, loginResponse } from '@/test/renderWithProviders';
+import { installAdminReadMocks } from '@/test/adminReads';
 
 /** Pruebas de integración de interfaz con la aplicación completa y `fetch` simulado. */
 
-function openLogin(state?: unknown) {
+function openLogin(state?: unknown, role = 'admin') {
+  installAdminReadMocks(role);
   // React Router guarda el estado de navegación bajo `usr` en window.history.state.
   window.history.replaceState(state ? { usr: state, key: 'prueba', idx: 0 } : null, '', '/login');
   render(<App />);
@@ -23,6 +25,7 @@ async function fillAndSubmit(email: string, password: string) {
 describe('Inicio de sesión (fetch simulado)', () => {
   beforeEach(() => {
     tokenStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -83,7 +86,7 @@ describe('Inicio de sesión (fetch simulado)', () => {
       ['gerente_restaurante', /Bienvenido, Persona Prueba/i],
     ])('%s entra al panel', async (rol, heading) => {
       global.fetch = vi.fn().mockResolvedValue(loginResponse(rol));
-      openLogin();
+      openLogin(undefined, rol);
       await fillAndSubmit('persona@ejemplo.com', 'Clave1234');
       expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
       expect(window.location.pathname).toBe('/admin');

@@ -55,6 +55,13 @@ export const getById = async (req: Request, res: Response, next: NextFunction) =
   } catch (error) { next(error); }
 };
 
+export const verificar = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const pago = await pagoService.verifyPago(Number(req.params.id), req.user!);
+    res.status(200).json({ success: true, statusCode: 200, message: "Estado del pago verificado", data: pago });
+  } catch (error) { next(error); }
+};
+
 export const getAll = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pagos = await pagoService.getPagos(req.query as Record<string, string>, req.user!);

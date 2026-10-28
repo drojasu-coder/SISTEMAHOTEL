@@ -6,6 +6,7 @@ import { reservationFinancialExposure } from "../pago.service";
 
 import { ROLES, Role } from "../../constants/roles";
 import { env } from "../../config/env";
+import { SedeScope, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
 
 
 
@@ -1006,11 +1007,10 @@ export const calculateTotal = (
  */
 
 export const getAllReservaHabitaciones =
-
   async (
-
-    requester?: RequesterContext
-
+    requester?: RequesterContext,
+    scope?: SedeScope,
+    sucursalId?: number
   ) => {
 
     const where:
@@ -1038,9 +1038,25 @@ export const getAllReservaHabitaciones =
     ) {
 
       where.usuario_id =
-
         requester.id;
-
+      /**
+       * Filtro de visualización sobre las propias.
+       */
+      if (sucursalId !== undefined) {
+        where["$Habitacion.sucursal_id$"] = sucursalId;
+      }
+    } else if (scope) {
+      /**
+       * Personal administrativo: solo reservas de
+       * habitaciones de sus sedes autorizadas; la
+       * sede pedida debe estar dentro del alcance.
+       */
+      Object.assign(
+        where,
+        sedeWhere(scope, sucursalId ?? null, "$Habitacion.sucursal_id$")
+      );
+    } else if (sucursalId !== undefined) {
+      where["$Habitacion.sucursal_id$"] = sucursalId;
     }
 
 
@@ -1076,9 +1092,8 @@ export const getReservaHabitacionById =
   async (
 
     id: number,
-
-    requester?: RequesterContext
-
+    requester?: RequesterContext,
+    scope?: SedeScope
   ) => {
 
     const reservaHabitacion =
@@ -1142,11 +1157,13 @@ export const getReservaHabitacionById =
           "INSUFFICIENT_PERMISSIONS",
 
           "No tiene permisos para acceder a esta reserva de habitación"
-
         );
-
       }
-
+    } else if (scope) {
+      assertSedeAccess(
+        scope,
+        reservaHabitacion.Habitacion?.sucursal_id
+      );
     }
 
 
@@ -1172,9 +1189,8 @@ export const createReservaHabitacion =
   async (
 
     data:
-
-      CreateReservaHabitacionData
-
+      CreateReservaHabitacionData,
+    scope?: SedeScope
   ) => {
 
     /**
@@ -1226,12 +1242,15 @@ export const createReservaHabitacion =
             data.usuario_id,
 
             data.habitacion_id,
-
             transaction
-
           );
 
-
+        if (scope) {
+          assertSedeAccess(
+            scope,
+            habitacion.sucursal_id
+          );
+        }
 
         validateHabitacionReservable(
 
@@ -1357,16 +1376,31 @@ export const createReservaHabitacion =
 
  */
 
+/**
+ * Sede de la habitación actual de una reserva. Lectura sin bloqueo para no
+ * alterar el orden de locks Reserva -> Habitación destino.
+ */
+const assertReservaEnAlcance = async (
+  reservaHabitacion: any,
+  scope: SedeScope | undefined,
+  transaction: any
+) => {
+  if (!scope || scope.global) return;
+  const habitacionActual = await Habitacion.findByPk(
+    reservaHabitacion.habitacion_id,
+    { attributes: ["id", "sucursal_id"], transaction }
+  );
+  assertSedeAccess(scope, habitacionActual?.sucursal_id);
+};
+
 export const updateReservaHabitacion =
 
   async (
 
     id: number,
-
     data:
-
-      UpdateReservaHabitacionData
-
+      UpdateReservaHabitacionData,
+    scope?: SedeScope
   ) => sequelize.transaction(async (
 
     transaction: any
@@ -1413,8 +1447,13 @@ export const updateReservaHabitacion =
 
 
 
-    /**
+    await assertReservaEnAlcance(
+      reservaHabitacion,
+      scope,
+      transaction
+    );
 
+    /**
      * Calculamos cómo quedaría finalmente
 
      * la reserva después del PATCH.
@@ -1646,14 +1685,21 @@ export const updateReservaHabitacion =
       } =
 
         await validateLockedReferences(
-
           usuarioId,
-
           habitacionId,
-
           transaction
-
         );
+
+      /**
+       * La habitación de destino también debe pertenecer
+       * a una sede autorizada.
+       */
+      if (scope) {
+        assertSedeAccess(
+          scope,
+          habitacion.sucursal_id
+        );
+      }
 
 
 
@@ -1958,8 +2004,7 @@ export const updateReservaHabitacion =
  */
 
 export const deleteReservaHabitacion =
-
-  async (id: number) => sequelize.transaction(async (
+  async (id: number, scope?: SedeScope) => sequelize.transaction(async (
 
     transaction: any
 
@@ -2004,6 +2049,12 @@ export const deleteReservaHabitacion =
     }
 
 
+
+    await assertReservaEnAlcance(
+      reservaHabitacion,
+      scope,
+      transaction
+    );
 
     await reservationExposureWithoutProcessing(
 

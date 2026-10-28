@@ -43,11 +43,11 @@ describe('Compra 3C: datos autorizados y acciones explícitas', () => {
     mount();
     expect(await screen.findByText('Sede verificable')).toBeInTheDocument();
     expect(await screen.findByText('Evento reservado')).toBeInTheDocument();
-    expect(screen.getByText(/Q 900.00 · ≈ US\$ 115.38/)).toBeInTheDocument();
+    expect(screen.getByText(/Q900\.00/)).toBeInTheDocument();
     expect(screen.queryByText(/9999/)).not.toBeInTheDocument();
     expect(reservasApi.getDisponibilidad).not.toHaveBeenCalled();
     expect(pagosApi.create).not.toHaveBeenCalled(); expect(carritoApi.create).not.toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: 'Nueva búsqueda con estas fechas' })).toHaveAttribute('href', expect.stringContaining('/habitaciones?'));
+    expect(screen.getByRole('link', { name: 'Nueva búsqueda con estas fechas' })).toHaveAttribute('href', '/reservar?fecha_entrada=2030-01-01&fecha_salida=2030-01-03&numero_huespedes=2&sucursal_id=1');
     expect(screen.getByText(/no modifica ni cancela su reserva actual/)).toBeInTheDocument();
   });
   it.each(['processing', 'sin_identificador', 'unknown', 'network'])('bloquea retiradas ante intento %s o consulta incierta sin generar otro', async (kind) => {

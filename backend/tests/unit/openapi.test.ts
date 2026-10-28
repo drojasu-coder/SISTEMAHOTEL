@@ -83,8 +83,26 @@ describe("generated OpenAPI contract", () => {
       0,
     );
 
-    expect(Object.keys(paths)).toHaveLength(110);
-    expect(operations).toBe(202);
+    // Incluye los contratos públicos/comerciales ya integrados y la verificación de pago.
+    // El reporte administrativo añade una ruta GET con tres formatos de salida.
+    // GET /api/admin/alcance: sedes autorizadas para el selector global del panel.
+    expect(Object.keys(paths)).toHaveLength(124);
+    expect(operations).toBe(217);
+    const scope = (swaggerSpec.paths as Record<string, any>)["/api/admin/alcance"].get;
+    expect(scope.security).toEqual([{ bearerAuth: [] }]);
+    const report = (swaggerSpec.paths as Record<string, any>)["/api/reportes/reservas-habitaciones"].get;
+    expect(report.security).toEqual([{ bearerAuth: [] }]);
+    expect(Object.keys(report.responses["200"].content)).toEqual([
+      "application/json", "application/pdf",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]);
+  });
+  it("documents explicit payment verification without writable payment fields", () => {
+    const operation = (swaggerSpec.paths as Record<string, any>)["/api/pagos/{id}/verificar"].post;
+    expect(operation.security).toEqual([{ bearerAuth: [] }]);
+    expect(operation.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+    expect(operation.responses["200"].content["application/json"].schema.$ref).toBe("#/components/schemas/PagoResponse");
+    for (const status of ["401", "404", "409", "502"]) expect(operation.responses[status]).toBeDefined();
   });
   it("contains complete reservas and disponibilidad schemas and contract responses (BE-011, BE-012)", () => {
     const paths = swaggerSpec.paths as Record<string, Record<string, any>>;

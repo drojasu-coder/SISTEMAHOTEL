@@ -3,7 +3,7 @@ import request from "supertest";
 import app from "../../src/app";
 import { ROLES } from "../../src/constants/roles";
 import { createAuthenticatedUser } from "../helpers/auth";
-import { createHotelFixture } from "../fixtures/hotel";
+import { assignEmpleadoSede, createHotelFixture } from "../fixtures/hotel";
 
 describe("Consulta administrativa de reservas de habitación (control de acceso y aislamiento)", () => {
   it("coincidencia de roles: admin, recepcionista y gerente_habitaciones pueden listar y consultar cualquier reserva; cliente solo la suya", async () => {
@@ -44,6 +44,8 @@ describe("Consulta administrativa de reservas de habitación (control de acceso 
 
     for (const rol of rolesAdministrativos) {
       const staffUser = await createAuthenticatedUser({ rol });
+      // El personal (no admin) consulta reservas de su sede asignada.
+      if (rol !== ROLES.ADMIN) await assignEmpleadoSede(staffUser.usuario.id, hotel.sucursal.id);
 
       // Listado administrativo: debe incluir la reserva del clienteA
       const listRes = await request(app)

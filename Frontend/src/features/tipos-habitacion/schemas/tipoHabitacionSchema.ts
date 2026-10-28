@@ -10,88 +10,38 @@ export const mensajesTipoHabitacion = {
   tarifaFormato: "La tarifa debe ser un número válido con hasta dos decimales (ej. 150.00)",
   tarifaNegativa: "La tarifa no puede ser negativa, debe ser mayor o igual a cero",
   descripcionLarga: "La descripción no puede superar 500 caracteres",
+  sede: "Seleccione una sede autorizada o una categoría general",
 };
-
-/**
- * Esquema de validación del formulario de tipo de habitación.
- *
- * En los campos numéricos, se valida explícitamente el valor antes de cualquier
- * conversión numérica: una tarifa vacía NO se convierte automáticamente a 0
- * y genera un error de validación.
- *
- * El valor 0 introducido de forma explícita ("0" o "0.00") es completamente
- * válido según el contrato de backend (moneySchema: value >= 0).
- */
-export const tipoHabitacionFormSchema = z.object({
-  nombre: z
-    .string({ required_error: mensajesTipoHabitacion.nombreVacio })
-    .trim()
-    .min(1, mensajesTipoHabitacion.nombreVacio)
-    .max(50, mensajesTipoHabitacion.nombreLargo),
-
-  capacidad_maxima: z
-    .string({ required_error: mensajesTipoHabitacion.capacidadVacia })
-    .trim()
-    .min(1, mensajesTipoHabitacion.capacidadVacia)
-    .refine(
-      (val) => /^\d+$/.test(val) && Number(val) > 0,
-      mensajesTipoHabitacion.capacidadInvalida
-    ),
-
-  tarifa_noche: z
-    .string({ required_error: mensajesTipoHabitacion.tarifaVacia })
-    .trim()
-    .min(1, mensajesTipoHabitacion.tarifaVacia)
-    .refine(
-      (val) => /^\d+(\.\d{1,2})?$/.test(val),
-      mensajesTipoHabitacion.tarifaFormato
-    )
-    .refine(
-      (val) => Number(val) >= 0,
-      mensajesTipoHabitacion.tarifaNegativa
-    ),
-
-  descripcion: z
-    .string()
-    .trim()
-    .max(500, mensajesTipoHabitacion.descripcionLarga)
-    .optional()
-    .or(z.literal("")),
-});
-
+const english: typeof mensajesTipoHabitacion = {
+  nombreVacio: "Room type name is required", nombreLargo: "Name cannot exceed 50 characters",
+  capacidadVacia: "Maximum capacity is required", capacidadInvalida: "Capacity must be a positive whole number",
+  tarifaVacia: "Nightly rate is required", tarifaFormato: "Enter a valid rate with up to two decimal places",
+  tarifaNegativa: "The rate must be zero or greater", descripcionLarga: "Description cannot exceed 500 characters",
+  sede: "Select an authorized site or a general category",
+};
+export function createTipoHabitacionFormSchema(locale: 'es' | 'en' = 'es') {
+  const message = locale === 'en' ? english : mensajesTipoHabitacion;
+  return z.object({
+    sucursal_id: z.string().min(1, message.sede).refine(value =>
+      value === "general" || (/^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) <= 2147483647), message.sede),
+    nombre: z.string().trim().min(1, message.nombreVacio).max(50, message.nombreLargo),
+    capacidad_maxima: z.string().trim().min(1, message.capacidadVacia).refine(value =>
+      /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0, message.capacidadInvalida),
+    // Empty is invalid; an explicit zero remains valid under the backend contract.
+    tarifa_noche: z.string().trim().min(1, message.tarifaVacia)
+      .refine(value => /^\d+(\.\d{1,2})?$/.test(value) && Number.isFinite(Number(value)), message.tarifaFormato)
+      .refine(value => Number(value) >= 0, message.tarifaNegativa),
+    descripcion: z.string().trim().max(500, message.descripcionLarga).optional().or(z.literal("")),
+  });
+}
+export const tipoHabitacionFormSchema = createTipoHabitacionFormSchema();
 export type TipoHabitacionFormData = z.infer<typeof tipoHabitacionFormSchema>;
-
-export const CAMPOS_TIPO_HABITACION = [
-  "nombre",
-  "capacidad_maxima",
-  "tarifa_noche",
-  "descripcion",
-] as const;
-
-/**
- * Normaliza y convierte los valores válidos del formulario para el payload de creación.
- */
-export function sanitizeCreateTipoHabitacion(
-  values: TipoHabitacionFormData
-): CreateTipoHabitacionInput {
+export const CAMPOS_TIPO_HABITACION = ["sucursal_id", "nombre", "capacidad_maxima", "tarifa_noche", "descripcion"] as const;
+export function sanitizeCreateTipoHabitacion(values: TipoHabitacionFormData): CreateTipoHabitacionInput {
   return {
-    nombre: values.nombre.trim(),
-    capacidad_maxima: Number(values.capacidad_maxima),
-    tarifa_noche: Number(values.tarifa_noche),
+    sucursal_id: values.sucursal_id === "general" ? null : Number(values.sucursal_id),
+    nombre: values.nombre.trim(), capacidad_maxima: Number(values.capacidad_maxima), tarifa_noche: Number(values.tarifa_noche),
     descripcion: values.descripcion?.trim() ? values.descripcion.trim() : null,
   };
 }
-
-/**
- * Normaliza y convierte los valores válidos para el payload de actualización parcial.
- */
-export function sanitizeUpdateTipoHabitacion(
-  values: TipoHabitacionFormData
-): UpdateTipoHabitacionInput {
-  return {
-    nombre: values.nombre.trim(),
-    capacidad_maxima: Number(values.capacidad_maxima),
-    tarifa_noche: Number(values.tarifa_noche),
-    descripcion: values.descripcion?.trim() ? values.descripcion.trim() : null,
-  };
-}
+export const sanitizeUpdateTipoHabitacion = (values: TipoHabitacionFormData): UpdateTipoHabitacionInput => sanitizeCreateTipoHabitacion(values);

@@ -1,3 +1,4 @@
+import operacionesRoutes from "./modules/operaciones/operaciones.routes";
 import express from "express";
 import { corsMiddleware, securityHeaders, authenticationRateLimiter } from "./config/httpSecurity";
 import { env } from "./config/env";
@@ -19,6 +20,7 @@ import carritoItemsRoutes from "./routes/carrito/carritoItem.routes";
 import sucursalRoutes from "./modules/sucursales/sucursal.routes";
 
 import mesaRoutes from "./routes/restaurante/mesa.routes";
+import restauranteRoutes from "./routes/restaurante/restaurante.routes";
 import reservaMesaRoutes from "./routes/restaurante/reservaMesa.routes";
 
 import recursoActividadRoutes from "./routes/actividades/recursoActividad.routes";
@@ -43,6 +45,7 @@ import tipoHabitacionRoutes from "./routes/habitaciones/tipoHabitacion.routes";
 import habitacionRoutes from "./routes/habitaciones/habitacion.routes";
 import parqueoRoutes from "./routes/habitaciones/parqueo.routes";
 import reservaHabitacionRoutes from "./routes/habitaciones/reservaHabitacion.routes";
+import publicHabitacionRoutes from "./routes/habitaciones/publicHabitacion.routes";
 import reservaParqueoRoutes from "./routes/habitaciones/reservaParqueo.routes";
 import promocionRoutes from "./routes/habitaciones/promocion.routes";
 import facturaRoutes from "./routes/habitaciones/factura.routes";
@@ -55,6 +58,9 @@ import pagoRoutes from "./routes/pagos/pago.routes";
 import { stripeWebhook } from "./controllers/pagos/pago.controller";
 import mediaRoutes from "./routes/media/media.routes";
 import inicioRoutes from "./routes/inicio/inicio.routes";
+import adminDashboardRoutes from "./routes/admin/dashboard.routes";
+import adminAlcanceRoutes from "./routes/admin/alcance.routes";
+import reportesRoutes from "./modules/reportes/reportes.routes";
 
 const app = express();
 
@@ -142,6 +148,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+// The operational role adapter reuses existing controllers with explicit tenant checks.
+app.use("/api", operacionesRoutes);
 app.use("/api/auth/login", authenticationRateLimiter);
 app.use("/api/auth/register", authenticationRateLimiter);
 app.use("/api/auth", authRoutes);
@@ -149,6 +157,7 @@ app.use("/api/servicios-evento", servicioEventoRoutes);
 
 app.use("/api/habitaciones", habitacionRoutes);
 app.use("/api/tipos-habitacion", tipoHabitacionRoutes);
+app.use("/api/public", publicHabitacionRoutes);
 app.use("/api/parqueos", parqueoRoutes);
 app.use("/api/reservas-habitacion", reservaHabitacionRoutes);
 app.use("/api/reservas-parqueo", reservaParqueoRoutes);
@@ -174,6 +183,7 @@ app.use("/api/vehiculos", vehiculoRoutes);
 app.use("/api/reservas-transporte", reservaTransporteRoutes);
 app.use("/api/sucursales", sucursalRoutes);
 app.use("/api/mesas", mesaRoutes);
+app.use("/api/restaurantes", restauranteRoutes);
 app.use("/api/recursos-actividad", recursoActividadRoutes);
 app.use("/api/instructores", instructorRoutes);
 app.use("/api/reservas-actividad", reservaActividadRoutes);
@@ -188,6 +198,9 @@ app.use("/api/carritos/:carritoId/items", carritoItemsRoutes);
 app.use("/api/carritos", carritoRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/inicio", inicioRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+app.use("/api/admin/alcance", adminAlcanceRoutes);
+app.use("/api/reportes", reportesRoutes);
 
 // Debe ir después de todas las rutas
 app.use(notFoundHandler);

@@ -3,6 +3,11 @@ import { restoreRoomDraft, saveRoomDraft, validatedRoomDraft } from './reservati
 const path = '/habitaciones/7?sede=1&fecha_entrada=2030-01-01&fecha_salida=2030-01-03&numero_huespedes=2&min=700&orden=precio_asc';
 afterEach(() => sessionStorage.clear());
 describe('Borrador mínimo restaurado', () => {
+  it('restaura el recorrido principal con habitación solicitada y criterios, filtrando secretos', () => {
+    const reserva = '/reservar?sucursal_id=1&habitacion_id=7&fecha_entrada=2030-01-01&fecha_salida=2030-01-03&numero_huespedes=2';
+    saveRoomDraft(`${reserva}&password=secret&total=1`);
+    expect(restoreRoomDraft()).toBe(reserva);
+  });
   it('conserva recurso, sede, fechas, huéspedes y filtros, descartando secretos', () => {
     saveRoomDraft(`${path}&client_secret=secret&password=secret&usuario_id=4`);
     expect(restoreRoomDraft()).toBe(path);

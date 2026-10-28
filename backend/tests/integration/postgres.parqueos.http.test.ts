@@ -62,11 +62,21 @@ describe("HTTP parqueos against isolated PostgreSQL (hotel_test_db)", () => {
       activa: true,
     });
     testSucursalId = sucursal.id;
+
+    // El gerente opera en esta sede (ficha de empleado con sede principal).
+    await database.Empleado.create({
+      usuario_id: gerenteHabitacionesUserId,
+      sucursal_id: testSucursalId,
+      area: "QA",
+    });
   });
 
   afterAll(async () => {
     if (createdParqueoId) {
       await database.Parqueo.destroy({ where: { id: createdParqueoId }, force: true });
+    }
+    if (gerenteHabitacionesUserId) {
+      await database.Empleado.destroy({ where: { usuario_id: gerenteHabitacionesUserId }, force: true });
     }
     if (testSucursalId) {
       await database.Sucursal.destroy({ where: { id: testSucursalId }, force: true });
@@ -88,14 +98,13 @@ describe("HTTP parqueos against isolated PostgreSQL (hotel_test_db)", () => {
     expect(res.status).toBe(401);
   });
 
-  it("permite la lectura autenticada con rol cliente (200)", async () => {
+  it("rechaza la lectura del inventario de parqueos con rol cliente (403)", async () => {
+    // El inventario de parqueos es información operativa; ningún flujo de cliente lo consume.
     const res = await request(app)
       .get("/api/parqueos")
       .set("Authorization", `Bearer ${clientToken}`);
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.status).toBe(403);
   });
 
   it("rechaza la creación de parqueos con rol cliente sin permisos (403)", async () => {

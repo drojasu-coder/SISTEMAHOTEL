@@ -5,16 +5,20 @@ import {
 } from "express";
 
 import * as reservaMesaService from "../../services/restaurante/reservaMesa.service";
+import { getSedeScope, parseSucursalIdQuery } from "../../utils/sedeScope";
 
 export const getAll =
   async (
-    _req: Request,
+    req: Request,
     res: Response,
     next: NextFunction
   ) => {
     try {
       const data =
-        await reservaMesaService.getAll();
+        await reservaMesaService.getAll(
+          await getSedeScope(req.user!),
+          parseSucursalIdQuery(req.query.sucursal_id)
+        );
 
       res.status(200).json({
         status: "success",

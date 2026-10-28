@@ -65,6 +65,7 @@ const mockInstructores: Instructor[] = [
 
 describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     tokenStorage.clear();
     vi.restoreAllMocks();
   });
@@ -114,7 +115,7 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
                 hora_inicio: '10:00:00',
                 hora_fin: '11:00:00',
                 con_equipo: true,
-                total: '130.00',
+                total: '115.00',
                 estado: 'confirmada',
                 RecursoActividad: mockRecursos[0],
                 Instructor: mockInstructores[0],
@@ -134,8 +135,8 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
 
     expect(await screen.findByText('Cancha de Tenis Central')).toBeInTheDocument();
     expect(screen.getByText('Kayaks de Lago')).toBeInTheDocument();
-    expect(screen.getByText(/Q\s*75\.00.*US\$/)).toBeInTheDocument();
-    expect(screen.getByText(/Q\s*50\.00.*US\$/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*75\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Q\s*50\.00/)).toBeInTheDocument();
   });
 
   it('2. Filtra actividades por término de búsqueda', async () => {
@@ -160,7 +161,7 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
 
     expect(await screen.findByText('Cancha de Tenis Central')).toBeInTheDocument();
 
-    const botonesReservar = screen.getAllByRole('button', { name: /Reservar actividad/i });
+    const botonesReservar = screen.getAllByRole('button', { name: /Ver y reservar/i });
     await user.click(botonesReservar[0]);
 
     // Modal abierto
@@ -171,19 +172,23 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
     const selectInstructor = screen.getByLabelText(/Instructor/i);
     await user.selectOptions(selectInstructor, '5');
 
-    // Marcar equipamiento
-    const checkEquipo = screen.getByLabelText(/Requerir equipamiento/i);
-    await user.click(checkEquipo);
+    // El equipamiento tiene tarifa sin unidad de cobro definida: no se ofrece como suplemento.
+    expect(screen.queryByRole('checkbox', { name: /equipamiento/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/no se puede añadir en la reserva en línea/i)).toBeInTheDocument();
 
     // Confirmar reserva
     const botonConfirmar = screen.getByRole('button', { name: /Confirmar reserva/i });
+    await user.type(screen.getByLabelText(/Hora de inicio/i), '10:00');
+    await user.type(screen.getByLabelText(/Hora de fin/i), '11:00');
+    // Antes de reservar se comunica el total que calculará el servidor: (75 + 40 instructor) × 1 h.
+    expect(screen.getByText('Total estimado').parentElement).toHaveTextContent(/Q\s*115\.00/);
     await user.click(botonConfirmar);
 
     // Éxito
     await waitFor(() => {
       expect(screen.getByText(/¡Reserva confirmada exitosamente!/i)).toBeInTheDocument();
       expect(screen.getByText(/#301/i)).toBeInTheDocument();
-      expect(screen.getByText(/Q\s*130\.00.*US\$/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Q\s*115\.00/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -202,10 +207,12 @@ describe('Catálogo de Actividades para Clientes (CatalogoActividadesPage)', () 
 
     expect(await screen.findByText('Cancha de Tenis Central')).toBeInTheDocument();
 
-    const botonesReservar = screen.getAllByRole('button', { name: /Reservar actividad/i });
+    const botonesReservar = screen.getAllByRole('button', { name: /Ver y reservar/i });
     await user.click(botonesReservar[0]);
 
     const botonConfirmar = screen.getByRole('button', { name: /Confirmar reserva/i });
+    await user.type(screen.getByLabelText(/Hora de inicio/i), '10:00');
+    await user.type(screen.getByLabelText(/Hora de fin/i), '11:00');
     await user.click(botonConfirmar);
 
     await waitFor(() => {

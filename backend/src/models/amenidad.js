@@ -26,6 +26,12 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      // false = espacio compartido de libre acceso, sin reservas.
+      reservable: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+      },
       imagen_key: {
         type: DataTypes.STRING(500),
         allowNull: true,

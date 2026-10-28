@@ -1729,6 +1729,15 @@ RecursoActividad: {
       minimum: 0,
       example: 25.00,
     },
+    modalidad: {
+      type: "string",
+      enum: ["por_hora", "experiencia"],
+      description: "por_hora: reserva exclusiva de 30 min a 2 h, total = precio_hora × horas. experiencia: salida de duración fija con cupo compartido, total = precio_persona × numero_participantes.",
+      example: "experiencia",
+    },
+    duracion_minutos: { type: "integer", nullable: true, minimum: 30, maximum: 720, example: 360 },
+    cupo_maximo: { type: "integer", nullable: true, minimum: 1, example: 8 },
+    precio_persona: { type: "number", nullable: true, minimum: 0, example: 725.00 },
     createdAt: {
       type: "string",
       format: "date-time",
@@ -1961,10 +1970,16 @@ CreateReservaActividadRequest: {
     "recurso_id",
     "fecha",
     "hora_inicio",
-    "hora_fin",
   ],
   additionalProperties: false,
   properties: {
+    numero_participantes: {
+      type: "integer",
+      minimum: 1,
+      maximum: 100,
+      description: "Solo afecta a experiencias (precio por persona y cupo). Por defecto 1.",
+      example: 2,
+    },
     recurso_id: {
       type: "integer",
       minimum: 1,
@@ -1988,6 +2003,7 @@ CreateReservaActividadRequest: {
     hora_fin: {
       type: "string",
       example: "11:00",
+      description: "Obligatoria para recursos por_hora. En experiencias es opcional: el servidor la calcula y, si se envía, debe coincidir con la duración.",
     },
     con_equipo: {
       type: "boolean",
@@ -2027,6 +2043,11 @@ Amenidad: {
     "updatedAt",
   ],
   properties: {
+    reservable: {
+      type: "boolean",
+      description: "false = espacio compartido de libre acceso; POST /api/reservas-amenidad responde 422 AMENITY_NOT_RESERVABLE.",
+      example: true,
+    },
     id: {
       type: "integer",
       example: 1,
@@ -2326,6 +2347,12 @@ UpdateReservaAmenidadEstadoRequest: {
 Terapeuta: {
   type: "object",
   properties: {
+    sucursal_id: {
+      type: "integer",
+      nullable: true,
+      description: "Sede del registro. null = registro general anterior a la vinculación por sede.",
+      example: 1,
+    },
     id: {
       type: "integer",
       example: 1,
@@ -2356,6 +2383,12 @@ CreateTerapeutaRequest: {
   ],
   additionalProperties: false,
   properties: {
+    sucursal_id: {
+      type: "integer",
+      nullable: true,
+      description: "Sede del registro. null = registro general anterior a la vinculación por sede.",
+      example: 1,
+    },
     nombre: {
       type: "string",
       example: "Ana López",
@@ -2371,6 +2404,12 @@ UpdateTerapeutaRequest: {
   type: "object",
   additionalProperties: false,
   properties: {
+    sucursal_id: {
+      type: "integer",
+      nullable: true,
+      description: "Sede del registro. null = registro general anterior a la vinculación por sede.",
+      example: 1,
+    },
     nombre: {
       type: "string",
       example: "Ana López",
@@ -2385,6 +2424,17 @@ UpdateTerapeutaRequest: {
 ServicioBienestar: {
   type: "object",
   properties: {
+    sucursal_id: {
+      type: "integer",
+      nullable: true,
+      description: "Sede del registro. null = registro general anterior a la vinculación por sede.",
+      example: 1,
+    },
+    activo: {
+      type: "boolean",
+      description: "false = retirado del catálogo público (GET sin incluir_inactivos) y no admite citas nuevas.",
+      example: true,
+    },
     id: {
       type: "integer",
       example: 1,
@@ -2423,6 +2473,17 @@ CreateServicioBienestarRequest: {
   ],
   additionalProperties: false,
   properties: {
+    sucursal_id: {
+      type: "integer",
+      nullable: true,
+      description: "Sede del registro. null = registro general anterior a la vinculación por sede.",
+      example: 1,
+    },
+    activo: {
+      type: "boolean",
+      description: "false = retirado del catálogo público (GET sin incluir_inactivos) y no admite citas nuevas.",
+      example: true,
+    },
     nombre: {
       type: "string",
       example: "Masaje relajante",
@@ -2444,6 +2505,17 @@ UpdateServicioBienestarRequest: {
   type: "object",
   additionalProperties: false,
   properties: {
+    sucursal_id: {
+      type: "integer",
+      nullable: true,
+      description: "Sede del registro. null = registro general anterior a la vinculación por sede.",
+      example: 1,
+    },
+    activo: {
+      type: "boolean",
+      description: "false = retirado del catálogo público (GET sin incluir_inactivos) y no admite citas nuevas.",
+      example: true,
+    },
     nombre: {
       type: "string",
       example: "Masaje terapéutico",
@@ -3409,7 +3481,7 @@ UpdateBoletoParqueEstadoRequest: {
     },
   },
 
-  apis: [routesPath, path.resolve(process.cwd(), "src", "app.ts")],
+  apis: [routesPath, path.resolve(process.cwd(), "src", "modules", "reportes", "reportes.routes.ts"), path.resolve(process.cwd(), "src", "app.ts")],
 };
 
 export const swaggerSpec =

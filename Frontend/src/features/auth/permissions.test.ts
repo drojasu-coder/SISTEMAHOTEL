@@ -24,20 +24,20 @@ describe('permisos derivados del backend', () => {
     expect(moduleIds('admin')).toEqual(PANEL_MODULES.map((m) => m.id));
   });
 
-  it('recepcionista y gerente_habitaciones: habitaciones, facturación y pagos', () => {
-    expect(moduleIds('recepcionista')).toEqual(['habitaciones', 'facturacion', 'pagos']);
-    expect(moduleIds('gerente_habitaciones')).toEqual(['habitaciones', 'facturacion', 'pagos']);
+  it('recepción gestiona habitaciones y gerencia opera sus módulos sin finanzas globales', () => {
+    expect(moduleIds('recepcionista')).toEqual(['habitaciones']);
+    expect(moduleIds('gerente_habitaciones')).toEqual(['habitaciones', 'restaurante', 'servicios', 'personal']);
   });
 
-  it('gerente_restaurante: solo restaurante y proveedores', () => {
-    expect(moduleIds('gerente_restaurante')).toEqual(['restaurante']);
+  it('el rol histórico de restaurante no crea una quinta interfaz operativa', () => {
+    expect(moduleIds('gerente_restaurante')).toEqual([]);
   });
 
-  it('cliente y empleado_operativo no tienen módulos de panel', () => {
+  it('cliente conserva el sitio público y encargado recibe únicamente habitaciones', () => {
     expect(moduleIds('cliente')).toEqual([]);
-    expect(moduleIds('empleado_operativo')).toEqual([]);
+    expect(moduleIds('empleado_operativo')).toEqual(['habitaciones']);
     expect(canAccessPanel('cliente')).toBe(false);
-    expect(canAccessPanel('empleado_operativo')).toBe(false);
+    expect(canAccessPanel('empleado_operativo')).toBe(true);
   });
 
   it('un rol desconocido no tiene ningún permiso', () => {
@@ -51,9 +51,9 @@ describe('permisos derivados del backend', () => {
     expect(getHomeRouteForUser(userWithRole('admin'))).toBe('/admin');
     expect(getHomeRouteForUser(userWithRole('recepcionista'))).toBe('/admin');
     expect(getHomeRouteForUser(userWithRole('gerente_habitaciones'))).toBe('/admin');
-    expect(getHomeRouteForUser(userWithRole('gerente_restaurante'))).toBe('/admin');
+    expect(getHomeRouteForUser(userWithRole('gerente_restaurante'))).toBe('/cuenta');
     expect(getHomeRouteForUser(userWithRole('cliente'))).toBe('/');
-    expect(getHomeRouteForUser(userWithRole('empleado_operativo'))).toBe('/cuenta');
+    expect(getHomeRouteForUser(userWithRole('empleado_operativo'))).toBe('/admin');
     for (const rol of ROLES) {
       expect(getHomeRouteForUser(userWithRole(rol))).toMatch(/^\//);
     }
@@ -62,11 +62,11 @@ describe('permisos derivados del backend', () => {
 
 describe('acceso a rutas', () => {
   it('cada ruta de módulo exige el permiso de ese módulo', () => {
-    const restaurante = userWithRole('gerente_restaurante');
+    const restaurante = userWithRole('gerente_habitaciones');
     expect(canAccessRoute(restaurante, '/admin')).toBe(true);
     expect(canAccessRoute(restaurante, '/admin/restaurante')).toBe(true);
     expect(canAccessRoute(restaurante, '/admin/pagos')).toBe(false);
-    expect(canAccessRoute(restaurante, '/admin/personal')).toBe(false);
+    expect(canAccessRoute(restaurante, '/admin/personal')).toBe(true);
 
     const recepcion = userWithRole('recepcionista');
     expect(canAccessRoute(recepcion, '/admin/habitaciones')).toBe(true);
@@ -77,7 +77,9 @@ describe('acceso a rutas', () => {
   it('rutas de panel inexistentes o sin permiso no se permiten', () => {
     expect(canAccessRoute(userWithRole('admin'), '/admin/inventado')).toBe(false);
     expect(canAccessRoute(userWithRole('cliente'), '/admin')).toBe(false);
-    expect(canAccessRoute(userWithRole('empleado_operativo'), '/admin')).toBe(false);
+    expect(canAccessRoute(userWithRole('empleado_operativo'), '/admin')).toBe(true);
+    expect(canAccessRoute(userWithRole('empleado_operativo'), '/admin/reservas')).toBe(false);
+    expect(canAccessRoute(userWithRole('empleado_operativo'), '/admin/tipos-habitacion')).toBe(false);
   });
 });
 
@@ -89,8 +91,8 @@ describe('destino posterior al inicio de sesión', () => {
 
   it('no envía a un rol sin permiso a una ruta de panel', () => {
     expect(getPostLoginRoute(userWithRole('cliente'), '/admin')).toBe('/');
-    expect(getPostLoginRoute(userWithRole('gerente_restaurante'), '/admin/pagos')).toBe('/admin');
-    expect(getPostLoginRoute(userWithRole('empleado_operativo'), '/admin/habitaciones')).toBe('/cuenta');
+    expect(getPostLoginRoute(userWithRole('gerente_restaurante'), '/admin/pagos')).toBe('/cuenta');
+    expect(getPostLoginRoute(userWithRole('empleado_operativo'), '/admin/habitaciones')).toBe('/admin/habitaciones');
   });
 
   it('descarta destinos externos o de autenticación', () => {
@@ -98,5 +100,12 @@ describe('destino posterior al inicio de sesión', () => {
     expect(getPostLoginRoute(userWithRole('cliente'), 'https://sitio-externo.com')).toBe('/');
     expect(getPostLoginRoute(userWithRole('admin'), '/login')).toBe('/admin');
     expect(getPostLoginRoute(userWithRole('admin'), undefined)).toBe('/admin');
+  });
+});
+
+describe('restricciones definitivas de gestión', () => {
+  it.each(['gerente_habitaciones', 'recepcionista', 'empleado_operativo'] as const)('%s no recibe permisos financieros, globales ni reportes', role => {
+    for (const permission of ['facturas.gestionar', 'pagos.administrar', 'configuracion.administrar'] as const) expect(hasPermission(role, permission)).toBe(false);
+    expect(canAccessRoute(userWithRole(role), '/admin/reportes')).toBe(false);
   });
 });

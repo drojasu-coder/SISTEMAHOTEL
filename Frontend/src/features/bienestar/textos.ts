@@ -1,24 +1,24 @@
 export const textosBienestar = {
   // Encabezados y navegación cliente
   subtitulo: 'HOTEL HUNAHPÚ · EXPERIENCIAS DE BIENESTAR',
-  titulo: 'Bienestar y Spa',
+  titulo: 'Bienestar',
   descripcion:
-    'Disfrute de tratamientos relajantes, masajes y terapias corporales diseñadas para renovar su energía en un entorno de serenidad absoluta.',
-  catalogoTitulo: 'Catálogo de Servicios de Bienestar',
+    'Consulte los servicios de bienestar y prepare su cita.',
+  catalogoTitulo: 'Bienestar',
   catalogoDescripcion:
-    'Seleccione el tratamiento de su preferencia y reserve su cita con nuestros terapeutas certificados.',
+    'Seleccione un servicio y reserve su cita con un terapeuta del catálogo.',
   pestanaHabitaciones: 'Reservas de Habitación',
   pestanaRestaurante: 'Reservas de Mesa',
   pestanaAmenidades: 'Pases de Amenidades',
   pestanaActividades: 'Actividades Recreativas',
-  pestanaBienestar: 'Bienestar y Spa',
+  pestanaBienestar: 'Bienestar',
 
   // Mis Citas Cliente
   misReservasSubtitulo: 'HOTEL HUNAHPÚ · CLIENTE',
   misReservasTitulo: 'Mis Citas de Bienestar',
   misReservasDescripcion:
     'Consulte el estado de sus citas de spa, terapeutas asignados y opciones para añadirlas al carrito de pagos.',
-  reservarCita: 'Reservar cita de spa',
+  reservarCita: 'Reservar cita de bienestar',
   sinCitasTitulo: 'No tiene citas de spa reservadas',
   sinCitasDesc:
     'Aún no ha programado citas de bienestar. Explore nuestro catálogo para consentirse durante su estancia.',
@@ -32,7 +32,7 @@ export const textosBienestar = {
 
   // Detalle Cita
   detalleSubtitulo: 'HOTEL HUNAHPÚ · DETALLE DE CITA',
-  detalleTitulo: 'Detalle de la Cita de Spa',
+  detalleTitulo: 'Detalle de la cita de Bienestar',
   citaNumero: (id: number | string) => `Cita #${id}`,
   estadoCita: 'Estado de la cita:',
   fechaCita: 'Fecha programada:',
@@ -44,11 +44,11 @@ export const textosBienestar = {
   minutos: 'minutos',
 
   // Modal / Formulario de Reserva
-  modalReservaTitulo: 'Reservar Cita de Spa',
+  modalReservaTitulo: 'Reservar cita de Bienestar',
   modalReservaDesc:
     'Indique la fecha y hora de inicio deseada. La duración y la hora de fin se determinan automáticamente según el servicio seleccionado.',
   seleccionarTerapeuta: 'Seleccionar terapeuta',
-  seleccioneTerapeutaOpcion: 'Seleccione un terapeuta disponible...',
+  seleccioneTerapeutaOpcion: 'Seleccione un terapeuta activo...',
   fecha: 'Fecha de la cita',
   horaInicio: 'Hora de inicio (formato 24h, ej. 10:00)',
   duracionCalculada: 'Duración del servicio:',
@@ -60,12 +60,12 @@ export const textosBienestar = {
   citaExitosaTitulo: '¡Cita reservada exitosamente!',
   citaExitosaDesc:
     'Su cita de bienestar ha sido registrada en el sistema. Puede consultarla en cualquier momento desde Mis reservas o añadirla a su carrito para proceder al pago.',
-  iniciarSesionParaReservar: 'Debe iniciar sesión como cliente para reservar una cita de spa.',
+  iniciarSesionParaReservar: 'Debe iniciar sesión como cliente para reservar una cita de bienestar.',
   irAlLogin: 'Iniciar sesión',
 
   // Errores de negocio
   errorTerapeutaOcupado:
-    'El terapeuta seleccionado no está disponible en este horario. Se requiere un tiempo de descanso de 15 minutos entre citas. Por favor elija otro horario o terapeuta.',
+    'El terapeuta seleccionado no está disponible en este horario. Se requiere un tiempo de descanso de 15 minutos entre citas. Cambie la fecha o la hora; no tenemos otros horarios verificados para ofrecerle.',
   errorTerapeutaInactivo:
     'El terapeuta seleccionado se encuentra inactivo actualmente. Por favor seleccione otro terapeuta.',
   errorServicioNoEncontrado:

@@ -33,6 +33,12 @@ const estadoBadges: Record<EstadoHabitacion, { badge: string; label: string }> =
   },
 };
 
+/** Un estado no reconocido se muestra como tal; nunca se asume «Disponible». */
+const estadoDesconocido = {
+  badge: "border-neutro-300 bg-neutro-100 text-neutro-700",
+  label: textosHabitaciones.estadoDesconocido,
+};
+
 export const HabitacionesList: React.FC<HabitacionesListProps> = ({
   habitaciones,
   sedesMap,
@@ -77,7 +83,7 @@ export const HabitacionesList: React.FC<HabitacionesListProps> = ({
                 const tipo =
                   hab.TipoHabitacion ?? tiposMap.get(hab.tipo_habitacion_id);
                 const estadoConfig =
-                  estadoBadges[hab.estado] ?? estadoBadges.disponible;
+                  estadoBadges[hab.estado] ?? estadoDesconocido;
                 const photoUrl = hab.imagen_url;
 
                 return (
@@ -166,7 +172,7 @@ export const HabitacionesList: React.FC<HabitacionesListProps> = ({
           const tipo =
             hab.TipoHabitacion ?? tiposMap.get(hab.tipo_habitacion_id);
           const estadoConfig =
-            estadoBadges[hab.estado] ?? estadoBadges.disponible;
+            estadoBadges[hab.estado] ?? estadoDesconocido;
           const photoUrl = hab.imagen_url;
 
           return (
@@ -231,7 +237,9 @@ export const HabitacionesList: React.FC<HabitacionesListProps> = ({
                     </div>
                   )}
                   <span className="font-semibold text-neutro-800 ml-auto">
-                    {formatGTQ(tipo?.tarifa_noche)} / noche
+                    {tipo?.tarifa_noche != null && tipo.tarifa_noche !== ""
+                      ? `${formatGTQ(tipo.tarifa_noche)} / noche`
+                      : `Tarifa ${textosHabitaciones.importeNoDisponible.toLowerCase()}`}
                   </span>
                 </div>
               </div>

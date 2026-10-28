@@ -4,9 +4,9 @@ import { isKnownRole, type AuthUser, type Role } from './types';
 /**
  * Permisos de interfaz derivados de la autorización REAL del backend.
  *
- * Cada permiso corresponde a un conjunto de roles que el backend exige con
- * `requireRole(...)` en las rutas indicadas (revisión 2ed9ef5). No se inventan ni se
- * amplían permisos: si el backend cambia, esta tabla debe actualizarse con él.
+ * Cada permiso corresponde a las rutas existentes y al adaptador territorial de
+ * modules/operaciones/operaciones.routes.ts. Si cambia la autorización del servidor,
+ * esta tabla debe actualizarse con ella.
  *
  * Estos permisos solo deciden qué se muestra y a dónde se navega. La autorización
  * definitiva la aplica siempre el servidor en cada petición.
@@ -17,6 +17,8 @@ import { isKnownRole, type AuthUser, type Role } from './types';
  */
 export type Permission =
   | 'habitaciones.gestionar'
+  | 'reservas.gestionar'
+  | 'habitaciones.configurar'
   | 'facturas.gestionar'
   | 'pagos.administrar'
   | 'restaurante.gestionar'
@@ -28,26 +30,26 @@ const ADMIN: Role = 'admin';
 
 export const PERMISSIONS: Record<Permission, readonly Role[]> = {
   // routes/habitaciones/{habitacion,tipoHabitacion,parqueo,promocion,reservaHabitacion,reservaParqueo}.routes.ts
-  // → rolesGestionHabitaciones = admin, recepcionista, gerente_habitaciones
-  'habitaciones.gestionar': [ADMIN, 'recepcionista', 'gerente_habitaciones'],
+  // El encargado consulta habitaciones y modifica solo el estado físico.
+  'habitaciones.gestionar': [ADMIN, 'recepcionista', 'gerente_habitaciones', 'empleado_operativo'],
+  'habitaciones.configurar': [ADMIN, 'recepcionista', 'gerente_habitaciones'],
+  'reservas.gestionar': [ADMIN, 'recepcionista', 'gerente_habitaciones'],
 
   // routes/habitaciones/{factura,facturaItem}.routes.ts → rolesGestionFacturas
-  'facturas.gestionar': [ADMIN, 'recepcionista', 'gerente_habitaciones'],
+  'facturas.gestionar': [ADMIN],
 
   // routes/pagos/pago.routes.ts (aprobar-transferencia, reembolso) y
   // utils/paymentOwnership.ts → PAYMENT_ADMINISTRATIVE_ROLES
-  'pagos.administrar': [ADMIN, 'recepcionista', 'gerente_habitaciones'],
+  'pagos.administrar': [ADMIN],
 
-  // routes/restaurante/mesa.routes.ts y routes/proveedores/*.routes.ts
-  // → admin, gerente_restaurante
-  'restaurante.gestionar': [ADMIN, 'gerente_restaurante'],
+  // Catálogo y reservas de restaurante: admin global o gerente en sus sedes.
+  'restaurante.gestionar': [ADMIN, 'gerente_habitaciones'],
 
-  // routes/{actividades,amenidades,bienestar,parque,eventos}: altas/bajas de catálogo y
-  // listados/estados de reservas de servicio exigen admin
-  'servicios.administrar': [ADMIN],
+  // Catálogos y estados de reservas: admin global o gerente en sus sedes.
+  'servicios.administrar': [ADMIN, 'gerente_habitaciones'],
 
-  // routes/usuarios, personal (empleados, turnos), transporte (choferes, vehiculos): admin
-  'personal.administrar': [ADMIN],
+  // Admin gestiona usuarios/asignaciones; gerente solo empleados y turnos de sus sedes.
+  'personal.administrar': [ADMIN, 'gerente_habitaciones'],
 
   // routes/sucursales (alta/edición/baja) y routes/configuracion.routes.ts (IVA): admin
   'configuracion.administrar': [ADMIN],
@@ -89,7 +91,7 @@ export function canAccessPanel(role: unknown): boolean {
  * Destino inicial tras autenticarse, siempre válido para un rol conocido:
  * - con módulos de panel → /admin
  * - cliente → sitio público
- * - rol conocido sin módulos (p. ej. empleado_operativo) → /cuenta
+ * - rol histórico conocido sin módulos → /cuenta
  */
 export function getHomeRouteForUser(user: Pick<AuthUser, 'rol'>): string {
   if (canAccessPanel(user.rol)) return '/admin';
