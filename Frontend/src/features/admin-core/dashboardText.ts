@@ -1,4 +1,12 @@
 const es = {
+  kpiOccupancy: 'Ocupación hoy', kpiRoomsOf: (n: number, m: number) => `${n} de ${m} habitaciones`, kpiArrivals: 'Llegadas hoy', kpiDepartures: 'Salidas hoy',
+  kpiPending: 'Por confirmar', kpiOutOfService: 'Limpieza o mantenimiento', kpiReservations: 'reservas',
+  forecastTitle: 'Ocupación prevista', forecastSub: (d: number) => `Estancias confirmadas · próximos ${d} días`, forecastEmpty: (d: number) => `No hay estancias confirmadas en los próximos ${d} días.`,
+  days: (d: number) => `${d} días`, months: (m: number) => `${m} meses`, period: 'Período',
+  monthlyTitle: 'Reservas registradas', monthlySub: (m: number) => `Por mes de registro · últimos ${m} meses`, monthlyEmpty: 'No se registraron reservas en este período.',
+  others: 'Otros estados', roomStatusTitle: 'Estado de las habitaciones', roomStatusSub: (n: number) => `${n} habitaciones registradas`,
+  showTable: 'Ver datos en tabla', date: 'Fecha', rooms: 'Habitaciones', occupancyPct: 'Ocupación', month: 'Mes', total: 'Total',
+  chartRooms: (n: number, m: number, p: string) => `${n} de ${m} habitaciones · ${p}`, viewAll: 'Ver todas', today: 'Hoy',
   welcome: 'Bienvenido', operations: 'Resumen operativo', refresh: 'Actualizar', retry: 'Reintentar',
   all: 'Todas las sedes autorizadas', loading: 'Consultando datos del servidor...',
   error: 'No fue posible consultar el resumen operativo.', errorHelp: 'Los indicadores no están disponibles. Reintente la consulta; una avería no equivale a cero.',
@@ -19,6 +27,14 @@ const es = {
   snapshot: 'Consulta del', pendiente: 'Pendiente', confirmada: 'Confirmada', cancelada: 'Cancelada', finalizada: 'Finalizada', expirada: 'Expirada',
 };
 const en: typeof es = {
+  kpiOccupancy: 'Occupancy today', kpiRoomsOf: (n: number, m: number) => `${n} of ${m} rooms`, kpiArrivals: 'Arrivals today', kpiDepartures: 'Departures today',
+  kpiPending: 'To confirm', kpiOutOfService: 'Cleaning or maintenance', kpiReservations: 'reservations',
+  forecastTitle: 'Forecast occupancy', forecastSub: (d: number) => `Confirmed stays · next ${d} days`, forecastEmpty: (d: number) => `No confirmed stays in the next ${d} days.`,
+  days: (d: number) => `${d} days`, months: (m: number) => `${m} months`, period: 'Period',
+  monthlyTitle: 'Reservations recorded', monthlySub: (m: number) => `By month recorded · last ${m} months`, monthlyEmpty: 'No reservations were recorded in this period.',
+  others: 'Other statuses', roomStatusTitle: 'Room status', roomStatusSub: (n: number) => `${n} rooms recorded`,
+  showTable: 'View data as a table', date: 'Date', rooms: 'Rooms', occupancyPct: 'Occupancy', month: 'Month', total: 'Total',
+  chartRooms: (n: number, m: number, p: string) => `${n} of ${m} rooms · ${p}`, viewAll: 'View all', today: 'Today',
   welcome: 'Welcome', operations: 'Operations overview', refresh: 'Refresh', retry: 'Retry',
   all: 'All authorized sites', loading: 'Loading current records...',
   error: 'Unable to load the operations overview.', errorHelp: 'Indicators are unavailable. Retry the query; a failure does not mean zero.',

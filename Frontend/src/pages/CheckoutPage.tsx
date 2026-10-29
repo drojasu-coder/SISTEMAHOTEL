@@ -816,7 +816,7 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
   return (
     <section
       aria-labelledby="titulo-checkout"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8"
+      className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8"
     >
       <PurchaseSteps current={1} allowCartReturn={!intentoServidor && !intentoCreadoValido && !pagoIdValido && !estadoIncierto} />
       <div className="flex flex-col gap-1.5">
@@ -827,14 +827,6 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
         >
           {textosCheckout.titulo}
         </h1>
-        <p className="max-w-2xl text-sm text-neutro-600">
-          {textosCheckout.descripcion}
-        </p>
-        {carritoValido && (
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-500">
-            {textosCheckout.carritoNumero(carritoValido.id)}
-          </p>
-        )}
       </div>
 
       {carritoValido && <CartExpiry expiresAt={carritoValido.expira_en} onCheck={() => { void checkExpiry(); }} />}
@@ -931,22 +923,20 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
         itemsListos &&
         resumenListo &&
         resumen && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-            <div className="flex min-w-0 flex-col gap-6"><AccountContact /><ListaArticulosCheckout items={items} /></div>
-
-            <div className="flex flex-col gap-6">
+          <div className="w-full">
+            <div className="flex flex-col gap-5">
               <ResumenCheckout
                 resumen={resumen}
                 cantidadArticulos={items.length}
-              />
+              >
+                <AccountContact />
+                <ListaArticulosCheckout items={items} />
+              </ResumenCheckout>
 
               <Card className="flex flex-col gap-5">
-                <div className="flex flex-col gap-1">
-                  <p className="eyebrow">{textosCheckout.pago.titulo}</p>
-                  <h2 className="text-lg font-serif font-semibold text-neutro-900">
-                    {textosCheckout.pago.titulo}
-                  </h2>
-                </div>
+                <h2 className="text-lg font-serif font-semibold text-neutro-900">
+                  {textosCheckout.pago.titulo}
+                </h2>
 
                 {mensaje && (
                   <div className="flex flex-col items-start gap-3">
@@ -1370,16 +1360,18 @@ const ContenidoCheckout: React.FC<{ userId: number }> = ({ userId }) => {
                   )}
 
                 {mostrarFormulario && intentoParaFormulario && (
-                  <div className="flex flex-col gap-3">
-                    <StripePaymentForm
-                      blocked={expiryChecking || verificandoPago}
-                      clientSecret={intentoParaFormulario.clientSecret}
-                      monto={intentoParaFormulario.monto}
-                      moneda={intentoParaFormulario.moneda}
-                      pagoId={intentoParaFormulario.pagoId}
-                      onConfirmacionEnviada={confirmacionEnviadaAlServidor}
-                      onEstadoIncierto={estadoConfirmacionIncierto}
-                    />
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-full max-w-md sm:max-w-lg">
+                      <StripePaymentForm
+                        blocked={expiryChecking || verificandoPago}
+                        clientSecret={intentoParaFormulario.clientSecret}
+                        monto={intentoParaFormulario.monto}
+                        moneda={intentoParaFormulario.moneda}
+                        pagoId={intentoParaFormulario.pagoId}
+                        onConfirmacionEnviada={confirmacionEnviadaAlServidor}
+                        onEstadoIncierto={estadoConfirmacionIncierto}
+                      />
+                    </div>
                     <LegalNotice />
                   </div>
                 )}

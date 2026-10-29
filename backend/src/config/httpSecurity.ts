@@ -18,7 +18,7 @@ if (env.NODE_ENV === "production" && allowedCorsOrigins.length === 0) {
   throw new Error("CORS_ORIGINS es obligatoria en producción");
 }
 
-const configuredOrigins =
+export const configuredOrigins =
   allowedCorsOrigins.length > 0
     ? allowedCorsOrigins
     : env.NODE_ENV === "production"
@@ -42,7 +42,7 @@ export const corsOptions: CorsOptions = {
   },
   credentials: false,
   methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type", "Stripe-Signature"],
+  allowedHeaders: ["Authorization", "Content-Type", "Stripe-Signature", "X-Google-CSRF"],
   optionsSuccessStatus: 204,
 };
 

@@ -1,6 +1,7 @@
 import { MoneyReference } from '@/components/ui/MoneyReference';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { LegalNotice } from '@/features/legal';
 import { Link } from 'react-router-dom';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -41,10 +42,14 @@ export const ResumenReservaModal: React.FC<ResumenReservaModalProps> = ({
 }) => {
   const textosCrearReserva = usePublicTexts('crearReserva');
   const { p, date: calendarDate } = usePublicInterface();
+  const [accepted, setAccepted] = useState(false);
+  useEffect(() => { setAccepted(false); }, [open, habitacion?.id, criterios]);
   if (!habitacion || !criterios) return null;
 
+  // Un 409 por carrito ocupado o plazo vencido no significa que la habitación se haya ocupado: se muestra su mensaje propio.
   const isConflict409 =
-    error instanceof ApiError && error.status === 409;
+    error instanceof ApiError && error.status === 409 &&
+    !['CART_HAS_PROCESSING_PAYMENT', 'RESERVATION_PAYMENT_WINDOW_EXPIRED'].includes(error.code ?? '');
   const isNetworkError =
     Boolean(error && (!(error instanceof ApiError) || error.status === 0 || error.status >= 500 || error.code === 'NETWORK_ERROR'));
 
@@ -177,6 +182,16 @@ export const ResumenReservaModal: React.FC<ResumenReservaModalProps> = ({
           </div>
         </div>
 
+        <div className="space-y-3 border-t border-neutro-200 pt-4">
+          <LegalNotice />
+          <label className="flex items-start gap-3 text-sm text-neutro-700">
+            <input type="checkbox" checked={accepted} disabled={isSubmitting}
+              onChange={(event) => setAccepted(event.target.checked)} className="mt-0.5 size-5 shrink-0 accent-bronce-600" />
+            {textosCrearReserva.aceptacionReserva}
+          </label>
+          <p className="text-xs text-neutro-600">{textosCrearReserva.avisoDisponibilidadNoAparta}</p>
+        </div>
+
         {/* Acciones */}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
@@ -191,7 +206,7 @@ export const ResumenReservaModal: React.FC<ResumenReservaModalProps> = ({
             type="button"
             variant="primary"
             isLoading={isSubmitting}
-            disabled={isSubmitting || isConflict409 || isNetworkError || invalidated}
+            disabled={!accepted || isSubmitting || isConflict409 || isNetworkError || invalidated}
             onClick={onConfirm}
           >
             {isSubmitting

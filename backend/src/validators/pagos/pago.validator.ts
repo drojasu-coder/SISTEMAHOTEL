@@ -58,3 +58,8 @@ export const createReembolsoSchema = z.object({
   motivo: z.string().trim().min(1).max(255).optional(),
   idempotency_key: z.string().trim().min(1).max(150),
 }).strict();
+
+export const comprobantesReservaQuerySchema = z.object({
+  tipo_item: z.enum(["habitacion", "evento", "mesa", "actividad", "amenidad", "bienestar", "boleto_parque", "transporte"]),
+  referencia_id: positiveId,
+}).strict();

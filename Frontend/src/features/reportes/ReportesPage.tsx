@@ -1,168 +1,175 @@
-import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileSpreadsheet, FileText, Search } from 'lucide-react';
-import { ApiError } from '@/api/client/http';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { DateField } from '@/components/ui/DateField';
-import { Alert, LoadingNotice } from '@/components/ui/Feedback';
-import { Pagination } from '@/components/ui/Pagination';
-import { Select } from '@/components/ui/Select';
-import { Table, type Column } from '@/components/ui/Table';
+import { LoadingNotice } from '@/components/ui/Feedback';
 import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
 import { useAuth } from '@/features/auth/AuthContext';
-import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
+import { useUrlFilters } from '@/features/personal/useUrlFilters';
 import { useLocale } from '@/i18n/LocaleContext';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
-import { reportesApi } from './reportesApi';
-import { reportText } from './textos';
-import { reportKinds, reportStates, type ReportKind, type ReportFilters, type ReportRecord, type ReportState } from './types';
+import { cn } from '@/lib/cn';
+import { BarList, LineChart, daysBetween, type FilaBarra } from './charts';
+import { DetalleReporte } from './DetalleReporte';
+import { consultarPanorama, type EstadoConteo, type Panorama } from './panorama';
+import { usePanoramaText, type TextosPanorama } from './textosPanorama';
 
-function currentPeriod() {
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  return { desde: `${today.slice(0, 7)}-01`, hasta: today };
-}
-const showDate = (value: string) => value.split('-').reverse().join('/');
-const sameFilters = (a: ReportFilters, b: ReportFilters) => a.desde === b.desde && a.hasta === b.hasta && a.sucursal_id === b.sucursal_id && a.estado === b.estado;
+const SECCIONES = ['resumen', 'habitaciones', 'restaurante', 'servicios', 'finanzas'] as const;
+type Seccion = typeof SECCIONES[number];
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+const shift = (iso: string, days: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+const field = 'h-10 rounded-lg border border-neutro-300 bg-white px-3 text-sm text-neutro-900 focus:border-bronce-600 focus:outline-none focus:ring-2 focus:ring-bronce-600/30';
+const BARRA_ESTADO: Record<string, string> = { aprobado: 'bg-exito-600', confirmada: 'bg-exito-600', finalizada: 'bg-info-600', completada: 'bg-info-600', usada: 'bg-info-600', pendiente: 'bg-advertencia-600', procesando: 'bg-advertencia-600', cotizacion: 'bg-advertencia-600', rechazado: 'bg-error-600', cancelada: 'bg-neutro-400', cancelado: 'bg-neutro-400', expirada: 'bg-neutro-400', anulada: 'bg-neutro-400', reembolsado: 'bg-info-600', reembolsado_parcial: 'bg-info-600' };
 
-/** Existing panel session guard runs first. No report query mounts for any other role. */
+/** La sesión del panel se verifica primero; ninguna consulta se monta para otros roles. */
 export function ReportesPage() {
   const { user } = useAuth();
-  return user?.rol === 'admin' ? <RoomReportCenter userId={user.id} /> : <ForbiddenPage />;
+  return user?.rol === 'admin' ? <Reportes /> : <ForbiddenPage />;
 }
 
-function RoomReportCenter({ userId }: { userId: number }) {
+function Reportes() {
+  const p = usePanoramaText();
   const { locale } = useLocale();
-  const text = reportText(locale);
-  const { selectedSedeId } = useAdminScope();
-  const sites = useSedesQuery({ retry: false });
-  const [draft, setDraft] = useState<ReportFilters>(() => ({ ...currentPeriod(), sucursal_id: selectedSedeId === 'all' ? undefined : selectedSedeId }));
-  const [applied, setApplied] = useState<ReportFilters | null>(null);
-  const [kind, setKind] = useState<ReportKind>('reservas-habitaciones');
-  const [appliedKind, setAppliedKind] = useState<ReportKind>('reservas-habitaciones');
-  const [page, setPage] = useState(1);
-  const [validation, setValidation] = useState(false);
-  const [downloading, setDownloading] = useState<'pdf' | 'xlsx' | null>(null);
-  const [downloadMessage, setDownloadMessage] = useState<'success' | 'error' | null>(null);
-  const [downloadDetail, setDownloadDetail] = useState<string | null>(null);
-  useEffect(() => {
-    setDraft(value => ({ ...value, sucursal_id: selectedSedeId === 'all' ? undefined : selectedSedeId }));
-  }, [selectedSedeId]);
+  const { selectedSedeId, sedes } = useAdminScope();
+  const { params, update } = useUrlFilters();
+  const today = getTodayInGuatemala();
+  const rawDesde = params.get('desde') ?? '', rawHasta = params.get('hasta') ?? '';
+  const desde = ISO.test(rawDesde) ? rawDesde : `${today.slice(0, 7)}-01`;
+  const hasta = ISO.test(rawHasta) ? rawHasta : today;
+  const dias = daysBetween(desde, hasta);
+  const valido = dias >= 1 && dias <= 366;
+  const seccion = (SECCIONES as readonly string[]).includes(params.get('seccion') ?? '') ? params.get('seccion') as Seccion : 'resumen';
+  const sucursal = selectedSedeId === 'all' ? undefined : selectedSedeId;
+  const sedeNombre = sucursal ? sedes.find(s => s.id === sucursal)?.nombre ?? `#${sucursal}` : p.todasSedes;
   const query = useQuery({
-    queryKey: ['reportes', appliedKind, userId, applied, page],
-    queryFn: ({ signal }) => reportesApi.consultar(applied!, page, signal, appliedKind), enabled: applied !== null,
-    retry: false, refetchOnWindowFocus: false, gcTime: 0,
+    queryKey: ['reportes-panorama', desde, hasta, sucursal], queryFn: ({ signal }) => consultarPanorama({ desde, hasta, sucursal_id: sucursal }, signal),
+    enabled: valido, retry: false, refetchOnWindowFocus: false,
   });
-  const report = query.data;
-  const money = (amount: number) => `Q${amount.toLocaleString(locale === 'en' ? 'en-US' : 'es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const stateLabel = (state: string) => text[state as ReportState] ?? state;
-  const dirty = applied && (!sameFilters(draft, applied) || kind !== appliedKind);
-  const roomReport = report?.reporte === 'reservas-habitaciones' ? report : null;
-  const operationalReport = report && report.reporte !== 'reservas-habitaciones' ? report : null;
-  const totalRecords = roomReport?.resumen.reservas ?? operationalReport?.resumen.registros ?? 0;
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
-    const days = (Date.parse(draft.hasta) - Date.parse(draft.desde)) / 86400000 + 1;
-    if (!validDate(draft.desde) || !validDate(draft.hasta) || days < 1 || days > 366) { setValidation(true); return; }
-    setValidation(false);
-    setDownloadMessage(null);
-    if (applied && sameFilters(draft, applied) && page === 1 && kind === appliedKind) void query.refetch();
-    else { setApplied({ ...draft }); setAppliedKind(kind); setPage(1); }
-  }
-  async function download(formato: 'pdf' | 'xlsx') {
-    if (!report || query.isFetching || downloading !== null) return;
-    setDownloading(formato); setDownloadMessage(null); setDownloadDetail(null);
-    try {
-      await reportesApi.descargar({ desde: report.filtros.desde, hasta: report.filtros.hasta,
-        sucursal_id: report.filtros.sucursal_id ?? undefined, estado: report.filtros.estado ?? undefined }, formato, report.reporte);
-      setDownloadMessage('success');
-    } catch (error) {
-      if (!(error instanceof Error && error.name === 'AbortError')) {
-        setDownloadMessage('error');
-        if (error instanceof ApiError && error.code === 'REPORT_TOO_LARGE') setDownloadDetail(error.message);
-      }
-    } finally { setDownloading(null); }
-  }
-  const columns: Column<Omit<ReportRecord, 'id'> & { id: string }>[] = [
-    { key: 'id', label: text.id, render: row => `#${row.id}` },
-    { key: 'sede', label: text.site, render: row => row.sede },
-    { key: 'habitacion', label: text.room, render: row => row.habitacion },
-    { key: 'tipo', label: text.type, render: row => row.tipo_habitacion },
-    { key: 'entrada', label: text.entry, render: row => showDate(row.fecha_entrada) },
-    { key: 'salida', label: text.exit, render: row => showDate(row.fecha_salida) },
-    { key: 'estado', label: text.state, render: row => <span className="inline-flex rounded-full bg-neutro-100 px-2.5 py-1 text-xs font-medium">{stateLabel(row.estado)}</span> },
-    { key: 'huespedes', label: text.guests, render: row => row.huespedes },
-    { key: 'noches', label: text.nights, render: row => row.noches_periodo },
-    { key: 'importe', label: text.amount, render: row => <span className="whitespace-nowrap font-semibold tabular-nums">{money(row.importe_reservado)}</span> },
+  const fmtDate = (k: string, monthly: boolean) => monthly ? new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-GT', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(`${k}-01T00:00:00Z`)) : k.slice(8) + '/' + k.slice(5, 7);
+  const presets: { id: keyof TextosPanorama['presets']; range: [string, string] }[] = [
+    { id: 'mes', range: [`${today.slice(0, 7)}-01`, today] }, { id: 'ultimos30', range: [shift(today, -29), today] },
+    { id: 'proximos30', range: [today, shift(today, 29)] }, { id: 'anio', range: [`${today.slice(0, 4)}-01-01`, today] },
   ];
-  return <div className="space-y-6">
-    <header className="flex items-start gap-3">
-      <span className="rounded-xl bg-bronce-50 p-3 text-bronce-700"><FileText className="size-6" aria-hidden="true" /></span>
-      <div><p className="text-xs font-semibold uppercase tracking-wider text-bronce-700">HOTEL HUNAHPÚ</p>
-        <h1 className="mt-1 font-serif text-2xl font-semibold text-neutro-900 sm:text-3xl">{text.center}</h1>
-        <p className="mt-2 max-w-3xl text-sm text-neutro-600">{text.intro}</p></div>
-    </header>
-    <Card><form onSubmit={submit} aria-label={text.applied} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <Select label={text.report} value={kind} onChange={e => { setKind(e.target.value as ReportKind); setDraft(value => ({ ...value, estado: undefined })); }}>
-          {reportKinds.map(value => <option key={value} value={value}>{text[value]}</option>)}
-        </Select>
-        <Select label={text.site} value={draft.sucursal_id ?? 'all'} loading={sites.isLoading} onChange={e => setDraft({ ...draft, sucursal_id: e.target.value === 'all' ? undefined : Number(e.target.value) })}>
-          <option value="all">{text.allSites}</option>{sites.data?.map(site => <option key={site.id} value={site.id}>{site.nombre}</option>)}
-        </Select>
-        <Select label={text.state} value={draft.estado ?? ''} onChange={e => setDraft({ ...draft, estado: e.target.value ? e.target.value as ReportState : undefined })}>
-          <option value="">{text.allStates}</option>{reportStates[kind].map(state => <option key={state} value={state}>{stateLabel(state)}</option>)}
-        </Select>
-        <DateField label={text.from} value={draft.desde} required onChange={e => setDraft({ ...draft, desde: e.target.value })} />
-        <DateField label={text.to} value={draft.hasta} required min={draft.desde || undefined} onChange={e => setDraft({ ...draft, hasta: e.target.value })} />
-        <div className="flex items-end"><Button type="submit" className="w-full" isLoading={Boolean(applied && query.isFetching)} disabled={downloading !== null}><Search className="size-4" aria-hidden="true" />{text.consult}</Button></div>
-      </div>
-      <p className="text-xs text-neutro-600">{text.periodHint}</p>
-      <p className="max-w-4xl text-xs leading-relaxed text-neutro-600">{kind === 'reservas-habitaciones' ? text.criterion : text.operationalCriterion}</p>
-      {validation && <Alert tone="error">{text.datesError}</Alert>}
-      {sites.isError && <Alert tone="warning">{text.sitesError} <Button variant="text" size="sm" onClick={() => void sites.refetch()}>{text.retry}</Button></Alert>}
-    </form></Card>
-    {dirty && <Alert tone="warning">{text.draft}</Alert>}
-    {!applied && <Card><p className="py-8 text-center text-sm text-neutro-600">{text.initial}</p></Card>}
-    {applied && query.isFetching && <LoadingNotice label={appliedKind === 'reservas-habitaciones' ? text.loading : text.operationalLoading} />}
-    {query.isError && <Alert tone="error" title={text.error}><Button variant="secondary" onClick={() => void query.refetch()}>{text.retry}</Button></Alert>}
-    {report && !query.isError && <section aria-label={text.results} className="space-y-4" aria-busy={query.isFetching}>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="font-serif text-xl font-semibold">{text[report.reporte]}</h2>
-          <p className="mt-1 text-sm text-neutro-600">{text.applied}: {report.filtros.sucursal_id === null ? text.allSites : report.sede} · {showDate(report.filtros.desde)} - {showDate(report.filtros.hasta)} · {report.filtros.estado ? stateLabel(report.filtros.estado) : text.allStates}</p>
-          <p className="mt-1 text-xs text-neutro-500">{text.generated}: {new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-GT', { timeZone: 'America/Guatemala', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.generado))} (Guatemala)</p>
+  const base = { desde, hasta };
+  return (
+    <div className="space-y-5">
+      <header><p className="text-xs font-medium text-neutro-500">{p.categoria}</p><h1 className="font-sans text-2xl font-semibold text-neutro-900">{p.titulo}</h1></header>
+      <div className="space-y-3 rounded-xl border border-neutro-200 bg-white p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-neutro-600">{p.desde}<input type="date" className={cn(field, 'mt-1 block')} value={desde} max={hasta} onChange={e => update({ desde: e.target.value || null })} /></label>
+          <label className="text-xs text-neutro-600">{p.hasta}<input type="date" className={cn(field, 'mt-1 block')} value={hasta} min={desde} onChange={e => update({ hasta: e.target.value || null })} /></label>
+          <div role="group" aria-label={p.periodo} className="flex flex-wrap gap-2">{presets.map(({ id, range }) => {
+            const active = range[0] === desde && range[1] === hasta;
+            return <Button key={id} type="button" size="sm" variant={active ? 'primary' : 'secondary'} aria-pressed={active} onClick={() => update({ desde: range[0], hasta: range[1] })}>{p.presets[id]}</Button>;
+          })}</div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={query.isFetching || downloading !== null || totalRecords > 10000} isLoading={downloading === 'pdf'} onClick={() => void download('pdf')}><Download className="size-4" aria-hidden="true" />{text.downloadPdf}</Button>
-          <Button variant="secondary" disabled={query.isFetching || downloading !== null || totalRecords > 10000} isLoading={downloading === 'xlsx'} onClick={() => void download('xlsx')}><FileSpreadsheet className="size-4" aria-hidden="true" />{text.downloadExcel}</Button>
-        </div>
+        <p className="text-xs text-neutro-500">{p.sedeLabel(sedeNombre)} · {p.zona}</p>
+        {!valido && <p role="alert" className="text-xs font-medium text-error-700">{p.fechasInvalidas}</p>}
       </div>
-      <p className="text-xs text-neutro-600">{roomReport ? (totalRecords > 10000 ? text.limit : text.exportHint) : (totalRecords > 10000 ? text.operationalLimit : text.operationalExport)}</p>
-      {downloadMessage && <Alert tone={downloadMessage === 'error' ? 'error' : 'success'}>{downloadMessage === 'error' ? downloadDetail ?? text.downloadError : text.downloaded}</Alert>}
-      {roomReport && <><dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[[text.reservations, roomReport.resumen.reservas], [text.guests, roomReport.resumen.huespedes], [text.nights, roomReport.resumen.noches_periodo], [text.amount, money(roomReport.resumen.importe_reservado)]].map(([label, value]) =>
-          <Card key={label} className="border-l-2 border-l-bronce-600"><dt className="text-xs text-neutro-600">{label}</dt><dd className="mt-2 text-2xl font-semibold tabular-nums text-neutro-900">{value}</dd></Card>)}
-      </dl>
-      <p className="text-sm text-neutro-600">{text.cancelled}: <strong>{roomReport.resumen.canceladas}</strong> · {text.cancelledAmount}: <strong>{money(roomReport.resumen.importe_cancelado)}</strong></p>
-      <Card><p className="mb-2 text-xs leading-relaxed text-neutro-600">{text.moneyNote}</p><p className="text-xs leading-relaxed text-neutro-600">{text.guestsNote}</p></Card></>}
-      {operationalReport && <>
-        <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {operationalReport.metricas.map(metric => <Card key={metric.clave} className="border-l-2 border-l-bronce-600">
-            <dt className="text-xs text-neutro-600">{locale === 'en' ? metric.etiqueta_en : metric.etiqueta}</dt>
-            <dd className="mt-2 text-2xl font-semibold tabular-nums text-neutro-900">{metric.formato === 'importe' ? money(operationalReport.resumen[metric.clave]) : operationalReport.resumen[metric.clave]}</dd>
-          </Card>)}
-        </dl>
-        <Card><p className="mb-2 text-xs leading-relaxed text-neutro-600">{locale === 'en' ? operationalReport.criterio_en : operationalReport.criterio}</p>
-          <p className="text-xs leading-relaxed text-neutro-600">{locale === 'en' ? operationalReport.nota_en : operationalReport.nota}</p></Card>
-      </>}
-      <Card className="overflow-hidden">
-        {roomReport && (roomReport.registros.length ? <Table rows={roomReport.registros.map(row => ({ ...row, id: String(row.id) }))} columns={columns} caption={text.title} /> : <p role="status" className="py-10 text-center text-sm text-neutro-600">{text.empty}</p>)}
-        {operationalReport && (operationalReport.registros.length ? <Table<Record<string, string | number | null> & { id: string }> rows={operationalReport.registros.map(row => ({ ...row, id: row.referencia }))} columns={operationalReport.columnas.map(column => ({ key: column.clave, label: locale === 'en' ? column.etiqueta_en : column.etiqueta,
-          render: row => { const value = row[column.clave]; return value == null ? '—' : column.formato === 'importe' ? money(Number(value)) : column.formato === 'fecha' ? showDate(String(value)) : column.clave === 'estado' ? stateLabel(String(value)) : column.clave === 'tipo_servicio' ? text[value as 'experiencia' | 'alquiler' | 'bienestar'] ?? String(value) : String(value); },
-        }))} caption={text[operationalReport.reporte]} /> : <p role="status" className="py-10 text-center text-sm text-neutro-600">{text.operationalEmpty}</p>)}
-        <div className="mt-4"><Pagination page={report.paginacion.pagina} totalPages={report.paginacion.total_paginas} onChange={setPage} disabled={query.isFetching || downloading !== null} labels={{ page: text.page, of: text.of, previous: text.previous, next: text.next }} /></div>
-      </Card>
-    </section>}
+      <nav aria-label={p.navLabel} className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+        {SECCIONES.map(s => <button key={s} type="button" aria-current={s === seccion ? 'page' : undefined}
+          onClick={() => update({ seccion: s === 'resumen' ? null : s, estado: null, reporte: null })}
+          className={cn('whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors', s === seccion ? 'border-bronce-600 bg-bronce-600 text-white' : 'border-neutro-300 bg-white text-neutro-700 hover:bg-neutro-50')}>{p.secciones[s]}</button>)}
+      </nav>
+      {valido && (query.isLoading ? <LoadingNotice label={p.cargando} />
+        : query.isError || !query.data ? <div role="alert" className="rounded-xl border border-error-600/20 bg-error-50 p-4 text-sm text-error-700">{p.error} <Button variant="secondary" size="sm" onClick={() => void query.refetch()}>{p.reintentar}</Button></div>
+        : <Contenido seccion={seccion} data={query.data} base={base} sucursal={sucursal} fmtDate={fmtDate} />)}
+    </div>
+  );
+}
+
+function Contenido({ seccion, data, base, sucursal, fmtDate }: { seccion: Seccion; data: Panorama; base: { desde: string; hasta: string }; sucursal?: number; fmtDate: (k: string, m: boolean) => string }) {
+  const p = usePanoramaText();
+  const { locale } = useLocale();
+  const nf = (n: number) => n.toLocaleString(locale === 'en' ? 'en-US' : 'es-GT');
+  const money = (n: number) => `Q${n.toLocaleString(locale === 'en' ? 'en-US' : 'es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const moneyAxis = (n: number) => `Q${n.toLocaleString(locale === 'en' ? 'en-US' : 'es-GT', { maximumFractionDigits: 0 })}`;
+  const chartLabels = { empty: p.vacio, table: p.tabla, period: p.periodo, total: p.colTotal, monthly: p.agrupadoMes };
+  const q = `desde=${base.desde}&hasta=${base.hasta}`;
+  const est = (e: string) => p.estadosGen[e] ?? e;
+  const sum = (rows: { valor: number }[]) => rows.reduce((s, r) => s + r.valor, 0);
+  const barrasEstado = (rows: EstadoConteo[], href?: (estado: string) => string): FilaBarra[] => rows.map(r => ({ clave: r.estado, etiqueta: est(r.estado), valor: r.valor, clase: BARRA_ESTADO[r.estado], href: href?.(r.estado) }));
+  const h = data.habitaciones, s = data.servicios, f = data.finanzas;
+
+  if (seccion === 'resumen') {
+    const filas: { id: keyof TextosPanorama['modulos']; rows: EstadoConteo[]; to: string }[] = [
+      { id: 'habitaciones', rows: h.estados_en_periodo.map(r => ({ estado: r.estado, valor: r.reservas })), to: '/admin/reservas?vista=todas' },
+      { id: 'restaurante', rows: s.restaurante, to: '/admin/reservas-restaurante?vista=todas' }, { id: 'actividades', rows: s.actividades, to: '/admin/reservas-actividades?vista=todas' },
+      { id: 'bienestar', rows: s.bienestar, to: '/admin/citas-spa?vista=historial' }, { id: 'eventos', rows: s.eventos, to: '/admin/reservas-evento?vista=historial' }, { id: 'amenidades', rows: s.amenidades, to: '/admin/reservas-amenidades' },
+    ];
+    return <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LineChart titulo={p.creadasTitulo} descripcion={p.creadasDesc} desde={base.desde} hasta={base.hasta} formato={nf} etiquetaFecha={fmtDate} labels={chartLabels} series={[{ clave: 'c', etiqueta: p.reservas, datos: h.creadas_por_dia, clase: 'text-bronce-600' }]} />
+        <LineChart titulo={p.cobradoTitulo} descripcion={p.cobradoDesc} desde={base.desde} hasta={base.hasta} formato={money} formatoEje={moneyAxis} etiquetaFecha={fmtDate} labels={chartLabels} series={[{ clave: 'g', etiqueta: p.cobrado, datos: f.cobrado_por_dia.map(x => ({ fecha: x.fecha, valor: x.valor })), clase: 'text-exito-600' }]} />
+      </div>
+      <section aria-label={p.resumenTabla} className="rounded-xl border border-neutro-200 bg-white p-4">
+        <h2 className="font-sans text-sm font-semibold text-neutro-900">{p.resumenTabla}</h2><p className="text-xs text-neutro-500">{p.resumenTablaDesc}</p>
+        <div className="mt-3 hidden overflow-x-auto md:block"><table className="w-full text-left text-sm">
+          <thead className="text-xs text-neutro-500"><tr>{[p.colModulo, p.colBase, p.colTotal, p.colConfirmadas, p.colCanceladas, p.colOtras, ''].map((c, i) => <th key={i} scope="col" className="px-3 py-2 font-medium">{c || <span className="sr-only">{p.verRegistros}</span>}</th>)}</tr></thead>
+          <tbody className="divide-y divide-neutro-100">{filas.map(({ id, rows, to }) => { const total = sum(rows), conf = rows.find(r => r.estado === 'confirmada')?.valor ?? 0, canc = rows.find(r => r.estado === 'cancelada')?.valor ?? 0;
+            return <tr key={id}><th scope="row" className="px-3 py-2.5 font-medium text-neutro-900">{p.modulos[id]}</th><td className="px-3 py-2.5 text-xs text-neutro-600">{p.baseModulo[id]}</td>
+              <td className="px-3 py-2.5 tabular-nums font-semibold">{nf(total)}</td><td className="px-3 py-2.5 tabular-nums">{nf(conf)}</td><td className="px-3 py-2.5 tabular-nums">{nf(canc)}</td><td className="px-3 py-2.5 tabular-nums">{nf(total - conf - canc)}</td>
+              <td className="px-3 py-2.5"><Link to={to} className="whitespace-nowrap text-xs font-semibold text-bronce-700 underline">{p.verRegistros}</Link></td></tr>; })}</tbody></table></div>
+        <ul className="mt-3 space-y-2 md:hidden">{filas.map(({ id, rows, to }) => { const total = sum(rows), conf = rows.find(r => r.estado === 'confirmada')?.valor ?? 0, canc = rows.find(r => r.estado === 'cancelada')?.valor ?? 0;
+          return <li key={id} className="rounded-lg border border-neutro-200 p-3 text-sm"><div className="flex justify-between gap-2"><span className="font-semibold">{p.modulos[id]}</span><span className="font-semibold tabular-nums">{nf(total)}</span></div>
+            <p className="text-xs text-neutro-500">{p.baseModulo[id]}</p><p className="mt-1 text-xs text-neutro-600">{p.colConfirmadas}: {nf(conf)} · {p.colCanceladas}: {nf(canc)} · {p.colOtras}: {nf(total - conf - canc)}</p>
+            <Link to={to} className="mt-1 inline-block text-xs font-semibold text-bronce-700 underline">{p.verRegistros}</Link></li>; })}</ul>
+      </section>
+    </div>;
+  }
+  if (seccion === 'habitaciones') {
+    return <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LineChart titulo={p.creadasTitulo} descripcion={p.creadasDesc} desde={base.desde} hasta={base.hasta} formato={nf} etiquetaFecha={fmtDate} labels={chartLabels} series={[{ clave: 'c', etiqueta: p.reservas, datos: h.creadas_por_dia, clase: 'text-bronce-600' }]} />
+        <LineChart titulo={p.llegadasTitulo} descripcion={p.llegadasDesc} desde={base.desde} hasta={base.hasta} formato={nf} etiquetaFecha={fmtDate} labels={chartLabels}
+          series={[{ clave: 'l', etiqueta: p.llegadas, datos: h.llegadas_por_dia, clase: 'text-bronce-600' }, { clave: 's', etiqueta: p.salidas, datos: h.salidas_por_dia, clase: 'text-info-600', dash: '5 4' }]} />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BarList titulo={p.estadosTitulo} descripcion={p.estadosDesc} vacio={p.vacio} enlace={p.verRegistros} filas={h.estados_en_periodo.map(r => ({ clave: r.estado, etiqueta: est(r.estado), valor: r.reservas, clase: BARRA_ESTADO[r.estado], nota: money(r.importe), href: `/admin/reservas?vista=todas&estado=${r.estado}` }))} />
+        {!sucursal && h.por_sede.length > 0 ? <BarList titulo={p.sedesTitulo} descripcion={p.sedesDesc} vacio={p.vacio} enlace={p.verRegistros} filas={h.por_sede.map(r => ({ clave: String(r.sucursal_id), etiqueta: r.sede, valor: r.reservas, texto: p.reservasN(r.reservas), nota: money(r.importe_vigente) }))} />
+          : <BarList titulo={p.fisicoTitulo} descripcion={p.fisicoDesc} vacio={p.vacio} enlace={p.verRegistros} filas={h.estado_fisico_actual.map(r => ({ clave: r.estado, etiqueta: est(r.estado), valor: r.habitaciones, texto: p.habitacionesN(r.habitaciones) }))} />}
+      </div>
+      {!sucursal && h.por_sede.length > 0 && <BarList titulo={p.fisicoTitulo} descripcion={p.fisicoDesc} vacio={p.vacio} enlace={p.verRegistros} filas={h.estado_fisico_actual.map(r => ({ clave: r.estado, etiqueta: est(r.estado), valor: r.habitaciones, texto: p.habitacionesN(r.habitaciones) }))} />}
+      <p className="text-xs text-neutro-500">{p.histNota}</p>
+      <DetalleReporte kinds={['reservas-habitaciones']} filters={{ ...base, sucursal_id: sucursal }} />
+    </div>;
+  }
+  if (seccion === 'restaurante') {
+    return <div className="space-y-4">
+      <BarList titulo={p.modulos.restaurante} descripcion={p.serviciosNota} vacio={p.vacio} enlace={p.verRegistros} filas={barrasEstado(s.restaurante, e => `/admin/reservas-restaurante?vista=todas&estado=${e}`)} />
+      <DetalleReporte kinds={['reservas-restaurante']} filters={{ ...base, sucursal_id: sucursal }} />
+    </div>;
+  }
+  if (seccion === 'servicios') {
+    return <div className="space-y-4">
+      <p className="text-xs text-neutro-500">{p.serviciosNota}</p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <BarList titulo={p.modulos.actividades} vacio={p.vacio} enlace={p.verRegistros} filas={barrasEstado(s.actividades, e => `/admin/reservas-actividades?vista=todas&estado=${e}`)} />
+        <BarList titulo={p.modulos.bienestar} vacio={p.vacio} enlace={p.verRegistros} filas={barrasEstado(s.bienestar)} />
+        <BarList titulo={p.modulos.eventos} vacio={p.vacio} enlace={p.verRegistros} filas={barrasEstado(s.eventos)} />
+        <BarList titulo={p.modulos.amenidades} descripcion={p.amenidadesSinDetalle} vacio={p.vacio} enlace={p.verRegistros} filas={barrasEstado(s.amenidades)} />
+      </div>
+      <DetalleReporte kinds={['actividades-bienestar', 'cotizaciones-eventos']} filters={{ ...base, sucursal_id: sucursal }} />
+    </div>;
+  }
+  const cobrado = sum(f.cobrado_por_dia), aprob = f.pagos_por_estado.find(r => r.estado === 'aprobado');
+  const enProceso = f.pagos_por_estado.filter(r => r.estado === 'pendiente' || r.estado === 'procesando').reduce((a, r) => a + r.cantidad, 0);
+  const noComp = f.pagos_por_estado.filter(r => r.estado === 'rechazado' || r.estado === 'cancelado').reduce((a, r) => a + r.cantidad, 0);
+  const kpi = (l: string, v: string, n = '') => <div className="rounded-xl border border-neutro-200 bg-white px-4 py-3"><p className="text-xs text-neutro-500">{l}</p><p className="mt-0.5 text-lg font-semibold tabular-nums text-neutro-900">{v}</p><p className="text-xs text-neutro-400">{n}</p></div>;
+  return <div className="space-y-4">
+    {sucursal && <p role="note" className="rounded-lg border border-info-600/20 bg-info-50 px-3 py-2 text-xs text-info-700">{p.sedeNoAplica}</p>}
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {kpi(p.kpi.cobrado, money(cobrado), p.kpi.cobradoNota)}{kpi(p.kpi.aprobados, nf(aprob?.cantidad ?? 0))}{kpi(p.kpi.enProceso, nf(enProceso), p.finNota.split('.')[0])}{kpi(p.kpi.noCompletados, nf(noComp))}
+    </div>
+    <LineChart titulo={p.cobradoTitulo} descripcion={p.cobradoDesc} desde={base.desde} hasta={base.hasta} formato={money} formatoEje={moneyAxis} etiquetaFecha={fmtDate} labels={chartLabels} series={[{ clave: 'g', etiqueta: p.cobrado, datos: f.cobrado_por_dia.map(x => ({ fecha: x.fecha, valor: x.valor })), clase: 'text-exito-600' }]} />
+    <div className="grid gap-4 lg:grid-cols-2">
+      <BarList titulo={p.pagosEstadoTitulo} descripcion={p.pagosEstadoDesc} vacio={p.vacio} enlace={p.verRegistros} filas={f.pagos_por_estado.map(r => ({ clave: r.estado, etiqueta: p.estadosPago[r.estado] ?? r.estado, valor: r.cantidad, clase: BARRA_ESTADO[r.estado], nota: money(r.importe), href: `/admin/pagos?estado=${r.estado}&${q}` }))} />
+      <BarList titulo={p.facturasTitulo} descripcion={p.facturasDesc} vacio={p.vacio} enlace={p.verRegistros} filas={f.facturas_por_estado.map(r => ({ clave: r.estado, etiqueta: p.estadosFactura[r.estado] ?? r.estado, valor: r.cantidad, clase: BARRA_ESTADO[r.estado], nota: money(r.importe), href: `/admin/facturacion?estado=${r.estado}&${q}` }))} />
+    </div>
+    <section aria-label={p.reembolsosTitulo} className="rounded-xl border border-neutro-200 bg-white p-4"><h3 className="font-sans text-sm font-semibold">{p.reembolsosTitulo}</h3>
+      {f.reembolsos.length === 0 ? <p role="status" className="mt-2 text-sm text-neutro-500">{p.reembolsosVacio}</p>
+        : <><ul className="mt-2 space-y-1 text-sm">{f.reembolsos.map(r => <li key={r.estado} className="flex justify-between"><span>{r.estado} · {nf(r.cantidad)}</span><span className="font-semibold tabular-nums">{money(r.importe)}</span></li>)}</ul><p className="mt-2 text-xs text-advertencia-700">{p.reembolsosNota}</p></>}
+    </section>
+    <p className="text-xs text-neutro-500">{p.finNota}</p>
   </div>;
 }

@@ -1,6 +1,13 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
+import {
+  RESTAURANT_BOOKING_HOURS,
+  minutesOf,
+  toTimeString,
+  getAllBookingSlots,
+  intervalsOverlap,
+} from "../../constants/restaurant";
 import { SedeScope, sedeWhere } from "../../utils/sedeScope";
 
 const db = require("../../models");
@@ -202,6 +209,32 @@ const getLockedMesaOrFail = async (
 };
 
 /**
+ * La hora de inicio debe estar dentro del horario de reservas y alinearse
+ * con las franjas configuradas (RESTAURANT_BOOKING_HOURS).
+ *
+ * Con una duración estándar de 90 minutos y cierre a las 22:00,
+ * la última hora de inicio permitida es 20:30.
+ */
+const validateBookingHours = (
+  hora: string
+) => {
+  const start = minutesOf(hora);
+  const seconds = Number(normalizeTime(hora).slice(6, 8));
+  if (
+    start < minutesOf(RESTAURANT_BOOKING_HOURS.APERTURA) ||
+    start > minutesOf(RESTAURANT_BOOKING_HOURS.ULTIMO_INICIO) ||
+    start % RESTAURANT_BOOKING_HOURS.INTERVALO_MINUTOS !== 0 ||
+    seconds !== 0
+  ) {
+    throw new AppError(
+      422,
+      "TABLE_RESERVATION_OUTSIDE_HOURS",
+      `Las reservas de mesa se aceptan de ${RESTAURANT_BOOKING_HOURS.APERTURA} a ${RESTAURANT_BOOKING_HOURS.ULTIMO_INICIO} (cierre ${RESTAURANT_BOOKING_HOURS.CIERRE}, duración ${RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS} min), en intervalos de ${RESTAURANT_BOOKING_HOURS.INTERVALO_MINUTOS} minutos`
+    );
+  }
+};
+
+/**
  * No permitimos nuevas reservas
  * mientras la mesa esté en mantenimiento.
  *
@@ -240,15 +273,14 @@ const validateCapacity = (
 };
 
 /**
- * Con el modelo actual cada reserva
- * representa una hora concreta.
+ * Cada reserva retiene la mesa durante el intervalo de ocupación
+ * [inicio, inicio + DURACION_MINUTOS).
  *
- * Por eso la colisión se define como:
+ * Dos reservas de la misma mesa colisionan si sus intervalos se superponen:
+ *   inicio_nueva < fin_existente && fin_nueva > inicio_existente
  *
- * misma mesa
- * + misma fecha
- * + misma hora
- * + confirmada
+ * Considera únicamente las reservas con estado "confirmada".
+ * Las reservas canceladas quedan libres y no generan conflicto.
  */
 const validateAvailability =
   async (
@@ -258,43 +290,48 @@ const validateAvailability =
     reservaId?: number,
     transaction?: any
   ) => {
+    const inicioNueva = minutesOf(hora);
+    const finNueva =
+      inicioNueva + RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS;
+
     const where: any = {
-      mesa_id:
-        mesaId,
-
+      mesa_id: mesaId,
       fecha,
-
-      hora,
-
-      estado:
-        "confirmada",
+      estado: "confirmada",
     };
 
     /**
-     * Al reactivar una reserva,
-     * excluimos la propia.
+     * Al reactivar o actualizar una reserva existente,
+     * se excluye el propio registro.
      */
-    if (
-      reservaId !==
-      undefined
-    ) {
+    if (reservaId !== undefined) {
       where.id = {
-        [Op.ne]:
-          reservaId,
+        [Op.ne]: reservaId,
       };
     }
 
-    const existente =
-      await ReservaMesa.findOne({
-        where,
-        transaction,
-      });
+    const existentes = await ReservaMesa.findAll({
+      where,
+      transaction,
+    });
 
-    if (existente) {
+    const conflicto = existentes.find((existente: any) => {
+      const inicioExistente = minutesOf(existente.hora);
+      const finExistente =
+        inicioExistente + RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS;
+      return intervalsOverlap(
+        inicioNueva,
+        finNueva,
+        inicioExistente,
+        finExistente
+      );
+    });
+
+    if (conflicto) {
       throw new AppError(
         409,
-        "TABLE_UNAVAILABLE",
-        "La mesa ya se encuentra reservada para esa fecha y hora"
+        "TABLE_RESERVATION_TIME_CONFLICT",
+        "La mesa ya se encuentra reservada para esa fecha y horario"
       );
     }
   };
@@ -430,6 +467,14 @@ export const create =
      */
     validateReservationDateTime(
       data.fecha,
+      data.hora
+    );
+
+    /**
+     * Regla 2:
+     * solo dentro del horario de reservas del restaurante.
+     */
+    validateBookingHours(
       data.hora
     );
 
@@ -662,3 +707,218 @@ export const updateStatus =
       reservaId
     );
   };
+
+/**
+ * Cancelación por el propietario de la reserva (cliente).
+ *
+ * Reglas:
+ * - Solo el usuario dueño de la reserva puede cancelarla.
+ * - Solo se cancelan reservas "confirmada"; una ya cancelada responde 409.
+ * - Solo antes de la fecha y hora reservadas (zona horaria del hotel).
+ *   No existe una política de anticipación mínima ni penalización: no se
+ *   aplica ninguna.
+ *
+ * El SELECT ... FOR UPDATE serializa cancelaciones concurrentes y cambios
+ * administrativos sobre la misma reserva: la segunda solicitud ya observa
+ * "cancelada" y recibe 409 en lugar de un segundo 200.
+ *
+ * La disponibilidad de la mesa se calcula a partir de las reservas
+ * "confirmada" (validateAvailability), por lo que el horario queda libre al
+ * cambiar el estado. El estado físico de la mesa (Mesa.estado) no se toca.
+ */
+export const cancelForUser =
+  async (
+    id: number,
+    userId: number
+  ) => {
+    const reservaId =
+      await sequelize.transaction(
+        async (
+          transaction: any
+        ) => {
+          const reserva =
+            await ReservaMesa.findByPk(
+              id,
+              {
+                transaction,
+                lock:
+                  transaction
+                    .LOCK
+                    .UPDATE,
+              }
+            );
+
+          if (!reserva) {
+            throw new AppError(
+              404,
+              "TABLE_RESERVATION_NOT_FOUND",
+              "La reserva de mesa solicitada no existe"
+            );
+          }
+
+          if (
+            reserva.usuario_id !==
+            userId
+          ) {
+            throw new AppError(
+              403,
+              "FORBIDDEN",
+              "No tiene permisos para cancelar esta reserva de mesa"
+            );
+          }
+
+          if (
+            reserva.estado ===
+            "cancelada"
+          ) {
+            throw new AppError(
+              409,
+              "TABLE_RESERVATION_ALREADY_CANCELLED",
+              "La reserva de mesa ya se encuentra cancelada"
+            );
+          }
+
+          if (
+            reserva.estado !==
+            "confirmada"
+          ) {
+            throw new AppError(
+              409,
+              "TABLE_RESERVATION_NOT_CANCELLABLE",
+              "La reserva de mesa no puede cancelarse en su estado actual"
+            );
+          }
+
+          const current =
+            getCurrentHotelDateTime();
+
+          if (
+            reserva.fecha <
+              current.fecha ||
+            (reserva.fecha ===
+              current.fecha &&
+              normalizeTime(
+                reserva.hora
+              ) <=
+                current.hora)
+          ) {
+            throw new AppError(
+              422,
+              "TABLE_RESERVATION_ALREADY_STARTED",
+              "Solo puede cancelar una reserva antes de su fecha y hora"
+            );
+          }
+
+          await reserva.update(
+            {
+              estado:
+                "cancelada",
+            },
+            {
+              transaction,
+            }
+          );
+
+          return reserva.id;
+        }
+      );
+
+    return getByIdForUser(
+      reservaId,
+      userId
+    );
+  };
+
+/**
+ * Consulta la disponibilidad de todas las franjas horarias de una mesa
+ * para una fecha específica (zona horaria del hotel).
+ */
+export const getDisponibilidadMesa = async (
+  mesaId: number,
+  fecha: string
+) => {
+  const mesa = await getMesaOrFail(mesaId);
+  const current = getCurrentHotelDateTime();
+
+  const reservas = await ReservaMesa.findAll({
+    where: {
+      mesa_id: mesaId,
+      fecha,
+      estado: "confirmada",
+    },
+    order: [["hora", "ASC"]],
+  });
+
+  const allSlots = getAllBookingSlots();
+
+  const slots = allSlots.map((slot) => {
+    const inicioSlot = minutesOf(slot);
+    const finSlot =
+      inicioSlot + RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS;
+
+    const conflicto = reservas.find((r: any) => {
+      const rIni = minutesOf(r.hora);
+      const rFin =
+        rIni + RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS;
+      return intervalsOverlap(
+        inicioSlot,
+        finSlot,
+        rIni,
+        rFin
+      );
+    });
+
+    const ocupada = Boolean(conflicto);
+
+    const pasada =
+      fecha < current.fecha ||
+      (fecha === current.fecha &&
+        normalizeTime(slot) <= current.hora);
+
+    const disponible =
+      !ocupada &&
+      !pasada &&
+      mesa.estado !== "mantenimiento";
+
+    return {
+      hora: slot,
+      hora_fin: toTimeString(finSlot),
+      disponible,
+      ocupada,
+      pasada,
+    };
+  });
+
+  return {
+    mesa_id: mesa.id,
+    fecha,
+    estado_mesa: mesa.estado,
+    capacidad: mesa.capacidad,
+    configuracion: {
+      apertura: RESTAURANT_BOOKING_HOURS.APERTURA,
+      cierre: RESTAURANT_BOOKING_HOURS.CIERRE,
+      intervalo_minutos: RESTAURANT_BOOKING_HOURS.INTERVALO_MINUTOS,
+      duracion_minutos: RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS,
+      ultima_hora_inicio: RESTAURANT_BOOKING_HOURS.ULTIMO_INICIO,
+    },
+    slots,
+    horarios_disponibles: slots
+      .filter((s) => s.disponible)
+      .map((s) => s.hora),
+    horarios_ocupados: slots
+      .filter((s) => s.ocupada)
+      .map((s) => s.hora),
+  };
+};
+
+export const getBookingConfig = () => {
+  return {
+    apertura: RESTAURANT_BOOKING_HOURS.APERTURA,
+    cierre: RESTAURANT_BOOKING_HOURS.CIERRE,
+    intervalo_minutos: RESTAURANT_BOOKING_HOURS.INTERVALO_MINUTOS,
+    duracion_minutos: RESTAURANT_BOOKING_HOURS.DURACION_MINUTOS,
+    ultima_hora_inicio: RESTAURANT_BOOKING_HOURS.ULTIMO_INICIO,
+    slots: getAllBookingSlots(),
+  };
+};
+

@@ -9,10 +9,10 @@ import type {
 } from '../types';
 
 /** Ocupación de un recurso en una fecha; se usa para mostrar lugares libres por salida. */
-export function useSalidasActividadQuery(recursoId: number | undefined, fecha: string, enabled = true) {
+export function useSalidasActividadQuery(recursoId: number | undefined, fecha: string, enabled = true, instructorId?: number) {
   return useQuery({
-    queryKey: actividadesQueryKeys.salidas(recursoId ?? 0, fecha),
-    queryFn: () => actividadesApi.getSalidas(recursoId!, fecha),
+    queryKey: actividadesQueryKeys.salidas(recursoId ?? 0, fecha, instructorId),
+    queryFn: () => actividadesApi.getSalidas(recursoId!, fecha, instructorId),
     enabled: enabled && Boolean(recursoId) && /^\d{4}-\d{2}-\d{2}$/.test(fecha),
   });
 }

@@ -21,7 +21,7 @@ import {
 } from '@/api/session';
 import { es } from '@/i18n/es';
 import { authApi } from './api/authApi';
-import { AuthFlowError, type AuthUser, type LoginRequest } from './types';
+import { AuthFlowError, type AuthUser, type LoginRequest, type LoginResponse, type GoogleLoginRequest } from './types';
 
 /**
  * - loading: se está verificando con el servidor una sesión existente.
@@ -44,6 +44,7 @@ interface AuthContextValue {
   notice: string | null;
   noticeReason: SessionInvalidReason | null;
   login: (credentials: LoginRequest) => Promise<AuthUser>;
+  googleLogin: (payload: GoogleLoginRequest, nonce: string) => Promise<AuthUser>;
   logout: () => void;
   retry: () => void;
 }
@@ -168,9 +169,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [attempt, endSession]);
 
-  const login = useCallback(
-    async (credentials: LoginRequest) => {
-      const { accessToken, usuario } = await authApi.login(credentials);
+  const acceptSession = useCallback(
+    ({ accessToken, usuario }: LoginResponse) => {
       // Cambio de usuario: nada de la sesión previa sobrevive.
       discardPrivateData();
       tokenStorage.set(accessToken);
@@ -184,6 +184,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [discardPrivateData],
   );
 
+  const login = useCallback(async (credentials: LoginRequest) =>
+    acceptSession(await authApi.login(credentials)), [acceptSession]);
+  const googleLogin = useCallback(async (payload: GoogleLoginRequest, nonce: string) =>
+    acceptSession(await authApi.googleLogin(payload, nonce)), [acceptSession]);
+
   // Cerrar sesión explícitamente la cierra en todas las pestañas.
   const logout = useCallback(() => {
     endSession();
@@ -192,8 +197,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, notice, noticeReason, login, logout, retry }),
-    [status, user, notice, noticeReason, login, logout, retry],
+    () => ({ status, user, notice, noticeReason, login, googleLogin, logout, retry }),
+    [status, user, notice, noticeReason, login, googleLogin, logout, retry],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

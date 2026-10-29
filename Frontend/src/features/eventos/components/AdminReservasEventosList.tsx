@@ -1,249 +1,175 @@
-import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Calendar,
-  Clock,
-  Building2,
-  Users,
-  Search,
-  ChevronRight,
-} from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Button, buttonStyles } from '@/components/ui/Button';
+import React, { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ChevronRight, RefreshCw, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
-import { useAdminReservasEventosQuery } from '../hooks/useEventos';
-import { AdminReservaEventoEstadoModal } from './AdminReservaEventoEstadoModal';
-import {
-  textosEventos,
-  etiquetasTipoEvento,
-  etiquetasEstadoReserva,
-  formatearGTQ,
-} from '../textos';
-import type { ReservaEvento } from '../types';
+import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
+import { formatAdminCalendarDate, formatAdminTimeOfDay } from '@/features/admin-core/adminDates';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import { getApiErrorMessage } from '@/api/errors';
+import { useLocale } from '@/i18n/LocaleContext';
+import { cn } from '@/lib/cn';
+import { useAdminReservasEventosQuery, useSalonesQuery } from '../hooks/useEventos';
+import { EVENTOS_ROUTES } from '../constants/routes';
+import { formatearGTQ } from '../textos';
+import { useTextosGestionEventos } from '../gestionTextos';
+import { AdminReservaEventoEstadoModal } from './AdminReservaEventoEstadoModal';
+import { EventosAdminNav } from './EventosAdminNav';
+import type { ReservaEvento } from '../types';
 
+const VISTAS = ['hoy', 'proximos', 'historial'] as const;
+type Vista = typeof VISTAS[number];
+const ESTADOS = ['cotizacion', 'confirmada', 'finalizada', 'cancelada', 'expirada'] as const;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ID = /^[1-9]\d*$/;
+/** Estados finales: el servidor no admite cambiarlos (EVENT_RESERVATION_FINAL_STATE). */
+const FINALES = new Set(['cancelada', 'expirada']);
+
+/**
+ * Reservas de eventos: hoy, próximos e historial, filtrables por la sede global,
+ * salón, fecha y estado (en la URL). Los estados son los del backend; el cambio
+ * de estado usa el diálogo existente y el servidor valida cada transición.
+ */
 export const AdminReservasEventosList: React.FC = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState<string>('todos');
-  const [filtroFecha, setFiltroFecha] = useState<string>('');
-  const [reservaParaCambioEstado, setReservaParaCambioEstado] = useState<ReservaEvento | null>(null);
-
+  const t = useTextosGestionEventos();
+  const { locale } = useLocale();
+  const { selectedSedeId } = useAdminScope();
   const reservasQuery = useAdminReservasEventosQuery();
-  const reservas = reservasQuery.data ?? [];
+  const salonesQuery = useSalonesQuery();
+  const [reservaParaCambio, setReservaParaCambio] = useState<ReservaEvento | null>(null);
+  const [params, setParams] = useSearchParams();
+  const update = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) value ? next.set(key, value) : next.delete(key);
+    setParams(next, { replace: true });
+  };
 
-  const reservasFiltradas = useMemo(() => {
-    return reservas.filter((r) => {
-      const matchEstado = filtroEstado === 'todos' || r.estado === filtroEstado;
-      const matchFecha = !filtroFecha || r.fecha === filtroFecha;
-      const term = searchTerm.toLowerCase().trim();
-      const matchSearch =
-        !term ||
-        (r.Usuario?.nombre ?? '').toLowerCase().includes(term) ||
-        (r.Usuario?.email ?? '').toLowerCase().includes(term) ||
-        (r.Salon?.nombre ?? '').toLowerCase().includes(term) ||
-        String(r.id).includes(term);
+  const salonesMap = useMemo(() => new Map((salonesQuery.data ?? []).map((s) => [s.id, s])), [salonesQuery.data]);
+  const sedeDe = (r: ReservaEvento) => r.Salon?.sucursal_id ?? salonesMap.get(r.salon_id)?.sucursal_id ?? null;
+  const reservas = useMemo(() => (reservasQuery.data ?? []).filter((r) => selectedSedeId === 'all' || sedeDe(r) === selectedSedeId), [reservasQuery.data, selectedSedeId, salonesMap]);
+  const salones = (salonesQuery.data ?? []).filter((s) => selectedSedeId === 'all' || s.sucursal_id === selectedSedeId);
 
-      return matchEstado && matchFecha && matchSearch;
-    });
-  }, [reservas, filtroEstado, filtroFecha, searchTerm]);
+  const vista: Vista = (VISTAS as readonly string[]).includes(params.get('vista') ?? '') ? params.get('vista') as Vista : 'hoy';
+  const q = params.get('q') ?? '';
+  const fecha = ISO_DATE.test(params.get('fecha') ?? '') ? params.get('fecha')! : '';
+  const estado = (ESTADOS as readonly string[]).includes(params.get('estado') ?? '') ? params.get('estado')! : '';
+  const salonFiltro = ID.test(params.get('salon') ?? '') ? Number(params.get('salon')) : null;
+
+  const today = getTodayInGuatemala();
+  const porVista = useMemo(() => {
+    const key = (r: ReservaEvento) => `${r.fecha} ${r.hora_inicio}`;
+    const asc = (a: ReservaEvento, b: ReservaEvento) => key(a).localeCompare(key(b)) || a.id - b.id;
+    return {
+      hoy: reservas.filter((r) => r.fecha === today).sort(asc),
+      proximos: reservas.filter((r) => (r.estado === 'confirmada' || r.estado === 'cotizacion') && r.fecha > today).sort(asc),
+      historial: reservas.filter((r) => r.fecha < today).sort((a, b) => asc(b, a)),
+    } satisfies Record<Vista, ReservaEvento[]>;
+  }, [reservas, today]);
+
+  const term = q.trim().toLowerCase().replace(/^#/, '');
+  const filtradas = porVista[vista].filter((r) =>
+    (!term || [String(r.id), r.Usuario?.nombre, r.Usuario?.email, r.Salon?.nombre ?? salonesMap.get(r.salon_id)?.nombre].some((v) => v?.toLowerCase().includes(term))) &&
+    (!fecha || r.fecha === fecha) && (!estado || r.estado === estado) && (salonFiltro === null || r.salon_id === salonFiltro));
+  const hasFilters = Boolean(q || fecha || estado || salonFiltro);
+  const salonNombre = salonFiltro !== null ? salonesMap.get(salonFiltro)?.nombre ?? `#${salonFiltro}` : '';
+  const date = (v: string) => formatAdminCalendarDate(v, locale);
+  const time = (v?: string | null) => v ? formatAdminTimeOfDay(v, locale) : '';
+  const estadoLabel = (e: string) => t.estados[e as keyof typeof t.estados] ?? e;
+  const estadoClase = (e: string) => e === 'confirmada' ? 'border-exito-600/20 bg-exito-50 text-exito-700' : e === 'cotizacion' ? 'border-advertencia-600/20 bg-advertencia-50 text-advertencia-700' : e === 'finalizada' ? 'border-info-600/20 bg-info-50 text-info-700' : 'border-neutro-300 bg-neutro-100 text-neutro-600';
+  const tipo = (v: string) => t.tipos[v as keyof typeof t.tipos] ?? v;
+  const salonDe = (r: ReservaEvento) => r.Salon?.nombre ?? salonesMap.get(r.salon_id)?.nombre ?? `#${r.salon_id}`;
+  const accion = (r: ReservaEvento) => FINALES.has(r.estado) ? null : <Button type="button" variant="ghost" size="sm" aria-label={t.cambiarEstadoDe(r.id)} onClick={() => setReservaParaCambio(r)}><RefreshCw className="size-4" aria-hidden="true" /><span className="hidden 2xl:inline">{t.cambiarEstado}</span></Button>;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12">
-      {/* Retorno */}
-      <Link
-        to="/admin/servicios"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-neutro-600 hover:text-bronce-700 transition-colors w-fit"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        <span>Volver a servicios</span>
-      </Link>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+      <header>
+        <p className="text-xs font-medium text-neutro-500">{t.modulo}</p>
+        <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{t.nav.reservas}</h1>
+        {reservasQuery.isSuccess && <p className="mt-1 text-sm text-neutro-600">{t.reservasResumen(reservas.length)} · {t.hoy} {date(today)}</p>}
+      </header>
+      <EventosAdminNav />
 
-      {/* Encabezado */}
-      <div className="flex flex-col gap-1.5">
-        <p className="eyebrow">{textosEventos.adminReservasEyebrow}</p>
-        <h1 className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem] font-serif font-semibold">
-          {textosEventos.adminReservasTitulo}
-        </h1>
-        <p className="max-w-2xl text-sm text-neutro-600">
-          {textosEventos.adminReservasDesc}
-        </p>
-      </div>
+      {reservasQuery.isPending && <LoadingNotice label={t.cargando} />}
+      {reservasQuery.isError && <Alert tone="error" title={t.errorReservas}><p>{getApiErrorMessage(reservasQuery.error)}</p><Button className="mt-2" variant="secondary" onClick={() => void reservasQuery.refetch()}>{t.reintentar}</Button></Alert>}
 
-      {/* Barra de Búsqueda y Filtros */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 bg-white p-4 rounded-xl border border-neutro-200 shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-400" aria-hidden="true" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={textosEventos.buscarPorCliente}
-            className="w-full rounded-lg border border-neutro-300 pl-9 pr-3 py-2 text-sm text-neutro-900 placeholder-neutro-400 focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
-          />
+      {reservasQuery.isSuccess && <>
+        <div role="group" aria-label={t.vistasLabel} className="flex gap-1 overflow-x-auto rounded-xl border border-neutro-200 bg-white p-1">
+          {VISTAS.map((key) => <button key={key} type="button" aria-pressed={vista === key} onClick={() => update({ vista: key === 'hoy' ? null : key })}
+            className={cn('inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors', vista === key ? 'bg-bronce-50 text-bronce-800' : 'text-neutro-600 hover:bg-neutro-50 hover:text-neutro-900')}>
+            {t.vistas[key]}<span className={cn('rounded-full px-1.5 text-xs tabular-nums', vista === key ? 'bg-bronce-600 text-white' : 'bg-neutro-100 text-neutro-700')}>{porVista[key].length}</span>
+          </button>)}
         </div>
 
-        <div>
-          <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-            className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-sm text-neutro-900 focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
-          >
-            <option value="todos">{textosEventos.todosLosEstados}</option>
-            <option value="cotizacion">Cotización</option>
-            <option value="confirmada">Confirmada</option>
-            <option value="cancelada">Cancelada</option>
-            <option value="finalizada">Finalizada</option>
-          </select>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+          <label className="relative min-w-0 sm:col-span-2 xl:col-span-1"><span className="sr-only">{t.buscarReserva}</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-500" aria-hidden="true" />
+            <input type="search" value={q} placeholder={t.buscarReserva} onChange={(event) => update({ q: event.target.value || null })} className="field-control !pl-9" /></label>
+          <label className="min-w-0"><span className="sr-only">{t.salon}</span>
+            <select value={salonFiltro ?? ''} onChange={(event) => update({ salon: event.target.value || null })} className="field-control">
+              <option value="">{t.todosSalones}</option>
+              {salones.map((s) => <option key={s.id} value={s.id} lang="es">{s.nombre}</option>)}
+            </select></label>
+          {vista !== 'hoy' && <label className="min-w-0"><span className="sr-only">{t.fecha}</span>
+            <input type="date" value={fecha} aria-label={t.fecha} onChange={(event) => update({ fecha: event.target.value || null })} className="field-control" /></label>}
+          <label className="min-w-0"><span className="sr-only">{t.estado}</span>
+            <select value={estado} onChange={(event) => update({ estado: event.target.value || null })} className="field-control">
+              <option value="">{t.todosEstados}</option>
+              {ESTADOS.map((e) => <option key={e} value={e}>{estadoLabel(e)}</option>)}
+            </select></label>
         </div>
+        {hasFilters && <div className="flex flex-wrap items-center gap-2">
+          {salonFiltro !== null && <button type="button" onClick={() => update({ salon: null })} aria-label={t.quitarSalon} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-bronce-200 bg-bronce-50 px-3 text-xs font-medium text-bronce-800 hover:border-bronce-400"><span lang="es">{t.filtroSalon(salonNombre)}</span><X className="size-3.5" aria-hidden="true" /></button>}
+          <Button variant="text" size="sm" onClick={() => update({ q: null, fecha: null, estado: null, salon: null })}>{t.limpiar}</Button>
+        </div>}
 
-        <div>
-          <input
-            type="date"
-            value={filtroFecha}
-            onChange={(e) => setFiltroFecha(e.target.value)}
-            className="w-full rounded-lg border border-neutro-300 bg-white px-3 py-2 text-sm text-neutro-900 focus:border-selva-500 focus:outline-none focus:ring-1 focus:ring-selva-500"
-          />
-        </div>
-      </div>
+        {filtradas.length === 0 ? <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">{hasFilters ? t.vacioR.filtros : t.vacioR[vista]}</p> : <>
+          <div className="relative hidden overflow-x-auto rounded-xl border border-neutro-200 bg-white xl:block">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">{t.vistas[vista]}</caption>
+              <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold text-neutro-600">
+                <tr>
+                  <th scope="col" className="px-3 py-3">{t.colR.reserva}</th>
+                  <th scope="col" className="px-3 py-3">{t.colR.fechaHora}</th>
+                  <th scope="col" className="px-3 py-3">{t.colR.evento}</th>
+                  <th scope="col" className="px-3 py-3">{t.colR.cliente}</th>
+                  <th scope="col" className="px-3 py-3">{t.colR.invitados}</th>
+                  <th scope="col" className="px-3 py-3 text-right">{t.colR.total}</th>
+                  <th scope="col" className="px-3 py-3">{t.colR.estado}</th>
+                  <th scope="col" className="px-3 py-3 text-right"><span className="sr-only">{t.colR.acciones}</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutro-100">
+                {filtradas.map((r) => <tr key={r.id} className="hover:bg-bronce-50/40">
+                  <td className="whitespace-nowrap px-3 py-2.5"><Link to={EVENTOS_ROUTES.ADMIN_RESERVA_DETALLE(r.id)} aria-label={t.verReserva(r.id)} className="inline-flex min-h-9 items-center gap-1 font-semibold text-bronce-700 hover:underline">#{r.id}<ChevronRight className="size-3.5" aria-hidden="true" /></Link></td>
+                  <td className="whitespace-nowrap px-3 py-2.5"><span className={cn('font-medium', r.fecha === today ? 'text-bronce-800' : 'text-neutro-900')}>{date(r.fecha)}</span><span className="block text-xs text-neutro-600">{time(r.hora_inicio)}{r.hora_fin && ` – ${time(r.hora_fin)}`}</span></td>
+                  <td className="px-3 py-2.5"><span className="block font-medium text-neutro-900">{tipo(r.tipo_evento)}</span><span className="block text-xs text-neutro-500" lang="es">{salonDe(r)}</span></td>
+                  <td className="px-3 py-2.5"><span className="block text-neutro-900">{r.Usuario?.nombre ?? '—'}</span><span className="hidden max-w-[14rem] truncate text-xs text-neutro-500 2xl:block">{r.Usuario?.email}</span></td>
+                  <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{r.numero_invitados}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums"><span className="block">{formatearGTQ(r.total)}</span><span className="block text-xs text-neutro-500">{t.anticipo(formatearGTQ(r.anticipo))}</span></td>
+                  <td className="px-3 py-2.5"><span className={cn('inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold', estadoClase(r.estado))}>{estadoLabel(r.estado)}</span></td>
+                  <td className="px-3 py-1.5 text-right">{accion(r)}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          <ul className="divide-y divide-neutro-200 overflow-hidden rounded-xl border border-neutro-200 bg-white xl:hidden">
+            {filtradas.map((r) => <li key={r.id} className="flex flex-col gap-2 px-4 py-3">
+              <Link to={EVENTOS_ROUTES.ADMIN_RESERVA_DETALLE(r.id)} aria-label={t.verReserva(r.id)} className="flex items-start justify-between gap-3">
+                <span className="min-w-0 space-y-0.5">
+                  <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-neutro-900">#{r.id}</span><span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold', estadoClase(r.estado))}>{estadoLabel(r.estado)}</span></span>
+                  <span className="block text-sm text-neutro-800">{date(r.fecha)} · {time(r.hora_inicio)}{r.hora_fin && ` – ${time(r.hora_fin)}`}</span>
+                  <span className="block truncate text-xs text-neutro-600">{tipo(r.tipo_evento)} · <span lang="es">{salonDe(r)}</span></span>
+                  <span className="block truncate text-xs text-neutro-600">{r.Usuario?.nombre ?? '—'} · {r.numero_invitados} · {formatearGTQ(r.total)}</span>
+                </span>
+                <ChevronRight className="mt-1 size-4 shrink-0 text-neutro-400" aria-hidden="true" />
+              </Link>
+              {accion(r) && <div className="-ml-2">{accion(r)}</div>}
+            </li>)}
+          </ul>
+        </>}
+      </>}
 
-      {/* Estados */}
-      {reservasQuery.isPending && (
-        <div className="flex justify-center py-16">
-          <LoadingNotice label="Cargando reservas de eventos..." />
-        </div>
-      )}
-
-      {reservasQuery.isError && (
-        <Card className="p-6">
-          <Alert tone="error" title="Error al listar reservas">
-            {getApiErrorMessage(reservasQuery.error)}
-          </Alert>
-        </Card>
-      )}
-
-      {!reservasQuery.isPending && !reservasQuery.isError && (
-        <>
-          {reservasFiltradas.length === 0 ? (
-            <Card className="flex flex-col items-center justify-center p-12 text-center">
-              <Building2 className="size-12 text-neutro-300 mb-3" aria-hidden="true" />
-              <h2 className="text-base font-semibold text-neutro-800">
-                No se encontraron reservas
-              </h2>
-              <p className="mt-1 text-sm text-neutro-500">
-                No hay solicitudes de eventos que coincidan con los filtros aplicados.
-              </p>
-            </Card>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {reservasFiltradas.map((reserva) => {
-                const estado = etiquetasEstadoReserva[reserva.estado] ?? {
-                  label: reserva.estado,
-                  tone: 'neutral',
-                };
-                return (
-                  <Card
-                    key={reserva.id}
-                    className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 p-5 border border-neutro-200"
-                  >
-                    <div className="flex flex-col gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-neutro-500">
-                          #{reserva.id}
-                        </span>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${
-                            estado.tone === 'success'
-                              ? 'bg-selva-100 text-selva-800'
-                              : estado.tone === 'warning'
-                              ? 'bg-amber-100 text-amber-800'
-                              : estado.tone === 'error'
-                              ? 'bg-rojo-100 text-rojo-800'
-                              : 'bg-neutro-100 text-neutro-800'
-                          }`}
-                        >
-                          {estado.label}
-                        </span>
-                        <span className="text-xs font-semibold text-neutro-700 bg-neutro-100 px-2.5 py-0.5 rounded-full">
-                          {etiquetasTipoEvento[reserva.tipo_evento] ?? reserva.tipo_evento}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
-                        <h2 className="text-base font-serif font-bold text-neutro-900">
-                          {reserva.Salon?.nombre ?? 'Salón'}
-                        </h2>
-                        {reserva.Usuario?.nombre && (
-                          <span className="text-xs text-neutro-600">
-                            — Cliente: <strong className="font-semibold text-neutro-800">{reserva.Usuario.nombre}</strong> ({reserva.Usuario.email})
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-neutro-600">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Calendar className="size-3.5 text-neutro-400" aria-hidden="true" />
-                          {reserva.fecha}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <Clock className="size-3.5 text-neutro-400" aria-hidden="true" />
-                          {reserva.hora_inicio} - {reserva.hora_fin}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <Users className="size-3.5 text-neutro-400" aria-hidden="true" />
-                          {reserva.numero_invitados} invitados
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between lg:justify-end gap-6 border-t lg:border-t-0 pt-3 lg:pt-0 border-neutro-100">
-                      <div className="flex flex-col lg:text-right">
-                        <span className="text-xs text-neutro-500">Total presupuestado</span>
-                        <span className="text-base font-bold text-neutro-900">
-                          {formatearGTQ(reserva.total)}
-                        </span>
-                        <span className="text-[0.6875rem] text-selva-700 font-medium">
-                          Anticipo: {formatearGTQ(reserva.anticipo)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setReservaParaCambioEstado(reserva)}
-                          className="text-xs"
-                        >
-                          Estado
-                        </Button>
-                        <Link
-                          to={`/admin/reservas-evento/${reserva.id}`}
-                          className={buttonStyles({
-                            variant: 'primary',
-                            size: 'sm',
-                            className: 'inline-flex items-center gap-1 text-xs',
-                          })}
-                        >
-                          <span>Detalle</span>
-                          <ChevronRight className="size-3.5" aria-hidden="true" />
-                        </Link>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-
-      {reservaParaCambioEstado && (
-        <AdminReservaEventoEstadoModal
-          reserva={reservaParaCambioEstado}
-          isOpen={Boolean(reservaParaCambioEstado)}
-          onClose={() => setReservaParaCambioEstado(null)}
-        />
-      )}
+      {reservaParaCambio && <AdminReservaEventoEstadoModal reserva={reservaParaCambio} isOpen onClose={() => setReservaParaCambio(null)} />}
     </div>
   );
 };

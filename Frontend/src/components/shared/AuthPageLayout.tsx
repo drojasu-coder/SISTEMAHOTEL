@@ -6,6 +6,7 @@ import { LanguageSelector } from '@/i18n/LocaleContext';
 import { Alert } from '@/components/ui/Feedback';
 import { Card } from '@/components/ui/Card';
 import { usePublicInterface } from '@/i18n/public';
+import { LegalLinks } from '@/features/legal';
 
 interface AuthPageLayoutProps {
   title: string;
@@ -44,5 +45,6 @@ export const AuthPageLayout: React.FC<AuthPageLayoutProps> = ({
     <Card className="p-5 sm:p-8">{children}</Card>
 
     <p className="text-center text-xs text-neutro-600">{footer}</p>
+    <LegalLinks className="justify-center text-xs text-neutro-600" linkClassName="inline-flex min-h-11 items-center underline hover:text-bronce-700" />
   </div>
 ); };

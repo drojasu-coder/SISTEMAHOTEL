@@ -1,202 +1,112 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, RefreshCw, Palette } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { Check, ImageOff, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Feedback';
-import { ImageUploader } from '@/components/ui/ImageUploader';
+import { Alert, LoadingNotice } from '@/components/ui/Feedback';
+import { Modal } from '@/components/ui/Modal';
+import { cn } from '@/lib/cn';
 import { useBranding, BRANDING_QUERY_KEY } from '../hooks/useBranding';
 import { uploadBrandingAsset, type BrandingVariant } from '../api/mediaApi';
+import { useTextosMarca } from '../textos';
 
-interface VariantConfig {
-  key: BrandingVariant;
-  title: string;
-  description: string;
-  darkBg?: boolean;
-}
-
-const VARIANTS: VariantConfig[] = [
-  {
-    key: 'logoHorizontalColor',
-    title: 'Logo Horizontal Principal (Color)',
-    description: 'Versión oficial a color sobre fondo claro para encabezados, documentos y pantallas principales.',
-    darkBg: false,
-  },
-  {
-    key: 'logoHorizontalBlanco',
-    title: 'Logo Horizontal en Negativo (Blanco)',
-    description: 'Versión blanca para contrastar sobre fondos oscuros, fotografías o encabezados en modo noche.',
-    darkBg: true,
-  },
-  {
-    key: 'isotipoColor',
-    title: 'Isotipo Oficial (Símbolo Color)',
-    description: 'Símbolo gráfico compacto para avatares, barra lateral contraída e ícono distintivo.',
-    darkBg: false,
-  },
+const VARIANTS: { key: BrandingVariant; dark: boolean }[] = [
+  { key: 'logoHorizontalColor', dark: false }, { key: 'logoHorizontalBlanco', dark: true }, { key: 'isotipoColor', dark: false },
 ];
+const TYPES = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/webp'];
+const MAX = 5 * 1024 * 1024; // coincide con el límite del servidor
+
+/** Recuadro de vista previa proporcionado: la imagen completa, sin deformar. */
+const Preview: React.FC<{ src?: string | null; alt: string; dark: boolean; label: string; empty: string }> = ({ src, alt, dark, label, empty }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  return <figure className="min-w-0">
+    <div className={cn('flex h-28 items-center justify-center rounded-lg border p-3', dark ? 'border-neutro-700 bg-neutro-900' : 'border-neutro-200 bg-white')}>
+      {src && !failed ? <img src={src} alt={alt} className="max-h-full max-w-full object-contain" onError={() => setFailed(true)} />
+        : <span className={cn('flex items-center gap-1.5 text-xs', dark ? 'text-neutro-300' : 'text-neutro-500')}><ImageOff className="size-4" aria-hidden />{empty}</span>}
+    </div>
+    <figcaption className="mt-1 text-xs font-medium text-neutro-600">{label}</figcaption>
+  </figure>;
+};
 
 export const BrandingManager: React.FC = () => {
+  const t = useTextosMarca();
   const queryClient = useQueryClient();
-  const { data: branding, isLoading, isError, error, refetch } = useBranding();
+  const { data: branding, isLoading, isError, refetch } = useBranding();
+  const [files, setFiles] = useState<Partial<Record<BrandingVariant, File>>>({});
+  const [errors, setErrors] = useState<Partial<Record<BrandingVariant, string>>>({});
+  const [confirm, setConfirm] = useState<BrandingVariant | null>(null);
+  const [busy, setBusy] = useState<BrandingVariant | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [urls, setUrls] = useState<Partial<Record<BrandingVariant, string>>>({});
+  const inputs = useRef<Partial<Record<BrandingVariant, HTMLInputElement | null>>>({});
 
-  // Estados por variante
-  const [selectedFiles, setSelectedFiles] = useState<Record<BrandingVariant, File | null>>({
-    logoHorizontalColor: null,
-    logoHorizontalBlanco: null,
-    isotipoColor: null,
-  });
+  useEffect(() => {
+    const next: Partial<Record<BrandingVariant, string>> = {};
+    for (const [k, f] of Object.entries(files) as [BrandingVariant, File][]) next[k] = URL.createObjectURL(f);
+    setUrls(next);
+    return () => Object.values(next).forEach(u => URL.revokeObjectURL(u));
+  }, [files]);
 
-  const [uploadProgress, setUploadProgress] = useState<Record<BrandingVariant, number>>({
-    logoHorizontalColor: 0,
-    logoHorizontalBlanco: 0,
-    isotipoColor: 0,
-  });
-
-  const [isUploading, setIsUploading] = useState<Record<BrandingVariant, boolean>>({
-    logoHorizontalColor: false,
-    logoHorizontalBlanco: false,
-    isotipoColor: false,
-  });
-
-  const [errors, setErrors] = useState<Record<BrandingVariant, string | null>>({
-    logoHorizontalColor: null,
-    logoHorizontalBlanco: null,
-    isotipoColor: null,
-  });
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  const handleFileSelect = (variant: BrandingVariant, file: File | null) => {
-    setSelectedFiles((prev) => ({ ...prev, [variant]: file }));
-    setErrors((prev) => ({ ...prev, [variant]: null }));
-    setSuccessMessage(null);
-  };
-
-  const handleSave = async (variant: BrandingVariant) => {
-    const file = selectedFiles[variant];
+  const pick = (key: BrandingVariant, file: File | undefined) => {
+    setNotice(null);
     if (!file) return;
-
-    setIsUploading((prev) => ({ ...prev, [variant]: true }));
-    setUploadProgress((prev) => ({ ...prev, [variant]: 10 }));
-    setErrors((prev) => ({ ...prev, [variant]: null }));
-
+    if (!TYPES.includes(file.type)) { setErrors(e => ({ ...e, [key]: t.errTipo })); return; }
+    if (file.size > MAX) { setErrors(e => ({ ...e, [key]: t.errTam((file.size / 1048576).toFixed(1)) })); return; }
+    setErrors(e => ({ ...e, [key]: undefined })); setFiles(f => ({ ...f, [key]: file }));
+  };
+  const cancel = (key: BrandingVariant) => { setFiles(f => { const n = { ...f }; delete n[key]; return n; }); setErrors(e => ({ ...e, [key]: undefined })); if (inputs.current[key]) inputs.current[key]!.value = ''; };
+  const publish = async () => {
+    const key = confirm, file = key ? files[key] : undefined;
+    if (!key || !file) return;
+    setBusy(key); setProgress(0);
     try {
-      await uploadBrandingAsset(variant, file, (progress) => {
-        setUploadProgress((prev) => ({ ...prev, [variant]: progress }));
-      });
-
+      await uploadBrandingAsset(key, file, setProgress);
       await queryClient.invalidateQueries({ queryKey: BRANDING_QUERY_KEY });
-      setSelectedFiles((prev) => ({ ...prev, [variant]: null }));
-      setSuccessMessage(`Recurso "${variant}" actualizado exitosamente en AWS S3.`);
-    } catch (err: any) {
-      setErrors((prev) => ({
-        ...prev,
-        [variant]: err?.response?.data?.message || err?.message || 'Error al actualizar el logotipo',
-      }));
-    } finally {
-      setIsUploading((prev) => ({ ...prev, [variant]: false }));
-      setUploadProgress((prev) => ({ ...prev, [variant]: 0 }));
-    }
+      cancel(key); setNotice(t.ok(t.variantes[key].nombre));
+    } catch (err) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      setErrors(prev => ({ ...prev, [key]: e?.response?.data?.message || t.errSubida }));
+    } finally { setBusy(null); setConfirm(null); }
   };
 
+  if (isLoading) return <LoadingNotice label={t.cargando} />;
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 text-bronce-700">
-          <Palette className="size-5" aria-hidden="true" />
-          <h2 className="font-serif text-xl font-bold text-neutro-900">
-            Identidad Visual y Logotipos Oficiales
-          </h2>
-        </div>
-        <p className="text-xs text-neutro-600 max-w-3xl">
-          Administre los activos vectoriales y de imagen oficiales de HOTEL HUNAHPÚ alojados en AWS S3. 
-          Los cambios se sincronizan inmediatamente con toda la aplicación y componentes de marca. Formatos permitidos: SVG (sanitizado), WebP, PNG, JPEG (hasta 2MB).
-        </p>
-      </div>
-
-      {successMessage && (
-        <Alert tone="success">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="size-4 shrink-0 text-selva-600" />
-            <span className="text-xs">{successMessage}</span>
-          </div>
-        </Alert>
-      )}
-
-      {isError && (
-        <Alert tone="error">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-xs">
-              Error al consultar la vigencia de los logos de marca: {(error as any)?.message || 'Error de conexión'}
-            </span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="size-3 mr-1" />
-              Reintentar
-            </Button>
-          </div>
-        </Alert>
-      )}
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6" aria-busy="true">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="p-6 space-y-4">
-              <div className="h-4 w-2/3 animate-pulse rounded bg-neutro-200" />
-              <div className="h-32 w-full animate-pulse rounded bg-neutro-200" />
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {VARIANTS.map((v) => {
-            const currentUrl = branding ? (branding as any)[v.key] : null;
-            const hasSelectedFile = Boolean(selectedFiles[v.key]);
-
-            return (
-              <Card key={v.key} className="flex flex-col justify-between p-5 space-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-neutro-900">{v.title}</h3>
-                    <p className="mt-1 text-xs text-neutro-500 leading-relaxed">{v.description}</p>
-                  </div>
-
-                  <div className={v.darkBg ? 'rounded-lg bg-neutro-900 p-3' : ''}>
-                    <ImageUploader
-                      label="Archivo de marca"
-                      helpText="Seleccione archivo para reemplazar"
-                      currentImageUrl={currentUrl}
-                      selectedFile={selectedFiles[v.key]}
-                      removeMarked={false}
-                      onFileSelect={(file) => handleFileSelect(v.key, file)}
-                      onRemoveCurrent={() => {}}
-                      allowSvg={true}
-                      uploadProgress={uploadProgress[v.key]}
-                      isUploading={isUploading[v.key]}
-                      error={errors[v.key]}
-                    />
-                  </div>
-                </div>
-
-                {hasSelectedFile && (
-                  <div className="pt-2">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="w-full justify-center"
-                      disabled={isUploading[v.key]}
-                      onClick={() => handleSave(v.key)}
-                    >
-                      {isUploading[v.key] ? 'Publicando en S3...' : 'Guardar y Publicar Logo'}
-                    </Button>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
+    <div className="space-y-4">
+      {notice && <Alert tone="success"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><Check className="size-4" aria-hidden />{notice}</span><button type="button" className="text-xs underline" onClick={() => setNotice(null)}>{t.volver}</button></div></Alert>}
+      {isError && <div role="alert" className="rounded-xl border border-error-600/20 bg-error-50 p-4 text-sm text-error-700">{t.error} <Button variant="secondary" size="sm" onClick={() => refetch()}>{t.reintentar}</Button></div>}
+      <ul className="space-y-4">
+        {VARIANTS.map(({ key, dark }) => {
+          const v = t.variantes[key], file = files[key], current = branding?.[key];
+          return <li key={key} className="rounded-xl border border-neutro-200 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div><h2 className="font-sans text-base font-semibold text-neutro-900">{v.nombre}</h2><p className="text-sm text-neutro-600">{v.desc}</p></div>
+              <div className="flex gap-2">
+                <input ref={el => { inputs.current[key] = el; }} type="file" className="sr-only" tabIndex={-1} accept={TYPES.join(',')} aria-label={`${t.elegir}: ${v.nombre}`} onChange={e => pick(key, e.target.files?.[0])} />
+                {file ? <>
+                  <Button size="sm" onClick={() => setConfirm(key)} disabled={busy !== null}><Upload className="size-4" aria-hidden />{t.publicar}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => cancel(key)} disabled={busy !== null}><X className="size-4" aria-hidden />{t.cancelar}</Button></>
+                  : <Button size="sm" variant="secondary" onClick={() => inputs.current[key]?.click()}><Upload className="size-4" aria-hidden />{t.reemplazar}</Button>}
+              </div>
+            </div>
+            <div className={cn('mt-3 grid gap-3', file ? 'sm:grid-cols-2' : 'sm:grid-cols-[minmax(0,22rem)_1fr]')}>
+              <Preview src={current} alt={`${v.nombre} · ${t.actual}`} dark={dark} label={`${t.actual} · ${dark ? t.fondoOscuro : t.fondoClaro}`} empty={t.sinImagen} />
+              {file ? <div>
+                <Preview src={urls[key]} alt={`${v.nombre} · ${t.nueva}`} dark={dark} label={`${t.nueva} · ${dark ? t.fondoOscuro : t.fondoClaro}`} empty={t.sinImagen} />
+                <p className="mt-1 truncate text-xs text-neutro-500">{t.archivo(file.name, Math.max(1, Math.round(file.size / 1024)))}</p></div>
+                : <div className="text-sm"><p className="text-xs font-medium text-neutro-500">{t.usoTitulo}</p>
+                  {v.usos.length ? <ul className="mt-1 list-disc space-y-0.5 pl-4 text-neutro-700">{v.usos.map(u => <li key={u}>{u}</li>)}</ul> : <p className="mt-1 text-neutro-500">{t.sinUso}</p>}
+                  <p className="mt-2 text-xs text-neutro-400">{t.formatos}</p></div>}
+            </div>
+            {errors[key] && <p role="alert" className="mt-2 text-xs font-medium text-error-700">{errors[key]}</p>}
+            {busy === key && <div role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutro-200"><div className="h-full bg-bronce-600 transition-all" style={{ width: `${progress}%` }} /></div>}
+          </li>;
+        })}
+      </ul>
+      <p className="text-xs text-neutro-500">{t.noEditable}</p>
+      <Modal open={confirm !== null} onClose={() => setConfirm(null)} busy={busy !== null} busyLabel={t.publicando} title={t.confirmarTitulo} description={confirm ? t.confirmarDesc(t.variantes[confirm].nombre) : ''} closeLabel={t.volver}>
+        <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => setConfirm(null)} disabled={busy !== null}>{t.volver}</Button><Button onClick={() => void publish()} isLoading={busy !== null}>{busy ? t.publicando : t.confirmar}</Button></div>
+      </Modal>
     </div>
   );
 };

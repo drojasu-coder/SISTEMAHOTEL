@@ -6,6 +6,7 @@ import {
   AppError,
 } from "../../utils/AppError";
 import { env } from "../../config/env";
+import { horaDe, iniciosDelDia, leerHorario, validarInicioEnFranja, INTERVALO_FRANJAS_MINUTOS } from "../../utils/franjasHorarias";
 
 const db =
   require("../../models");
@@ -539,6 +540,24 @@ export const create =
               "Esta amenidad es de libre acceso y no requiere reserva"
             );
           }
+          /**
+           * La franja debe ser una de las ofrecidas: inicio cada 30 minutos
+           * dentro del horario y fin = inicio + duración fija de la amenidad.
+           */
+          const duracionAmenidad = Number(amenidad.duracion_minutos) || 0;
+          validarInicioEnFranja(
+            duracionAmenidad > 0 ? leerHorario(amenidad) : null,
+            duracionAmenidad,
+            data.fecha,
+            horaDe(nuevaFranja.inicio),
+          );
+          if (nuevaFranja.fin - nuevaFranja.inicio !== duracionAmenidad) {
+            throw new AppError(
+              422,
+              "INVALID_AMENITY_DURATION",
+              `Cada reserva de esta amenidad dura ${duracionAmenidad} minutos`
+            );
+          }
 
           /**
            * Obtenemos las reservas que actualmente
@@ -766,3 +785,50 @@ export const updateStatus =
       reservaId
     );
   };
+
+
+
+/**
+ * Máximo de reservas simultáneas dentro de [inicio, fin), con la misma regla que
+ * validateCapacity: ante la misma hora, las salidas se procesan antes que las entradas.
+ */
+const ocupacionMaxima = (slots: ParsedTimeSlot[], inicio: number, fin: number) => {
+  const events: Array<{ time: number; delta: number }> = [];
+  for (const slot of slots) {
+    if (!slotsOverlap(slot.inicio, slot.fin, inicio, fin)) continue;
+    events.push({ time: Math.max(slot.inicio, inicio), delta: 1 }, { time: Math.min(slot.fin, fin), delta: -1 });
+  }
+  events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+  let ocupacion = 0;
+  let maximo = 0;
+  for (const event of events) {
+    ocupacion += event.delta;
+    maximo = Math.max(maximo, ocupacion);
+  }
+  return maximo;
+};
+
+/**
+ * Franjas reservables de una amenidad en una fecha: inicios cada 30 minutos dentro
+ * de su horario, con su duración fija, y las plazas libres de cada una según el aforo
+ * (cada reserva confirmada consume una plaza). Sin horario o duración configurados no
+ * se ofrece ninguna franja. La reserva vuelve a validarse al confirmar.
+ */
+export const getDisponibilidadAmenidad = async (amenidadId: number, fecha: string) => {
+  validateDate(fecha);
+  const amenidad = await Amenidad.findByPk(amenidadId);
+  if (!amenidad) throw new AppError(404, "AMENITY_NOT_FOUND", "La amenidad solicitada no existe");
+  if (amenidad.reservable === false) throw new AppError(422, "AMENITY_NOT_RESERVABLE", "Esta amenidad es de libre acceso y no requiere reserva");
+  const reservas = await ReservaAmenidad.findAll({ where: { amenidad_id: amenidadId, fecha, estado: "confirmada" }, attributes: ["franja_horaria"] });
+  const slots: ParsedTimeSlot[] = reservas.map((reserva: any) => getStoredSlot(reserva.franja_horaria));
+  const aforo = Number(amenidad.aforo_maximo);
+  const duracion = Number(amenidad.duracion_minutos) || null;
+  const horario = duracion ? leerHorario(amenidad) : null;
+  const horarios = horario && duracion
+    ? iniciosDelDia(horario, duracion, fecha).map((inicio) => {
+      const t = Number(inicio.slice(0, 2)) * 60 + Number(inicio.slice(3, 5));
+      return { inicio, fin: horaDe(t + duracion), disponibles: Math.max(0, aforo - ocupacionMaxima(slots, t, t + duracion)) };
+    })
+    : [];
+  return { fecha, aforo_maximo: aforo, duracion_minutos: duracion, intervalo_minutos: INTERVALO_FRANJAS_MINUTOS, horario, horarios };
+};

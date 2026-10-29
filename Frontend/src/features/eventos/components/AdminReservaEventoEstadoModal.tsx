@@ -6,6 +6,7 @@ import { useUpdateReservaEventoEstadoMutation } from '../hooks/useEventos';
 import { textosEventos, etiquetasEstadoReserva } from '../textos';
 import type { ReservaEvento } from '../types';
 import { getApiErrorMessage } from '@/api/errors';
+import { useEscapeToClose } from '@/lib/useEscapeToClose';
 
 interface AdminReservaEventoEstadoModalProps {
   reserva: ReservaEvento;
@@ -22,6 +23,7 @@ export const AdminReservaEventoEstadoModal: React.FC<AdminReservaEventoEstadoMod
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const updateEstadoMutation = useUpdateReservaEventoEstadoMutation();
+  useEscapeToClose(onClose, updateEstadoMutation.isPending, isOpen);
 
   if (!isOpen) return null;
 

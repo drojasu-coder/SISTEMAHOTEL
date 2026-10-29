@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Sparkles, Edit, Trash2 } from 'lucide-react';
+import { EventosAdminNav } from './EventosAdminNav';
+import { useTextosGestionEventos } from '../gestionTextos';
+import { Plus, Sparkles, Edit, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
@@ -11,6 +12,7 @@ import type { ServicioEvento } from '../types';
 import { getApiErrorMessage } from '@/api/errors';
 
 export const AdminServiciosEventoList: React.FC = () => {
+  const tg = useTextosGestionEventos();
   const serviciosQuery = useServiciosEventoQuery();
   const deleteMutation = useDeleteServicioEventoMutation();
 
@@ -32,38 +34,15 @@ export const AdminServiciosEventoList: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-12">
-      {/* Retorno */}
-      <Link
-        to="/admin/servicios"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-neutro-600 hover:text-bronce-700 transition-colors w-fit"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        <span>Volver a servicios</span>
-      </Link>
-
-      {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{textosEventos.adminServiciosEyebrow}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem] font-serif font-semibold">
-            {textosEventos.adminServiciosTitulo}
-          </h1>
-          <p className="max-w-2xl text-sm text-neutro-600">
-            {textosEventos.adminServiciosDesc}
-          </p>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-neutro-500">{tg.modulo}</p>
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{tg.nav.servicios}</h1>
         </div>
-
-        <Button
-          type="button"
-          variant="primary"
-          onClick={() => setServicioEnEdicion(null)}
-          className="inline-flex items-center gap-2 self-start sm:self-center"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          <span>{textosEventos.nuevoServicioBoton}</span>
-        </Button>
-      </div>
+        <Button type="button" onClick={() => setServicioEnEdicion(null)}><Plus className="size-4" aria-hidden="true" /><span>{textosEventos.nuevoServicioBoton}</span></Button>
+      </header>
+      <EventosAdminNav />
 
       {errorAccion && (
         <Alert tone="error" title="No fue posible completar la acción">

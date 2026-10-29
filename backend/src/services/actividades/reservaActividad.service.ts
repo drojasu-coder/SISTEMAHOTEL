@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
+import { leerHorario, validarInicioEnFranja } from "../../utils/franjasHorarias";
 
 const db = require("../../models");
 
@@ -825,6 +826,20 @@ export const create =
       validateTimeRange(
         horaInicio,
         horaFin
+      );
+    }
+
+    /**
+     * El inicio debe ser una de las franjas ofrecidas: horario del recurso
+     * configurado, cada 30 minutos y terminando a más tardar al cierre.
+     * Si el recurso no existe, el 404 llega dentro de la transacción.
+     */
+    if (recursoPrevio) {
+      validarInicioEnFranja(
+        leerHorario(recursoPrevio),
+        (timeToSeconds(horaFin) - timeToSeconds(horaInicio)) / 60,
+        data.fecha,
+        horaInicio,
       );
     }
 

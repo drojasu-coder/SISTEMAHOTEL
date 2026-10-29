@@ -12,6 +12,7 @@ import {
   pagoIdSchema,
   pagoQuerySchema,
   resumenPagoQuerySchema,
+  comprobantesReservaQuerySchema,
 } from "../../validators/pagos/pago.validator";
 
 const router = Router();
@@ -188,6 +189,39 @@ router.get("/resumen", validateQuery(resumenPagoQuerySchema), controller.resumen
 
 /**
  * @openapi
+ * /api/pagos/comprobantes:
+ *   get:
+ *     tags: [Pagos]
+ *     summary: Pagos aprobados con comprobante para una reserva propia
+ *     description: >
+ *       Devuelve id, fecha, monto y moneda de los pagos aprobados del solicitante
+ *       que incluyen la reserva indicada (por carrito o pago directo de habitación).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: tipo_item
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: referencia_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Lista (posiblemente vacía) de pagos aprobados
+ *       400:
+ *         description: Parámetros inválidos
+ *       401:
+ *         description: Usuario no autenticado
+ */
+router.get("/comprobantes", validateQuery(comprobantesReservaQuerySchema), controller.comprobantesDeReserva);
+
+/**
+ * @openapi
  * /api/pagos/intento-activo:
  *   get:
  *     tags: [Pagos]
@@ -360,6 +394,41 @@ router.post("/:id/aprobar-transferencia", requireRole(...managementRoles), valid
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+/**
+ * @openapi
+ * /api/pagos/{id}/comprobante:
+ *   get:
+ *     tags: [Pagos]
+ *     summary: Descargar el comprobante interno PDF de un pago aprobado
+ *     description: >
+ *       Comprobante interno con los importes históricos del pago y sus conceptos.
+ *       No es factura fiscal FEL. Solo el propietario del pago o un administrador.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: PDF del comprobante
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Usuario no autenticado
+ *       404:
+ *         description: Pago no encontrado o ajeno
+ *       409:
+ *         description: El pago no está aprobado o no tiene registros de compra
+ */
+router.get("/:id/comprobante", validateParams(pagoIdSchema), controller.comprobante);
+
 router.get("/:id", validateParams(pagoIdSchema), controller.getById);
 
 /**

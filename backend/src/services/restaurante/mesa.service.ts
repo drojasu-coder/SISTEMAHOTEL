@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import { SedeScope, assertSedeAccess } from "../../utils/sedeScope";
+import * as reservaMesaService from "./reservaMesa.service";
 const db = require("../../models");
 
 const { Mesa, Sucursal, ReservaMesa, Restaurante } = db;
@@ -98,4 +99,12 @@ export const remove = async (id: number, scope: SedeScope = GLOBAL_SCOPE) => {
   }
 
   await mesa.destroy();
+};
+
+export const getDisponibilidad = async (mesaId: number, fecha: string) => {
+  return reservaMesaService.getDisponibilidadMesa(mesaId, fecha);
+};
+
+export const getBookingConfig = () => {
+  return reservaMesaService.getBookingConfig();
 };

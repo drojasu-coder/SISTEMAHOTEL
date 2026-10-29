@@ -1,189 +1,176 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Building2, Edit, Trash2, Users, Sparkles } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import React, { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { CalendarCheck, ImageOff, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
-import { useSalonesQuery, useDeleteSalonMutation } from '../hooks/useEventos';
-import { SalonFormModal } from './SalonFormModal';
-import { textosEventos, formatearGTQ } from '../textos';
-import type { Salon } from '../types';
+import { Modal } from '@/components/ui/Modal';
+import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
+import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import { getApiErrorMessage } from '@/api/errors';
+import { cn } from '@/lib/cn';
+import { useAdminReservasEventosQuery, useDeleteSalonMutation, useSalonesQuery } from '../hooks/useEventos';
+import { EVENTOS_ROUTES } from '../constants/routes';
+import { formatearGTQ } from '../textos';
+import { useTextosGestionEventos } from '../gestionTextos';
+import { SalonFormModal } from './SalonFormModal';
+import { EventosAdminNav } from './EventosAdminNav';
+import type { Salon } from '../types';
+import { HorarioBadge } from '@/components/ui/HorarioBadge';
 
+/**
+ * Salones: inventario filtrable por la sede global, nombre, capacidad y
+ * fotografía, con sus próximos eventos reales. El backend no ofrece una
+ * consulta de disponibilidad por salón: la disponibilidad se valida solo al
+ * reservar, por eso aquí se muestran reservas existentes y no «libre/ocupado».
+ */
 export const AdminSalonesList: React.FC = () => {
+  const t = useTextosGestionEventos();
+  const { selectedSedeId } = useAdminScope();
   const salonesQuery = useSalonesQuery();
+  const reservasQuery = useAdminReservasEventosQuery();
+  const sedesQuery = useSedesQuery();
   const deleteMutation = useDeleteSalonMutation();
-
   const [salonEnEdicion, setSalonEnEdicion] = useState<Salon | null | undefined>(undefined);
+  const [salonAEliminar, setSalonAEliminar] = useState<Salon | null>(null);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
-
-  const salones = salonesQuery.data ?? [];
-
-  const handleDelete = async (id: number) => {
-    if (!window.confirm(textosEventos.confirmarEliminarSalon)) return;
-    setErrorAccion(null);
-    try {
-      await deleteMutation.mutateAsync(id);
-    } catch (err: unknown) {
-      setErrorAccion(getApiErrorMessage(err));
-    }
+  const [params, setParams] = useSearchParams();
+  const update = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) value ? next.set(key, value) : next.delete(key);
+    setParams(next, { replace: true });
   };
 
+  const sedesMap = useMemo(() => new Map((sedesQuery.data ?? []).map((sede) => [sede.id, sede.nombre])), [sedesQuery.data]);
+  const enSede = useMemo(() => (salonesQuery.data ?? []).filter((s) => selectedSedeId === 'all' || s.sucursal_id === selectedSedeId), [salonesQuery.data, selectedSedeId]);
+  const capacidades = useMemo(() => [...new Set(enSede.map((s) => s.capacidad_maxima).filter((n): n is number => typeof n === 'number' && n > 0))].sort((a, b) => a - b), [enSede]);
+  const today = getTodayInGuatemala();
+  const proximos = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const r of reservasQuery.data ?? []) if ((r.estado === 'confirmada' || r.estado === 'cotizacion') && r.fecha >= today) counts.set(r.salon_id, (counts.get(r.salon_id) ?? 0) + 1);
+    return counts;
+  }, [reservasQuery.data, today]);
+
+  const q = params.get('q') ?? '';
+  const capacidad = capacidades.map(String).includes(params.get('capacidad') ?? '') ? params.get('capacidad')! : '';
+  const imagen = ['con', 'sin'].includes(params.get('imagen') ?? '') ? params.get('imagen')! : '';
+  const hasFilters = Boolean(q || capacidad || imagen);
+  const term = q.trim().toLowerCase();
+  const filtrados = enSede.filter((s) =>
+    (!term || (s.nombre ?? '').toLowerCase().includes(term)) &&
+    (!capacidad || (s.capacidad_maxima ?? 0) >= Number(capacidad)) &&
+    (!imagen || (imagen === 'con') === Boolean(s.imagen_url)));
+  const plazas = enSede.reduce((sum, s) => sum + (s.capacidad_maxima ?? 0), 0);
+  const sede = (s: Salon) => (s.sucursal_id != null && sedesMap.get(s.sucursal_id)) || s.sucursal?.nombre || `#${s.sucursal_id}`;
+
+  const confirmarEliminar = async () => {
+    if (!salonAEliminar?.id) return;
+    setErrorAccion(null);
+    try {
+      await deleteMutation.mutateAsync(salonAEliminar.id);
+      setSalonAEliminar(null);
+    } catch (err: unknown) {
+      setErrorAccion(getApiErrorMessage(err));
+      setSalonAEliminar(null);
+    }
+  };
+  const thumb = (s: Salon, size: string) => s.imagen_url
+    ? <img src={s.imagen_url} alt="" loading="lazy" className={cn(size, 'shrink-0 rounded-md border border-neutro-200 object-cover')} />
+    : <span title={t.sinFoto} className={cn(size, 'flex shrink-0 items-center justify-center rounded-md border border-dashed border-neutro-300 bg-neutro-50 text-neutro-400')}><ImageOff className="size-4" aria-hidden="true" /><span className="sr-only">{t.sinFoto}</span></span>;
+  const acciones = (s: Salon, compact = false) => <div className={cn('flex items-center gap-1', !compact && 'justify-end')}>
+    <Link to={`${EVENTOS_ROUTES.ADMIN_RESERVAS}?vista=proximos&salon=${s.id}`} aria-label={t.reservasDe(s.nombre ?? '')} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5' })}>
+      <CalendarCheck className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.reservas}</span></Link>
+    <button type="button" onClick={() => setSalonEnEdicion(s)} aria-label={t.editarDe(s.nombre ?? '')} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5' })}>
+      <Pencil className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.editar}</span></button>
+    <button type="button" onClick={() => setSalonAEliminar(s)} aria-label={t.eliminarDe(s.nombre ?? '')} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5 text-error-700 hover:bg-error-50' })}>
+      <Trash2 className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.eliminar}</span></button>
+  </div>;
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-12">
-      {/* Retorno al hub de servicios */}
-      <Link
-        to="/admin/servicios"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-neutro-600 hover:text-bronce-700 transition-colors w-fit"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        <span>Volver a servicios</span>
-      </Link>
-
-      {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{textosEventos.adminSalonesEyebrow}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem] font-serif font-semibold">
-            {textosEventos.adminSalonesTitulo}
-          </h1>
-          <p className="max-w-2xl text-sm text-neutro-600">
-            {textosEventos.adminSalonesDesc}
-          </p>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-neutro-500">{t.modulo}</p>
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{t.nav.salones}</h1>
+          {salonesQuery.isSuccess && <p className="mt-1 text-sm text-neutro-600">{t.salonesResumen(enSede.length, plazas)}</p>}
         </div>
+        <Button type="button" onClick={() => setSalonEnEdicion(null)}><Plus className="size-4" aria-hidden="true" />{t.nuevoSalon}</Button>
+      </header>
+      <EventosAdminNav />
 
-        <Button
-          type="button"
-          variant="primary"
-          onClick={() => setSalonEnEdicion(null)}
-          className="inline-flex items-center gap-2 self-start sm:self-center"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          <span>{textosEventos.nuevoSalonBoton}</span>
-        </Button>
-      </div>
+      {errorAccion && <Alert tone="error"><div className="flex items-center justify-between gap-4"><span>{errorAccion}</span>
+        <button type="button" onClick={() => setErrorAccion(null)} aria-label={t.cerrar} className="rounded p-1 hover:bg-black/5"><X className="size-4" aria-hidden="true" /></button></div></Alert>}
+      {(salonesQuery.isPending || sedesQuery.isPending) && <LoadingNotice label={t.cargando} />}
+      {salonesQuery.isError && <Alert tone="error"><p>{getApiErrorMessage(salonesQuery.error)}</p><Button className="mt-3" variant="secondary" onClick={() => void salonesQuery.refetch()}>{t.reintentar}</Button></Alert>}
+      {salonesQuery.isSuccess && enSede.length === 0 && <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">{t.vacio}</p>}
 
-      {errorAccion && (
-        <Alert tone="error" title="No fue posible completar la acción">
-          {errorAccion}
-        </Alert>
-      )}
-
-      {/* Estado de Carga y Error */}
-      {salonesQuery.isPending && (
-        <div className="flex justify-center py-16">
-          <LoadingNotice label="Cargando salones..." />
+      {salonesQuery.isSuccess && enSede.length > 0 && <>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="relative min-w-0"><span className="sr-only">{t.buscar}</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-500" aria-hidden="true" />
+            <input type="search" value={q} placeholder={t.buscar} onChange={(event) => update({ q: event.target.value || null })} className="field-control !pl-9" /></label>
+          <label className="min-w-0"><span className="sr-only">{t.capacidad}</span>
+            <select value={capacidad} onChange={(event) => update({ capacidad: event.target.value || null })} className="field-control">
+              <option value="">{t.cualquierCapacidad}</option>
+              {capacidades.map((n) => <option key={n} value={String(n)}>{t.capacidadMin(n)}</option>)}
+            </select></label>
+          <label className="min-w-0"><span className="sr-only">{t.imagen}</span>
+            <select value={imagen} onChange={(event) => update({ imagen: event.target.value || null })} className="field-control">
+              <option value="">{t.todasImagenes}</option>
+              <option value="con">{t.conImagen}</option>
+              <option value="sin">{t.sinImagen}</option>
+            </select></label>
         </div>
-      )}
+        {hasFilters && <div><Button variant="text" size="sm" onClick={() => update({ q: null, capacidad: null, imagen: null })}><X className="size-3.5" aria-hidden="true" />{t.limpiar}</Button></div>}
 
-      {salonesQuery.isError && (
-        <Card className="p-6">
-          <Alert tone="error" title="Error al listar salones">
-            {getApiErrorMessage(salonesQuery.error)}
-          </Alert>
-        </Card>
-      )}
+        {filtrados.length === 0 ? <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">{t.sinResultados}</p> : <>
+          <div className="relative hidden overflow-x-auto rounded-xl border border-neutro-200 bg-white xl:block">
+            <table className="w-full text-left text-sm text-neutro-800">
+              <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold text-neutro-600">
+                <tr>
+                  <th scope="col" className="px-3 py-3">{t.col.salon}</th>
+                  {selectedSedeId === 'all' && <th scope="col" className="px-3 py-3">{t.col.sede}</th>}
+                  <th scope="col" className="px-3 py-3">{t.col.capacidad}</th>
+                  <th scope="col" className="px-3 py-3 text-right">{t.col.tarifa}</th>
+                  <th scope="col" className="px-3 py-3">{t.col.proximos}</th>
+                  <th scope="col" className="px-3 py-3 text-right"><span className="sr-only">{t.col.acciones}</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutro-100">
+                {filtrados.map((s) => <tr key={s.id} className="hover:bg-bronce-50/40">
+                  <td className="px-3 py-2.5"><span className="flex items-center gap-3">{thumb(s, 'size-10')}<span className="flex flex-col items-start gap-1"><span className="font-semibold text-neutro-900" lang="es">{s.nombre}</span><HorarioBadge registro={s} /></span></span></td>
+                  {selectedSedeId === 'all' && <td className="px-3 py-2.5" lang="es">{sede(s)}</td>}
+                  <td className="whitespace-nowrap px-3 py-2.5">{s.capacidad_maxima ? t.personas(s.capacidad_maxima) : '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{formatearGTQ(s.tarifa_base)}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{reservasQuery.isSuccess ? proximos.get(s.id ?? 0) ?? 0 : '—'}</td>
+                  <td className="px-3 py-1.5">{acciones(s)}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          <ul className="divide-y divide-neutro-200 overflow-hidden rounded-xl border border-neutro-200 bg-white xl:hidden">
+            {filtrados.map((s) => <li key={s.id} className="flex items-center gap-3 px-3 py-3">
+              {thumb(s, 'size-12')}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-neutro-900" lang="es">{s.nombre}</span>
+                <span className="mt-1 block"><HorarioBadge registro={s} /></span>
+                <span className="block truncate text-xs text-neutro-600">{selectedSedeId === 'all' && <><span lang="es">{sede(s)}</span> · </>}{s.capacidad_maxima ? t.personas(s.capacidad_maxima) : '—'} · {formatearGTQ(s.tarifa_base)}{reservasQuery.isSuccess && ` · ${t.col.proximos}: ${proximos.get(s.id ?? 0) ?? 0}`}</span>
+              </span>
+              {acciones(s, true)}
+            </li>)}
+          </ul>
+        </>}
+      </>}
 
-      {!salonesQuery.isPending && !salonesQuery.isError && (
-        <>
-          {salones.length === 0 ? (
-            <Card className="flex flex-col items-center justify-center p-12 text-center">
-              <Building2 className="size-12 text-neutro-300 mb-3" aria-hidden="true" />
-              <h2 className="text-base font-semibold text-neutro-800">
-                No hay salones registrados
-              </h2>
-              <p className="mt-1 text-sm text-neutro-500">
-                Haga clic en &quot;Nuevo salón&quot; para registrar el primer espacio para eventos.
-              </p>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {salones.map((salon) => (
-                <Card
-                  key={salon.id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 border border-neutro-200"
-                >
-                  <div className="flex items-start sm:items-center gap-4">
-                    {salon.imagen_url ? (
-                      <img
-                        src={salon.imagen_url}
-                        alt={salon.nombre}
-                        className="size-16 rounded-xl object-cover border border-neutro-200 shrink-0"
-                      />
-                    ) : (
-                      <div className="flex size-16 items-center justify-center rounded-xl bg-selva-50 border border-selva-100 text-selva-700 shrink-0">
-                        <Building2 className="size-7" />
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-serif font-bold text-neutro-900">
-                          {salon.nombre}
-                        </h2>
-                        {salon.sucursal?.nombre && (
-                          <span className="rounded-full bg-selva-50 px-2 py-0.5 text-xs font-semibold text-selva-700">
-                            {salon.sucursal.nombre}
-                          </span>
-                        )}
-                      </div>
-                      {salon.descripcion && (
-                        <p className="text-xs text-neutro-600 line-clamp-2 max-w-2xl">
-                          {salon.descripcion}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-4 text-xs text-neutro-600 mt-1">
-                        <span className="inline-flex items-center gap-1">
-                          <Users className="size-3.5 text-neutro-400" />
-                          Capacidad: {salon.capacidad_maxima} personas
-                        </span>
-                        <span className="inline-flex items-center gap-1 font-semibold text-neutro-800">
-                          <Sparkles className="size-3.5 text-bronce-500" />
-                          Tarifa base: {formatearGTQ(salon.tarifa_base)}
-                        </span>
-                        {salon.imagen_creditos?.autor && (
-                          <span className="text-[10px] text-neutro-400">
-                            Foto: {salon.imagen_creditos.autor}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+      {salonEnEdicion !== undefined && <SalonFormModal salon={salonEnEdicion} isOpen onClose={() => setSalonEnEdicion(undefined)} />}
 
-                  <div className="flex items-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutro-100 shrink-0">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setSalonEnEdicion(salon)}
-                      className="inline-flex items-center gap-1.5 text-xs"
-                    >
-                      <Edit className="size-3.5" aria-hidden="true" />
-                      <span>{textosEventos.editarSalon}</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(salon.id!)}
-                      disabled={deleteMutation.isPending}
-                      className="text-xs text-rojo-600 hover:text-rojo-700 hover:bg-rojo-50"
-                    >
-                      <Trash2 className="size-3.5" aria-hidden="true" />
-                      <span className="sr-only sm:not-sr-only">{textosEventos.eliminarSalon}</span>
-                    </Button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {salonEnEdicion !== undefined && (
-        <SalonFormModal
-          salon={salonEnEdicion}
-          isOpen={true}
-          onClose={() => setSalonEnEdicion(undefined)}
-        />
-      )}
+      <Modal open={Boolean(salonAEliminar)} onClose={() => { if (!deleteMutation.isPending) setSalonAEliminar(null); }} title={t.eliminarTitulo}
+        description={salonAEliminar ? t.eliminarDesc(salonAEliminar.nombre ?? '') : undefined}>
+        <div className="flex justify-end gap-3 border-t border-neutro-200 pt-4">
+          <Button type="button" variant="ghost" disabled={deleteMutation.isPending} onClick={() => setSalonAEliminar(null)}>{t.cancelar}</Button>
+          <Button type="button" variant="danger" disabled={deleteMutation.isPending} onClick={() => void confirmarEliminar()}>{deleteMutation.isPending ? t.eliminando : t.eliminar}</Button>
+        </div>
+      </Modal>
     </div>
   );
 };

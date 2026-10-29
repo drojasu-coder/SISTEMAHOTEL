@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { horaOperacionSchema } from "../../utils/franjasHorarias";
 
 const tarifa = z
   .number()
@@ -10,6 +11,8 @@ const modalidadFields = {
   duracion_minutos: z.number().int().min(30).max(720).nullable().optional(),
   cupo_maximo: z.number().int().positive().max(500).nullable().optional(),
   precio_persona: tarifa.nullable().optional(),
+  hora_apertura: horaOperacionSchema,
+  hora_cierre: horaOperacionSchema,
 };
 
 /** Una experiencia necesita duración, cupo y precio por persona. */
@@ -30,6 +33,8 @@ const experienciaMessage = {
 export const salidasQuerySchema = z
   .object({
     fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha debe tener formato YYYY-MM-DD"),
+    // Opcional: excluye las franjas que chocarían con otras clases del instructor elegido.
+    instructor_id: z.coerce.number().int().positive().optional(),
   })
   .strict();
 

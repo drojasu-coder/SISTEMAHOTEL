@@ -75,3 +75,32 @@ export interface ProductoMenu {
   imagen_url?: string | null;
   imagen_creditos?: { autor?: string; licencia?: string; url?: string; texto?: string } | null;
 }
+
+export interface SlotDisponibilidad {
+  hora: string;
+  hora_fin?: string;
+  disponible: boolean;
+  ocupada: boolean;
+  pasada: boolean;
+}
+
+export interface ConfiguracionReservasMesa {
+  apertura: string;
+  cierre: string;
+  intervalo_minutos: number;
+  duracion_minutos: number;
+  ultima_hora_inicio: string;
+  slots?: string[];
+}
+
+export interface DisponibilidadMesaResponse {
+  mesa_id: number;
+  fecha: string;
+  estado_mesa: string;
+  capacidad: number;
+  configuracion: ConfiguracionReservasMesa;
+  slots: SlotDisponibilidad[];
+  horarios_disponibles: string[];
+  horarios_ocupados: string[];
+}
+

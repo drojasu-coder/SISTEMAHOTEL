@@ -64,7 +64,19 @@ export type CreateReservaHabitacionRequest =
 export type CreateReservaHabitacionInput = Omit<
   CreateReservaHabitacionRequest,
   "usuario_id"
->;
+> & {
+  /** Solo clientes: el servidor vincula la reserva al carrito en la misma operación. */
+  agregar_al_carrito?: boolean;
+};
+
+/** Vínculo de una reserva pendiente con el carrito (respuesta de POST con agregar_al_carrito). */
+export interface ReservaCarritoVinculo {
+  vinculada: boolean;
+  carrito_id: number | null;
+  item_id: number | null;
+  /** Vencimiento real del carrito (ISO). Nunca se reinicia ni se amplía al abrir o recargar el carrito. */
+  expira_en: string | null;
+}
 
 // Envoltorios de respuesta de la API REST
 export type ReservaHabitacionResponse = Schemas["ReservaHabitacionResponse"];
@@ -73,3 +85,16 @@ export type ReservaHabitacionCreatedResponse =
 export type ReservasHabitacionResponse = Schemas["ReservasHabitacionResponse"];
 export type DisponibilidadHabitacionesResponse =
   Schemas["DisponibilidadHabitacionesResponse"];
+
+export type ReservaHabitacionConCarrito = ReservaHabitacion & {
+  reutilizada?: boolean;
+  carrito?: ReservaCarritoVinculo;
+};
+
+
+/** Contrato de GET /reservas-habitacion/:id/estado-pago, pendiente de regenerar OpenAPI. */
+export interface EstadoPagoReserva {
+  estado: 'pagable' | 'pagada' | 'no_disponible' | 'incierto' | 'reanudable';
+  pago_id: number | null;
+  carrito_id: number | null;
+}

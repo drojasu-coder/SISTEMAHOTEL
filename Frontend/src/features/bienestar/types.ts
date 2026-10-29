@@ -17,10 +17,15 @@ export type ServicioBienestar = Omit<components['schemas']['ServicioBienestar'],
   /** Sede del servicio; null en los servicios generales anteriores. */
   sucursal_id?: number | null;
   activo?: boolean;
+  /** Horario de atención (HH:MM:SS); sin ambos valores no se ofrecen citas en línea. */
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
 };
 
-export type CreateServicioBienestarInput = components['schemas']['CreateServicioBienestarRequest'];
-export type UpdateServicioBienestarInput = components['schemas']['UpdateServicioBienestarRequest'];
+/** Horario de atención editable desde el panel (HH:MM o null para quitarlo). */
+type HorarioAtencionInput = { hora_apertura?: string | null; hora_cierre?: string | null };
+export type CreateServicioBienestarInput = components['schemas']['CreateServicioBienestarRequest'] & HorarioAtencionInput;
+export type UpdateServicioBienestarInput = components['schemas']['UpdateServicioBienestarRequest'] & HorarioAtencionInput;
 
 export type Terapeuta = components['schemas']['Terapeuta'] & { sucursal_id?: number | null };
 export type CreateTerapeutaInput = components['schemas']['CreateTerapeutaRequest'];

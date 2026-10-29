@@ -1,4 +1,5 @@
 import {Router} from "express";
+import googleAuthRoutes from "./googleAuth.routes";
 
 import * as authController from "../controllers/auth.controller";
 import {validateBody} from "../middlewares/validate.middleware";
@@ -10,6 +11,7 @@ import {
 } from "../validators/auth.validator";
 
 const router = Router();
+router.use("/google", googleAuthRoutes);
 
 const loginRateLimiter = createRateLimiter({
     max: 10,

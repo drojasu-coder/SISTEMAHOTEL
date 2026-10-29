@@ -1,11 +1,18 @@
 /** Textos de la Ficha 1. El resto de módulos conserva el diccionario es existente. */
 export const uxEs = {
+  languageCurrency: 'Idioma y moneda', preferences: 'Preferencias', spanish: 'Español', english: 'English',
+  quetzales: 'GTQ · Quetzales', dollars: 'USD · Dólares',
+  displayCurrencyHint: 'Los precios en USD son orientativos. El cobro se realiza en GTQ.',
+  profile: 'Mi perfil', amenitiesDescription: 'Espacios para disfrutar su estancia',
+  activitiesDescription: 'Descubra y explore a su ritmo', wellnessDescription: 'Un momento de calma y cuidado',
+  eventsDescription: 'Encuentros que merecen celebrarse',
+
   showing: 'Mostrando:', changeSite: 'Cambiar sede',
   cartLoading: 'Carrito: consultando artículos', cartError: 'Carrito: no se pudo consultar el contenido',
   cartCount: 'Carrito: {count} {item}', cartItem: 'artículo', cartItems: 'artículos',
-  home: 'Inicio', rooms: 'Habitaciones', restaurant: 'Restaurante', experiences: 'Experiencias',
+  home: 'Inicio', rooms: 'Habitaciones', restaurant: 'Restaurante', experiences: 'Experiencias', reserve: 'Reservar',
   amenities: 'Amenidades', activities: 'Actividades', wellness: 'Bienestar', events: 'Eventos', sites: 'Sedes',
-  login: 'Ingresar', register: 'Crear cuenta', account: 'Mi cuenta', reservations: 'Mis reservas',
+  login: 'Ingresar', register: 'Crear cuenta', account: 'Mi cuenta', reservations: 'Mis reservas', myTrip: 'Mi viaje', myTripShortcut: 'Vea todas sus reservas organizadas por día en Mi viaje',
   logout: 'Cerrar sesión', panel: 'Ir al panel', cart: 'Carrito', navigation: 'Navegación principal',
   openMenu: 'Abrir menú de navegación', closeMenu: 'Cerrar menú de navegación', skip: 'Saltar al contenido',
   language: 'Idioma', site: 'Sede', allSites: 'Todas las sedes', allSitesAction: 'Ver todas las sedes',
@@ -32,12 +39,19 @@ export const uxEs = {
 
 export type UxKey = keyof typeof uxEs;
 export const uxEn: Partial<Record<UxKey, string>> = {
+  languageCurrency: 'Language and currency', preferences: 'Preferences', spanish: 'Español', english: 'English',
+  quetzales: 'GTQ · Quetzales', dollars: 'USD · Dollars',
+  displayCurrencyHint: 'USD prices are indicative. Payments are processed in GTQ.',
+  profile: 'My profile', amenitiesDescription: 'Spaces to enjoy your stay',
+  activitiesDescription: 'Discover and explore at your pace', wellnessDescription: 'A moment of calm and care',
+  eventsDescription: 'Gatherings worth celebrating',
+
   showing: 'Showing:', changeSite: 'Change location',
   cartLoading: 'Cart: loading items', cartError: 'Cart: content could not be loaded',
   cartCount: 'Cart: {count} {item}', cartItem: 'item', cartItems: 'items',
-  guest: 'Guest', signInAction: 'Sign in', home: 'Home', rooms: 'Rooms', restaurant: 'Restaurant', experiences: 'Experiences', amenities: 'Amenities',
+  guest: 'Guest', signInAction: 'Sign in', home: 'Home', rooms: 'Rooms', restaurant: 'Restaurant', experiences: 'Experiences', reserve: 'Reserve', amenities: 'Amenities',
   activities: 'Activities', wellness: 'Wellness', events: 'Events', sites: 'Locations', login: 'Sign in', register: 'Create account',
-  account: 'My account', reservations: 'My reservations', logout: 'Sign out', panel: 'Go to dashboard', cart: 'Cart',
+  account: 'My account', reservations: 'My reservations', myTrip: 'My trip', myTripShortcut: 'See all your reservations organized by day in My trip', logout: 'Sign out', panel: 'Go to dashboard', cart: 'Cart',
   navigation: 'Main navigation', openMenu: 'Open navigation menu', closeMenu: 'Close navigation menu', skip: 'Skip to content',
   language: 'Language', site: 'Location', allSites: 'All locations', allSitesAction: 'View all locations',
   loadingSite: 'Loading selected location…', loading: 'Loading locations…',

@@ -57,6 +57,7 @@ router.get("/", validateQuery(listServiciosSpaQuerySchema), controller.getAll);
  *       404:
  *         description: Servicio no encontrado
  */
+router.get("/:id/disponibilidad", validateParams(idParamSchema), controller.getDisponibilidad);
 router.get("/:id", validateParams(idParamSchema), controller.getById);
 
 router.use(authMiddleware);

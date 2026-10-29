@@ -1,10 +1,8 @@
 import { DateField } from '@/components/ui/DateField';
-import { TimeField } from '@/components/ui/TimeField';
-import { Select } from '@/components/ui/Select';
 import { TranslatedError, type LocalizedError } from '@/i18n/public';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ServiceReservationPanel, ServiceAuthNotice } from '@/components/shared/ServiceReservationPanel';
 import { useServiceDraft } from '@/features/auth/serviceDraft';
@@ -14,13 +12,13 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button, buttonStyles } from "@/components/ui/Button";
 import { Alert } from "@/components/ui/Feedback";
 import { useAuth } from "@/features/auth/AuthContext";
-import { useCreateReservaMesaMutation } from "../hooks/useReservasMesa";
+import { useCreateReservaMesaMutation, useDisponibilidadMesaQuery } from "../hooks/useReservasMesa";
 
 import { RESTAURANTE_ROUTES } from "../constants/routes";
-import type { MesaConSucursal, ReservaMesa } from "../types";
+import type { MesaConSucursal, ReservaMesa, DisponibilidadMesaResponse } from "../types";
 import { ApiError } from "@/api/client/http";
-import { CheckCircle2, ArrowRight } from "lucide-react";
-import { validateMesaReservation, normalizeMesaTime, validMesaReservationFields, type MesaReservationFields } from '../reservationValidation';
+import { CheckCircle2, ArrowRight, MapPin, Minus, Plus, Users } from "lucide-react";
+import { validateMesaReservation, normalizeMesaTime, validMesaReservationFields, mesaSlotsFor, RESTAURANT_BOOKING_HOURS, type MesaReservationFields } from '../reservationValidation';
 import { readMesaAttempt, saveMesaAttempt } from '../reservationAttempt';
 import { restauranteApi } from '../api/restauranteApi';
 
@@ -60,7 +58,22 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
   const [checkedEmpty, setCheckedEmpty] = useState(false);
   const [checkError, setCheckError] = useState(false);
 
+  const {
+    data: disponibilidad,
+    isLoading: isDisponibilidadLoading,
+    refetch: refetchDisponibilidad,
+  } = useDisponibilidadMesaQuery(mesa?.id, fecha);
+
   useEffect(() => { if (mesa && !reservaConfirmada) draft.save({ fecha, hora, comensales }); }, [mesa?.id, fecha, hora, comensales, reservaConfirmada, draft.save]);
+  // Al cambiar la fecha, una hora que ya no se ofrece (pasada o fuera de horario) se descarta.
+  useEffect(() => { if (hora && !uncertain && !mesaSlotsFor(fecha).includes(hora.slice(0, 5))) setHora(''); }, [fecha]);
+  // Si la disponibilidad reporta que la hora seleccionada está ocupada, se descarta.
+  useEffect(() => {
+    if (hora && disponibilidad && !disponibilidad.horarios_disponibles.includes(hora.slice(0, 5))) {
+      setHora('');
+    }
+  }, [disponibilidad, hora]);
+
 
   const handleClose = () => {
     if (submitting.current || checking.current) return;
@@ -79,6 +92,10 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
 
     setErrorLocal(null);
 
+    if (!hora) {
+      setErrorLocal({ section: 'restaurante', key: 'horaRequerida' });
+      return;
+    }
     const fields = { fecha, hora, numero_comensales: comensales };
     const validation = validateMesaReservation(fields, capacidadMaxima);
     if (validation) {
@@ -110,8 +127,9 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
         return;
       }
       saveMesaAttempt(mesa.id, null);
-      if (err.code === "TABLE_UNAVAILABLE") {
+      if (err.code === "TABLE_UNAVAILABLE" || err.code === "TABLE_RESERVATION_TIME_CONFLICT") {
         setErrorLocal({ section: 'restaurante', key: 'errorMesaOcupada' });
+        void refetchDisponibilidad();
       } else if (err.code === "TABLE_IN_MAINTENANCE") {
         setErrorLocal({ section: 'restaurante', key: 'errorMesaMantenimiento' });
       } else if (err.code === "TABLE_CAPACITY_EXCEEDED") {
@@ -120,6 +138,8 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
         setErrorLocal({ section: 'restaurante', key: 'errorFechaPasada' });
       } else if (err.code === "TABLE_RESERVATION_TIME_IN_PAST") {
         setErrorLocal({ section: 'restaurante', key: 'errorHoraPasada' });
+      } else if (err.code === "TABLE_RESERVATION_OUTSIDE_HOURS") {
+        setErrorLocal({ section: 'restaurante', key: 'errorFueraHorario' });
       } else {
         setErrorLocal({ api: err });
       }
@@ -148,6 +168,11 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
     <ServiceReservationPanel
       name={`${p('table')} #${mesa.id}`} siteId={mesa.sucursal_id} siteName={mesa.Sucursal?.nombre}
       media={{ src: site?.restaurante_imagen_url, alt: `${p('restaurant')} ${site?.nombre ?? ''}`, credits: site?.restaurante_imagen_creditos }}
+      compact
+      details={<ul className="space-y-1.5 text-sm text-neutro-700">
+        {mesa.zona && <li className="flex items-center gap-2"><MapPin className="size-4 shrink-0 text-bronce-600" aria-hidden="true" /><span className="sr-only">{t.zona}: </span><span lang="es">{mesa.zona}</span></li>}
+        <li className="flex items-center gap-2"><Users className="size-4 shrink-0 text-bronce-600" aria-hidden="true" />{t.comensalesMax(capacidadMaxima)}</li>
+      </ul>}
       busy={createMutation.isPending || isChecking}
       busyLabel={p('processingRequest')}
       open={isOpen}
@@ -169,6 +194,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                 <p className="text-xs mt-1">
                   {t.siguienteAccion}
                 </p>
+                <p className="text-xs mt-1">{p('noOnlinePayment')}</p>
               </div>
             </div>
 
@@ -211,7 +237,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                 variant="primary"
                 className="flex-1 justify-center"
                 onClick={() => {
-                  handleClose();
+                  // Navegar directo: handleClose() haría navigate(-1) y revertiría este destino.
                   navigate(RESTAURANTE_ROUTES.DETALLE_RESERVA(reservaConfirmada.id));
                 }}
               >
@@ -223,7 +249,7 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
                 variant="secondary"
                 className="justify-center"
                 onClick={() => {
-                  handleClose();
+                  // Navegar directo: handleClose() haría navigate(-1) y revertiría este destino.
                   navigate(RESTAURANTE_ROUTES.MIS_RESERVAS);
                 }}
               >
@@ -252,35 +278,14 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
               </Alert>
             )}
 
-            <div className="rounded-md bg-neutro-50 p-3 border border-neutro-200 text-xs text-neutro-600">
-              <p>{t.avisoDisponibilidad}</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <p className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide">
-                  {t.sedeLabel}
-                </p>
-                <div className="mt-1 flex items-center gap-2 rounded-md border border-neutro-200 bg-neutro-100 px-3 py-2 text-sm text-neutro-900">
-                  <span><span lang="es">{site?.nombre || mesa.Sucursal?.nombre || (mesa.sucursal_id ? `#${mesa.sucursal_id}` : p('siteName'))}</span></span>
-                </div>
-              </div>
-              <div>
-                <p className="block text-xs font-semibold text-neutro-700 uppercase tracking-wide">
-                  {t.mesaLabel}
-                </p>
-                <div className="mt-1 flex items-center gap-2 rounded-md border border-neutro-200 bg-neutro-100 px-3 py-2 text-sm text-neutro-900">
-                  <span>{p('table')} #{mesa.id} — <span lang="es">{mesa.zona}</span> ({t.comensalesMax(capacidadMaxima)})</span>
-                </div>
-              </div>
-            </div>
-
             <DateField label={t.fechaLabel} id="reserva-fecha" min={getTodayInGuatemala()} value={fecha} onChange={(e) => setFecha(e.target.value)} required disabled={createMutation.isPending || Boolean(uncertain)} />
-            <TimeField label={t.horaLabel} hint={t.ayudaHora} id="reserva-hora" value={hora} onChange={(e) => setHora(e.target.value)} required disabled={createMutation.isPending || Boolean(uncertain)} />
-            <Select label={t.comensalesLabel} hint={t.comensalesMax(capacidadMaxima)} id="reserva-comensales" value={comensales} onChange={(e) => setComensales(Number(e.target.value))} required disabled={createMutation.isPending || Boolean(uncertain)}>
-              {Array.from({ length: capacidadMaxima }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{t.capacidadPersonas(n)}</option>)}
-            </Select>
+            <MesaTimeSlots fecha={fecha} value={hora} onChange={setHora} disabled={createMutation.isPending || Boolean(uncertain)} disponibilidad={disponibilidad} isLoading={isDisponibilidadLoading} />
+            <PartySize value={comensales} max={capacidadMaxima} onChange={setComensales} disabled={createMutation.isPending || Boolean(uncertain)} />
 
+            {hora && <p aria-live="polite" className="rounded-md border border-bronce-200 bg-bronce-50/60 p-3 text-sm font-medium text-neutro-800">
+              <span lang="es">{site?.nombre || mesa.Sucursal?.nombre}</span> · {p('table')} #{mesa.id} · {calendarDate(fecha)} · {hora.slice(0, 5)} · {t.capacidadPersonas(comensales)}
+            </p>}
+            <p className="text-xs text-neutro-500">{t.disponibilidadAlConfirmar}</p>
             <div className="flex justify-end gap-3 pt-4 border-t border-neutro-200">
               <Button
                 type="button"
@@ -304,3 +309,113 @@ export const ReservaMesaModal: React.FC<ReservaMesaModalProps> = ({
     </ServiceReservationPanel>
   );
 };
+
+const PERIODS = [
+  { key: 'manana', from: '00:00', to: '12:00' },
+  { key: 'tarde', from: '12:00', to: '18:00' },
+  { key: 'noche', from: '18:00', to: '24:00' },
+] as const;
+type PeriodKey = typeof PERIODS[number]['key'];
+
+/** Hora legible (7:00 a. m. / 7:00 AM) a partir de HH:MM, sin conversión de zona horaria. */
+const useSlotLabel = () => {
+  const { locale } = usePublicInterface();
+  const format = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-GT', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' });
+  return (time: string) => { const [h, m] = time.split(':').map(Number); return format.format(new Date(Date.UTC(1970, 0, 1, h, m))); };
+};
+
+/** Selector de franjas de 30 minutos agrupadas por momento del día. */
+function MesaTimeSlots({
+  fecha,
+  value,
+  onChange,
+  disabled,
+  disponibilidad,
+  isLoading,
+}: {
+  fecha: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  disponibilidad?: DisponibilidadMesaResponse;
+  isLoading?: boolean;
+}) {
+  const t = usePublicTexts('restaurante');
+  const { locale } = usePublicInterface();
+  const label = useSlotLabel();
+  const labelId = useId();
+  const slots = mesaSlotsFor(fecha);
+  const inPeriod = (key: PeriodKey) => { const period = PERIODS.find((item) => item.key === key)!; return slots.filter((slot) => slot >= period.from && slot < period.to); };
+  const selected = value.slice(0, 5);
+  const initial = (PERIODS.find((period) => selected && selected >= period.from && selected < period.to) ?? PERIODS.find((period) => inPeriod(period.key).length) ?? PERIODS[0]).key;
+  const [period, setPeriod] = useState<PeriodKey>(initial);
+  // Si el periodo elegido se queda sin franjas (p. ej. hoy por la tarde), se pasa al siguiente con horarios.
+  useEffect(() => { if (!inPeriod(period).length) setPeriod((PERIODS.find((item) => inPeriod(item.key).length) ?? PERIODS[0]).key); }, [fecha]);
+  const visible = inPeriod(period);
+
+  return <div className="space-y-2" role="group" aria-labelledby={labelId}>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+      <p id={labelId} className="text-xs font-semibold text-neutro-700">{t.horaLabel}</p>
+      <p className="text-xs text-neutro-500">{t.horarioAtencion(label(RESTAURANT_BOOKING_HOURS.apertura), label(RESTAURANT_BOOKING_HOURS.cierre))} · {locale === 'en' ? 'Duration' : 'Duración'} {RESTAURANT_BOOKING_HOURS.duracionMinutos} min</p>
+    </div>
+    {slots.length === 0 ? <p role="status" className="rounded-md border border-neutro-200 bg-neutro-50 p-3 text-sm text-neutro-700">{t.sinHorariosHoy}</p> : <>
+      <div className="grid grid-cols-3 gap-1 rounded-lg bg-neutro-100 p-1">
+        {PERIODS.map((item) => { const count = inPeriod(item.key).length; return <button key={item.key} type="button" disabled={disabled || !count} aria-pressed={period === item.key} onClick={() => setPeriod(item.key)}
+          className={`min-h-10 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${period === item.key ? 'bg-white text-bronce-800 shadow-sm' : 'text-neutro-700 hover:text-bronce-800'}`}>{t.franjas[item.key]}</button>; })}
+      </div>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {visible.map((slot) => {
+          const slotInfo = disponibilidad?.slots.find((s) => s.hora === slot);
+          const isOcupado = slotInfo?.ocupada ?? false;
+          const isPasado = slotInfo ? slotInfo.pasada : false;
+          const isBotonDeshabilitado = disabled || isOcupado || isPasado || isLoading;
+          const slotLabel = label(slot);
+          return (
+            <button
+              key={slot}
+              type="button"
+              disabled={isBotonDeshabilitado}
+              aria-pressed={selected === slot}
+              aria-label={isOcupado ? `${slotLabel} (${t.estadosMesa.ocupada ?? 'Ocupada'})` : slotLabel}
+              title={isOcupado ? (t.estadosMesa.ocupada ?? 'Horario ocupado por otra reserva') : undefined}
+              onClick={() => onChange(slot)}
+              className={`min-h-11 rounded-md border px-2 text-sm font-medium transition-colors flex flex-col items-center justify-center py-1 ${
+                selected === slot
+                  ? 'border-bronce-600 bg-bronce-600 text-white'
+                  : isOcupado
+                  ? 'border-neutro-200 bg-neutro-100 text-neutro-400 cursor-not-allowed line-through'
+                  : 'border-neutro-300 bg-white text-neutro-800 hover:border-bronce-500 disabled:cursor-not-allowed disabled:opacity-50'
+              }`}
+            >
+              <span>{slotLabel}</span>
+              {isOcupado && (
+                <span className="block text-[10px] uppercase tracking-wider font-semibold no-underline text-error-600/90 leading-tight">
+                  {t.estadosMesa.ocupada ? 'Ocupada' : 'Ocupado'}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </>}
+  </div>;
+}
+
+/** Número de comensales entre 1 y la capacidad real de la mesa. */
+function PartySize({ value, max, onChange, disabled }: { value: number; max: number; onChange: (value: number) => void; disabled?: boolean }) {
+  const t = usePublicTexts('restaurante');
+  const id = useId();
+  const invalid = !Number.isSafeInteger(value) || value < 1 || value > max;
+  return <div className="space-y-2">
+    <p id={id} className="text-xs font-semibold text-neutro-700">{t.comensalesLabel}</p>
+    <div className="flex items-center gap-3" role="group" aria-labelledby={id}>
+      <div className="flex items-center rounded-md border border-neutro-300 bg-white p-1">
+        <Button type="button" variant="ghost" size="sm" aria-label={t.menosComensales} disabled={disabled || value <= 1} onClick={() => onChange(Math.max(1, value - 1))}><Minus className="size-4" aria-hidden="true" /></Button>
+        <output aria-live="polite" className="min-w-10 text-center text-base font-semibold text-neutro-900">{value}</output>
+        <Button type="button" variant="ghost" size="sm" aria-label={t.masComensales} disabled={disabled || value >= max} onClick={() => onChange(Math.min(max, value + 1))}><Plus className="size-4" aria-hidden="true" /></Button>
+      </div>
+      <span className="text-sm text-neutro-600">{t.capacidadPersonas(value)}</span>
+    </div>
+    {invalid ? <p role="alert" className="text-xs text-error-600">{t.errorCapacidad}</p> : <p className="text-xs text-neutro-500">{t.comensalesMax(max)}</p>}
+  </div>;
+}

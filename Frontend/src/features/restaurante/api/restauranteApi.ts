@@ -8,6 +8,8 @@ import type {
   UpdateReservaMesaEstadoInput,
   ProductoMenu,
   Restaurante,
+  DisponibilidadMesaResponse,
+  ConfiguracionReservasMesa,
 } from "../types";
 
 export const restauranteApi = {
@@ -41,6 +43,33 @@ export const restauranteApi = {
   },
 
   /**
+   * Consulta pública de disponibilidad de franjas horarias de una mesa para una fecha.
+   * GET /api/mesas/:id/disponibilidad?fecha=YYYY-MM-DD
+   */
+  getDisponibilidadMesa: async (
+    mesaId: number,
+    fecha: string
+  ): Promise<DisponibilidadMesaResponse> => {
+    const response = await api.get<{ status: string; data: DisponibilidadMesaResponse }>(
+      `/mesas/${mesaId}/disponibilidad`,
+      { params: { fecha } }
+    );
+    return response.data;
+  },
+
+  /**
+   * Consulta pública de horarios y configuración de reservas de restaurante.
+   * GET /api/mesas/configuracion
+   */
+  getConfiguracionReservas: async (): Promise<ConfiguracionReservasMesa> => {
+    const response = await api.get<{ status: string; data: ConfiguracionReservasMesa }>(
+      "/mesas/configuracion"
+    );
+    return response.data;
+  },
+
+
+  /**
    * Creación de reserva de mesa para el cliente autenticado.
    * POST /api/reservas-mesa
    */
@@ -64,6 +93,15 @@ export const restauranteApi = {
    */
   getMyReservaById: async (id: number): Promise<ReservaMesa> => {
     const response = await api.get<ReservaMesaResponse>(`/reservas-mesa/mis-reservas/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Cancelación de una reserva propia del cliente autenticado.
+   * PATCH /api/reservas-mesa/mis-reservas/:id/cancelar
+   */
+  cancelMyReserva: async (id: number): Promise<ReservaMesa> => {
+    const response = await api.patch<ReservaMesaResponse>(`/reservas-mesa/mis-reservas/${id}/cancelar`, {});
     return response.data;
   },
 

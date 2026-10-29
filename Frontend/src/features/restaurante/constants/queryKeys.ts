@@ -3,6 +3,10 @@ export const restauranteQueryKeys = {
   mesas: () => [...restauranteQueryKeys.all, "mesas"] as const,
   restaurantes: () => [...restauranteQueryKeys.all, "restaurantes"] as const,
   menu: (restauranteId: number) => [...restauranteQueryKeys.all, "menu", restauranteId] as const,
+  disponibilidad: (mesaId: number, fecha: string) =>
+    [...restauranteQueryKeys.all, "disponibilidad", mesaId, fecha] as const,
+  disponibilidadAll: () =>
+    [...restauranteQueryKeys.all, "disponibilidad"] as const,
   reservas: {
     all: ["reservas-mesa"] as const,
     list: (userId?: number) =>

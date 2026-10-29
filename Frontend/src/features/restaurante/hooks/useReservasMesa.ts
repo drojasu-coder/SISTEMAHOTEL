@@ -47,7 +47,42 @@ export const useCreateReservaMesaMutation = () => {
       queryClient.invalidateQueries({
         queryKey: restauranteQueryKeys.reservas.all,
       });
+      queryClient.invalidateQueries({
+        queryKey: restauranteQueryKeys.disponibilidadAll(),
+      });
     },
+  });
+};
+
+/**
+ * Consulta en tiempo real de disponibilidad de horarios para una mesa y fecha específicas.
+ */
+export const useDisponibilidadMesaQuery = (
+  mesaId?: number,
+  fecha?: string,
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: restauranteQueryKeys.disponibilidad(mesaId ?? 0, fecha ?? ""),
+    queryFn: () => restauranteApi.getDisponibilidadMesa(mesaId!, fecha!),
+    enabled:
+      (options?.enabled ?? true) &&
+      typeof mesaId === "number" &&
+      mesaId > 0 &&
+      typeof fecha === "string" &&
+      fecha.length === 10,
+    staleTime: 1000 * 5, // 5s para reflejar rápidamente nuevas reservas
+  });
+};
+
+/**
+ * Consulta la configuración de horarios y reglas del restaurante.
+ */
+export const useConfiguracionReservasQuery = () => {
+  return useQuery({
+    queryKey: [...restauranteQueryKeys.all, "configuracion"] as const,
+    queryFn: restauranteApi.getConfiguracionReservas,
+    staleTime: 1000 * 60 * 5, // 5 minutos
   });
 };
 
@@ -141,6 +176,30 @@ export const useUpdateEstadoReservaMesaMutation = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: restauranteQueryKeys.reservas.all,
+      });
+      queryClient.invalidateQueries({
+        queryKey: restauranteQueryKeys.disponibilidadAll(),
+      });
+    },
+  });
+};
+
+/**
+ * Cancelación de una reserva propia (cliente). Al terminar se vuelven a
+ * consultar las reservas para mostrar el estado guardado en el servidor.
+ */
+export const useCancelarMiReservaMesaMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => restauranteApi.cancelMyReserva(id),
+    retry: false,
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: restauranteQueryKeys.reservas.all,
+      });
+      queryClient.invalidateQueries({
+        queryKey: restauranteQueryKeys.disponibilidadAll(),
       });
     },
   });

@@ -1,436 +1,592 @@
 import type { LegalDocuments } from './types';
 
-/**
- * Contenido legal en español. Cada afirmación describe el comportamiento real
- * del sistema (backend y frontend) o una norma guatemalteca verificada; lo que
- * no está determinado se declara como pendiente en lugar de inventarse.
- */
+/** Información pública basada en los servicios disponibles; decisiones internas en docs/pendientes-backend.md. */
 export const legalEs: LegalDocuments = {
-  terminos: {
-    title: 'Términos y condiciones',
-    description:
-      'Condiciones de uso de la plataforma de HOTEL HUNAHPÚ: cuentas, reservas, precios, pagos y límites del servicio.',
-    sections: [
+  "terminos": {
+    "title": "Términos y condiciones",
+    "description": "Información para consultar nuestros servicios, gestionar su cuenta y reservar con HOTEL HUNAHPÚ.",
+    "sections": [
       {
-        id: 'naturaleza',
-        title: 'Naturaleza del sitio',
-        blocks: [
-          { p: 'HOTEL HUNAHPÚ es un proyecto universitario de gestión hotelera. El sitio demuestra el funcionamiento de un sistema de reservas, pagos y administración para un hotel con sedes en Guatemala.' },
-          { p: 'HOTEL HUNAHPÚ no es una sociedad mercantil inscrita ni un establecimiento de hospedaje registrado ante el Instituto Guatemalteco de Turismo (INGUAT). Las reservas, los servicios y los importes que se muestran tienen fines académicos y no constituyen una oferta comercial real de hospedaje, alimentación ni otros servicios.' },
-        ],
+        "id": "naturaleza",
+        "title": "Bienvenido a HOTEL HUNAHPÚ",
+        "blocks": [
+          {
+            "p": "En HOTEL HUNAHPÚ puede consultar alojamiento y servicios en nuestras sedes de Antigua, Atitlán, Xela y Capital. Revise la sede, las fechas, los horarios, la capacidad y el importe de su selección antes de confirmar una solicitud."
+          }
+        ]
       },
       {
-        id: 'alcance',
-        title: 'Alcance de estos términos',
-        blocks: [
-          { p: 'Estos términos describen cómo funciona la plataforma y qué se espera de quienes la utilizan. Complementan la Política de privacidad, la Política de reservas, cancelaciones y reembolsos y la Política de almacenamiento en el navegador.' },
-          { p: 'El sistema no registra una aceptación expresa de estos términos: no existe una casilla de aceptación ni un registro de la fecha en que fueron leídos. Nada de lo aquí indicado limita los derechos que el Decreto 6-2003 del Congreso, Ley de Protección al Consumidor y Usuario, reconoce a consumidores y usuarios.' },
-        ],
+        "id": "alcance",
+        "title": "Alcance de estas condiciones",
+        "blocks": [
+          {
+            "p": "Estas condiciones se complementan con las políticas de privacidad, reservas, cancelaciones y reembolsos, y cookies y almacenamiento. Describen las opciones disponibles en el sitio y no limitan los derechos que le correspondan conforme a la legislación aplicable."
+          }
+        ]
       },
       {
-        id: 'cuentas',
-        title: 'Registro, inicio de sesión y credenciales',
-        blocks: [
-          { p: 'Para reservar es necesario crear una cuenta de cliente con nombre, correo electrónico y contraseña; el teléfono es opcional.' },
-          { list: [
-            'La contraseña debe tener entre 8 y 72 caracteres e incluir al menos una mayúscula, una minúscula y un número.',
-            'El sistema no verifica la titularidad del correo electrónico durante el registro.',
-            'La sesión dura como máximo una hora. Se conserva mientras la pestaña esté abierta y se comparte con otras pestañas del mismo sitio abiertas en el navegador; al cerrar sesión en una de ellas, se cierra en todas.',
-            'Tras varios intentos fallidos, el servidor limita temporalmente nuevos intentos de inicio de sesión.',
-          ] },
-          { p: 'Usted es responsable de mantener la confidencialidad de su contraseña y de cerrar la sesión en equipos compartidos. Si sospecha un uso no autorizado de su cuenta, comuníquelo mediante los datos de contacto publicados en el sitio.' },
-        ],
+        "id": "cuentas",
+        "title": "Su cuenta y su seguridad",
+        "blocks": [
+          {
+            "p": "Puede consultar nuestros catálogos sin iniciar sesión. Para gestionar reservas necesita una cuenta de cliente con su nombre y correo electrónico. Puede registrarse con una contraseña o utilizar el acceso con Google cuando esté disponible. El teléfono es opcional."
+          },
+          {
+            "p": "Mantenga sus datos de contacto actualizados mediante los canales de atención y no comparta sus credenciales. La sesión puede vencer por seguridad. Al cerrar sesión se cierra también en las demás pestañas abiertas del sitio en el mismo navegador."
+          }
+        ]
       },
       {
-        id: 'uso',
-        title: 'Uso permitido',
-        blocks: [
-          { p: 'La plataforma debe usarse para consultar los catálogos y gestionar reservas propias. No está permitido:' },
-          { list: [
-            'Acceder o intentar acceder a cuentas, reservas o pagos de otras personas.',
-            'Introducir datos falsos de terceros o suplantar a otra persona.',
-            'Realizar solicitudes automatizadas que alteren el funcionamiento del servicio o eludan los controles de acceso.',
-            'Usar las funciones administrativas sin la autorización correspondiente a su rol.',
-          ] },
-          { p: 'El personal del hotel accede solo a las funciones de su rol y, cuando corresponde, únicamente a la información de las sedes que tiene asignadas.' },
-        ],
+        "id": "uso",
+        "title": "Uso del servicio",
+        "blocks": [
+          {
+            "p": "Utilice su cuenta para gestionar sus propias solicitudes. No está permitido suplantar identidades, acceder a información ajena, eludir controles de seguridad ni interferir con el funcionamiento del sitio."
+          }
+        ]
       },
       {
-        id: 'reservas',
-        title: 'Requisitos para reservar y confirmaciones',
-        blocks: [
-          { list: [
-            'Habitaciones: se indican sede, fechas de llegada y salida y número de huéspedes, sin superar la capacidad del tipo de habitación. Consultar disponibilidad no aparta la habitación; la disponibilidad se comprueba de nuevo al crear la reserva. La reserva se crea en estado «pendiente» y pasa a «confirmada» cuando su total queda cubierto por pagos aprobados, o cuando el personal la confirma.',
-            'Restaurante, actividades, bienestar y amenidades: la reserva se registra en estado «confirmada» cuando el sistema valida horario, cupo y reglas del servicio. Ese estado es operativo: no acredita por sí mismo que exista un pago.',
-            'Eventos: la solicitud se registra como «cotización». No aparta el salón ni genera un cobro inmediato. El personal administrativo es quien la confirma.',
-          ] },
-          { p: 'Las fechas y horarios se interpretan en la hora de Guatemala.' },
-        ],
+        "id": "reservas",
+        "title": "Reservas y confirmaciones",
+        "blocks": [
+          {
+            "list": [
+              "Consultar disponibilidad no aparta una habitación. La disponibilidad y la capacidad se revisan al crear la reserva.",
+              "Las habitaciones se registran como pendientes. El pago total aprobado permite confirmarlas; el personal autorizado también puede gestionar su confirmación.",
+              "En habitaciones, restaurante, actividades, bienestar y amenidades, la confirmación indica el estado de la reserva; no acredita por sí sola que esté pagada. Consulte también el estado del pago y el importe aprobado.",
+              "Las solicitudes de eventos se registran como cotizaciones y requieren confirmación del hotel. Una cotización no aparta el salón.",
+              "Las fechas y los horarios se interpretan en la hora de Guatemala."
+            ]
+          }
+        ]
       },
       {
-        id: 'precios-pagos',
-        title: 'Precios y pagos',
-        blocks: [
-          { list: [
-            'Los precios se expresan en quetzales (GTQ) e incluyen los impuestos aplicables. Al hospedaje se le aplica además la tasa de turismo del INGUAT; a los demás servicios, solo el IVA.',
-            'El importe en dólares (USD) es una referencia calculada a Q7.80 por US$1.00. Los pagos se procesan siempre en quetzales.',
-            'El total de una reserva de habitación se calcula con la tarifa vigente al crearla o al cambiar sus fechas o su habitación. Si la tarifa del catálogo cambia después, el importe registrado no se recalcula.',
-            'Para eventos se calcula un anticipo del 30 % del total de la cotización (tarifa base del salón más servicios adicionales). El saldo solo puede pagarse después de cubrir el anticipo.',
-            'Los pagos en línea se hacen con tarjeta a través de Stripe. La plataforma opera con Stripe en modo de prueba: no se realizan cargos reales y deben utilizarse los datos de prueba que indica Stripe.',
-            'Una transferencia queda pendiente hasta que el personal autorizado la aprueba. Los pagos en efectivo solo puede registrarlos el personal.',
-            'Un carrito de compra vence a los 15 minutos. Si vence antes de pagar, es necesario iniciar un nuevo carrito.',
-          ] },
-          { p: 'El sistema genera registros internos de factura. Esos registros no son documentos tributarios electrónicos certificados por la Superintendencia de Administración Tributaria (SAT).' },
-        ],
+        "id": "precios-pagos",
+        "title": "Precios, pagos y comprobantes",
+        "blocks": [
+          {
+            "list": [
+              "Los precios publicados son finales e incluyen los impuestos aplicables. El IVA y, en alojamiento, el INGUAT ya están incluidos: no se añaden nuevamente al importe. El total de su selección se muestra antes de continuar al pago.",
+              "Los importes de pago se expresan en quetzales (GTQ). La visualización en dólares (USD) es orientativa, a razón de Q7.80 por US$1.00; no cambia la moneda de la operación.",
+              "Las reservas de habitación y los carritos que incluyen habitaciones requieren el pago completo. En eventos, el anticipo y el saldo son los indicados en la cotización.",
+              "Los pagos con tarjeta se gestionan mediante Stripe.",
+              "Una transferencia registrada permanece pendiente hasta su aprobación por personal autorizado. Los pagos en efectivo se registran por el personal.",
+              "Un pago en procesamiento o pendiente de verificación no debe repetirse. Consulte su estado antes de intentar otra operación.",
+              "Los comprobantes descargables son constancias internas de pago; no sustituyen una factura electrónica FEL."
+            ]
+          },
+          {
+            "p": "Un pago pendiente o en procesamiento aún no acredita el pago de la reserva. Un pago aprobado acredita el importe registrado; debe cubrir el total requerido para considerar pagada la selección. Si aparece rechazado o cancelado, consulte el estado actualizado y utilice únicamente las opciones disponibles, sin repetir una operación cuyo resultado siga sin verificarse."
+          }
+        ]
       },
       {
-        id: 'cancelaciones',
-        title: 'Cancelaciones y modificaciones',
-        blocks: [
-          { p: 'Las reglas de cada servicio se detallan en la Política de reservas, cancelaciones y reembolsos. En resumen, solo las cotizaciones y reservas de eventos pueden cancelarse directamente desde la cuenta del cliente; las demás reservas las modifica o cancela el personal del hotel. Ningún reembolso es automático.' },
-        ],
+        "id": "cancelaciones",
+        "title": "Cambios y cancelaciones",
+        "blocks": [
+          {
+            "p": "En «Mis reservas» encontrará las acciones disponibles para cada servicio. La opción de cancelar una habitación pendiente se ofrece cuando la reserva cumple las condiciones para cancelarla. No está disponible si hay pagos aprobados, pendientes de verificar u otros pagos asociados que requieran revisión. Las reservas confirmadas o con pagos asociados pueden requerir atención del hotel. Consulte la política de reservas para conocer las condiciones de cada servicio."
+          },
+          {
+            "p": "Cancelar una reserva no genera un reembolso automático. Para conocer las condiciones aplicables a su solicitud, contacte con el hotel e indique la referencia de su reserva y pago."
+          }
+        ]
       },
       {
-        id: 'limitaciones',
-        title: 'Limitaciones del servicio',
-        blocks: [
-          { list: [
-            'La información de sedes, habitaciones, menús, actividades, servicios y salones es demostrativa y puede cambiar sin aviso.',
-            'El sistema no envía confirmaciones por correo electrónico ni mensajes de texto: el estado de cada reserva se consulta en la sección «Mis reservas».',
-            'La disponibilidad del sitio puede interrumpirse por mantenimiento o fallas técnicas.',
-          ] },
-        ],
+        "id": "responsabilidades",
+        "title": "Responsabilidades del huésped",
+        "blocks": [
+          {
+            "p": "Proporcione datos correctos y revise la sede, las fechas, los horarios y el número de huéspedes o participantes antes de reservar. Respete la capacidad y las condiciones de uso publicadas para cada habitación o servicio. Conserve la referencia de su reserva y comunique al hotel los cambios que necesite; una solicitud de modificación no garantiza que haya disponibilidad."
+          }
+        ]
       },
       {
-        id: 'ley-aplicable',
-        title: 'Normativa de referencia y quejas',
-        blocks: [
-          { p: 'Se toman como referencia las leyes de la República de Guatemala, en particular el Decreto 6-2003 del Congreso (Ley de Protección al Consumidor y Usuario) y el Acuerdo Gubernativo 1144-83 (Reglamento para Establecimientos de Hospedaje del INGUAT).' },
-          { p: 'Un establecimiento real debe poner a disposición del público un libro de quejas autorizado (artículo 17 del Decreto 6-2003 y artículo 103 del Acuerdo Gubernativo 1144-83). Este proyecto no cuenta con libro de quejas autorizado; las consultas y reclamos se canalizan por los datos de contacto publicados en el sitio.' },
-        ],
+        "id": "atencion",
+        "title": "Atención al huésped",
+        "blocks": [
+          {
+            "p": "Para solicitar ayuda, consulte los datos de contacto publicados en la ficha de su sede. Indique la referencia de la reserva o del pago y el motivo de su consulta. Nunca envíe contraseñas ni datos completos de tarjeta. El estado de sus solicitudes se consulta en su cuenta; no dependa de recibir un correo o mensaje automático de confirmación."
+          }
+        ]
       },
       {
-        id: 'cambios',
-        title: 'Cambios a estos términos',
-        blocks: [
-          { p: 'Estos términos pueden actualizarse cuando cambie el funcionamiento de la plataforma. La fecha de la última actualización aparece al inicio de esta página.' },
-        ],
-      },
-    ],
+        "id": "cambios",
+        "title": "Actualizaciones y disponibilidad del sitio",
+        "blocks": [
+          {
+            "p": "El sitio puede tener interrupciones por mantenimiento o incidencias técnicas. Si una operación no muestra un resultado claro, consulte su estado antes de repetirla. La fecha al inicio de esta página identifica la última revisión de estas condiciones."
+          }
+        ]
+      }
+    ]
   },
-
-  privacidad: {
-    title: 'Política de privacidad',
-    description:
-      'Qué datos personales recopila la plataforma, para qué se usan, dónde se procesan y quién puede consultarlos.',
-    sections: [
+  "privacidad": {
+    "title": "Política de privacidad",
+    "description": "Cómo se utiliza y protege la información que comparte con HOTEL HUNAHPÚ.",
+    "sections": [
       {
-        id: 'responsable',
-        title: 'Responsable y marco normativo',
-        blocks: [
-          { p: 'La plataforma es un proyecto universitario de gestión hotelera y no está operada por una entidad legal registrada. Las consultas sobre esta política se atienden mediante los datos de contacto publicados en el sitio.' },
-          { p: 'Guatemala no cuenta todavía con una ley integral de protección de datos personales aplicable al sector privado; las iniciativas presentadas al Congreso aún no han sido aprobadas. Esta política no afirma cumplir normas extranjeras, como el Reglamento General de Protección de Datos de la Unión Europea.' },
-        ],
+        "id": "responsable",
+        "title": "Consultas sobre su información",
+        "blocks": [
+          {
+            "p": "Para consultas sobre sus datos personales, utilice los datos de contacto publicados en la ficha de su sede de HOTEL HUNAHPÚ. Indique qué información desea revisar o corregir, sin enviar contraseñas ni datos completos de tarjeta."
+          }
+        ]
       },
       {
-        id: 'datos',
-        title: 'Datos que se almacenan',
-        blocks: [
-          { list: [
-            'Cuenta: nombre, correo electrónico, teléfono (opcional), rol, estado activo o inactivo y fechas de creación y actualización. La contraseña no se guarda en texto legible: se almacena su resumen criptográfico (bcrypt).',
-            'Reservas de habitación: sede y habitación, fechas de llegada y salida, número de huéspedes, estado e importe total.',
-            'Restaurante: mesa, fecha, hora, número de comensales y estado.',
-            'Actividades: recurso, instructor (si se eligió), fecha, horario, participantes, equipo, estado e importe.',
-            'Bienestar: servicio, terapeuta, fecha, horario y estado de la cita.',
-            'Amenidades: amenidad, fecha, franja horaria, mobiliario solicitado, código QR y estado.',
-            'Eventos: salón, tipo de evento, fecha, horario, número de invitados, servicios adicionales, total, anticipo y estado.',
-            'Carrito y pagos: artículos del carrito, importe, moneda, método, tipo de pago (total, anticipo o saldo), estado, fecha, identificador del intento de pago de Stripe, clave de idempotencia y, si ocurre, código y mensaje de error. Los reembolsos registran importe, motivo, estado e identificador externo.',
-            'Facturas: NIT, nombre y dirección fiscales y desglose de importes e impuestos.',
-            'Personal del hotel: además de la cuenta, sede principal, sedes adicionales autorizadas, área y fecha de contratación.',
-          ] },
-          { p: 'La plataforma no almacena el número completo de la tarjeta, la fecha de vencimiento ni el código de seguridad. Esos datos se escriben en el formulario de pago de Stripe y no pasan por los servidores del proyecto.' },
-        ],
+        "id": "datos",
+        "title": "Información que conservamos",
+        "blocks": [
+          {
+            "list": [
+              "Cuenta: nombre, correo electrónico, teléfono si lo proporciona, método de acceso, estado de la cuenta y fechas de registro y actualización. Las contraseñas se guardan mediante una transformación criptográfica, no como texto legible.",
+              "Reservas y servicios: sede, habitación o recurso elegido, fechas y horarios, huéspedes o participantes, opciones seleccionadas, estado e importes aplicables. Las reservas de amenidades pueden incluir un código QR.",
+              "Pagos: importe, moneda, método, estado, referencia de la operación y datos necesarios para verificarla y evitar duplicados. Los reembolsos conservan su importe, motivo y resultado.",
+              "Facturación: nombre, NIT y dirección fiscal cuando estos datos se incorporan a un registro de facturación.",
+              "Personal: cuenta, función, área, sede, asignaciones y datos laborales necesarios para la gestión del hotel."
+            ]
+          },
+          {
+            "p": "HOTEL HUNAHPÚ no almacena el número completo de la tarjeta, su fecha de vencimiento ni su código de seguridad. Los campos de tarjeta pertenecen al formulario de Stripe."
+          }
+        ]
       },
       {
-        id: 'finalidades',
-        title: 'Para qué se usan',
-        blocks: [
-          { list: [
-            'Autenticar a cada persona y aplicar los permisos de su rol.',
-            'Crear, consultar y gestionar reservas, cotizaciones y pagos.',
-            'Calcular importes, anticipos y saldos, y registrar facturas internas y reembolsos.',
-            'Permitir que el personal autorizado atienda las reservas de las sedes que tiene asignadas.',
-            'Diagnosticar errores y proteger el servicio frente a usos indebidos.',
-          ] },
-          { p: 'Los datos no se utilizan para publicidad, perfiles comerciales ni decisiones automatizadas, y no se venden a terceros.' },
-        ],
+        "id": "finalidades",
+        "title": "Para qué utilizamos los datos",
+        "blocks": [
+          {
+            "p": "Utilizamos la información para permitir el acceso a su cuenta, gestionar reservas y cotizaciones, consultar pagos, atender solicitudes, mantener el historial de las operaciones y proteger el servicio. El sitio no incorpora herramientas de publicidad ni de seguimiento comercial."
+          }
+        ]
       },
       {
-        id: 'proveedores',
-        title: 'Dónde se procesan',
-        blocks: [
-          { list: [
-            'PostgreSQL: base de datos donde se guardan cuentas, reservas, pagos y facturas.',
-            'Stripe: procesa los pagos con tarjeta en modo de prueba. La plataforma le envía el importe, la moneda y referencias internas (identificadores de pago, carrito o reserva y tipo de pago); no le envía su nombre ni su correo.',
-            'Amazon Web Services (S3): almacena las imágenes de los catálogos (sedes, habitaciones, menús y servicios). Los clientes no suben imágenes.',
-            'Google Fonts: el sitio carga sus tipografías desde servidores de Google, por lo que el navegador les envía datos técnicos de la conexión, como la dirección IP.',
-          ] },
-        ],
+        "id": "proveedores",
+        "title": "Servicios que intervienen",
+        "blocks": [
+          {
+            "list": [
+              "Stripe recibe el importe, la moneda y referencias de la operación para gestionar el formulario de tarjeta y su resultado. Actualmente no se realizan cargos reales.",
+              "Amazon Web Services proporciona el almacenamiento y la entrega de imágenes del catálogo.",
+              "Google Fonts proporciona las tipografías del sitio y recibe datos técnicos de conexión cuando el navegador las descarga.",
+              "Cuando está habilitado, el acceso con Google carga su biblioteca en las pantallas de inicio de sesión y registro. Google recibe datos técnicos de conexión incluso antes de pulsar el botón. Si utiliza ese acceso, recibimos su identificador de Google, nombre y correo verificado para crear o reconocer su cuenta. No solicitamos acceso a contactos o archivos ni su contraseña de Google; no conservamos su fotografía. Para vincular una cuenta existente se solicita su contraseña del hotel."
+            ]
+          }
+        ]
       },
       {
-        id: 'acceso',
-        title: 'Quién puede consultar la información',
-        blocks: [
-          { list: [
-            'Cada cliente consulta únicamente sus propias reservas, pagos y facturas.',
-            'El personal accede según su rol: el administrador general a todas las sedes; recepción y gerencias, solo a la información administrativa de las sedes que tienen asignadas.',
-            'Los reembolsos y la aprobación de transferencias quedan reservados a roles administrativos autorizados.',
-          ] },
-        ],
+        "id": "acceso",
+        "title": "Acceso y protección",
+        "blocks": [
+          {
+            "p": "Cada cliente accede a su propia información. El personal autorizado dispone de acceso según su función y, cuando corresponde, su sede. El servicio verifica permisos, limita intentos de acceso y utiliza sesiones con vencimiento. Estas medidas reducen riesgos, pero no eliminan todas las posibilidades de un incidente."
+          }
+        ]
       },
       {
-        id: 'seguridad',
-        title: 'Medidas de seguridad',
-        blocks: [
-          { list: [
-            'Contraseñas almacenadas con resumen criptográfico (bcrypt).',
-            'Sesiones con un token de acceso que vence a la hora y se guarda en el almacenamiento de la pestaña, no en cookies.',
-            'Permisos verificados en el servidor para cada solicitud, por rol y por sede.',
-            'Límite de intentos de inicio de sesión.',
-            'Los registros técnicos del servidor anotan la ruta, el método, el resultado y la duración de cada solicitud, y omiten contraseñas, tokens y datos de tarjeta.',
-          ] },
-          { p: 'Ninguna medida elimina por completo el riesgo. La plataforma no declara certificaciones de seguridad.' },
-        ],
+        "id": "conservacion",
+        "title": "Conservación del historial",
+        "blocks": [
+          {
+            "p": "Cerrar sesión o cancelar una reserva no elimina la cuenta ni su historial. Actualmente no se aplica una eliminación automática de cuentas, reservas o pagos. Las solicitudes de revisión, corrección o eliminación deben ser evaluadas por el hotel, considerando los registros relacionados y las obligaciones aplicables; no se garantiza una eliminación inmediata de todos los datos."
+          },
+          {
+            "p": "Los datos de acceso de Google se verifican temporalmente; no se conserva su token en la base de datos ni en el almacenamiento del navegador. El vínculo de su cuenta con el identificador de Google sí se conserva."
+          }
+        ]
       },
       {
-        id: 'conservacion',
-        title: 'Conservación',
-        blocks: [
-          { p: 'No existen plazos de eliminación automática. Las reservas canceladas se conservan como historial y los registros se mantienen mientras el proyecto esté activo.' },
-        ],
+        "id": "derechos",
+        "title": "Gestión de su cuenta",
+        "blocks": [
+          {
+            "p": "Puede consultar su información en «Mi cuenta» y sus reservas en «Mis reservas». Para corregir datos, solicitar la eliminación de la cuenta o resolver dificultades de acceso, contacte con el hotel. El sitio no ofrece actualmente edición o eliminación de la cuenta, recuperación de contraseña ni desvinculación de Google por cuenta propia. Cerrar sesión aquí no cierra su sesión de Google."
+          }
+        ]
       },
       {
-        id: 'derechos',
-        title: 'Consultas y solicitudes',
-        blocks: [
-          { p: 'Puede revisar sus datos de cuenta en «Mi cuenta» y sus reservas en «Mis reservas». La plataforma no ofrece todavía funciones para corregir o eliminar la cuenta por cuenta propia. Las solicitudes de corrección o eliminación se dirigen a los datos de contacto publicados y se atienden manualmente, sin un plazo de respuesta garantizado.' },
-        ],
-      },
-      {
-        id: 'cambios',
-        title: 'Cambios a esta política',
-        blocks: [
-          { p: 'Esta política se actualizará si cambian los datos tratados o los proveedores utilizados. La fecha de la última actualización aparece al inicio de esta página.' },
-        ],
-      },
-    ],
+        "id": "cambios",
+        "title": "Actualizaciones de esta política",
+        "blocks": [
+          {
+            "p": "La fecha de revisión se muestra al inicio de esta página. Consulte también nuestra política de cookies y almacenamiento para conocer la información que permanece en su navegador."
+          }
+        ]
+      }
+    ]
   },
-
-  reservas: {
-    title: 'Reservas, cancelaciones y reembolsos',
-    description:
-      'Cómo funcionan los estados de cada reserva, quién puede cancelarla y cómo se tramita un reembolso, servicio por servicio.',
-    sections: [
+  "reservas": {
+    "title": "Reservas, cancelaciones y reembolsos",
+    "description": "Condiciones de gestión de sus reservas de alojamiento, servicios y eventos.",
+    "sections": [
       {
-        id: 'principios',
-        title: 'Principios generales',
-        blocks: [
-          { list: [
-            'Pendiente: la reserva existe, pero todavía no está confirmada (habitaciones).',
-            'Confirmada: la reserva es válida para la fecha indicada. En restaurante, actividades, bienestar y amenidades es un estado operativo que no acredita un pago.',
-            'Cotización: solicitud de evento que todavía no aparta el salón.',
-            'Cancelada: la reserva deja de estar vigente, pero se conserva como historial.',
-          ] },
-          { p: 'Cancelar una reserva y reembolsar un pago son operaciones distintas. Cancelar cambia el estado de la reserva; un reembolso solo existe cuando el personal autorizado lo registra sobre un pago aprobado. Ningún reembolso se genera automáticamente al cancelar.' },
-          { p: 'El sistema no aplica plazos, penalizaciones ni cargos por cancelación tardía o por no presentarse.' },
-        ],
+        "id": "principios",
+        "title": "Estados de su reserva",
+        "blocks": [
+          {
+            "list": [
+              "Pendiente: la reserva de habitación está registrada y espera confirmación.",
+              "Confirmada: indica el estado de la reserva, también en habitaciones; no acredita por sí sola un pago. Consulte por separado el estado y el importe aprobado del pago.",
+              "Cotización: solicitud de evento que todavía no aparta el salón.",
+              "Cancelada o expirada: la reserva ya no está vigente y no debe pagarse. Su historial se conserva."
+            ]
+          }
+        ]
       },
       {
-        id: 'habitaciones',
-        title: 'Habitaciones',
-        blocks: [
-          { list: [
-            'La reserva se crea en estado «pendiente» y pasa a «confirmada» cuando sus pagos aprobados cubren el total, o cuando la confirma el personal.',
-            'El cliente no puede cancelarla por sí mismo desde la plataforma. Para cancelarla o cambiarla debe solicitarlo al hotel; el personal autorizado de la sede la cancela o modifica.',
-            'No se puede cancelar ni modificar una reserva mientras uno de sus pagos está en procesamiento. Tampoco se puede reducir su total por debajo de lo ya pagado.',
-            'Cancelar no genera un reembolso automático. El reembolso se tramita por separado, como se describe más abajo.',
-          ] },
-          { p: 'Referencia normativa (INGUAT): el Acuerdo Gubernativo 1144-83 permite pedir arras (un anticipo) para formalizar una reserva (artículo 96). Si el huésped cancela, el establecimiento debe devolver las arras y puede retener el 30 % si cancela con más de 30 días de anticipación, el 50 % si lo hace con más de 7 días y la totalidad de las arras con 7 días o menos (artículo 98). Si el incumplimiento es del establecimiento, debe devolver las arras más otra cantidad igual (artículo 97). El sistema no calcula estas retenciones ni exige arras para habitaciones: cobra el total. Cómo aplicarlas es una decisión pendiente (ver «Aspectos pendientes»).' },
-          { p: 'El derecho de ocupación de la habitación, salvo disposición distinta aprobada por el INGUAT, empieza a las 13:00 horas de un día y vence a las 13:00 horas del día siguiente (artículo 89). La plataforma registra fechas de llegada y salida, pero no horas de entrada y salida.' },
-        ],
+        "id": "habitaciones",
+        "title": "Habitaciones",
+        "blocks": [
+          {
+            "p": "Seleccione sede, fechas y número de huéspedes dentro de la capacidad indicada. La disponibilidad se vuelve a comprobar al crear la reserva. El importe registrado se calcula con la tarifa aplicable a su selección; un cambio posterior en el catálogo no modifica por sí solo ese importe."
+          },
+          {
+            "p": "Puede solicitar la cancelación de una habitación pendiente desde su cuenta cuando la opción esté disponible. La operación requiere comprobar que no haya pagos aprobados, pendientes de verificar u otros pagos asociados que requieran revisión. Una reserva confirmada y pagada no ofrece un nuevo pago ni cancelación directa. Para cambios de fechas, habitación o cancelación de una reserva confirmada, solicite atención al hotel."
+          },
+          {
+            "p": "Si un pago sigue en procesamiento, se desconoce su resultado o aún no puede verificarse, la reserva permanece protegida. Utilice «Consultar estado» y no inicie un segundo pago. Cuando sea posible continuar, se reutiliza el intento existente. Las estancias terminadas no admiten pagos en línea desde el detalle."
+          }
+        ]
       },
       {
-        id: 'restaurante',
-        title: 'Restaurante',
-        blocks: [
-          { list: [
-            'La reserva de mesa se registra como «confirmada» y no requiere un pago en línea.',
-            'El cliente no puede cancelarla desde la plataforma; el personal administrativo cancela o reactiva la reserva. Para reactivarla se comprueba de nuevo que la mesa esté libre y en servicio.',
-          ] },
-        ],
+        "id": "plazos",
+        "title": "Plazos de reserva y carrito",
+        "blocks": [
+          {
+            "p": "El carrito tiene un vencimiento que se muestra en pantalla. Abrirlo o recargar la página no renueva su plazo. Si una reserva tiene un límite de pago asignado, ese límite se mantiene aunque cambie de carrito. El vencimiento del carrito no demuestra que una reserva se haya cancelado ni que un pago haya fallado."
+          },
+          {
+            "p": "Después de un vencimiento, consulte la reserva y el estado de cualquier pago. Solo continúe cuando la opción esté disponible y no exista un pago pendiente de verificar. Una reserva cuyo plazo ya venció no puede pagarse; contacte con el hotel si requiere ayuda."
+          }
+        ]
       },
       {
-        id: 'actividades',
-        title: 'Actividades y experiencias',
-        blocks: [
-          { list: [
-            'La reserva calcula su importe con la tarifa por hora del recurso y, si se elige, la del instructor, multiplicadas por la duración (entre 30 minutos y 2 horas).',
-            'El equipo con tarifa no se ofrece en línea porque no tiene una unidad de cobro definida; el equipo sin cargo puede solicitarse.',
-            'El cliente no puede cancelar desde la plataforma; el personal administrativo cambia el estado a cancelada o completada.',
-          ] },
-        ],
+        "id": "restaurante",
+        "title": "Restaurante",
+        "blocks": [
+          {
+            "p": "Elija sede, mesa, fecha, horario y número de comensales. La reserva se confirma cuando se valida la disponibilidad y la capacidad de la mesa. Reservar una mesa no inicia un pago en línea ni supone que los consumos estén incluidos."
+          },
+          {
+            "p": "Puede cancelar su reserva de mesa confirmada desde su cuenta antes de la fecha y hora reservadas. Para otros cambios o si el horario ya llegó, solicite atención al hotel."
+          }
+        ]
       },
       {
-        id: 'bienestar',
-        title: 'Bienestar',
-        blocks: [
-          { list: [
-            'La cita se registra como «confirmada» con un terapeuta y un horario disponibles. Ese estado no acredita un pago; el pago se gestiona en el carrito y el checkout.',
-            'El cliente no puede cancelar desde la plataforma; el personal administrativo cambia el estado a cancelada o completada.',
-          ] },
-        ],
+        "id": "actividades",
+        "title": "Actividades y experiencias",
+        "blocks": [
+          {
+            "p": "Seleccione el recurso, horario y participantes disponibles. El importe considera la duración y los servicios seleccionados que tengan tarifa. Un instructor se ofrece únicamente cuando hay opciones disponibles. Revise el resumen antes de reservar; para cambios o cancelaciones, solicite atención al hotel."
+          }
+        ]
       },
       {
-        id: 'amenidades',
-        title: 'Amenidades',
-        blocks: [
-          { list: [
-            'La reserva de una amenidad se registra para una fecha y una franja horaria, y genera un código QR. Las amenidades no tienen una tarifa configurada, por lo que no se cobran en línea.',
-            'El cliente no puede cancelarla desde la plataforma; el personal administrativo la marca como usada o cancelada.',
-          ] },
-        ],
+        "id": "bienestar",
+        "title": "Bienestar",
+        "blocks": [
+          {
+            "p": "Seleccione un servicio, terapeuta y horario de la sede elegida. La cita depende de la disponibilidad y de la duración del servicio. «Confirmada» describe la cita, no su pago. Si corresponde pagar en línea, consulte el importe y el estado del pago en su cuenta. Para cambios o cancelaciones, contacte con el hotel."
+          }
+        ]
       },
       {
-        id: 'eventos',
-        title: 'Eventos y cotizaciones',
-        blocks: [
-          { list: [
-            'La solicitud se registra como «cotización», sin apartar el salón ni generar cobros. El total suma la tarifa base del salón y los servicios adicionales; el anticipo requerido es el 30 % del total.',
-            'El personal administrativo confirma, cancela o finaliza el evento.',
-            'El cliente puede cancelar su propia cotización o reserva desde «Mis reservas» siempre que no tenga pagos aprobados ni pagos en procesamiento. Una reserva vencida no puede cancelarse.',
-            'Si ya existe un pago aprobado, la cancelación y cualquier devolución deben solicitarse al hotel.',
-          ] },
-        ],
+        "id": "amenidades",
+        "title": "Amenidades",
+        "blocks": [
+          {
+            "p": "La reserva identifica la amenidad, fecha, franja horaria y opciones disponibles; puede incluir un código QR para su gestión. La generación de ese código no acredita un pago. Consulte las condiciones de uso indicadas en la ficha y solicite al hotel los cambios o cancelaciones."
+          }
+        ]
       },
       {
-        id: 'reembolsos',
-        title: 'Cómo se tramita un reembolso',
-        blocks: [
-          { list: [
-            'Solicitud: el cliente la presenta por los datos de contacto publicados. La plataforma no tiene un formulario de solicitud de reembolso.',
-            'Revisión: solo los roles administrativos autorizados pueden registrar un reembolso. Puede ser total o parcial, y nunca superior al monto aprobado disponible.',
-            'Procesamiento: si el pago se hizo con tarjeta, el reembolso se envía a Stripe y su estado (pendiente, aprobado o rechazado) depende de la respuesta de Stripe. En modo de prueba no se devuelve dinero real. En pagos registrados manualmente, el reembolso deja constancia en el sistema, pero la devolución del dinero ocurre fuera de la plataforma.',
-            'Resultado: el pago queda como «reembolsado» o «reembolsado parcialmente».',
-          ] },
-          { p: 'La plataforma no garantiza un reembolso ni un plazo de acreditación. Los tiempos dependen del emisor de la tarjeta y del medio de pago.' },
-        ],
+        "id": "eventos",
+        "title": "Eventos y cotizaciones",
+        "blocks": [
+          {
+            "p": "La solicitud de un evento genera una cotización con el salón, horario, invitados y servicios seleccionados. No aparta el salón ni genera un cobro inmediato. El hotel gestiona la confirmación. Revise el total, el anticipo requerido y el saldo de la cotización antes de pagar."
+          },
+          {
+            "p": "Puede solicitar la cancelación desde su cuenta mediante la opción disponible. La operación se rechaza cuando existe un compromiso financiero que impide cancelarla con seguridad. Si ya hay pagos aprobados o en proceso, contacte con el hotel."
+          }
+        ]
       },
       {
-        id: 'retracto',
-        title: 'Derecho de retracto',
-        blocks: [
-          { p: 'El artículo 51 del Decreto 6-2003 reconoce al consumidor el derecho a retractarse dentro de un plazo no mayor de cinco días hábiles cuando el contrato se celebra fuera del establecimiento comercial, con restitución de lo pagado siempre que no haya hecho uso del servicio. La plataforma no tiene un proceso automatizado para ejercerlo: debe solicitarse por los datos de contacto y lo tramita manualmente el personal.' },
-        ],
+        "id": "reembolsos",
+        "title": "Solicitudes de reembolso",
+        "blocks": [
+          {
+            "p": "La cancelación y el reembolso son operaciones distintas. Para solicitar una devolución, contacte con la sede e indique la reserva y el pago relacionado. El personal autorizado revisa la solicitud; el sitio no ofrece reembolsos automáticos ni fija un porcentaje de devolución o un plazo de acreditación. Esta información no limita los derechos que correspondan conforme a la legislación aplicable."
+          },
+          {
+            "p": "El registro de un reembolso puede ser total o parcial y no puede superar el importe aprobado disponible. Consulte su resultado antes de considerar completada la devolución. Las operaciones del formulario de tarjeta actual no mueven dinero real; por ello, sus registros no representan una devolución bancaria real."
+          }
+        ]
       },
       {
-        id: 'pendientes',
-        title: 'Aspectos pendientes de decisión',
-        blocks: [
-          { p: 'Antes de que la plataforma pudiera operar con clientes reales, quedarían por resolver estos puntos. Requieren una decisión comercial o una revisión legal:' },
-          { list: [
-            'Cómo aplicar a las habitaciones el régimen de arras y las retenciones del artículo 98 del Acuerdo Gubernativo 1144-83, dado que el sistema cobra el total y no calcula retenciones.',
-            'Plazos y canal formal para solicitar cancelaciones, reembolsos y el derecho de retracto.',
-            'Horas de entrada y salida autorizadas por el INGUAT, y tarifas aprobadas por esa institución.',
-            'Registro del contrato de adhesión ante la Dirección de Atención y Asistencia al Consumidor (artículo 52 del Decreto 6-2003) y libro de quejas autorizado.',
-            'Emisión de facturas electrónicas certificadas ante la SAT.',
-          ] },
-        ],
-      },
-    ],
+        "id": "atencion",
+        "title": "Ayuda con una reserva",
+        "blocks": [
+          {
+            "p": "Consulte el contacto de la sede en su ficha e indique la referencia de la reserva. Confirme con el hotel cualquier condición de llegada, salida o servicio que no figure en su selección. No comparta contraseñas ni datos completos de tarjeta."
+          }
+        ]
+      }
+    ]
   },
-
-  almacenamiento: {
-    title: 'Cookies y almacenamiento en el navegador',
-    description:
-      'Qué guarda el sitio en su navegador, para qué sirve y por qué no se muestra un aviso de consentimiento de cookies.',
-    sections: [
+  "almacenamiento": {
+    "title": "Cookies y almacenamiento en el navegador",
+    "description": "Información sobre las preferencias y los datos necesarios para utilizar el sitio.",
+    "sections": [
       {
-        id: 'resumen',
-        title: 'Resumen',
-        blocks: [
-          { p: 'El sitio no crea cookies propias y no utiliza herramientas de analítica, publicidad ni seguimiento. Usa el almacenamiento del navegador (sessionStorage y localStorage) solo para funciones necesarias y preferencias que usted elige. Por eso no muestra un aviso de consentimiento de cookies.' },
-        ],
+        "id": "resumen",
+        "title": "Cómo utilizamos el navegador",
+        "blocks": [
+          {
+            "p": "El sitio no establece cookies propias ni incorpora herramientas de analítica o publicidad. Utiliza almacenamiento del navegador para mantener su sesión, conservar solicitudes en curso y recordar sus preferencias. Algunos servicios de terceros pueden utilizar sus propias tecnologías."
+          }
+        ]
       },
       {
-        id: 'session',
-        title: 'Almacenamiento de la pestaña (sessionStorage)',
-        blocks: [
-          { p: 'Se borra al cerrar la pestaña. Contiene:' },
-          { list: [
-            'El token de acceso de la sesión (vence a la hora y se elimina al cerrar sesión).',
-            'Borradores de búsqueda y de reserva (criterios de estancia, selección de habitación y datos de servicios en curso), para no perderlos durante el inicio de sesión.',
-            'Datos técnicos del intento de pago en curso, para evitar cobros duplicados si recarga la página.',
-            'Para el personal, la sede seleccionada en el panel administrativo. Esta preferencia no otorga permisos: los permisos los verifica el servidor.',
-          ] },
-        ],
+        "id": "session",
+        "title": "Sesión y solicitudes en curso",
+        "blocks": [
+          {
+            "p": "En el almacenamiento de la pestaña se guardan los datos de sesión, borradores de búsquedas y reservas, y referencias del intento de pago. Permiten continuar después del inicio de sesión o una recarga y ayudan a evitar operaciones duplicadas. Para el personal también se conserva la sede seleccionada; esa selección no concede permisos de acceso."
+          },
+          {
+            "p": "Estos datos se eliminan al cerrar la pestaña o al finalizar la función correspondiente, según el caso. El navegador puede restaurar una sesión anterior; cierre sesión expresamente en equipos compartidos."
+          }
+        ]
       },
       {
-        id: 'local',
-        title: 'Preferencias del sitio (localStorage)',
-        blocks: [
-          { p: 'Se conservan hasta que usted las cambie o borre los datos del sitio en su navegador:' },
-          { list: [
-            'Idioma (español o inglés).',
-            'Moneda de visualización (GTQ o la referencia en USD).',
-            'Sede seleccionada para explorar el catálogo público.',
-          ] },
-        ],
+        "id": "local",
+        "title": "Preferencias",
+        "blocks": [
+          {
+            "p": "El idioma, la moneda de visualización y la sede seleccionada se conservan en el navegador hasta que los cambie o borre los datos del sitio. Puede elegir español o inglés y visualizar importes en GTQ o una referencia en USD."
+          }
+        ]
       },
       {
-        id: 'pestanas',
-        title: 'Comunicación entre pestañas',
-        blocks: [
-          { p: 'El sitio utiliza BroadcastChannel, una función del navegador que comunica pestañas del mismo sitio dentro del mismo navegador. Se usa para que una pestaña nueva reciba la sesión ya iniciada y para cerrar la sesión en todas las pestañas a la vez. La información no sale de su navegador por este medio y el servidor valida siempre la sesión recibida.' },
-        ],
+        "id": "pestanas",
+        "title": "Pestañas abiertas",
+        "blocks": [
+          {
+            "p": "Las pestañas del mismo sitio pueden compartir la sesión dentro del mismo navegador. Cerrar sesión en una de ellas cierra la sesión en las demás. El acceso a su información siempre se valida en el servicio."
+          }
+        ]
       },
       {
-        id: 'terceros',
-        title: 'Servicios de terceros',
-        blocks: [
-          { list: [
-            'Stripe: el formulario de pago se carga desde Stripe solo en el checkout. Stripe puede usar sus propias cookies y tecnologías similares, por ejemplo para prevenir el fraude. Esas tecnologías dependen de Stripe y se rigen por su política de privacidad, no por esta página.',
-            'Google Fonts: las tipografías se descargan desde servidores de Google, que reciben datos técnicos de la conexión.',
-            'Amazon Web Services: las imágenes de los catálogos se sirven mediante enlaces temporales de Amazon S3.',
-          ] },
-        ],
+        "id": "terceros",
+        "title": "Servicios de terceros",
+        "blocks": [
+          {
+            "list": [
+              "Stripe carga el formulario de tarjeta en la página de pago y puede utilizar cookies o tecnologías propias para su funcionamiento y prevención del fraude.",
+              "Google Fonts recibe datos técnicos al descargar las tipografías. Si está habilitado el acceso con Google, sus pantallas cargan la biblioteca de Google y transmiten datos técnicos de conexión, aunque todavía no haya pulsado el botón.",
+              "Las imágenes del catálogo se entregan mediante Amazon Web Services. Las conexiones a proveedores implican el envío de datos técnicos necesarios para mostrar el contenido.",
+              "Las tecnologías de cada proveedor están sujetas a sus propias condiciones y políticas de privacidad."
+            ]
+          }
+        ]
       },
       {
-        id: 'control',
-        title: 'Cómo controlarlo',
-        blocks: [
-          { p: 'Puede borrar el almacenamiento del sitio desde la configuración de su navegador. Si lo hace, se cerrará la sesión y se perderán los borradores y las preferencias, pero no se modifican las reservas ni los pagos guardados en el servidor.' },
-        ],
-      },
-    ],
+        "id": "control",
+        "title": "Control de sus datos en el navegador",
+        "blocks": [
+          {
+            "p": "Puede borrar los datos del sitio desde la configuración del navegador. Se perderán las preferencias y los borradores guardados, y puede ser necesario iniciar sesión nuevamente. Esto no cancela reservas, no detiene pagos en curso ni elimina los registros del hotel. Antes de repetir una operación, consulte su estado en su cuenta."
+          }
+        ]
+      }
+    ]
   },
-
-  preguntas: {
-    title: 'Preguntas frecuentes',
-    description: 'Respuestas breves sobre cuentas, reservas, pagos y cancelaciones en HOTEL HUNAHPÚ.',
-    sections: [
-      { id: 'real', title: '¿Es un hotel real?', blocks: [{ p: 'No. Es un proyecto universitario que demuestra un sistema de gestión hotelera. Las reservas y los pagos tienen fines académicos y Stripe opera en modo de prueba, sin cargos reales.' }] },
-      { id: 'cuenta', title: '¿Necesito una cuenta para reservar?', blocks: [{ p: 'Sí. Puede consultar los catálogos sin iniciar sesión, pero para reservar necesita una cuenta de cliente. El sistema conserva su búsqueda mientras inicia sesión o se registra.' }] },
-      { id: 'disponibilidad', title: '¿Consultar disponibilidad aparta la habitación?', blocks: [{ p: 'No. La disponibilidad se comprueba de nuevo al crear la reserva. Si otra persona reserva antes, el sistema se lo indicará.' }] },
-      { id: 'confirmada', title: '¿Cuándo queda confirmada mi reserva de habitación?', blocks: [{ p: 'Cuando los pagos aprobados cubren el total, o cuando el personal del hotel la confirma. Mientras tanto aparece como «pendiente».' }] },
-      { id: 'estado-confirmado', title: 'Mi cita de bienestar dice «confirmada». ¿Ya está pagada?', blocks: [{ p: 'No necesariamente. En restaurante, actividades, bienestar y amenidades, «confirmada» es un estado operativo. El estado del pago se consulta en el carrito y el checkout.' }] },
-      { id: 'moneda', title: '¿En qué moneda pago?', blocks: [{ p: 'En quetzales (GTQ). El importe en dólares es una referencia calculada a Q7.80 por US$1.00.' }] },
-      { id: 'tarjeta', title: '¿Guardan los datos de mi tarjeta?', blocks: [{ p: 'No. Los datos de la tarjeta se escriben en el formulario de Stripe y no pasan por los servidores del proyecto. Solo se guarda el resultado y la referencia del pago.' }] },
-      { id: 'cancelar', title: '¿Cómo cancelo una reserva?', blocks: [{ p: 'Las cotizaciones y reservas de eventos sin pagos aprobados ni en procesamiento pueden cancelarse desde «Mis reservas». Para las demás reservas, solicite la cancelación al hotel; la realiza el personal autorizado.' }] },
-      { id: 'reembolso', title: '¿Recibo un reembolso automático si cancelo?', blocks: [{ p: 'No. Cancelar no genera un reembolso. Los reembolsos los revisa y registra el personal autorizado, sin superar el monto pagado. Consulte la Política de reservas, cancelaciones y reembolsos.' }] },
-      { id: 'carrito', title: '¿Por qué venció mi carrito?', blocks: [{ p: 'El carrito vence a los 15 minutos. Si vence antes de completar el pago, inicie uno nuevo y vuelva a añadir sus reservas.' }] },
-      { id: 'tarifa', title: '¿Por qué el total de mi reserva no coincide con la tarifa actual?', blocks: [{ p: 'El total se calcula con la tarifa vigente al crear la reserva o al cambiar sus fechas o su habitación. Si después cambia la tarifa del catálogo, el importe registrado no se recalcula.' }] },
-      { id: 'pestanas', title: '¿Por qué se cerró mi sesión en otra pestaña?', blocks: [{ p: 'La sesión se comparte entre las pestañas abiertas del sitio en el mismo navegador. Si cierra sesión en una, se cierra en todas. La sesión también vence a la hora.' }] },
-      { id: 'cuenta-datos', title: '¿Puedo modificar o eliminar mi cuenta?', blocks: [{ p: 'La plataforma todavía no ofrece esas funciones por cuenta propia. Puede solicitarlo por los datos de contacto publicados en el sitio; la solicitud se atiende manualmente.' }] },
-    ],
-  },
+  "preguntas": {
+    "title": "Preguntas frecuentes",
+    "description": "Respuestas para planificar su estancia y gestionar sus servicios con HOTEL HUNAHPÚ.",
+    "sections": [
+      {
+        "id": "reservar-habitacion",
+        "title": "¿Cómo reservo una habitación?",
+        "blocks": [
+          {
+            "p": "Busque disponibilidad por sede, fechas y número de huéspedes. Elija una habitación, revise la estancia y el precio final e inicie sesión con su cuenta de cliente para completar la reserva. Consulte después su estado en «Mis reservas» y las opciones de pago que estén disponibles."
+          }
+        ]
+      },
+      {
+        "id": "disponibilidad",
+        "title": "¿Cómo consulto la disponibilidad de habitaciones?",
+        "blocks": [
+          {
+            "p": "En Habitaciones, seleccione la sede, las fechas de entrada y salida y el número de huéspedes. Consulte las opciones disponibles para esos criterios. La búsqueda no aparta una habitación: la disponibilidad se comprueba de nuevo al crear la reserva."
+          }
+        ]
+      },
+      {
+        "id": "cuenta",
+        "title": "¿Necesito una cuenta para reservar?",
+        "blocks": [
+          {
+            "p": "Sí. Puede explorar los catálogos sin iniciar sesión; para gestionar reservas necesita una cuenta de cliente. Su búsqueda puede conservarse en la misma pestaña mientras inicia sesión."
+          }
+        ]
+      },
+      {
+        "id": "pagar",
+        "title": "¿Cómo puedo pagar?",
+        "blocks": [
+          {
+            "p": "Desde el carrito o las opciones disponibles en el detalle de su reserva, revise el total y continúe a la pantalla de pago. Las habitaciones requieren el pago completo; los eventos muestran el anticipo y el saldo correspondientes. Si una operación queda en proceso, consulte su estado antes de continuar y no genere otro pago para la misma reserva."
+          }
+        ]
+      },
+      {
+        "id": "mis-reservas",
+        "title": "¿Dónde consulto mis reservas?",
+        "blocks": [
+          {
+            "p": "Inicie sesión y abra «Mis reservas». Elija la categoría correspondiente y abra una reserva para consultar su detalle, fechas, estado y acciones disponibles. La información se consulta desde su cuenta; no necesita esperar un correo automático de confirmación."
+          }
+        ]
+      },
+      {
+        "id": "cancelar",
+        "title": "¿Puedo cancelar una reserva?",
+        "blocks": [
+          {
+            "p": "En «Mis reservas», abra el detalle y consulte si dispone de la opción de cancelar. Se permite para determinadas habitaciones pendientes sin pagos aprobados, inciertos u otros pagos que requieran revisión; para mesas confirmadas antes de su horario; y para eventos que cumplan las condiciones indicadas. Un pago pendiente de verificar puede impedir la cancelación. Para los demás casos, contacte con el hotel."
+          }
+        ]
+      },
+      {
+        "id": "servicios",
+        "title": "¿Cómo reservo actividades?",
+        "blocks": [
+          {
+            "p": "Abra Actividades, elija una sede y una experiencia, y seleccione la fecha, el horario y los participantes. Complete las opciones disponibles y revise el resumen y su importe antes de reservar. Para cambiar o cancelar una reserva de actividad, contacte con el hotel."
+          }
+        ]
+      },
+      {
+        "id": "bienestar",
+        "title": "¿Cómo reservo bienestar?",
+        "blocks": [
+          {
+            "p": "En Bienestar, seleccione la sede, el servicio y un terapeuta y horario disponibles. Revise la duración y el resumen antes de confirmar la cita. Podrá consultarla en la sección de bienestar de «Mis reservas». Para modificaciones o cancelaciones, contacte con el hotel."
+          }
+        ]
+      },
+      {
+        "id": "mesa",
+        "title": "¿Cómo reservo una mesa?",
+        "blocks": [
+          {
+            "p": "En Restaurante, seleccione sede, mesa, fecha, horario y número de comensales. Inicie sesión y confirme cuando haya disponibilidad para su grupo. La reserva de mesa no inicia un pago en línea ni incluye los consumos. Consulte el detalle en la sección de restaurante de «Mis reservas»."
+          }
+        ]
+      },
+      {
+        "id": "evento",
+        "title": "¿Cómo solicito un evento?",
+        "blocks": [
+          {
+            "p": "En Eventos, elija un salón y complete la fecha, el horario, el tipo de evento, el número de invitados y los servicios que necesite entre las opciones disponibles. Revise el importe y envíe la solicitud de cotización. Consulte su evolución en «Mis reservas»: la cotización no aparta el salón ni genera un cargo inmediato y requiere confirmación del hotel."
+          }
+        ]
+      },
+      {
+        "id": "consultar-servicios",
+        "title": "¿Cómo consulto mis servicios reservados?",
+        "blocks": [
+          {
+            "p": "Dentro de «Mis reservas», consulte las categorías de restaurante, actividades, bienestar, amenidades y eventos. Abra cada registro para ver el servicio, la sede, las fechas y su estado. Las acciones dependen del servicio y de la situación de la reserva; si necesita un cambio que no aparece disponible, contacte con el hotel."
+          }
+        ]
+      },
+      {
+        "id": "atencion",
+        "title": "¿Cómo contacto al hotel?",
+        "blocks": [
+          {
+            "p": "En la ficha de cada sede. Incluya la referencia de su reserva o pago para facilitar la consulta. Para horarios de llegada y salida u otras condiciones no indicadas, consulte directamente con el hotel."
+          }
+        ]
+      },
+      {
+        "id": "confirmada",
+        "title": "¿Cuándo queda confirmada mi habitación?",
+        "blocks": [
+          {
+            "p": "La reserva empieza como pendiente. Se confirma cuando sus pagos aprobados cubren el total, o cuando el personal autorizado gestiona su confirmación. Consulte el estado en «Mis reservas»."
+          }
+        ]
+      },
+      {
+        "id": "estado-confirmado",
+        "title": "Mi reserva dice «confirmada». ¿Ya está pagada?",
+        "blocks": [
+          {
+            "p": "No necesariamente. Una habitación puede ser confirmada por personal autorizado y, en restaurante, actividades, bienestar y amenidades, la confirmación describe la reserva del servicio. Consulte por separado el estado del pago y el importe aprobado; el estado de la reserva no sustituye un comprobante de pago."
+          }
+        ]
+      },
+      {
+        "id": "moneda",
+        "title": "¿Los precios incluyen impuestos y en qué moneda pago?",
+        "blocks": [
+          {
+            "p": "Los precios publicados son finales: incluyen IVA y, para alojamiento, INGUAT, sin volver a sumarlos al importe. Los pagos se expresan en quetzales (GTQ); USD es solo una referencia de visualización a Q7.80 por US$1.00."
+          }
+        ]
+      },
+      {
+        "id": "tarjeta",
+        "title": "¿Cómo funciona el formulario de tarjeta?",
+        "blocks": [
+          {
+            "p": "Stripe proporciona los campos de tarjeta y HOTEL HUNAHPÚ conserva la referencia y el resultado de la operación, no los datos completos de tarjeta."
+          }
+        ]
+      },
+      {
+        "id": "pago-incierto",
+        "title": "¿Qué hago si mi pago sigue en proceso?",
+        "blocks": [
+          {
+            "p": "Utilice «Consultar estado». No repita el pago ni cree otra operación para la misma reserva. Si no se puede verificar el resultado, la reserva permanece protegida y puede solicitar ayuda al hotel."
+          }
+        ]
+      },
+      {
+        "id": "reembolso",
+        "title": "¿Cancelar genera una devolución automática?",
+        "blocks": [
+          {
+            "p": "No. Solicite la revisión al hotel con la referencia de su reserva y pago. La cancelación no establece por sí sola un importe ni un plazo de devolución."
+          }
+        ]
+      },
+      {
+        "id": "carrito",
+        "title": "¿Qué ocurre si vence el carrito?",
+        "blocks": [
+          {
+            "p": "El vencimiento aparece en pantalla y no se renueva al recargar. Consulte primero la reserva y el estado del pago. El plazo de una reserva, cuando existe, no se amplía al cambiar de carrito; un pago incierto no debe repetirse."
+          }
+        ]
+      },
+      {
+        "id": "cuenta-datos",
+        "title": "¿Cómo actualizo mis datos o resuelvo un problema de acceso?",
+        "blocks": [
+          {
+            "p": "Consulte «Mi cuenta» y contacte con el hotel para solicitar correcciones o ayuda. No hay recuperación de contraseña, eliminación de cuenta ni desvinculación de Google por cuenta propia. Nunca envíe su contraseña al solicitar atención."
+          }
+        ]
+      }
+    ]
+  }
 };

@@ -1,0 +1,58 @@
+import { useLocale } from '@/i18n/LocaleContext';
+
+/** Textos de la administración de amenidades e instalaciones (ES/EN). */
+const es = {
+  modulo: 'Amenidades e instalaciones', nav: { amenidades: 'Amenidades', reservas: 'Reservas' }, navLabel: 'Secciones de amenidades',
+  cerrar: 'Cerrar', reintentar: 'Reintentar', cargando: 'Cargando…', limpiar: 'Limpiar filtros', sinFoto: 'Sin fotografía',
+  resumen: (n: number, reservables: number) => `${n} ${n === 1 ? 'amenidad' : 'amenidades'} · ${reservables} con reserva`,
+  nueva: 'Nueva amenidad', buscar: 'Buscar amenidad por nombre',
+  acceso: 'Acceso', todosAccesos: 'Reservables e informativas', reservable: 'Con reserva', informativa: 'Acceso libre',
+  aforo: 'Aforo', cualquierAforo: 'Cualquier aforo', aforoMin: (n: number) => `${n} o más personas`, personas: (n: number) => `${n} ${n === 1 ? 'persona' : 'personas'}`,
+  imagen: 'Fotografía', todasImagenes: 'Con y sin fotografía', conImagen: 'Con fotografía', sinImagen: 'Sin fotografía',
+  col: { amenidad: 'Amenidad', sede: 'Sede', acceso: 'Acceso', aforo: 'Aforo', proximas: 'Próximas reservas', acciones: 'Acciones' },
+  noAplica: 'No aplica', reservas: 'Reservas', reservasDe: (n: string) => `Ver reservas de ${n}`, editar: 'Editar', editarDe: (n: string) => `Editar ${n}`,
+  vacio: 'No hay amenidades registradas en las sedes seleccionadas.', sinResultados: 'Ninguna amenidad coincide con los filtros.',
+  accesoNota: 'Las amenidades de acceso libre no admiten reservas; en las demás, las reservas que coinciden en la franja comparten el aforo.',
+  // Reservas
+  reservasTitulo: 'Reservas de amenidades', reservasResumen: (n: number) => `${n} ${n === 1 ? 'reserva' : 'reservas'} en las sedes seleccionadas`, hoy: 'Hoy',
+  vistas: { hoy: 'Hoy', proximas: 'Próximas', historial: 'Historial' }, vistasLabel: 'Vista de reservas',
+  buscarReserva: 'Buscar por número, cliente o correo', amenidad: 'Amenidad', todasAmenidades: 'Todas las amenidades', fecha: 'Fecha', estado: 'Estado', todosEstados: 'Todos los estados',
+  estados: { confirmada: 'Confirmada', usada: 'Usada', cancelada: 'Cancelada' },
+  vacioR: { hoy: 'No hay reservas para hoy.', proximas: 'No hay reservas próximas.', historial: 'No hay reservas anteriores.', filtros: 'Ninguna reserva coincide con los filtros.' },
+  colR: { reserva: 'Reserva', fechaHora: 'Fecha y franja', amenidad: 'Amenidad', cliente: 'Cliente', mobiliario: 'Mobiliario', estado: 'Estado', acciones: 'Acciones' },
+  verReserva: (id: number) => `Ver detalle de la reserva #${id}`, marcarUsada: 'Marcar como usada', cancelarReserva: 'Cancelar reserva',
+  usadaDe: (id: number) => `Marcar como usada la reserva #${id}`, cancelarDe: (id: number) => `Cancelar la reserva #${id}`,
+  confirmarTitulo: 'Confirmar cambio de estado', confirmarUsada: 'La reserva quedará registrada como usada. Esta acción es definitiva.',
+  confirmarCancelar: 'La reserva quedará cancelada y se liberará el aforo de esa franja. Esta acción es definitiva.',
+  confirmar: 'Confirmar', procesando: 'Actualizando…', estadoFinal: 'La reserva ya está en un estado definitivo y no puede modificarse.', errorActualizar: 'No fue posible actualizar el estado de la reserva.',
+  mobiliario: { ninguno: 'Sin mobiliario' } as Record<string, string>,
+  filtroAmenidad: (n: string) => `Amenidad: ${n}`, quitarAmenidad: 'Quitar filtro de amenidad', errorReservas: 'No fue posible cargar las reservas de amenidades.',
+};
+const en: typeof es = {
+  modulo: 'Amenities and facilities', nav: { amenidades: 'Amenities', reservas: 'Reservations' }, navLabel: 'Amenity sections',
+  cerrar: 'Close', reintentar: 'Retry', cargando: 'Loading…', limpiar: 'Clear filters', sinFoto: 'No photo',
+  resumen: (n: number, bookable: number) => `${n} ${n === 1 ? 'amenity' : 'amenities'} · ${bookable} bookable`,
+  nueva: 'New amenity', buscar: 'Search amenity by name',
+  acceso: 'Access', todosAccesos: 'Bookable and open access', reservable: 'Bookable', informativa: 'Open access',
+  aforo: 'Capacity', cualquierAforo: 'Any capacity', aforoMin: (n: number) => `${n}+ people`, personas: (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`,
+  imagen: 'Photo', todasImagenes: 'With and without photo', conImagen: 'With photo', sinImagen: 'Without photo',
+  col: { amenidad: 'Amenity', sede: 'Site', acceso: 'Access', aforo: 'Capacity', proximas: 'Upcoming reservations', acciones: 'Actions' },
+  noAplica: 'N/A', reservas: 'Reservations', reservasDe: (n: string) => `View reservations for ${n}`, editar: 'Edit', editarDe: (n: string) => `Edit ${n}`,
+  vacio: 'No amenities recorded in the selected sites.', sinResultados: 'No amenities match the filters.',
+  accesoNota: 'Open-access amenities cannot be booked; for the others, reservations overlapping in the same time slot share the capacity.',
+  reservasTitulo: 'Amenity reservations', reservasResumen: (n: number) => `${n} ${n === 1 ? 'reservation' : 'reservations'} in the selected sites`, hoy: 'Today',
+  vistas: { hoy: 'Today', proximas: 'Upcoming', historial: 'History' }, vistasLabel: 'Reservation view',
+  buscarReserva: 'Search by number, customer or email', amenidad: 'Amenity', todasAmenidades: 'All amenities', fecha: 'Date', estado: 'Status', todosEstados: 'All statuses',
+  estados: { confirmada: 'Confirmed', usada: 'Used', cancelada: 'Cancelled' },
+  vacioR: { hoy: 'No reservations today.', proximas: 'No upcoming reservations.', historial: 'No past reservations.', filtros: 'No reservations match the filters.' },
+  colR: { reserva: 'Reservation', fechaHora: 'Date and slot', amenidad: 'Amenity', cliente: 'Customer', mobiliario: 'Furniture', estado: 'Status', acciones: 'Actions' },
+  verReserva: (id: number) => `View details of reservation #${id}`, marcarUsada: 'Mark as used', cancelarReserva: 'Cancel reservation',
+  usadaDe: (id: number) => `Mark reservation #${id} as used`, cancelarDe: (id: number) => `Cancel reservation #${id}`,
+  confirmarTitulo: 'Confirm status change', confirmarUsada: 'The reservation will be recorded as used. This action is final.',
+  confirmarCancelar: 'The reservation will be cancelled and the slot capacity released. This action is final.',
+  confirmar: 'Confirm', procesando: 'Updating…', estadoFinal: 'The reservation is already in a final status and cannot be changed.', errorActualizar: 'The reservation status could not be updated.',
+  mobiliario: { ninguno: 'No furniture' } as Record<string, string>,
+  filtroAmenidad: (n: string) => `Amenity: ${n}`, quitarAmenidad: 'Remove amenity filter', errorReservas: 'Amenity reservations could not be loaded.',
+};
+export type TextosGestionAmenidades = typeof es;
+export function useTextosGestionAmenidades(): TextosGestionAmenidades { const { locale } = useLocale(); return locale === 'en' ? en : es; }

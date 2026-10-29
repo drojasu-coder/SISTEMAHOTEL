@@ -3,19 +3,10 @@ import { itemTypeLabel } from '@/features/compra/itemGroups';
 import { PurchaseItemDetails } from '@/features/compra/PurchaseItemDetails';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronRight, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { RESERVAS_ROUTES } from '@/features/reservas';
-import { ACTIVIDADES_ROUTES } from '@/features/actividades/constants/routes';
-import { BIENESTAR_ROUTES } from '@/features/bienestar/constants/routes';
-import { EVENTOS_ROUTES } from '@/features/eventos/constants/routes';
 import type { CarritoItem } from '../types';
-import {
-  esItemHabitacion,
-  etiquetaTipoItem,
-  formatearCantidad,
-} from '../textos';
+import { etiquetaTipoItem, formatearCantidad } from '../textos';
 
 interface CarritoItemCardProps {
   item: CarritoItem;
@@ -23,132 +14,49 @@ interface CarritoItemCardProps {
   retiroBloqueado: boolean;
 }
 
+// Tipos cuyo detalle se consulta en el servidor; el resto se identifica por la descripción que registró el carrito.
+const CON_DETALLE = new Set(['habitacion', 'evento', 'actividad', 'bienestar']);
+
 /**
- * Presenta un artículo tal como lo registró el servidor.
- *
- * No deduce nombres, fechas ni relaciones que la respuesta no incluya. Los
- * artículos que no son habitaciones se identifican por su tipo real y nunca se
- * presentan como reservas de habitación.
+ * Fila compacta de un artículo: qué es, dónde y cuándo, y cuánto cuesta. Los datos secundarios van en "Más detalles";
+ * el identificador técnico del artículo no se muestra. Retirar del carrito no cancela la reserva.
  */
-export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({
-  item,
-  onRetirar,
-  retiroBloqueado,
-}) => {
+export const CarritoItemCard: React.FC<CarritoItemCardProps> = ({ item, onRetirar, retiroBloqueado }) => {
   const textosCarrito = usePublicTexts('carrito');
   const { locale } = usePublicInterface();
-  const habitacion = esItemHabitacion(item);
-  const esActividad = item.tipo_item === 'actividad';
-  const esBienestar = item.tipo_item === 'bienestar';
-  const esEvento = item.tipo_item === 'evento';
+  const tipo = locale === 'es' ? etiquetaTipoItem(item.tipo_item) : itemTypeLabel(item.tipo_item, locale);
   const descripcion = item.descripcion?.trim() || textosCarrito.sinDescripcion(item.id);
-  const precio = <MoneyReference amount={item.precio} />;
   const cantidad = formatearCantidad(item.cantidad);
 
   return (
-    <article className="surface flex h-full flex-col gap-4 p-4 sm:p-5">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={
-              habitacion
-                ? 'rounded-full border border-bronce-200 bg-bronce-50 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-bronce-700'
-                : 'rounded-full border border-neutro-200 bg-neutro-100 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-700'
-            }
-          >
-            {locale === 'es' ? etiquetaTipoItem(item.tipo_item) : itemTypeLabel(item.tipo_item, locale)}
-          </span>
-          <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-500">
-            {textosCarrito.articuloNumero(item.id)}
-          </span>
-        </div>
-
-        <h3 lang={item.descripcion ? 'es' : locale} className="break-words text-lg font-serif font-semibold text-neutro-900">
-          {descripcion}
-        </h3>
-
-        {habitacion && (
-          <Link
-            to={RESERVAS_ROUTES.DETALLE(item.referencia_id)}
-            className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
-          >
-            {textosCarrito.verReserva(item.referencia_id)}
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Link>
-        )}
-
-        {esActividad && (
-          <Link
-            to={ACTIVIDADES_ROUTES.DETALLE(item.referencia_id)}
-            className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
-          >
-            {textosCarrito.verReserva(item.referencia_id)}
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Link>
-        )}
-
-        {esBienestar && (
-          <Link
-            to={BIENESTAR_ROUTES.DETALLE(item.referencia_id)}
-            className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
-          >
-            {textosCarrito.verReserva(item.referencia_id)}
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Link>
-        )}
-
-        {esEvento && (
-          <Link
-            to={EVENTOS_ROUTES.MI_RESERVA_DETALLE(item.referencia_id)}
-            className="inline-flex min-h-11 w-fit items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
-          >
-            {textosCarrito.verReserva(item.referencia_id)}
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Link>
-        )}
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="min-w-0 flex-1">
+        {CON_DETALLE.has(item.tipo_item)
+          ? <PurchaseItemDetails item={item} allowNewSearch={!retiroBloqueado} compact />
+          : <div className="flex flex-col gap-1">
+              <p className="mb-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-bronce-700">{tipo}</p>
+              <p lang="es" className="break-words font-serif text-base font-semibold text-neutro-900">{descripcion}</p>
+            </div>}
       </div>
-
-      <PurchaseItemDetails item={item} allowNewSearch={!retiroBloqueado} showLink={false} />
-      <dl className="grid grid-cols-2 gap-3 border-y border-neutro-200 py-3 text-xs">
-        <div className="flex flex-col gap-1">
-          <dt className="eyebrow">{textosCarrito.campos.precio}</dt>
-          <dd className="text-neutro-900">{precio}</dd>
+      <div className="flex shrink-0 items-center justify-between gap-3 sm:flex-col sm:items-end sm:gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-semibold text-neutro-900">
+            <MoneyReference amount={item.precio} />
+          </p>
+          {String(cantidad) !== '1' && <span className="text-xs font-normal text-neutro-500">× {cantidad}</span>}
         </div>
-        <div className="flex flex-col gap-1">
-          <dt className="eyebrow">{textosCarrito.campos.cantidad}</dt>
-          <dd className="text-neutro-900">{cantidad}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-auto flex flex-wrap items-end justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          {habitacion ? (
-            <p className="max-w-xs text-xs text-neutro-600">
-              {textosCarrito.notaHabitacion}
-            </p>
-          ) : (
-            <>
-              <p className="eyebrow">{textosCarrito.campos.referencia}</p>
-              <p className="text-xs text-neutro-700">
-                {textosCarrito.referenciaNumero(item.referencia_id)}
-              </p>
-            </>
-          )}
-        </div>
-
         <Button
           type="button"
-          variant="ghost"
+          variant="text"
           size="sm"
           onClick={() => onRetirar(item)}
           disabled={retiroBloqueado}
-          className="inline-flex items-center gap-1.5 text-xs text-neutro-600 hover:text-rojo-700"
+          className="text-neutro-500 hover:text-rojo-700 px-2 py-1.5"
           aria-label={textosCarrito.retirarArticulo(item.id)}
         >
-          <Trash2 className="size-3.5" aria-hidden="true" />
-          <span>{textosCarrito.retirar}</span>
+          <Trash2 className="size-3" aria-hidden="true" />
         </Button>
       </div>
-    </article>
+    </div>
   );
 };

@@ -17,6 +17,7 @@ import {
 import { useReservaHabitacionQuery } from '@/features/mis-reservas/hooks/useMisReservas';
 import { useSedesFallback } from '@/features/mis-reservas/hooks/useSedesFallback';
 import { usePublicTexts } from '@/i18n/public';
+import { ComprobantesReserva } from '@/features/pagos/components/DescargarComprobante';
 
 interface EstadoErrorProps {
   titulo: string;
@@ -181,6 +182,10 @@ const DetalleContenido: React.FC<{ id: number; userId: number }> = ({
           sedesPorId={sedesPorId}
           avisoSedes={avisoSedes}
         />
+      )}
+
+      {reserva && !reservaQuery.isError && (
+        <ComprobantesReserva tipoItem="habitacion" referenciaId={reserva.id} />
       )}
     </section>
   );

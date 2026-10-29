@@ -10,6 +10,9 @@ import {
   type LoginResponseEnvelope,
   type RegisterRequest,
   type RegisterResponseEnvelope,
+  type ApiEnvelope,
+  type GoogleChallenge,
+  type GoogleLoginRequest,
 } from '../types';
 
 /**
@@ -23,6 +26,20 @@ function assertKnownRole(user: { rol: unknown }): void {
 }
 
 export const authApi = {
+  async googleChallenge(signal?: AbortSignal): Promise<GoogleChallenge> {
+    const response = await api.post<ApiEnvelope<GoogleChallenge>>('/auth/google/challenge', {}, {
+      token: null, signal, headers: { 'X-Google-CSRF': 'init' }, cache: 'no-store',
+    });
+    return response.data;
+  },
+
+  async googleLogin(payload: GoogleLoginRequest, nonce: string): Promise<LoginResponse> {
+    const response = await api.post<LoginResponseEnvelope>('/auth/google', payload, {
+      token: null, headers: { 'X-Google-CSRF': nonce }, cache: 'no-store',
+    });
+    assertKnownRole(response.data.usuario);
+    return response.data;
+  },
   /** POST /api/auth/login — petición anónima tipada según contrato OpenAPI. */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<LoginResponseEnvelope>('/auth/login', credentials, {

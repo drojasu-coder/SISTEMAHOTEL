@@ -4,9 +4,11 @@ import React from 'react';
 import { Alert } from '@/components/ui/Feedback';
 import { Card } from '@/components/ui/Card';
 import type { ReservaHabitacion } from '@/features/reservas';
-import { BotonAnadirAlCarrito } from '@/features/carrito';
+import { CancelarReservaPropia } from './CancelarReservaPropia';
+import { ContinuarPagoReserva } from './ContinuarPagoReserva';
 import {
   calcularNoches,
+  estanciaTerminada,
   resolverNombreSede,
 } from '../formato';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
@@ -34,6 +36,7 @@ export const ReservaDetalle: React.FC<ReservaDetalleProps> = ({
   sedesPorId,
   avisoSedes,
 }) => {
+  const [cancelada, setCancelada] = React.useState(false);
   const textosMisReservas = usePublicTexts('misReservas');
   const { date } = usePublicInterface();
   const habitacion = reserva.Habitacion;
@@ -88,12 +91,10 @@ export const ReservaDetalle: React.FC<ReservaDetalleProps> = ({
         </div>
 
         <div className="border-t border-bronce-200/80 pt-3">
-          <BotonAnadirAlCarrito
-            reservaId={reserva.id}
-            reservaEstado={reserva.estado}
-            variant="primary"
-            size="sm"
-          />
+          {cancelada ? null : reserva.estado === 'pendiente' && !estanciaTerminada(reserva) ? <ContinuarPagoReserva reservaId={reserva.id} /> : null}
+          {(reserva.estado === 'pendiente' || cancelada) && (
+            <div className="mt-3"><CancelarReservaPropia reservaId={reserva.id} onCancelled={() => setCancelada(true)} /></div>
+          )}
         </div>
       </Card>
 

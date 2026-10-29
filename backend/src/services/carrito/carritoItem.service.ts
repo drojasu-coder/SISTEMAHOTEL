@@ -1,3 +1,5 @@
+import { Op } from "sequelize";
+import { isReservationPastPaymentDeadline, isStayEnded } from "../habitaciones/reservaExpiracion.policy";
 import { AppError }
   from "../../utils/AppError";
 
@@ -35,6 +37,7 @@ const {
   ServicioBienestar,
   BoletoParque,
   ReservaTransporte,
+  Usuario,
 } = db;
 
 interface ResolvedItem {
@@ -323,6 +326,12 @@ const resolveHabitacion =
     validateReferenceState(
       reserva.estado
     );
+    if (await isReservationPastPaymentDeadline(reserva.id, transaction)) {
+      throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar esta reserva venció");
+    }
+    if (isStayEnded(reserva.fecha_salida)) {
+      throw new AppError(409, "RESERVATION_STAY_ENDED", "La estancia de esta reserva ya terminó y no puede pagarse");
+    }
     if (
       await isReservationFullyPaid(
         reserva.id,
@@ -1199,3 +1208,105 @@ export const remove = async (
     }
   );
 };
+
+
+export interface RoomReservationCartLink {
+  vinculada: true;
+  carrito_id: number;
+  item_id: number;
+  /** Vencimiento REAL del carrito (no se reinicia ni se amplía por abrirlo, recargarlo o reintentar). */
+  expira_en: string;
+}
+
+/**
+ * Vincula una reserva de habitación PENDIENTE y propia al carrito activo del usuario (lo crea si no existe),
+ * dentro de la transacción recibida. Idempotente: si el artículo ya existe, lo reutiliza.
+ *
+ * Reglas de vencimiento:
+ * - Carrito nuevo (o activo pero vacío): vence en `deadline`, el límite de pago de la reserva.
+ * - Carrito activo con artículos: NO se modifica. Ampliarlo daría más tiempo a artículos ajenos; el plazo efectivo
+ *   de la reserva es el menor entre el del carrito y su propio límite (este último lo hace cumplir el servidor).
+ *
+ * Atomicidad: si el carrito tiene un pago en procesamiento NO se puede modificar y se lanza 409, de modo que la
+ * transacción completa (incluida la creación de la reserva) se revierte. Nunca queda una reserva sin artículo.
+ */
+export const attachRoomReservationToCart = async (
+  reservationId: number,
+  userId: number,
+  deadline: Date,
+  transaction: any,
+): Promise<RoomReservationCartLink> => {
+  // Serializa la creación de carritos por usuario (igual que carrito.create).
+  await Usuario.findByPk(userId, { transaction, lock: transaction.LOCK.UPDATE });
+  await Carrito.update(
+    { estado: "expirado" },
+    { where: { usuario_id: userId, estado: "activo", expira_en: { [Op.lte]: new Date() } }, transaction },
+  );
+  let carrito = await Carrito.findOne({
+    where: { usuario_id: userId, estado: "activo" },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+  if (carrito) {
+    const processing = await Pago.findOne({ where: { carrito_id: carrito.id, estado: "procesando" }, attributes: ["id"], transaction });
+    if (processing) {
+      throw new AppError(
+        409,
+        "CART_HAS_PROCESSING_PAYMENT",
+        "Su carrito tiene un pago en proceso. Espere a que termine o venza para crear una nueva reserva",
+      );
+    }
+    const itemCount = await CarritoItem.count({ where: { carrito_id: carrito.id }, transaction });
+    if (itemCount === 0) await carrito.update({ expira_en: deadline }, { transaction });
+  } else {
+    carrito = await Carrito.create({ usuario_id: userId, estado: "activo", expira_en: deadline }, { transaction });
+  }
+  let item = await CarritoItem.findOne({
+    where: { carrito_id: carrito.id, tipo_item: "habitacion", referencia_id: reservationId },
+    transaction,
+  });
+  if (!item) {
+    const resolved = await resolveReference("habitacion", reservationId, carrito.usuario_id, transaction);
+    item = await CarritoItem.create(
+      {
+        carrito_id: carrito.id, tipo_item: "habitacion", referencia_id: reservationId,
+        descripcion: resolved.descripcion, precio: resolved.precio, cantidad: 1, promocion_id: null,
+      },
+      { transaction },
+    );
+  }
+  return {
+    vinculada: true, carrito_id: Number(carrito.id), item_id: Number(item.id),
+    expira_en: new Date(carrito.expira_en).toISOString(),
+  };
+};
+
+/**
+ * Retira de los carritos ACTIVOS del titular el artículo de una reserva ya cancelada o expirada. Es una limpieza posterior y
+ * recuperable (transacción propia): la cancelación no depende de ella y puede repetirse sin efectos. No toca carritos
+ * pagados ni expirados, ni carritos con pago en procesamiento. Devuelve true si no queda ningún artículo por retirar.
+ */
+export const removeCancelledRoomReservationFromActiveCarts = async (reservationId: number, userId: number): Promise<boolean> =>
+  sequelize.transaction(async (transaction: any) => {
+    const reservation = await ReservaHabitacion.findByPk(reservationId, { transaction });
+    // Solo se retiran artículos de reservas que ya no pueden pagarse (canceladas por el cliente o expiradas).
+    if (!reservation || Number(reservation.usuario_id) !== Number(userId) || !["cancelada", "expirada"].includes(String(reservation.estado))) return false;
+    const carts = await Carrito.findAll({
+      where: { usuario_id: userId, estado: "activo" }, order: [["id", "ASC"]], transaction, lock: transaction.LOCK.UPDATE,
+    });
+    let pendingRemoval = false;
+    for (const cart of carts as any[]) {
+      const items = await CarritoItem.findAll({
+        where: { carrito_id: cart.id, tipo_item: "habitacion", referencia_id: reservationId }, transaction,
+      });
+      if (!items.length) continue;
+      // Un carrito con pago en procesamiento o con cobros registrados conserva sus artículos (historial financiero íntegro).
+      const financial = await Pago.findOne({
+        where: { carrito_id: cart.id, estado: { [Op.in]: ["procesando", "aprobado", "reembolsado", "reembolsado_parcial"] } },
+        attributes: ["id"], transaction,
+      });
+      if (financial) { pendingRemoval = true; continue; }
+      for (const item of items as any[]) await item.destroy({ transaction });
+    }
+    return !pendingRemoval;
+  });

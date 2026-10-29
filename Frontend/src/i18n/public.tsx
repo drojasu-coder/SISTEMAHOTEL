@@ -51,6 +51,9 @@ export const TranslatedError: React.FC<{ error: LocalizedError }> = ({ error }) 
       if (api.code === 'USER_INACTIVE') return <>{p('authInactive')}</>;
       if (api.code === 'INVALID_CREDENTIALS') return <>{p('invalidLogin')}</>;
       if (api.code === 'EMAIL_ALREADY_REGISTERED') return <>{p('emailRegistered')}</>;
+      if (api.code === 'CART_HAS_PROCESSING_PAYMENT') return <>{p('cartBusyPayment')}</>;
+      if (api.code === 'RESERVATION_PAYMENT_WINDOW_EXPIRED') return <>{p('reservationWindowExpired')}</>;
+      if (api.code === 'RESERVATION_STAY_ENDED') return <>{p('RESERVATION_STAY_ENDED')}</>;
       return <span lang="es">{api.message}</span>;
     }
     if (api instanceof Error && api.name === 'AuthFlowError') return locale === 'en' ? <>{p('unknownRole')}</> : <span lang="es">{api.message}</span>;

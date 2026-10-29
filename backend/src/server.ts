@@ -1,6 +1,8 @@
 import app from "./app";
 import { env } from "./config/env";
 import { logger } from "./utils/logger";
+import { startReservationExpirationScheduler } from "./services/habitaciones/reservaExpiracion.service";
+import { assertGoogleSchemaReady } from "./services/googleSchema.service";
 
 const db = require("./models");
 
@@ -8,6 +10,7 @@ async function startServer() {
   try {
     // 1. Autenticar conexión con la base de datos configurada
     await db.sequelize.authenticate();
+    if (env.GOOGLE_LOGIN_ENABLED) await assertGoogleSchemaReady();
 
     // 2. Consultar nombre de base y puerto interno de PostgreSQL
     const [queryResult] = await db.sequelize.query(
@@ -65,6 +68,10 @@ async function startServer() {
         env: env.NODE_ENV,
         database: confirmedDb,
       });
+      // Solo si RESERVA_PENDIENTE_EXPIRACION_ACTIVA=true y la migración expira_en está aplicada; el primer
+      // ciclo ocurre tras el intervalo y las reservas históricas (expira_en NULL) nunca son elegibles.
+      void startReservationExpirationScheduler().catch((error) =>
+        logger.error("reserva_expiracion.inicio_fallido", { error: error?.message || String(error) }));
     });
   } catch (error: any) {
     logger.error("server.startup_failed", { error: error?.message || error });

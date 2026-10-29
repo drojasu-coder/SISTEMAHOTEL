@@ -10,6 +10,7 @@ export const primaryLinks: { to: string; label: UxKey; children?: typeof experie
 ];
 export function sectionActive(path: string, to: string) {
   if (to === '/') return path === '/';
-  if (to === '/habitaciones') return ['/habitaciones', '/reservar', '/crear-reserva'].some((p) => path === p || path.startsWith(p + '/'));
+  // Explorar habitaciones y reservar son accesos distintos: /reservar tiene su propio acceso.
+  if (to === '/reservar') return ['/reservar', '/crear-reserva'].some((p) => path === p || path.startsWith(p + '/'));
   return path === to || path.startsWith(to + '/');
 }

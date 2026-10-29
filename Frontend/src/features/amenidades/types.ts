@@ -14,12 +14,18 @@ export type Amenidad = components["schemas"]["Amenidad"] & {
   imagen_creditos?: AssetCreditInfo | null;
   /** false = espacio compartido de libre acceso: el backend rechaza reservas (AMENITY_NOT_RESERVABLE). */
   reservable?: boolean;
+  /** Horario de reserva (HH:MM:SS) y duración fija; sin ellos no se ofrecen franjas. */
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
+  duracion_minutos?: number | null;
 };
 
 export type AmenidadesResponse = components["schemas"]["AmenidadesResponse"];
 export type AmenidadResponse = components["schemas"]["AmenidadResponse"];
-export type CreateAmenidadInput = components["schemas"]["CreateAmenidadRequest"];
-export type UpdateAmenidadInput = components["schemas"]["UpdateAmenidadRequest"];
+/** Horario de reserva y duración fija, editables desde el panel (null para quitarlos). */
+type HorarioAmenidadInput = { hora_apertura?: string | null; hora_cierre?: string | null; duracion_minutos?: number | null };
+export type CreateAmenidadInput = components["schemas"]["CreateAmenidadRequest"] & HorarioAmenidadInput;
+export type UpdateAmenidadInput = components["schemas"]["UpdateAmenidadRequest"] & HorarioAmenidadInput;
 
 export type ReservaAmenidad = components["schemas"]["ReservaAmenidad"];
 export type ReservaAmenidadEstado = ReservaAmenidad["estado"];

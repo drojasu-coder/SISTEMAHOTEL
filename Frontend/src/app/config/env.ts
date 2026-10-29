@@ -5,8 +5,13 @@
 
 const rawApiUrl = import.meta.env.VITE_API_BASE_URL;
 const rawStripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() || '';
+const googleLoginEnabled = import.meta.env.VITE_GOOGLE_LOGIN_ENABLED === 'true' &&
+  /^[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/.test(googleClientId);
 
 export const env = {
+  googleClientId,
+  googleLoginEnabled,
   apiBaseUrl:
     typeof rawApiUrl === 'string' && rawApiUrl.trim().length > 0
       ? rawApiUrl.trim().replace(/\/+$/, '')

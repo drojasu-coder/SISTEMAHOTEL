@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useEscapeToClose } from '@/lib/useEscapeToClose';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X } from 'lucide-react';
@@ -58,6 +59,8 @@ export const ServicioEventoFormModal: React.FC<ServicioEventoFormModalProps> = (
     }
     setErrorMessage(null);
   }, [servicio, reset]);
+
+  useEscapeToClose(onClose, createMutation.isPending || updateMutation.isPending || isSubmitting, isOpen);
 
   if (!isOpen) return null;
 

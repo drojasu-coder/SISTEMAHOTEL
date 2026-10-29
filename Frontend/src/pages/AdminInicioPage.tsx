@@ -131,6 +131,7 @@ export const AdminInicioPage: React.FC = () => {
     }
   };
 
+  const sectionName = { hero: 'portada', presentacion: 'presentación', experiencias: 'experiencias' } as const;
   const handleUploadImage = async (section: 'hero' | 'presentacion' | 'experiencias', file: File) => {
     setIsUploading((prev) => ({ ...prev, [section]: true }));
     setUploadProgress((prev) => ({ ...prev, [section]: 10 }));
@@ -149,12 +150,12 @@ export const AdminInicioPage: React.FC = () => {
 
       setFeedback({
         type: 'success',
-        message: `Fotografía de sección ${section} actualizada y publicada correctamente.`,
+        message: `Fotografía de ${sectionName[section]} publicada correctamente.`,
       });
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        message: err?.message || `Error al subir la imagen para la sección ${section}.`,
+        message: err?.message || `No fue posible publicar la fotografía de ${sectionName[section]}.`,
       });
     } finally {
       setIsUploading((prev) => ({ ...prev, [section]: false }));
@@ -163,7 +164,7 @@ export const AdminInicioPage: React.FC = () => {
   };
 
   const handleRemoveImage = async (section: 'hero' | 'presentacion' | 'experiencias') => {
-    if (!window.confirm(`¿Está seguro de desvincular la fotografía de la sección ${section}?`)) {
+    if (!window.confirm(`¿Desvincular la fotografía de ${sectionName[section]}? El sitio dejará de mostrarla.`)) {
       return;
     }
     setFeedback(null);
@@ -171,12 +172,12 @@ export const AdminInicioPage: React.FC = () => {
       await removeImageMutation.mutateAsync(section);
       setFeedback({
         type: 'success',
-        message: `Fotografía de sección ${section} desvinculada correctamente.`,
+        message: `Fotografía de ${sectionName[section]} desvinculada.`,
       });
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        message: err?.message || `Error al desvincular la imagen de la sección ${section}.`,
+        message: err?.message || `No fue posible desvincular la fotografía de ${sectionName[section]}.`,
       });
     }
   };
@@ -215,8 +216,8 @@ export const AdminInicioPage: React.FC = () => {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-16">
       {/* Encabezado y Navegación superior */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-6">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b pb-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Link
               to="/admin/sedes"
@@ -234,7 +235,7 @@ export const AdminInicioPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
             variant="secondary"
@@ -436,21 +437,26 @@ export const AdminInicioPage: React.FC = () => {
 
               {/* Uploader para la fotografía de portada */}
               <div className="flex flex-col gap-2 rounded-xl border border-neutro-200 bg-neutro-50 p-4">
-                <p className="text-xs font-semibold text-neutro-800">Fotografía de Portada (Hero)</p>
-                <ImageUploader
-                  label="Fotografía del Banner"
+                                <ImageUploader
+                  label="Fotografía de portada"
+                  optionalLabel=""
+                  previewSize="lg"
                   currentImageUrl={serverData.hero_imagen_url}
                   selectedFile={heroFile}
                   removeMarked={false}
                   onFileSelect={(file) => {
                     setHeroFile(file);
-                    if (file) handleUploadImage('hero', file);
                   }}
                   onRemoveCurrent={() => handleRemoveImage('hero')}
                   isUploading={isUploading['hero']}
                   uploadProgress={uploadProgress['hero']}
                   helpText="Se recomienda una imagen panorámica de alta resolución (1920x1080 WebP/JPG)."
                 />
+                {heroFile && (
+                  <Button type="button" size="sm" className="self-start" disabled={isUploading['hero']} onClick={() => handleUploadImage('hero', heroFile)}>
+                    {isUploading['hero'] ? 'Publicando…' : 'Publicar fotografía'}
+                  </Button>
+                )}
                 {serverData.hero_imagen_creditos && (
                   <p className="text-[11px] text-neutro-500 mt-2">
                     Crédito oficial asociado: {serverData.hero_imagen_creditos.texto}
@@ -529,21 +535,26 @@ export const AdminInicioPage: React.FC = () => {
 
               {/* Uploader para la fotografía de presentación */}
               <div className="flex flex-col gap-2 rounded-xl border border-neutro-200 bg-neutro-50 p-4">
-                <p className="text-xs font-semibold text-neutro-800">Fotografía Representativa</p>
-                <ImageUploader
-                  label="Fotografía Colonial/Hotel"
+                                <ImageUploader
+                  label="Fotografía de presentación"
+                  optionalLabel=""
+                  previewSize="lg"
                   currentImageUrl={serverData.presentacion_imagen_url}
                   selectedFile={presentacionFile}
                   removeMarked={false}
                   onFileSelect={(file) => {
                     setPresentacionFile(file);
-                    if (file) handleUploadImage('presentacion', file);
                   }}
                   onRemoveCurrent={() => handleRemoveImage('presentacion')}
                   isUploading={isUploading['presentacion']}
                   uploadProgress={uploadProgress['presentacion']}
                   helpText="Se recomienda formato horizontal o 4:3 con buena iluminación."
                 />
+                {presentacionFile && (
+                  <Button type="button" size="sm" className="self-start" disabled={isUploading['presentacion']} onClick={() => handleUploadImage('presentacion', presentacionFile)}>
+                    {isUploading['presentacion'] ? 'Publicando…' : 'Publicar fotografía'}
+                  </Button>
+                )}
                 {serverData.presentacion_imagen_creditos && (
                   <p className="text-[11px] text-neutro-500 mt-2">
                     Crédito oficial asociado: {serverData.presentacion_imagen_creditos.texto}
@@ -688,21 +699,26 @@ export const AdminInicioPage: React.FC = () => {
 
               {/* Uploader para la fotografía de experiencias */}
               <div className="flex flex-col gap-2 rounded-xl border border-neutro-200 bg-neutro-50 p-4">
-                <p className="text-xs font-semibold text-neutro-800">Fotografía Destacada de Experiencias</p>
-                <ImageUploader
-                  label="Fotografía Gastronomía/Bienestar"
+                                <ImageUploader
+                  label="Fotografía de experiencias"
+                  optionalLabel=""
+                  previewSize="lg"
                   currentImageUrl={serverData.experiencias_imagen_url}
                   selectedFile={experienciasFile}
                   removeMarked={false}
                   onFileSelect={(file) => {
                     setExperienciasFile(file);
-                    if (file) handleUploadImage('experiencias', file);
                   }}
                   onRemoveCurrent={() => handleRemoveImage('experiencias')}
                   isUploading={isUploading['experiencias']}
                   uploadProgress={uploadProgress['experiencias']}
                   helpText="Se recomienda una imagen ambientada de alta calidad."
                 />
+                {experienciasFile && (
+                  <Button type="button" size="sm" className="self-start" disabled={isUploading['experiencias']} onClick={() => handleUploadImage('experiencias', experienciasFile)}>
+                    {isUploading['experiencias'] ? 'Publicando…' : 'Publicar fotografía'}
+                  </Button>
+                )}
                 {serverData.experiencias_imagen_creditos && (
                   <p className="text-[11px] text-neutro-500 mt-2">
                     Crédito oficial asociado: {serverData.experiencias_imagen_creditos.texto}

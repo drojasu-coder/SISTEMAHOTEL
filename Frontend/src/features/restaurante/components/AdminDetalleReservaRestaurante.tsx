@@ -36,7 +36,7 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
   const t = useTextosAdminRestaurante();
   const { locale } = useLocale();
 
-  const isAdmin = status === "authenticated" && (user?.rol === "admin" || user?.rol === "gerente_habitaciones");
+  const isAdmin = status === "authenticated" && (user?.rol === "admin" || user?.rol === "gerente_habitaciones" || user?.rol === "gerente_restaurante");
   const reservaQuery = useAdminReservaMesaDetalleQuery(numericId, user?.id, isAdmin);
   const reserva = reservaQuery.data;
 
@@ -189,7 +189,7 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
                 {t.detalleTitulo} #{reserva.id}
               </h1>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span
                 className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-semibold ${estadoReservaMesa(reserva.estado, t.estados).className}`}
               >
@@ -229,9 +229,9 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
                 <User className="size-4 text-bronce-600 shrink-0" aria-hidden="true" />
                 <span>{reserva.Usuario?.nombre || t.clienteSinNombre}</span>
               </p>
-              <p className="text-xs text-neutro-600 flex items-center gap-1.5 pl-5">
+              <p className="flex min-w-0 items-center gap-1.5 pl-5 text-xs text-neutro-600">
                 <Mail className="size-3.5 text-neutro-400 shrink-0" aria-hidden="true" />
-                <span>{reserva.Usuario?.email || t.usuarioId(reserva.usuario_id)}</span>
+                <span className="min-w-0 break-all">{reserva.Usuario?.email || t.usuarioId(reserva.usuario_id)}</span>
               </p>
             </div>
 
@@ -248,7 +248,7 @@ export const AdminDetalleReservaRestaurante: React.FC = () => {
               <p className="text-xs text-neutro-600 flex items-center gap-1.5 pl-5">
                 <UtensilsCrossed className="size-3.5 text-neutro-400 shrink-0" aria-hidden="true" />
                 <span>
-                  {t.mesa(reserva.mesa_id)} — {reserva.Mesa?.zona || t.zonaNoRegistrada} ({t.aforo(reserva.Mesa?.capacidad)})
+                  <Link to={`/admin/restaurante?q=${reserva.mesa_id}`} className="text-bronce-700 underline-offset-2 hover:underline">{t.mesa(reserva.mesa_id)}</Link> — {reserva.Mesa?.zona || t.zonaNoRegistrada} ({t.aforo(reserva.Mesa?.capacidad)})
                 </span>
               </p>
             </div>

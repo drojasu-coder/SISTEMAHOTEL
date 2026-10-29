@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { GoogleSignIn } from './GoogleSignIn';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -29,6 +30,7 @@ export const RegisterForm: React.FC = () => {
   const { login } = useAuth();
   const context = useAuthReturn();
   const submitting = useRef(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
   const [callingCode, setCallingCode] = useState('');
 
@@ -95,7 +97,7 @@ export const RegisterForm: React.FC = () => {
 
       <form
         onSubmit={handleSubmit(async (data) => {
-          if (submitting.current || accountCreated) return;
+          if (submitting.current || accountCreated || googleBusy) return;
           submitting.current = true;
           try { await registerMutation.mutateAsync(data); } catch { /* Mensaje accesible de la mutación. */ }
           finally { submitting.current = false; }
@@ -103,7 +105,7 @@ export const RegisterForm: React.FC = () => {
         className="flex flex-col gap-5"
         noValidate
       >
-        <fieldset disabled={registerMutation.isPending || accountCreated} className="flex min-w-0 flex-col gap-5">
+        <fieldset disabled={registerMutation.isPending || accountCreated || googleBusy} className="flex min-w-0 flex-col gap-5">
         <Input
           label={auth.nombre}
           aria-required="true"
@@ -153,10 +155,11 @@ export const RegisterForm: React.FC = () => {
         />
 
         </fieldset>
-        <Button disabled={accountCreated} type="submit" size="lg" className="w-full" isLoading={registerMutation.isPending}>
+        <Button disabled={accountCreated || googleBusy} type="submit" size="lg" className="w-full" isLoading={registerMutation.isPending}>
           {auth.registroBoton}
         </Button>
       </form>
+      <GoogleSignIn disabled={registerMutation.isPending || accountCreated} onBusyChange={setGoogleBusy} />
     </div>
   );
 };

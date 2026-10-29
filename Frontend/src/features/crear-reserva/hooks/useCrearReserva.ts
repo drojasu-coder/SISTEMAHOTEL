@@ -3,11 +3,12 @@ import { reservasApi } from '@/features/reservas/api/reservasApi';
 import { habitacionesApi } from '@/features/habitaciones/api/habitacionesApi';
 import { reservasHabitacionQueryKeys } from '@/features/reservas/constants/queryKeys';
 import { useAuth } from '@/features/auth/AuthContext';
+import { carritoQueryKeys } from '@/features/carrito/constants/queryKeys';
 import type {
   CreateReservaHabitacionInput,
   DisponibilidadHabitacionQuery,
   HabitacionDisponible,
-  ReservaHabitacion,
+  ReservaHabitacionConCarrito,
 } from '@/features/reservas/types';
 import type { HabitacionDisponiblePublico } from '@/features/habitaciones/types';
 import { commercialRoomName } from '@/features/habitaciones/public/roomCategories';
@@ -83,7 +84,7 @@ export function useCreateReservaMutation() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  return useMutation<ReservaHabitacion, Error, CreateReservaHabitacionInput>({
+  return useMutation<ReservaHabitacionConCarrito, Error, CreateReservaHabitacionInput>({
     mutationFn: (data) => reservasApi.create(data),
     retry: false, // Bloquear reintentos automáticos del POST
     onSuccess: () => {
@@ -95,6 +96,8 @@ export function useCreateReservaMutation() {
       queryClient.invalidateQueries({
         queryKey: reservasHabitacionQueryKeys.all,
       });
+      // La reserva queda ya en el carrito: refrescar el carrito y su contador del encabezado.
+      queryClient.invalidateQueries({ queryKey: carritoQueryKeys.all });
     },
   });
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEscapeToClose } from '@/lib/useEscapeToClose';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertCircle } from 'lucide-react';
@@ -64,6 +65,8 @@ export const TerapeutaFormModal: React.FC<TerapeutaFormModalProps> = ({
       }
     }
   };
+
+  useEscapeToClose(onClose, isSubmitting);
 
   return (
     <div

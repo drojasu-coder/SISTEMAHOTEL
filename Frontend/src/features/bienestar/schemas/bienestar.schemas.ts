@@ -59,6 +59,20 @@ export const servicioSpaSchema = z.object({
     required_error: 'El precio es obligatorio',
     invalid_type_error: 'El precio debe ser un número válido',
   }).min(0, 'El precio no puede ser negativo'),
+  // Horario de atención: ambos campos o ninguno. Sin horario, el servicio no ofrece citas en línea.
+  hora_apertura: z.string().regex(/^$|^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no válida'),
+  hora_cierre: z.string().regex(/^$|^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no válida'),
+}).superRefine((values, ctx) => {
+  if (Boolean(values.hora_apertura) !== Boolean(values.hora_cierre)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [values.hora_apertura ? 'hora_cierre' : 'hora_apertura'], message: 'Indique apertura y cierre, o deje ambos vacíos' });
+  } else if (values.hora_apertura && values.hora_cierre) {
+    const minutos = (hora: string) => Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5));
+    if (minutos(values.hora_apertura) >= minutos(values.hora_cierre)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hora_cierre'], message: 'El cierre debe ser posterior a la apertura' });
+    } else if (Number.isFinite(values.duracion_minutos) && minutos(values.hora_apertura) + values.duracion_minutos > minutos(values.hora_cierre)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hora_cierre'], message: 'El horario es más corto que la duración del servicio' });
+    }
+  }
 });
 
 export type ServicioSpaFormValues = z.infer<typeof servicioSpaSchema>;

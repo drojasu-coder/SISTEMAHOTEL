@@ -1,10 +1,12 @@
 import { api } from '@/api/client/http';
 import type {
   CreateReservaHabitacionInput,
+  EstadoPagoReserva,
   DisponibilidadHabitacionQuery,
   DisponibilidadHabitacionesResponse,
   HabitacionDisponible,
   ReservaHabitacion,
+  ReservaHabitacionConCarrito,
   ReservaHabitacionResponse,
   ReservaHabitacionCreatedResponse,
   ReservasHabitacionResponse,
@@ -17,6 +19,12 @@ import type {
  * consumiendo el backend real.
  */
 export const reservasApi = {
+  /** Lectura del estado autoritativo, incluyendo pagos de carritos históricos. Nunca inicia un cobro. */
+  getPaymentStatus: async (id: number, signal?: AbortSignal): Promise<EstadoPagoReserva> => {
+    const response = await api.get<{ data: EstadoPagoReserva }>(`/reservas-habitacion/${id}/estado-pago`, { signal });
+    return response.data;
+  },
+
   /**
    * Consulta las habitaciones disponibles para una sede, rango de fechas y número de huéspedes.
    * Endpoint asignado en backend: GET /api/habitaciones/disponibles (BE-012).
@@ -51,12 +59,12 @@ export const reservasApi = {
    */
   create: async (
     data: CreateReservaHabitacionInput
-  ): Promise<ReservaHabitacion> => {
+  ): Promise<ReservaHabitacionConCarrito> => {
     const response = await api.post<ReservaHabitacionCreatedResponse>(
       '/reservas-habitacion',
       data
     );
-    return response.data;
+    return response.data as ReservaHabitacionConCarrito;
   },
 
   /**
@@ -123,5 +131,23 @@ export const reservasApi = {
    */
   cancelAdmin: async (id: number): Promise<void> => {
     await api.delete(`/reservas-habitacion/${id}`);
+  },
+
+  /**
+   * "Continuar con el pago": el servidor reutiliza la reserva pendiente propia y la vincula con un carrito válido.
+   * Endpoint: POST /api/reservas-habitacion/:id/continuar-pago. No crea reservas ni pagos y no amplía plazos.
+   */
+  continuePayment: async (id: number): Promise<ReservaHabitacionConCarrito> => {
+    const response = await api.post<ReservaHabitacionCreatedResponse>(`/reservas-habitacion/${id}/continuar-pago`, {});
+    return response.data as ReservaHabitacionConCarrito;
+  },
+
+  /**
+   * El cliente cancela su propia reserva pendiente (cancelación lógica).
+   * Endpoint: PATCH /api/reservas-habitacion/:id/cancelar. El servidor valida titularidad, estado y pagos.
+   */
+  cancelMine: async (id: number): Promise<{ reserva: ReservaHabitacion; carritoActualizado: boolean }> => {
+    const response = await api.patch<ReservaHabitacionResponse & { carrito_actualizado?: boolean }>(`/reservas-habitacion/${id}/cancelar`, {});
+    return { reserva: response.data, carritoActualizado: response.carrito_actualizado !== false };
   },
 };

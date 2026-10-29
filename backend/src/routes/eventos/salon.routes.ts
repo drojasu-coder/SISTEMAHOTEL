@@ -117,6 +117,12 @@ router.get(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
+  "/:id/disponibilidad",
+  validateParams(idParamSchema),
+  salonController.getDisponibilidad
+);
+
+router.get(
   "/:id",
   validateParams(idParamSchema),
   salonController.getById

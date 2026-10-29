@@ -4,7 +4,10 @@ import { PageContainer, PageHeader } from '@/components/shared/PageContainer';
 import { CatalogFilters, CatalogLinkContext, CatalogPagination } from '@/components/shared/CatalogFilters';
 import { CatalogState } from '@/components/shared/CatalogState';
 import { ServiceCard, ServiceMedia, ServiceGrid } from '@/components/shared/ServiceCard';
-import { Button } from '@/components/ui/Button';
+import { Link } from 'react-router-dom';
+import { Button, buttonStyles } from '@/components/ui/Button';
+import { useAuth } from '@/features/auth/AuthContext';
+import { AMENIDADES_ROUTES } from '../constants/routes';
 import { useCatalogUrl, useCatalogPage } from '@/features/preferencias/useCatalogUrl';
 import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
@@ -24,6 +27,7 @@ export function CatalogoAmenidadesCliente() {
   const { p } = usePublicInterface();
   const access = useAccessCopy();
   const scope = usePublicPreferences();
+  const { user, status } = useAuth();
   const catalog = useCatalogUrl({ acceso: ACCESOS });
   const query = useAmenidadesQuery();
   const all = query.data ?? [];
@@ -32,7 +36,8 @@ export function CatalogoAmenidadesCliente() {
   const filtered = all.filter((item) => scope.status === 'ready' && (scope.selected === 'all' || item.sucursal_id === scope.selected) && (!catalog.values.acceso || accesoDe(item) === catalog.values.acceso) && item.nombre.toLowerCase().includes(catalog.q.trim().toLowerCase()));
   const paging = useCatalogPage(filtered, catalog, query.isSuccess && scope.status === 'ready');
   return <PageContainer>
-    <PageHeader eyebrow={tc.catalogoSubtitulo} title={tc.catalogoTitulo} description={tc.catalogoDescripcion} context={<CatalogSiteNotice />} />
+    <PageHeader eyebrow={tc.catalogoSubtitulo} title={tc.catalogoTitulo} description={tc.catalogoDescripcion} context={<CatalogSiteNotice />}
+      action={status === 'authenticated' && user?.rol === 'cliente' ? <Link to={AMENIDADES_ROUTES.MIS_RESERVAS} className={buttonStyles({ variant: 'secondary' })}>{tc.misReservasTitulo}</Link> : undefined} />
     <CatalogLinkContext catalog={catalog} />
     {selection.missing && <MissingServiceSelection onClose={selection.close} />}
     <CatalogFilters catalog={catalog} searchLabel={t.buscarLabel} placeholder={t.buscarPlaceholder} count={query.isSuccess && !catalog.siteConflict && scope.status === 'ready' ? filtered.length : undefined} resultLabel={t.amenidadesMostradas(filtered.length)} />

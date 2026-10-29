@@ -39,6 +39,17 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      // Horario de uso (hora de Guatemala); sin ambos valores no se aceptan solicitudes en línea.
+      hora_apertura: {
+        type: DataTypes.TIME,
+        allowNull: true,
+        defaultValue: null,
+      },
+      hora_cierre: {
+        type: DataTypes.TIME,
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

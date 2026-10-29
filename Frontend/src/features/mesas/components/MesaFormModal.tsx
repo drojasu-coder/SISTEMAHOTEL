@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Feedback';
 import { ApiError } from '@/api/client/http';
 import { getApiErrorMessage, getFieldErrors } from '@/api/errors';
-import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
+import { useAdminSedes } from '@/features/admin-core/hooks/useAdminSedes';
+import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
 import {
   CAMPOS_MESA,
   createMesaFormSchema,
@@ -17,7 +18,7 @@ import {
   sanitizeUpdateMesa,
   type MesaFormValues,
 } from '../schemas/mesaSchema';
-import { useCreateMesaMutation, useUpdateMesaMutation } from '../hooks/useMesas';
+import { useCreateMesaMutation, useMesasQuery, useUpdateMesaMutation } from '../hooks/useMesas';
 import { SelectField } from './SelectField';
 import type { Mesa } from '../types';
 import { useTextosMesas } from '../texts';
@@ -53,16 +54,19 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
   const activeMutation = isEditing ? updateMutation : createMutation;
 
   const {
-    data: sucursales,
+    data: authorized,
     isLoading: isLoadingSucursales,
     isError: isErrorSucursales,
-  } = useSedesQuery();
+  } = useAdminSedes(open);
+  const sucursales = authorized?.sedes;
+  const { selectedSedeId } = useAdminScope();
 
   const {
     register,
     handleSubmit,
     reset,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<MesaFormValues>({
     resolver: zodResolver(schema),
@@ -87,7 +91,7 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
       });
     } else {
       reset({
-        sucursal_id: '',
+        sucursal_id: selectedSedeId === 'all' ? '' : String(selectedSedeId),
         zona: '',
         capacidad: '',
         estado: '',
@@ -98,6 +102,10 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
     updateMutation.reset();
   }, [open, mesa, reset]);
 
+  // Zonas ya registradas en la sede elegida: sugerencias para no crear variantes por error tipográfico.
+  const { data: todasLasMesas } = useMesasQuery();
+  const sedeElegida = Number(watch('sucursal_id'));
+  const zonasSugeridas = [...new Set((todasLasMesas ?? []).filter((item) => item.sucursal_id === sedeElegida).map((item) => item.zona).filter(Boolean))].sort();
   const nombreSedeSeleccionada = (() => {
     if (!mesa) return '';
     const desdeInclusion = mesa.Sucursal?.nombre?.trim();
@@ -149,6 +157,8 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
           </Alert>
         )}
 
+        <fieldset className="flex min-w-0 flex-col gap-4 rounded-lg border border-neutro-200 p-4">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-neutro-600">{locale === 'en' ? 'Location' : 'Ubicación'}</legend>
         {isEditing ? (
           <>
             <input type="hidden" {...register('sucursal_id')} />
@@ -182,9 +192,15 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
           placeholder={textosMesas.zonasPlaceholder}
           error={errors.zona?.message}
           disabled={isPending}
+          list="mesa-zonas-sugeridas"
+          autoComplete="off"
           {...register('zona')}
         />
 
+          <datalist id="mesa-zonas-sugeridas">{zonasSugeridas.map((zona) => <option key={zona} value={zona} />)}</datalist>
+        </fieldset>
+        <fieldset className="grid min-w-0 gap-4 rounded-lg border border-neutro-200 p-4 sm:grid-cols-2">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-neutro-600">{locale === 'en' ? 'Details' : 'Características'}</legend>
         <Input
           label={textosMesas.capacidad}
           type="number"
@@ -208,6 +224,7 @@ export const MesaFormModal: React.FC<MesaFormModalProps> = ({
           {...register('estado')}
         />
 
+        </fieldset>
         <div className="mt-2 flex items-center justify-end gap-3 border-t border-neutro-200 pt-4">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
             {textosMesas.cancelar}

@@ -10,7 +10,7 @@ const levels: Record<LogLevel, number> = {
   error: 40,
 };
 
-const sensitiveKey = /authorization|cookie|password|secret|token|signature|api[-_]?key|client[-_]?secret|card|cvv/i;
+const sensitiveKey = /authorization|cookie|password|secret|token|credential|nonce|csrf|signature|api[-_]?key|client[-_]?secret|card|cvv/i;
 const sensitiveText = /(authorization|cookie|password|secret|token|signature|api[-_]?key|client[-_]?secret|card|cvv)/gi;
 
 const sanitize = (value: unknown, key = ""): unknown => {

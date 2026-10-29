@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
+import { GoogleSignIn } from './GoogleSignIn';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -18,6 +19,7 @@ export const LoginForm: React.FC = () => {
   const { p, locale } = usePublicInterface();
   const { login } = useAuth();
   const submitting = useRef(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const {
     register,
@@ -44,7 +46,7 @@ export const LoginForm: React.FC = () => {
 
       <form
         onSubmit={handleSubmit(async (data) => {
-          if (submitting.current) return;
+          if (submitting.current || googleBusy) return;
           submitting.current = true;
           try { await loginMutation.mutateAsync(data); } catch { /* Mensaje accesible de la mutación. */ }
           finally { submitting.current = false; }
@@ -70,10 +72,11 @@ export const LoginForm: React.FC = () => {
           {...register('password')}
         />
 
-        <Button type="submit" size="lg" className="w-full" isLoading={loginMutation.isPending}>
+        <Button type="submit" size="lg" className="w-full" disabled={googleBusy} isLoading={loginMutation.isPending}>
           {auth.loginBoton}
         </Button>
       </form>
+      <GoogleSignIn disabled={loginMutation.isPending} onBusyChange={setGoogleBusy} />
     </div>
   );
 };

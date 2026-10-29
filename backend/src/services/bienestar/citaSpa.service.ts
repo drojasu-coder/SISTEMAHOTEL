@@ -1,5 +1,6 @@
 import { AppError } from "../../utils/AppError";
 import { cartReferenceProcessingExposure } from "../pago.service";
+import { iniciosDelDia, leerHorario, minutosDe, validarInicioEnFranja, INTERVALO_FRANJAS_MINUTOS } from "../../utils/franjasHorarias";
 
 const db = require("../../models");
 const { Op } = require("sequelize");
@@ -332,7 +333,18 @@ export const create = async (data: any) => {
     }
 
     // ----------------------------------------------------
-    // 4. Validar traslape + buffer y calcular hora_fin
+    // 4. Validar que el inicio sea una franja ofrecida: horario de atención
+    //    configurado, cada 30 minutos, sin pasar del cierre ni estar en el pasado
+    // ----------------------------------------------------
+    validarInicioEnFranja(
+      leerHorario(servicio),
+      Number(servicio.duracion_minutos),
+      data.fecha,
+      data.hora_inicio,
+    );
+
+    // ----------------------------------------------------
+    // 5. Validar traslape + buffer y calcular hora_fin
     // ----------------------------------------------------
     const { horaFinCalculada } = await validateTherapistAvailability({
       terapeutaId: data.terapeuta_id,
@@ -445,4 +457,55 @@ export const updateStatus = async (
   });
 
   return getById(id);
+};
+
+
+/**
+ * Franjas reservables de un servicio en una fecha, por terapeuta activo de su sede.
+ * Inicios cada 30 minutos dentro del horario de atención del servicio; se descartan
+ * los que chocan con citas confirmadas del terapeuta o su descanso de 15 minutos
+ * (misma regla que validateTherapistAvailability). La cita se vuelve a validar al confirmar.
+ * Sin horario configurado no se ofrece ninguna franja.
+ */
+export const getDisponibilidadServicio = async (servicioId: number, fecha: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new AppError(400, "INVALID_DATE", "La fecha no es válida");
+  const servicio = await ServicioBienestar.findByPk(servicioId);
+  if (!servicio || servicio.activo === false) throw new AppError(404, "WELLNESS_SERVICE_NOT_FOUND", "El servicio de bienestar no existe");
+  const duracion = Number(servicio.duracion_minutos);
+  const horario = leerHorario(servicio);
+  const terapeutas = await Terapeuta.findAll({
+    where: { activo: true, ...(servicio.sucursal_id != null ? { sucursal_id: servicio.sucursal_id } : {}) },
+    attributes: ["id", "nombre"],
+    order: [["nombre", "ASC"]],
+  });
+  const ids = terapeutas.map((item: any) => item.id);
+  const citas = ids.length ? await CitaBienestar.findAll({
+    where: { terapeuta_id: { [Op.in]: ids }, fecha, estado: "confirmada" },
+    attributes: ["terapeuta_id", "hora_inicio", "hora_fin"],
+  }) : [];
+  const inicios = horario ? iniciosDelDia(horario, duracion, fecha) : [];
+  return {
+    fecha,
+    duracion_minutos: duracion,
+    descanso_minutos: BUFFER_MINUTOS,
+    intervalo_minutos: INTERVALO_FRANJAS_MINUTOS,
+    horario,
+    terapeutas: terapeutas.map((terapeuta: any) => {
+      const ocupadas = citas.filter((cita: any) => cita.terapeuta_id === terapeuta.id).map((cita: any) => {
+        const inicio = minutosDe(cita.hora_inicio);
+        let fin = minutosDe(cita.hora_fin);
+        if (fin <= inicio) fin += 24 * 60;
+        return { inicio, fin };
+      });
+      return {
+        id: terapeuta.id,
+        nombre: terapeuta.nombre,
+        // Un inicio t choca si la cita empieza antes de t + duración + descanso y termina después de t - descanso.
+        horarios: inicios.filter((hora) => {
+          const t = minutosDe(hora);
+          return !ocupadas.some((c: { inicio: number; fin: number }) => c.inicio < t + duracion + BUFFER_MINUTOS && c.fin > t - BUFFER_MINUTOS);
+        }),
+      };
+    }),
+  };
 };

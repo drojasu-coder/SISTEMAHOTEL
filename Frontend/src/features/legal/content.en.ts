@@ -1,432 +1,592 @@
 import type { LegalDocuments } from './types';
 
-/** English version of the legal content. It must stay equivalent to content.es.ts. */
+/** Información pública basada en los servicios disponibles; decisiones internas en docs/pendientes-backend.md. */
 export const legalEn: LegalDocuments = {
-  terminos: {
-    title: 'Terms and conditions',
-    description:
-      'Terms of use of the HOTEL HUNAHPÚ platform: accounts, reservations, prices, payments and service limits.',
-    sections: [
+  "terminos": {
+    "title": "Terms and conditions",
+    "description": "Information about our services, your account and reservations with HOTEL HUNAHPÚ.",
+    "sections": [
       {
-        id: 'naturaleza',
-        title: 'Nature of this site',
-        blocks: [
-          { p: 'HOTEL HUNAHPÚ is a university hotel-management project. The site demonstrates how a reservation, payment and administration system works for a hotel with locations in Guatemala.' },
-          { p: 'HOTEL HUNAHPÚ is not a registered company and not a lodging establishment registered with the Guatemalan Tourism Institute (INGUAT). The reservations, services and amounts shown are for academic purposes and are not a real commercial offer of lodging, dining or other services.' },
-        ],
+        "id": "naturaleza",
+        "title": "Welcome to HOTEL HUNAHPÚ",
+        "blocks": [
+          {
+            "p": "At HOTEL HUNAHPÚ you can explore accommodation and services at our Antigua, Atitlán, Xela and Capital locations. Review the location, dates, times, capacity and amount before confirming a request."
+          }
+        ]
       },
       {
-        id: 'alcance',
-        title: 'Scope of these terms',
-        blocks: [
-          { p: 'These terms describe how the platform works and what is expected of the people who use it. They complement the Privacy policy, the Reservation, cancellation and refund policy and the Browser storage policy.' },
-          { p: 'The system does not record an explicit acceptance of these terms: there is no acceptance checkbox and no record of when they were read. Nothing here limits the rights that Decree 6-2003 of the Congress of Guatemala (Consumer and User Protection Law) grants to consumers and users.' },
-        ],
+        "id": "alcance",
+        "title": "Scope of these terms",
+        "blocks": [
+          {
+            "p": "These terms complement our privacy, reservations, cancellations and refunds, and cookies and storage policies. They describe the options available on the website and do not limit your rights under applicable law."
+          }
+        ]
       },
       {
-        id: 'cuentas',
-        title: 'Registration, sign-in and credentials',
-        blocks: [
-          { p: 'To make a reservation you need a customer account with your name, email address and password; a phone number is optional.' },
-          { list: [
-            'The password must be 8 to 72 characters long and include at least one uppercase letter, one lowercase letter and one number.',
-            'The system does not verify ownership of the email address during registration.',
-            'A session lasts at most one hour. It is kept while the tab is open and shared with other tabs of the same site open in the browser; signing out in one of them signs out in all of them.',
-            'After several failed attempts, the server temporarily limits new sign-in attempts.',
-          ] },
-          { p: 'You are responsible for keeping your password confidential and for signing out on shared devices. If you suspect unauthorized use of your account, report it through the contact details published on the site.' },
-        ],
+        "id": "cuentas",
+        "title": "Your account and security",
+        "blocks": [
+          {
+            "p": "You can browse our catalogues without signing in. To manage reservations, you need a customer account with your name and email address. Register with a password or use Google sign-in when available. A phone number is optional."
+          },
+          {
+            "p": "Keep your contact details up to date through our support channels and do not share your credentials. Your session may expire for security reasons. Signing out also signs you out of other open website tabs in the same browser."
+          }
+        ]
       },
       {
-        id: 'uso',
-        title: 'Permitted use',
-        blocks: [
-          { p: 'The platform must be used to browse the catalogs and manage your own reservations. You may not:' },
-          { list: [
-            'Access or try to access other people’s accounts, reservations or payments.',
-            'Enter false third-party data or impersonate another person.',
-            'Send automated requests that disrupt the service or bypass access controls.',
-            'Use administrative functions without the authorization of your role.',
-          ] },
-          { p: 'Hotel staff only access the functions of their role and, where applicable, only the information of the locations assigned to them.' },
-        ],
+        "id": "uso",
+        "title": "Using the service",
+        "blocks": [
+          {
+            "p": "Use your account to manage your own requests. Impersonation, accessing another person’s information, bypassing security controls and disrupting the website are not permitted."
+          }
+        ]
       },
       {
-        id: 'reservas',
-        title: 'Booking requirements and confirmations',
-        blocks: [
-          { list: [
-            'Rooms: you choose the location, arrival and departure dates and number of guests, within the capacity of the room type. Checking availability does not hold the room; availability is checked again when the reservation is created. The reservation is created as “pending” and becomes “confirmed” when approved payments cover its total, or when staff confirm it.',
-            'Restaurant, activities, wellness and amenities: the reservation is recorded as “confirmed” when the system validates the time, capacity and service rules. That status is operational: on its own it does not prove that a payment exists.',
-            'Events: the request is recorded as a “quotation”. It does not hold the venue or create an immediate charge. Administrative staff confirm it.',
-          ] },
-          { p: 'Dates and times are interpreted in Guatemala time.' },
-        ],
+        "id": "reservas",
+        "title": "Reservations and confirmations",
+        "blocks": [
+          {
+            "list": [
+              "Checking availability does not hold a room. Availability and capacity are checked when the reservation is created.",
+              "Room reservations start as pending. An approved payment covering the full amount allows confirmation; authorised staff can also manage confirmation.",
+              "For rooms, dining, activities, wellness and amenities, confirmation describes the reservation status; it does not itself prove that the reservation is paid. Also check the payment status and approved amount.",
+              "Event requests are recorded as quotations and require hotel confirmation. A quotation does not hold the venue.",
+              "Dates and times use Guatemala time."
+            ]
+          }
+        ]
       },
       {
-        id: 'precios-pagos',
-        title: 'Prices and payments',
-        blocks: [
-          { list: [
-            'Prices are stated in quetzales (GTQ) and include applicable taxes. Accommodation also carries the INGUAT tourism tax; other services carry VAT only.',
-            'The US dollar (USD) amount is a reference calculated at Q7.80 per US$1.00. Payments are always processed in quetzales.',
-            'The total of a room reservation is calculated with the rate in force when it is created or when its dates or room change. If the catalog rate changes later, the recorded amount is not recalculated.',
-            'For events, a deposit of 30% of the quotation total (venue base rate plus additional services) is calculated. The balance can only be paid after the deposit is covered.',
-            'Online payments are made by card through Stripe. The platform runs Stripe in test mode: no real charges are made and Stripe’s test data must be used.',
-            'A bank transfer stays pending until authorized staff approve it. Cash payments can only be recorded by staff.',
-            'A shopping cart expires after 15 minutes. If it expires before payment, a new cart must be started.',
-          ] },
-          { p: 'The system creates internal invoice records. They are not electronic tax documents certified by Guatemala’s Tax Administration (SAT).' },
-        ],
+        "id": "precios-pagos",
+        "title": "Prices, payments and receipts",
+        "blocks": [
+          {
+            "list": [
+              "Published prices are final and include applicable taxes. VAT and, for accommodation, INGUAT are already included and are not added to the amount again. The total for your selection is shown before you continue to payment.",
+              "Payment amounts are in Guatemalan quetzales (GTQ). US dollar (USD) amounts are indicative, at Q7.80 per US$1.00; they do not change the transaction currency.",
+              "Room reservations and carts containing rooms require full payment. Event deposits and balances are those shown in the quotation.",
+              "Card payments are handled through Stripe.",
+              "A recorded bank transfer remains pending until authorised staff approve it. Cash payments are recorded by staff.",
+              "Do not repeat a payment that is processing or awaiting verification. Check its status before attempting another transaction.",
+              "Downloadable receipts are internal payment records; they do not replace an FEL electronic tax invoice."
+            ]
+          },
+          {
+            "p": "A pending or processing payment does not yet prove that a reservation has been paid. An approved payment covers the recorded amount; it must cover the required total for your selection to be considered paid. If a payment appears declined or cancelled, check its current status and use only the available options, without repeating a transaction whose outcome remains unverified."
+          }
+        ]
       },
       {
-        id: 'cancelaciones',
-        title: 'Cancellations and changes',
-        blocks: [
-          { p: 'The rules for each service are detailed in the Reservation, cancellation and refund policy. In short, only event quotations and reservations can be cancelled directly from the customer account; all other reservations are changed or cancelled by hotel staff. No refund is automatic.' },
-        ],
+        "id": "cancelaciones",
+        "title": "Changes and cancellations",
+        "blocks": [
+          {
+            "p": "“My reservations” shows the actions available for each service. The option to cancel a pending room reservation is offered when the reservation meets the cancellation conditions. It is unavailable if there are approved payments, payments awaiting verification or other associated payments requiring review. Confirmed reservations or those with associated payments may require hotel assistance. See the reservations policy for service-specific information."
+          },
+          {
+            "p": "Cancelling a reservation does not automatically issue a refund. Contact the hotel with your reservation and payment reference to enquire about the conditions applicable to your request."
+          }
+        ]
       },
       {
-        id: 'limitaciones',
-        title: 'Service limitations',
-        blocks: [
-          { list: [
-            'Information about locations, rooms, menus, activities, services and venues is for demonstration and may change without notice.',
-            'The system does not send email or text-message confirmations: the status of each reservation is shown under “My reservations”.',
-            'The site may be unavailable during maintenance or technical failures.',
-          ] },
-        ],
+        "id": "responsabilidades",
+        "title": "Guest responsibilities",
+        "blocks": [
+          {
+            "p": "Provide accurate information and review the location, dates, times and number of guests or participants before booking. Observe the capacity and published usage conditions for each room or service. Keep your reservation reference and contact the hotel about any changes you need; requesting a change does not guarantee availability."
+          }
+        ]
       },
       {
-        id: 'ley-aplicable',
-        title: 'Reference regulations and complaints',
-        blocks: [
-          { p: 'The laws of the Republic of Guatemala are used as a reference, in particular Decree 6-2003 of the Congress (Consumer and User Protection Law) and Government Agreement 1144-83 (INGUAT Regulation for Lodging Establishments).' },
-          { p: 'A real establishment must make an authorized complaints book available to the public (article 17 of Decree 6-2003 and article 103 of Government Agreement 1144-83). This project does not have an authorized complaints book; questions and complaints are handled through the contact details published on the site.' },
-        ],
+        "id": "atencion",
+        "title": "Guest assistance",
+        "blocks": [
+          {
+            "p": "For assistance, use the contact details published on your location’s page. Include the reservation or payment reference and the reason for your enquiry. Never send passwords or full card details. Check the status of your requests in your account; do not rely on an automatic confirmation email or message."
+          }
+        ]
       },
       {
-        id: 'cambios',
-        title: 'Changes to these terms',
-        blocks: [
-          { p: 'These terms may be updated when the platform changes. The date of the last update is shown at the top of this page.' },
-        ],
-      },
-    ],
+        "id": "cambios",
+        "title": "Updates and website availability",
+        "blocks": [
+          {
+            "p": "The website may be interrupted by maintenance or technical issues. If a transaction does not show a clear result, check its status before repeating it. The date at the top of this page identifies the latest revision of these terms."
+          }
+        ]
+      }
+    ]
   },
-
-  privacidad: {
-    title: 'Privacy policy',
-    description:
-      'Which personal data the platform collects, what it is used for, where it is processed and who can see it.',
-    sections: [
+  "privacidad": {
+    "title": "Privacy policy",
+    "description": "How the information you share with HOTEL HUNAHPÚ is used and protected.",
+    "sections": [
       {
-        id: 'responsable',
-        title: 'Controller and legal framework',
-        blocks: [
-          { p: 'The platform is a university hotel-management project and is not operated by a registered legal entity. Questions about this policy are handled through the contact details published on the site.' },
-          { p: 'Guatemala does not yet have a comprehensive personal data protection law applicable to the private sector; the bills submitted to Congress have not been passed. This policy does not claim compliance with foreign regulations such as the European Union’s General Data Protection Regulation.' },
-        ],
+        "id": "responsable",
+        "title": "Enquiries about your information",
+        "blocks": [
+          {
+            "p": "For enquiries about your personal information, use the contact details on your HOTEL HUNAHPÚ location’s page. Explain what information you want to review or correct, without sending passwords or full card details."
+          }
+        ]
       },
       {
-        id: 'datos',
-        title: 'Data that is stored',
-        blocks: [
-          { list: [
-            'Account: name, email address, phone number (optional), role, active or inactive status and creation and update dates. The password is not stored in readable form: its cryptographic hash (bcrypt) is stored.',
-            'Room reservations: location and room, arrival and departure dates, number of guests, status and total amount.',
-            'Restaurant: table, date, time, number of diners and status.',
-            'Activities: resource, instructor (if chosen), date, time slot, participants, equipment, status and amount.',
-            'Wellness: service, therapist, date, time slot and appointment status.',
-            'Amenities: amenity, date, time slot, requested furniture, QR code and status.',
-            'Events: venue, event type, date, time slot, number of guests, additional services, total, deposit and status.',
-            'Cart and payments: cart items, amount, currency, method, payment type (full, deposit or balance), status, date, Stripe payment attempt identifier, idempotency key and, if any, error code and message. Refunds record amount, reason, status and external identifier.',
-            'Invoices: tax ID (NIT), tax name and address, and the breakdown of amounts and taxes.',
-            'Hotel staff: in addition to the account, main location, additional authorized locations, department and hiring date.',
-          ] },
-          { p: 'The platform does not store the full card number, expiry date or security code. These are entered in Stripe’s payment form and do not pass through the project’s servers.' },
-        ],
+        "id": "datos",
+        "title": "Information we retain",
+        "blocks": [
+          {
+            "list": [
+              "Account: name, email address, phone number if provided, sign-in method, account status, and registration and update dates. Passwords are stored using a cryptographic transformation, not as readable text.",
+              "Reservations and services: location, selected room or resource, dates and times, guests or participants, selected options, status and applicable amounts. Amenity reservations may include a QR code.",
+              "Payments: amount, currency, method, status, transaction reference and information needed to verify the transaction and prevent duplicates. Refund records retain the amount, reason and outcome.",
+              "Billing: name, tax identification number (NIT) and billing address when included in a billing record.",
+              "Staff: account, role, department, location, assignments and employment details needed to manage hotel operations."
+            ]
+          },
+          {
+            "p": "HOTEL HUNAHPÚ does not store full card numbers, expiry dates or security codes. Card fields are provided by Stripe’s payment form."
+          }
+        ]
       },
       {
-        id: 'finalidades',
-        title: 'What it is used for',
-        blocks: [
-          { list: [
-            'Authenticating each person and applying the permissions of their role.',
-            'Creating, viewing and managing reservations, quotations and payments.',
-            'Calculating amounts, deposits and balances, and recording internal invoices and refunds.',
-            'Allowing authorized staff to handle the reservations of their assigned locations.',
-            'Diagnosing errors and protecting the service against misuse.',
-          ] },
-          { p: 'The data is not used for advertising, commercial profiling or automated decision-making, and it is not sold to third parties.' },
-        ],
+        "id": "finalidades",
+        "title": "How we use information",
+        "blocks": [
+          {
+            "p": "We use information to provide account access, manage reservations and quotations, check payments, handle enquiries, retain transaction history and protect the service. The website does not include advertising or commercial tracking tools."
+          }
+        ]
       },
       {
-        id: 'proveedores',
-        title: 'Where it is processed',
-        blocks: [
-          { list: [
-            'PostgreSQL: the database that stores accounts, reservations, payments and invoices.',
-            'Stripe: processes card payments in test mode. The platform sends it the amount, currency and internal references (payment, cart or reservation identifiers and payment type); it does not send your name or email.',
-            'Amazon Web Services (S3): stores catalog images (locations, rooms, menus and services). Customers do not upload images.',
-            'Google Fonts: the site loads its typefaces from Google servers, so your browser sends them technical connection data such as your IP address.',
-          ] },
-        ],
+        "id": "proveedores",
+        "title": "Service providers",
+        "blocks": [
+          {
+            "list": [
+              "Stripe receives the amount, currency and transaction references needed to process card payments and return their status.",
+              "Amazon Web Services provides catalogue image storage and delivery.",
+              "Google Fonts provides website fonts and receives technical connection information when your browser downloads them.",
+              "When enabled, Google sign-in loads its library on the sign-in and registration pages. Google receives technical connection information even before you select the button. If you use this option, we receive your Google identifier, name and verified email address to create or recognise your account. We do not request access to contacts or files, or your Google password; we do not retain your photograph. Linking an existing account requires your hotel password."
+            ]
+          }
+        ]
       },
       {
-        id: 'acceso',
-        title: 'Who can see the information',
-        blocks: [
-          { list: [
-            'Each customer can only see their own reservations, payments and invoices.',
-            'Staff access depends on their role: the general administrator sees all locations; reception and managers only see administrative information for their assigned locations.',
-            'Refunds and transfer approvals are reserved for authorized administrative roles.',
-          ] },
-        ],
+        "id": "acceso",
+        "title": "Access and protection",
+        "blocks": [
+          {
+            "p": "Customers access their own information. Authorised staff have access according to their role and, where applicable, their location. The service checks permissions, limits sign-in attempts and uses expiring sessions. These measures reduce risks but cannot eliminate every possibility of an incident."
+          }
+        ]
       },
       {
-        id: 'seguridad',
-        title: 'Security measures',
-        blocks: [
-          { list: [
-            'Passwords stored as a cryptographic hash (bcrypt).',
-            'Sessions use an access token that expires after one hour and is kept in the tab’s storage, not in cookies.',
-            'Permissions checked on the server for every request, by role and by location.',
-            'Limited sign-in attempts.',
-            'Server technical logs record the path, method, result and duration of each request, and leave out passwords, tokens and card data.',
-          ] },
-          { p: 'No measure removes risk completely. The platform does not claim any security certification.' },
-        ],
+        "id": "conservacion",
+        "title": "Record retention",
+        "blocks": [
+          {
+            "p": "Signing out or cancelling a reservation does not delete your account or history. Accounts, reservations and payments are not currently deleted automatically. Requests to review, correct or delete information must be assessed by the hotel, considering related records and applicable obligations; immediate deletion of all information is not guaranteed."
+          },
+          {
+            "p": "Google sign-in credentials are temporarily verified; the Google token is not retained in the database or browser storage. The link between your account and your Google identifier is retained."
+          }
+        ]
       },
       {
-        id: 'conservacion',
-        title: 'Retention',
-        blocks: [
-          { p: 'There are no automatic deletion periods. Cancelled reservations are kept as history and records are kept while the project is active.' },
-        ],
+        "id": "derechos",
+        "title": "Managing your account",
+        "blocks": [
+          {
+            "p": "You can view your information in “My account” and your bookings in “My reservations”. Contact the hotel to correct information, request account deletion or resolve access difficulties. The website does not currently offer self-service account editing or deletion, password recovery or Google unlinking. Signing out here does not sign you out of Google."
+          }
+        ]
       },
       {
-        id: 'derechos',
-        title: 'Questions and requests',
-        blocks: [
-          { p: 'You can review your account details under “My account” and your reservations under “My reservations”. The platform does not yet offer self-service correction or deletion of the account. Correction or deletion requests are sent through the published contact details and handled manually, with no guaranteed response time.' },
-        ],
-      },
-      {
-        id: 'cambios',
-        title: 'Changes to this policy',
-        blocks: [
-          { p: 'This policy will be updated if the data processed or the providers used change. The date of the last update is shown at the top of this page.' },
-        ],
-      },
-    ],
+        "id": "cambios",
+        "title": "Policy updates",
+        "blocks": [
+          {
+            "p": "The revision date is shown at the top of this page. See our cookies and storage policy for information retained in your browser."
+          }
+        ]
+      }
+    ]
   },
-
-  reservas: {
-    title: 'Reservations, cancellations and refunds',
-    description:
-      'How reservation statuses work, who can cancel and how a refund is handled, service by service.',
-    sections: [
+  "reservas": {
+    "title": "Reservations, cancellations and refunds",
+    "description": "Information about managing accommodation, service and event reservations.",
+    "sections": [
       {
-        id: 'principios',
-        title: 'General principles',
-        blocks: [
-          { list: [
-            'Pending: the reservation exists but is not yet confirmed (rooms).',
-            'Confirmed: the reservation is valid for the stated date. For restaurant, activities, wellness and amenities it is an operational status that does not prove payment.',
-            'Quotation: an event request that does not yet hold the venue.',
-            'Cancelled: the reservation is no longer in force but is kept as history.',
-          ] },
-          { p: 'Cancelling a reservation and refunding a payment are different operations. Cancelling changes the reservation status; a refund only exists when authorized staff record it on an approved payment. No refund is created automatically when cancelling.' },
-          { p: 'The system does not apply deadlines, penalties or charges for late cancellation or no-shows.' },
-        ],
+        "id": "principios",
+        "title": "Reservation statuses",
+        "blocks": [
+          {
+            "list": [
+              "Pending: a room reservation has been recorded and awaits confirmation.",
+              "Confirmed: describes the reservation status, including rooms; it does not itself prove payment. Check the payment status and approved amount separately.",
+              "Quotation: an event request that does not yet hold the venue.",
+              "Cancelled or expired: the reservation is no longer active and must not be paid. Its history is retained."
+            ]
+          }
+        ]
       },
       {
-        id: 'habitaciones',
-        title: 'Rooms',
-        blocks: [
-          { list: [
-            'The reservation is created as “pending” and becomes “confirmed” when its approved payments cover the total, or when staff confirm it.',
-            'Customers cannot cancel it themselves on the platform. To cancel or change it, contact the hotel; authorized staff at the location cancel or change it.',
-            'A reservation cannot be cancelled or changed while one of its payments is processing, and its total cannot be reduced below what has already been paid.',
-            'Cancelling does not create an automatic refund. The refund is handled separately, as described below.',
-          ] },
-          { p: 'Regulatory reference (INGUAT): Government Agreement 1144-83 allows an establishment to require earnest money (a deposit) to formalize a reservation (article 96). If the guest cancels, the establishment must return it and may keep 30% when cancelling more than 30 days in advance, 50% when more than 7 days in advance, and the full deposit when 7 days or less (article 98). If the establishment fails to honor the reservation, it must return the deposit plus an equal amount (article 97). The system does not calculate these amounts or require a deposit for rooms: it charges the full total. How to apply them is an open decision (see “Open issues”).' },
-          { p: 'Unless INGUAT approves otherwise, the right to occupy the room starts at 13:00 on one day and ends at 13:00 the next day (article 89). The platform records arrival and departure dates, but not check-in and check-out times.' },
-        ],
+        "id": "habitaciones",
+        "title": "Rooms",
+        "blocks": [
+          {
+            "p": "Choose a location, dates and guest count within the stated capacity. Availability is checked again when creating the reservation. The recorded amount is calculated using the rate applicable to your selection; later catalogue changes do not by themselves change that amount."
+          },
+          {
+            "p": "You can request cancellation of a pending room reservation from your account when the option is available. The request requires checking that there are no approved payments, payments awaiting verification or other associated payments requiring review. A confirmed, paid reservation does not offer another payment or direct cancellation. Contact the hotel to request date or room changes, or cancellation of a confirmed reservation."
+          },
+          {
+            "p": "If a payment is processing, its result is uncertain or it cannot yet be verified, the reservation remains protected. Select “Check status” and do not start a second payment. Where continuation is available, the existing attempt is reused. Completed stays cannot be paid online from the reservation details."
+          }
+        ]
       },
       {
-        id: 'restaurante',
-        title: 'Restaurant',
-        blocks: [
-          { list: [
-            'A table reservation is recorded as “confirmed” and does not require an online payment.',
-            'Customers cannot cancel it on the platform; administrative staff cancel or reactivate it. Reactivation checks again that the table is free and in service.',
-          ] },
-        ],
+        "id": "plazos",
+        "title": "Reservation and cart deadlines",
+        "blocks": [
+          {
+            "p": "The cart has an expiry time shown on screen. Opening it or reloading the page does not renew that time. If a reservation has an assigned payment deadline, that deadline remains in place when it moves to another cart. Cart expiry does not prove that a reservation was cancelled or that a payment failed."
+          },
+          {
+            "p": "After expiry, check the reservation and any payment status. Continue only when the option is available and there is no payment awaiting verification. A reservation past its payment deadline cannot be paid; contact the hotel if you need assistance."
+          }
+        ]
       },
       {
-        id: 'actividades',
-        title: 'Activities and experiences',
-        blocks: [
-          { list: [
-            'The amount is calculated from the resource’s hourly rate and, if chosen, the instructor’s, multiplied by the duration (between 30 minutes and 2 hours).',
-            'Equipment with a charge is not offered online because it has no defined billing unit; free equipment can be requested.',
-            'Customers cannot cancel on the platform; administrative staff set the status to cancelled or completed.',
-          ] },
-        ],
+        "id": "restaurante",
+        "title": "Dining",
+        "blocks": [
+          {
+            "p": "Choose a location, table, date, time and party size. The reservation is confirmed when table availability and capacity are validated. Booking a table does not initiate an online payment or mean that food and drinks are included."
+          },
+          {
+            "p": "You can cancel your confirmed table reservation from your account before its scheduled date and time. Contact the hotel for other changes or if the scheduled time has arrived."
+          }
+        ]
       },
       {
-        id: 'bienestar',
-        title: 'Wellness',
-        blocks: [
-          { list: [
-            'The appointment is recorded as “confirmed” with an available therapist and time slot. That status does not prove payment; payment is handled in the cart and checkout.',
-            'Customers cannot cancel on the platform; administrative staff set the status to cancelled or completed.',
-          ] },
-        ],
+        "id": "actividades",
+        "title": "Activities and experiences",
+        "blocks": [
+          {
+            "p": "Select an available resource, time and number of participants. The amount reflects the duration and selected services with a stated price. An instructor is offered only when options are available. Review the summary before booking; contact the hotel for changes or cancellations."
+          }
+        ]
       },
       {
-        id: 'amenidades',
-        title: 'Amenities',
-        blocks: [
-          { list: [
-            'An amenity reservation is recorded for a date and time slot and generates a QR code. Amenities have no configured rate, so they are not charged online.',
-            'Customers cannot cancel it on the platform; administrative staff mark it as used or cancelled.',
-          ] },
-        ],
+        "id": "bienestar",
+        "title": "Wellness",
+        "blocks": [
+          {
+            "p": "Choose a service, therapist and appointment time at your selected location. Appointments depend on availability and service duration. “Confirmed” describes the appointment, not its payment. Where online payment applies, review the amount and payment status in your account. Contact the hotel for changes or cancellations."
+          }
+        ]
       },
       {
-        id: 'eventos',
-        title: 'Events and quotations',
-        blocks: [
-          { list: [
-            'The request is recorded as a “quotation”, without holding the venue or creating charges. The total adds the venue base rate and additional services; the required deposit is 30% of the total.',
-            'Administrative staff confirm, cancel or complete the event.',
-            'Customers can cancel their own quotation or reservation from “My reservations” as long as it has no approved or processing payments. An expired reservation cannot be cancelled.',
-            'If an approved payment already exists, the cancellation and any refund must be requested from the hotel.',
-          ] },
-        ],
+        "id": "amenidades",
+        "title": "Amenities",
+        "blocks": [
+          {
+            "p": "The reservation identifies the amenity, date, time slot and available options; it may include a QR code for managing access. The code does not prove payment. Review the usage information on the listing and contact the hotel for changes or cancellations."
+          }
+        ]
       },
       {
-        id: 'reembolsos',
-        title: 'How a refund is handled',
-        blocks: [
-          { list: [
-            'Request: the customer submits it through the published contact details. The platform has no refund request form.',
-            'Review: only authorized administrative roles can record a refund. It can be full or partial and never higher than the approved amount available.',
-            'Processing: for card payments the refund is sent to Stripe, and its status (pending, approved or rejected) depends on Stripe’s response. In test mode no real money is returned. For manually recorded payments, the refund is recorded in the system, but the money is returned outside the platform.',
-            'Result: the payment is marked as “refunded” or “partially refunded”.',
-          ] },
-          { p: 'The platform does not guarantee a refund or a crediting time. Timing depends on the card issuer and payment method.' },
-        ],
+        "id": "eventos",
+        "title": "Events and quotations",
+        "blocks": [
+          {
+            "p": "An event request creates a quotation with the selected venue, time, guest count and services. It does not hold the venue or initiate an immediate charge. The hotel manages confirmation. Review the total, required deposit and quotation balance before paying."
+          },
+          {
+            "p": "You can request cancellation from your account using the available option. The request is rejected when an associated payment prevents safe cancellation. If there are approved or processing payments, contact the hotel."
+          }
+        ]
       },
       {
-        id: 'retracto',
-        title: 'Right of withdrawal',
-        blocks: [
-          { p: 'Article 51 of Decree 6-2003 gives consumers the right to withdraw within no more than five business days when the contract is concluded outside the business premises, with a refund of the amounts paid provided the service has not been used. The platform has no automated process for this: it must be requested through the contact details and staff handle it manually.' },
-        ],
+        "id": "reembolsos",
+        "title": "Refund requests",
+        "blocks": [
+          {
+            "p": "Cancellation and refunding are separate operations. To request a refund, contact the location and provide the reservation and related payment reference. Authorised staff review requests; the website does not offer automatic refunds or establish a refund percentage or crediting deadline. This information does not limit your rights under applicable law."
+          },
+          {
+            "p": "A recorded refund may be full or partial and cannot exceed the available approved amount. Check its result before considering the refund complete. Transactions in the current card form do not move real money; their records therefore do not represent an actual bank refund."
+          }
+        ]
       },
       {
-        id: 'pendientes',
-        title: 'Open issues',
-        blocks: [
-          { p: 'Before the platform could operate with real customers, these points would need a commercial decision or legal review:' },
-          { list: [
-            'How to apply the deposit regime and the article 98 amounts of Government Agreement 1144-83 to rooms, given that the system charges the full total and does not calculate them.',
-            'Deadlines and a formal channel for cancellation, refund and withdrawal requests.',
-            'Check-in and check-out times and room rates approved by INGUAT.',
-            'Registration of the standard-form contract with the Consumer Assistance Directorate (article 52 of Decree 6-2003) and an authorized complaints book.',
-            'Issuing SAT-certified electronic invoices.',
-          ] },
-        ],
-      },
-    ],
+        "id": "atencion",
+        "title": "Reservation assistance",
+        "blocks": [
+          {
+            "p": "Find the location’s contact details on its page and provide your reservation reference. Confirm with the hotel any arrival, departure or service conditions not shown in your selection. Do not share passwords or full card details."
+          }
+        ]
+      }
+    ]
   },
-
-  almacenamiento: {
-    title: 'Cookies and browser storage',
-    description:
-      'What the site stores in your browser, what it is for and why no cookie consent banner is shown.',
-    sections: [
+  "almacenamiento": {
+    "title": "Cookies and browser storage",
+    "description": "Information about preferences and the data needed to use the website.",
+    "sections": [
       {
-        id: 'resumen',
-        title: 'Summary',
-        blocks: [
-          { p: 'The site does not set its own cookies and does not use analytics, advertising or tracking tools. It uses browser storage (sessionStorage and localStorage) only for essential functions and preferences you choose. That is why no cookie consent banner is shown.' },
-        ],
+        "id": "resumen",
+        "title": "How we use your browser",
+        "blocks": [
+          {
+            "p": "The website does not set its own cookies or include analytics or advertising tools. It uses browser storage to maintain your session, retain requests in progress and remember your preferences. Some third-party services may use their own technologies."
+          }
+        ]
       },
       {
-        id: 'session',
-        title: 'Tab storage (sessionStorage)',
-        blocks: [
-          { p: 'It is cleared when the tab is closed. It contains:' },
-          { list: [
-            'The session access token (it expires after one hour and is removed when signing out).',
-            'Search and booking drafts (stay criteria, room selection and service details in progress), so they are not lost while signing in.',
-            'Technical data of the payment attempt in progress, to avoid duplicate charges if you reload the page.',
-            'For staff, the location selected in the admin panel. This preference does not grant permissions: the server checks permissions.',
-          ] },
-        ],
+        "id": "session",
+        "title": "Session and requests in progress",
+        "blocks": [
+          {
+            "p": "Tab storage holds session information, search and reservation drafts, and payment attempt references. These help you continue after signing in or reloading and help prevent duplicate transactions. Staff location selections are also retained; those selections do not grant access permissions."
+          },
+          {
+            "p": "These details are cleared when the tab closes or the corresponding function ends, as applicable. Your browser may restore a previous session; always sign out explicitly on shared devices."
+          }
+        ]
       },
       {
-        id: 'local',
-        title: 'Site preferences (localStorage)',
-        blocks: [
-          { p: 'They are kept until you change them or clear the site data in your browser:' },
-          { list: [
-            'Language (Spanish or English).',
-            'Display currency (GTQ or the USD reference).',
-            'Location selected to browse the public catalog.',
-          ] },
-        ],
+        "id": "local",
+        "title": "Preferences",
+        "blocks": [
+          {
+            "p": "Your language, display currency and selected location remain in your browser until you change them or clear website data. You can choose Spanish or English and view amounts in GTQ or indicative USD."
+          }
+        ]
       },
       {
-        id: 'pestanas',
-        title: 'Communication between tabs',
-        blocks: [
-          { p: 'The site uses BroadcastChannel, a browser feature that connects tabs of the same site in the same browser. It lets a new tab receive an existing session and signs out all tabs at once. This information does not leave your browser through this channel, and the server always validates the session received.' },
-        ],
+        "id": "pestanas",
+        "title": "Open tabs",
+        "blocks": [
+          {
+            "p": "Website tabs can share your session within the same browser. Signing out in one tab signs you out in the others. Access to your information is always validated by the service."
+          }
+        ]
       },
       {
-        id: 'terceros',
-        title: 'Third-party services',
-        blocks: [
-          { list: [
-            'Stripe: the payment form is loaded from Stripe only at checkout. Stripe may use its own cookies and similar technologies, for example to prevent fraud. Those technologies are controlled by Stripe and governed by its privacy policy, not by this page.',
-            'Google Fonts: typefaces are downloaded from Google servers, which receive technical connection data.',
-            'Amazon Web Services: catalog images are served through temporary Amazon S3 links.',
-          ] },
-        ],
+        "id": "terceros",
+        "title": "Third-party services",
+        "blocks": [
+          {
+            "list": [
+              "Stripe loads the card form on the payment page and may use its own cookies or technologies for operation and fraud prevention.",
+              "Google Fonts receives technical data when fonts are downloaded. If Google sign-in is enabled, sign-in pages load Google’s library and send technical connection data even before you select the button.",
+              "Catalogue images are delivered through Amazon Web Services. Connections to providers transmit technical data needed to display content.",
+              "Each provider’s technologies are subject to its own terms and privacy policies."
+            ]
+          }
+        ]
       },
       {
-        id: 'control',
-        title: 'How to control it',
-        blocks: [
-          { p: 'You can clear the site’s storage in your browser settings. Doing so signs you out and removes drafts and preferences, but does not change reservations or payments stored on the server.' },
-        ],
-      },
-    ],
+        "id": "control",
+        "title": "Managing browser data",
+        "blocks": [
+          {
+            "p": "You can clear website data in your browser settings. Saved preferences and drafts will be lost, and you may need to sign in again. This does not cancel reservations, stop processing payments or delete hotel records. Check a transaction’s status in your account before repeating it."
+          }
+        ]
+      }
+    ]
   },
-
-  preguntas: {
-    title: 'Frequently asked questions',
-    description: 'Short answers about accounts, reservations, payments and cancellations at HOTEL HUNAHPÚ.',
-    sections: [
-      { id: 'real', title: 'Is this a real hotel?', blocks: [{ p: 'No. It is a university project that demonstrates a hotel-management system. Reservations and payments are for academic purposes and Stripe runs in test mode, without real charges.' }] },
-      { id: 'cuenta', title: 'Do I need an account to book?', blocks: [{ p: 'Yes. You can browse the catalogs without signing in, but you need a customer account to book. The system keeps your search while you sign in or register.' }] },
-      { id: 'disponibilidad', title: 'Does checking availability hold the room?', blocks: [{ p: 'No. Availability is checked again when the reservation is created. If someone else books first, the system will tell you.' }] },
-      { id: 'confirmada', title: 'When is my room reservation confirmed?', blocks: [{ p: 'When approved payments cover the total, or when hotel staff confirm it. Until then it shows as “pending”.' }] },
-      { id: 'estado-confirmado', title: 'My wellness appointment says “confirmed”. Is it paid?', blocks: [{ p: 'Not necessarily. For restaurant, activities, wellness and amenities, “confirmed” is an operational status. Payment status is shown in the cart and checkout.' }] },
-      { id: 'moneda', title: 'Which currency do I pay in?', blocks: [{ p: 'In quetzales (GTQ). The dollar amount is a reference calculated at Q7.80 per US$1.00.' }] },
-      { id: 'tarjeta', title: 'Do you store my card details?', blocks: [{ p: 'No. Card details are entered in Stripe’s form and do not pass through the project’s servers. Only the payment result and reference are stored.' }] },
-      { id: 'cancelar', title: 'How do I cancel a reservation?', blocks: [{ p: 'Event quotations and reservations with no approved or processing payments can be cancelled from “My reservations”. For other reservations, ask the hotel to cancel them; authorized staff do it.' }] },
-      { id: 'reembolso', title: 'Do I get an automatic refund if I cancel?', blocks: [{ p: 'No. Cancelling does not create a refund. Authorized staff review and record refunds, never above the amount paid. See the Reservation, cancellation and refund policy.' }] },
-      { id: 'carrito', title: 'Why did my cart expire?', blocks: [{ p: 'The cart expires after 15 minutes. If it expires before payment is completed, start a new one and add your reservations again.' }] },
-      { id: 'tarifa', title: 'Why does my reservation total differ from the current rate?', blocks: [{ p: 'The total is calculated with the rate in force when the reservation was created or when its dates or room changed. If the catalog rate changes later, the recorded amount is not recalculated.' }] },
-      { id: 'pestanas', title: 'Why was I signed out in another tab?', blocks: [{ p: 'The session is shared between open tabs of the site in the same browser. Signing out in one signs out in all of them. The session also expires after one hour.' }] },
-      { id: 'cuenta-datos', title: 'Can I change or delete my account?', blocks: [{ p: 'The platform does not offer these functions yet. You can request it through the contact details published on the site; requests are handled manually.' }] },
-    ],
-  },
+  "preguntas": {
+    "title": "Frequently asked questions",
+    "description": "Answers to help plan your stay and manage services with HOTEL HUNAHPÚ.",
+    "sections": [
+      {
+        "id": "reservar-habitacion",
+        "title": "How do I book a room?",
+        "blocks": [
+          {
+            "p": "Search availability by location, dates and number of guests. Choose a room, review the stay and final price, and sign in with your customer account to complete the reservation. Then check its status in “My reservations” and review the available payment options."
+          }
+        ]
+      },
+      {
+        "id": "disponibilidad",
+        "title": "How do I check room availability?",
+        "blocks": [
+          {
+            "p": "Under Rooms, choose a location, arrival and departure dates and the number of guests. View the available options for those criteria. Searching does not hold a room: availability is checked again when the reservation is created."
+          }
+        ]
+      },
+      {
+        "id": "cuenta",
+        "title": "Do I need an account to book?",
+        "blocks": [
+          {
+            "p": "Yes. You can browse catalogues without signing in; managing reservations requires a customer account. Your search can be retained in the same tab while you sign in."
+          }
+        ]
+      },
+      {
+        "id": "pagar",
+        "title": "How can I pay?",
+        "blocks": [
+          {
+            "p": "From the cart or the available options in your reservation details, review the total and continue to the payment screen. Rooms require full payment; events show the applicable deposit and balance. If a transaction remains in progress, check its status before continuing and do not create another payment for the same reservation."
+          }
+        ]
+      },
+      {
+        "id": "mis-reservas",
+        "title": "Where can I find my reservations?",
+        "blocks": [
+          {
+            "p": "Sign in and open “My reservations”. Choose the relevant category and open a reservation to view its details, dates, status and available actions. You can check this information in your account without waiting for an automatic confirmation email."
+          }
+        ]
+      },
+      {
+        "id": "cancelar",
+        "title": "Can I cancel a reservation?",
+        "blocks": [
+          {
+            "p": "In “My reservations”, open the details and check whether cancellation is available. It is permitted for eligible pending rooms without approved or uncertain payments or other payments requiring review; for confirmed tables before their scheduled time; and for events that meet the stated conditions. A payment awaiting verification may prevent cancellation. Contact the hotel for other cases."
+          }
+        ]
+      },
+      {
+        "id": "servicios",
+        "title": "How do I book activities?",
+        "blocks": [
+          {
+            "p": "Open Activities, choose a location and experience, and select the date, time and number of participants. Complete the available options and review the summary and amount before booking. Contact the hotel to change or cancel an activity reservation."
+          }
+        ]
+      },
+      {
+        "id": "bienestar",
+        "title": "How do I book wellness services?",
+        "blocks": [
+          {
+            "p": "Under Wellness, select a location, service, and an available therapist and time. Review the duration and summary before confirming your appointment. You can view it in the wellness section of “My reservations”. Contact the hotel for changes or cancellations."
+          }
+        ]
+      },
+      {
+        "id": "mesa",
+        "title": "How do I book a table?",
+        "blocks": [
+          {
+            "p": "Under Dining, select a location, table, date, time and party size. Sign in and confirm when availability permits your group. Booking a table does not initiate an online payment or include food and drinks. View the details in the dining section of “My reservations”."
+          }
+        ]
+      },
+      {
+        "id": "evento",
+        "title": "How do I request an event?",
+        "blocks": [
+          {
+            "p": "Under Events, choose a venue and enter the date, time, event type, guest count and any services you need from the available options. Review the amount and submit a quotation request. Follow its status in “My reservations”: a quotation does not hold the venue or initiate an immediate charge and requires hotel confirmation."
+          }
+        ]
+      },
+      {
+        "id": "consultar-servicios",
+        "title": "How do I view my booked services?",
+        "blocks": [
+          {
+            "p": "In “My reservations”, browse the dining, activities, wellness, amenities and events categories. Open each record to view the service, location, dates and status. Available actions depend on the service and reservation status; contact the hotel if the change you need is not available."
+          }
+        ]
+      },
+      {
+        "id": "atencion",
+        "title": "How do I contact the hotel?",
+        "blocks": [
+          {
+            "p": "On each location’s page. Include your reservation or payment reference to help with your enquiry. Ask the hotel directly about arrival and departure times or other conditions that are not stated."
+          }
+        ]
+      },
+      {
+        "id": "confirmada",
+        "title": "When is my room confirmed?",
+        "blocks": [
+          {
+            "p": "A reservation starts as pending. It is confirmed when approved payments cover the full amount or authorised staff manage its confirmation. Check the status in “My reservations”."
+          }
+        ]
+      },
+      {
+        "id": "estado-confirmado",
+        "title": "My reservation says “confirmed”. Is it paid?",
+        "blocks": [
+          {
+            "p": "Not necessarily. Authorised staff can confirm a room reservation, and for dining, activities, wellness and amenities, confirmation describes the service reservation. Check the payment status and approved amount separately; the reservation status does not replace proof of payment."
+          }
+        ]
+      },
+      {
+        "id": "moneda",
+        "title": "Do prices include taxes, and what currency is used?",
+        "blocks": [
+          {
+            "p": "Published prices are final: they include VAT and, for accommodation, INGUAT, without adding these taxes to the amount again. Payments are in Guatemalan quetzales (GTQ); USD is an indicative display amount at Q7.80 per US$1.00."
+          }
+        ]
+      },
+      {
+        "id": "tarjeta",
+        "title": "How does the card form work?",
+        "blocks": [
+          {
+            "p": "Stripe provides the card fields and HOTEL HUNAHPÚ retains the transaction reference and result, not full card details."
+          }
+        ]
+      },
+      {
+        "id": "pago-incierto",
+        "title": "What if my payment is still processing?",
+        "blocks": [
+          {
+            "p": "Select “Check status”. Do not repeat the payment or create another transaction for the same reservation. If the result cannot be verified, the reservation remains protected and you can ask the hotel for help."
+          }
+        ]
+      },
+      {
+        "id": "reembolso",
+        "title": "Does cancellation automatically issue a refund?",
+        "blocks": [
+          {
+            "p": "No. Ask the hotel to review your request and provide your reservation and payment reference. Cancellation alone does not establish a refund amount or deadline."
+          }
+        ]
+      },
+      {
+        "id": "carrito",
+        "title": "What happens if the cart expires?",
+        "blocks": [
+          {
+            "p": "The expiry time is shown on screen and is not renewed by reloading. Check the reservation and payment status first. A reservation deadline, where assigned, is not extended by changing carts; do not repeat an uncertain payment."
+          }
+        ]
+      },
+      {
+        "id": "cuenta-datos",
+        "title": "How do I update my details or resolve an access problem?",
+        "blocks": [
+          {
+            "p": "View “My account” and contact the hotel to request corrections or assistance. Self-service password recovery, account deletion and Google unlinking are not available. Never send your password when requesting support."
+          }
+        ]
+      }
+    ]
+  }
 };

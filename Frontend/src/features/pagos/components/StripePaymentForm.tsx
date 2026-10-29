@@ -43,6 +43,8 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
   const elements = useElements();
   const [confirmando, setConfirmando] = useState(false);
   const [errorTarjeta, setErrorTarjeta] = useState(false);
+  // Los errores de validación (campos incompletos, incluidos los de Stripe Link) no son un rechazo de la tarjeta.
+  const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
   const confirmandoRef = useRef(false);
 
   const confirmar = async () => {
@@ -52,6 +54,7 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
     confirmandoRef.current = true;
     setConfirmando(true);
     setErrorTarjeta(false);
+    setErrorValidacion(null);
 
     try {
       const resultado = await stripe.confirmPayment({
@@ -63,10 +66,10 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
       });
 
       if (resultado.error) {
-        if (
-          resultado.error.type === 'card_error' ||
-          resultado.error.type === 'validation_error'
-        ) {
+        if (resultado.error.type === 'validation_error') {
+          // Stripe ya resalta el campo y devuelve el mensaje en el idioma configurado.
+          setErrorValidacion(resultado.error.message ?? null);
+        } else if (resultado.error.type === 'card_error') {
           setErrorTarjeta(true);
         } else {
           // Fallo de red, API o estado incierto: no afirmamos que el pago
@@ -97,6 +100,12 @@ const FormularioTarjeta: React.FC<FormularioTarjetaProps> = ({
       {errorTarjeta && (
         <Alert tone="error" title={textosCheckout.estados.rechazadoTitulo}>
           {textosCheckout.errores.tarjetaRechazada}
+        </Alert>
+      )}
+
+      {errorValidacion && (
+        <Alert tone="warning" title={textosCheckout.pago.titulo}>
+          {errorValidacion}
         </Alert>
       )}
 

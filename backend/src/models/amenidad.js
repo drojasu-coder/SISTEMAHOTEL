@@ -32,6 +32,23 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: true,
       },
+      // Horario de reserva (hora de Guatemala) y duración fija de cada reserva.
+      // Sin los tres valores, la amenidad no ofrece franjas en línea.
+      hora_apertura: {
+        type: DataTypes.TIME,
+        allowNull: true,
+        defaultValue: null,
+      },
+      hora_cierre: {
+        type: DataTypes.TIME,
+        allowNull: true,
+        defaultValue: null,
+      },
+      duracion_minutos: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+      },
       imagen_key: {
         type: DataTypes.STRING(500),
         allowNull: true,

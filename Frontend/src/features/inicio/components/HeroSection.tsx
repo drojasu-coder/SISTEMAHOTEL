@@ -1,7 +1,7 @@
 import { usePublicInterface } from '@/i18n/public';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { buttonStyles } from '@/components/ui/Button';
 import type { InicioData } from '../types';
 
@@ -65,22 +65,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ data, place }) => {
           </Link>
         </div>
       </div>
-
-      {/* Crédito fotográfico discreto */}
-      {data.hero_imagen_creditos && (
-        <div className="absolute bottom-3 right-4 z-10 text-[10px] text-neutro-300/80 hover:text-white transition-colors">
-          <a
-            href={data.hero_imagen_creditos.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm"
-            title={p('photoBy', { name: data.hero_imagen_creditos.texto })}
-          >
-            <Info className="size-2.5" aria-hidden="true" />
-            <span>{p('photo')}{' '}{data.hero_imagen_creditos.texto}</span>
-          </a>
-        </div>
-      )}
     </section>
   );
 };

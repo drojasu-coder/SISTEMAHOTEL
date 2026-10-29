@@ -3,7 +3,7 @@ import { z } from "zod";
 const timeRegex =
   /^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/;
 
-const fecha = z
+export const fechaSchema = z
   .string()
   .regex(
     /^\d{4}-\d{2}-\d{2}$/,
@@ -40,6 +40,8 @@ const fecha = z
     },
     "La fecha no es válida"
   );
+
+const fecha = fechaSchema;
 
 export const createReservaMesaSchema =
   z
@@ -89,3 +91,15 @@ export const updateReservaMesaSchema =
       ),
     })
     .strict();
+
+export const disponibilidadReservaMesaQuerySchema = z
+  .object({
+    mesa_id: z
+      .string()
+      .trim()
+      .regex(/^\d+$/, "El ID de la mesa debe contener únicamente dígitos")
+      .transform(Number)
+      .refine((n) => n > 0, "El ID de la mesa debe ser un número positivo"),
+    fecha: fechaSchema,
+  })
+  .strict();

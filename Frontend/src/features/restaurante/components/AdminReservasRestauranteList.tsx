@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { Card } from "@/components/ui/Card";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
-import { Alert } from "@/components/ui/Feedback";
+import { Alert, LoadingNotice } from "@/components/ui/Feedback";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useAdminScope } from "@/features/admin-core/AdminScopeContext";
@@ -10,80 +9,74 @@ import { estadoReservaMesa } from "../estadoReservaMesa";
 import { useTextosAdminRestaurante } from "../adminTextos";
 import { useLocale } from "@/i18n/LocaleContext";
 import { formatAdminCalendarDate, formatAdminTimeOfDay } from "@/features/admin-core/adminDates";
+import { getTodayInGuatemala } from "@/features/crear-reserva/schemas/busquedaReservaSchema";
+import { useTextosGestionMesas } from "@/features/mesas/gestionTextos";
 import {
   useAdminReservasMesaQuery,
   useUpdateEstadoReservaMesaMutation,
 } from "../hooks/useReservasMesa";
-import {
-  AdminReservasRestauranteFilters,
-  type AdminReservasRestauranteFiltersState,
-} from "./AdminReservasRestauranteFilters";
 import { RESTAURANTE_ROUTES } from "../constants/routes";
 import type { ReservaMesa } from "../types";
 import { ApiError } from "@/api/client/http";
-import {
-  UtensilsCrossed,
-  ArrowRight,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
+import { ChevronRight, Search, X } from "lucide-react";
+import { cn } from "@/lib/cn";
 
+const VISTAS = ["hoy", "proximas", "canceladas", "todas"] as const;
+type Vista = typeof VISTAS[number];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Reservas de restaurante como herramienta de trabajo: hoy, próximas,
+ * canceladas y el registro completo, con búsqueda, fecha, estado y mesa en la
+ * URL. Los únicos estados son confirmada y cancelada; las acciones (cancelar o
+ * reactivar con confirmación) son las existentes.
+ */
 export const AdminReservasRestauranteList: React.FC = () => {
   const { status, user } = useAuth();
   const t = useTextosAdminRestaurante();
+  const g = useTextosGestionMesas();
   const { locale } = useLocale();
-
-  const isAdmin = status === "authenticated" && (user?.rol === "admin" || user?.rol === "gerente_habitaciones");
+  const isAdmin = status === "authenticated" && (user?.rol === "admin" || user?.rol === "gerente_habitaciones" || user?.rol === "gerente_restaurante");
   // La sede del selector global del panel se aplica en el servidor.
   const { selectedSedeId } = useAdminScope();
-  const { data: reservas = [], isLoading, isError, refetch } = useAdminReservasMesaQuery(
-    user?.id,
-    isAdmin,
-    selectedSedeId
-  );
-
+  const { data: reservas = [], isLoading, isError, refetch } = useAdminReservasMesaQuery(user?.id, isAdmin, selectedSedeId);
   const updateMutation = useUpdateEstadoReservaMesaMutation();
+  const [params, setParams] = useSearchParams();
+  const update = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) value ? next.set(key, value) : next.delete(key);
+    setParams(next, { replace: true });
+  };
+  const vista: Vista = (VISTAS as readonly string[]).includes(params.get("vista") ?? "") ? params.get("vista") as Vista : "hoy";
+  const q = params.get("q") ?? "";
+  const fecha = ISO_DATE.test(params.get("fecha") ?? "") ? params.get("fecha")! : "";
+  const estadoFiltro = ["confirmada", "cancelada"].includes(params.get("estado") ?? "") ? params.get("estado")! : "";
+  const mesaFiltro = /^[1-9]\d*$/.test(params.get("mesa") ?? "") ? Number(params.get("mesa")) : null;
 
-  const [filters, setFilters] = useState<AdminReservasRestauranteFiltersState>({
-    busqueda: "",
-    estado: "",
-    fecha: "",
-  });
+  const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [modalAction, setModalAction] = useState<{ reserva: ReservaMesa; nuevoEstado: "confirmada" | "cancelada" } | null>(null);
 
-  const [feedback, setFeedback] = useState<{
-    tone: "success" | "error";
-    message: string;
-  } | null>(null);
+  const today = getTodayInGuatemala();
+  const porVista = useMemo(() => {
+    const asc = (a: ReservaMesa, b: ReservaMesa) => `${a.fecha} ${a.hora}`.localeCompare(`${b.fecha} ${b.hora}`) || a.id - b.id;
+    return {
+      hoy: reservas.filter((r) => r.fecha === today).sort(asc),
+      proximas: reservas.filter((r) => r.estado === "confirmada" && r.fecha > today).sort(asc),
+      canceladas: reservas.filter((r) => r.estado === "cancelada").sort((a, b) => asc(b, a)),
+      todas: [...reservas].sort((a, b) => asc(b, a)),
+    } satisfies Record<Vista, ReservaMesa[]>;
+  }, [reservas, today]);
 
-  const [modalAction, setModalAction] = useState<{
-    reserva: ReservaMesa;
-    nuevoEstado: "confirmada" | "cancelada";
-  } | null>(null);
-
-  const reservasFiltradas = useMemo(() => {
-    return reservas.filter((r) => {
-      if (filters.estado !== "" && r.estado !== filters.estado) {
-        return false;
-      }
-
-      if (filters.fecha !== "" && r.fecha !== filters.fecha) {
-        return false;
-      }
-
-      if (filters.busqueda.trim() !== "") {
-        const query = filters.busqueda.trim().toLowerCase();
-        const idMatch = String(r.id).includes(query);
-        const clienteNombre = r.Usuario?.nombre?.toLowerCase() || "";
-        const clienteEmail = r.Usuario?.email?.toLowerCase() || "";
-        const nombreMatch = clienteNombre.includes(query);
-        const emailMatch = clienteEmail.includes(query);
-        if (!idMatch && !nombreMatch && !emailMatch) return false;
-      }
-
-      return true;
-    });
-  }, [reservas, filters]);
+  const term = q.trim().toLowerCase().replace(/^#/, "");
+  const filtradas = porVista[vista].filter((r) =>
+    (!term || [String(r.id), String(r.mesa_id), r.Usuario?.nombre, r.Usuario?.email, r.Mesa?.zona].some((v) => v?.toLowerCase().includes(term))) &&
+    (!fecha || r.fecha === fecha) &&
+    (vista !== "todas" || !estadoFiltro || r.estado === estadoFiltro) &&
+    (mesaFiltro === null || r.mesa_id === mesaFiltro));
+  const hasFilters = Boolean(q || fecha || estadoFiltro || mesaFiltro);
+  const showSite = selectedSedeId === "all";
+  const date = (value: string) => formatAdminCalendarDate(value, locale);
+  const time = (value: string) => formatAdminTimeOfDay(value, locale);
 
   const handleOpenActionModal = (
     reserva: ReservaMesa,
@@ -130,220 +123,106 @@ export const AdminReservasRestauranteList: React.FC = () => {
     }
   };
 
+  const acciones = (r: ReservaMesa) => r.estado === "cancelada"
+    ? <Button variant="ghost" size="sm" aria-label={t.reactivarAria(r.id)} onClick={() => handleOpenActionModal(r, "confirmada")}>{t.reactivarReserva}</Button>
+    : r.estado === "confirmada"
+      ? <Button variant="ghost" size="sm" className="text-error-700 hover:bg-error-50" aria-label={t.cancelarAria(r.id)} onClick={() => handleOpenActionModal(r, "cancelada")}>{t.cancelarReserva}</Button>
+      : null;
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12">
-      {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{t.subtitulo}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] md:text-[2.5rem] md:leading-[3rem] font-serif font-semibold text-neutro-900">
-            {t.titulo}
-          </h1>
-          <p className="text-sm text-neutro-600 max-w-2xl">{t.descripcion}</p>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+      <header>
+        <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{g.reservasTitulo}</h1>
+        {!isLoading && !isError && <p className="mt-1 text-sm text-neutro-600">{g.reservasResumen(reservas.length)} · {g.hoy} {date(today)}</p>}
+      </header>
+
+      {feedback && <Alert tone={feedback.tone}>
+        <div className="flex items-center justify-between gap-4"><span>{feedback.message}</span>
+          <button type="button" onClick={() => setFeedback(null)} aria-label={t.cerrarBoton} className="rounded p-1 hover:bg-black/5"><X className="size-4" aria-hidden="true" /></button></div>
+      </Alert>}
+
+      {isLoading && <LoadingNotice label={t.cargando} />}
+      {isError && <Alert tone="error" title={t.errorCargar}><Button className="mt-2" variant="secondary" onClick={() => void refetch()}>{t.reintentar}</Button></Alert>}
+
+      {!isLoading && !isError && <>
+        <div role="group" aria-label={g.vistasLabel} className="flex gap-1 overflow-x-auto rounded-xl border border-neutro-200 bg-white p-1">
+          {VISTAS.map((key) => <button key={key} type="button" aria-pressed={vista === key} onClick={() => update({ vista: key === "hoy" ? null : key, estado: null })}
+            className={cn("inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors", vista === key ? "bg-bronce-50 text-bronce-800" : "text-neutro-600 hover:bg-neutro-50 hover:text-neutro-900")}>
+            {g.vistas[key]}
+            <span className={cn("rounded-full px-1.5 text-xs tabular-nums", vista === key ? "bg-bronce-600 text-white" : "bg-neutro-100 text-neutro-700")}>{porVista[key].length}</span>
+          </button>)}
         </div>
 
-        <div className="flex gap-3 self-start sm:self-center">
-          <Link
-            to="/admin/restaurante"
-            className="inline-flex items-center gap-1.5 rounded-md border border-neutro-300 bg-white px-4 py-2 text-sm font-medium text-neutro-700 shadow-sm hover:bg-neutro-50 transition-colors"
-          >
-            <UtensilsCrossed className="size-4" aria-hidden="true" />
-            <span>{t.irGestionMesas}</span>
-          </Link>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]">
+          <label className="relative min-w-0 sm:col-span-2 lg:col-span-1"><span className="sr-only">{g.buscarReserva}</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-500" aria-hidden="true" />
+            <input type="search" value={q} placeholder={g.buscarReserva} onChange={(event) => update({ q: event.target.value || null })} className="field-control !pl-9" /></label>
+          {vista !== "hoy" && <label className="min-w-0"><span className="sr-only">{g.fechaFiltro}</span>
+            <input type="date" value={fecha} aria-label={g.fechaFiltro} onChange={(event) => update({ fecha: event.target.value || null })} className="field-control" /></label>}
+          {vista === "todas" && <label className="min-w-0"><span className="sr-only">{g.estadoReserva}</span>
+            <select value={estadoFiltro} onChange={(event) => update({ estado: event.target.value || null })} className="field-control">
+              <option value="">{g.todosEstadosReserva}</option>
+              <option value="confirmada">{t.estados.confirmada}</option>
+              <option value="cancelada">{t.estados.cancelada}</option>
+            </select></label>}
         </div>
-      </div>
+        {hasFilters && <div className="flex flex-wrap items-center gap-2">
+          {mesaFiltro !== null && <button type="button" onClick={() => update({ mesa: null })} aria-label={g.quitarMesa} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-bronce-200 bg-bronce-50 px-3 text-xs font-medium text-bronce-800 hover:border-bronce-400">{g.filtroMesa(mesaFiltro)}<X className="size-3.5" aria-hidden="true" /></button>}
+          <Button variant="text" size="sm" onClick={() => update({ q: null, fecha: null, estado: null, mesa: null })}>{g.limpiar}</Button>
+        </div>}
 
-      {/* Feedback Mensajes */}
-      {feedback && (
-        <Alert tone={feedback.tone}>
-          <div className="flex items-center justify-between gap-4">
-            <span>{feedback.message}</span>
-            <button
-              type="button"
-              onClick={() => setFeedback(null)}
-              className="text-xs font-semibold underline hover:no-underline"
-            >
-              {t.cerrarBoton}
-            </button>
+        {filtradas.length === 0 ? <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">{hasFilters ? g.vacioR.filtros : g.vacioR[vista]}</p> : <>
+          <div className="relative hidden overflow-x-auto rounded-xl border border-neutro-200 bg-white xl:block">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">{g.vistas[vista]}</caption>
+              <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold text-neutro-600">
+                <tr>
+                  <th scope="col" className="px-4 py-3">{g.colR.reserva}</th>
+                  <th scope="col" className="px-4 py-3">{g.colR.fechaHora}</th>
+                  <th scope="col" className="px-4 py-3">{g.colR.mesa}</th>
+                  <th scope="col" className="px-4 py-3">{g.colR.cliente}</th>
+                  <th scope="col" className="px-4 py-3">{g.colR.comensales}</th>
+                  <th scope="col" className="px-4 py-3">{g.colR.estado}</th>
+                  <th scope="col" className="px-4 py-3 text-right"><span className="sr-only">{g.colR.acciones}</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutro-100">
+                {filtradas.map((r) => {
+                  const estado = estadoReservaMesa(r.estado, t.estados);
+                  return <tr key={r.id} className="hover:bg-bronce-50/40">
+                    <td className="whitespace-nowrap px-4 py-2.5"><Link to={RESTAURANTE_ROUTES.ADMIN_DETALLE_RESERVA(r.id)} aria-label={g.verReserva(r.id)} className="inline-flex min-h-9 items-center gap-1 font-semibold text-bronce-700 hover:underline">#{r.id}<ChevronRight className="size-3.5" aria-hidden="true" /></Link></td>
+                    <td className="whitespace-nowrap px-4 py-2.5"><span className={cn("font-medium", r.fecha === today ? "text-bronce-800" : "text-neutro-900")}>{date(r.fecha)}</span><span className="block text-xs text-neutro-600">{time(r.hora)}</span></td>
+                    <td className="px-4 py-2.5"><span className="block font-medium text-neutro-900">{t.mesa(r.mesa_id)}</span>
+                      <span className="block text-xs text-neutro-600" lang="es">{r.Mesa?.zona}{showSite && ` · ${r.Mesa?.Sucursal?.nombre ?? t.sedeId(r.Mesa?.sucursal_id ?? "")}`}</span></td>
+                    <td className="px-4 py-2.5"><span className="block text-neutro-900">{r.Usuario?.nombre || t.clienteSinNombre}</span>
+                      <span className="hidden max-w-[14rem] truncate text-xs text-neutro-500 2xl:block">{r.Usuario?.email || t.usuarioId(r.usuario_id)}</span></td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{t.personas(r.numero_comensales)}</td>
+                    <td className="px-4 py-2.5"><span title={estado.conocido ? undefined : t.estadoRegistrado(r.estado)} className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold", estado.className)}>{estado.label}</span></td>
+                    <td className="px-4 py-1.5 text-right">{acciones(r)}</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
           </div>
-        </Alert>
-      )}
-
-      {/* Filtros */}
-      <AdminReservasRestauranteFilters
-        filters={filters}
-        onChange={setFilters}
-        onReset={() =>
-          setFilters({ busqueda: "", estado: "", fecha: "" })
-        }
-        totalCount={reservas.length}
-        filteredCount={reservasFiltradas.length}
-      />
-
-      {/* Estado: Cargando */}
-      {isLoading && (
-        <Card className="p-8 space-y-4" aria-busy="true">
-          <div className="h-8 w-1/4 animate-pulse rounded bg-neutro-200" />
-          <div className="h-10 w-full animate-pulse rounded bg-neutro-200" />
-          <div className="h-10 w-full animate-pulse rounded bg-neutro-200" />
-          <div className="h-10 w-full animate-pulse rounded bg-neutro-200" />
-        </Card>
-      )}
-
-      {/* Estado: Error */}
-      {isError && !isLoading && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center border-rojo-200 bg-rojo-50">
-          <AlertCircle className="size-12 text-rojo-500 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">{t.errorCargar}</h2>
-          <p className="text-sm text-neutro-600 max-w-md mb-6">
-            Ocurrió un problema al obtener las reservas de restaurante.
-          </p>
-          <Button type="button" variant="primary" onClick={() => refetch()}>
-            {t.reintentar}
-          </Button>
-        </Card>
-      )}
-
-      {/* Estado: Sin Reservas en el Hotel */}
-      {!isLoading && !isError && reservas.length === 0 && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center">
-          <UtensilsCrossed className="size-12 text-neutro-400 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">
-            {t.sinReservasTitulo}
-          </h2>
-          <p className="text-sm text-neutro-600 max-w-md">
-            {t.sinReservasDesc}
-          </p>
-        </Card>
-      )}
-
-      {/* Estado: Sin Resultados por Filtros */}
-      {!isLoading && !isError && reservas.length > 0 && reservasFiltradas.length === 0 && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center">
-          <AlertCircle className="size-12 text-neutro-400 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">
-            {t.sinResultados}
-          </h2>
-          <p className="text-sm text-neutro-600 max-w-md mb-6">
-            Intente modificando los filtros de sede, fecha, estado o el término de búsqueda.
-          </p>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() =>
-              setFilters({ busqueda: "", estado: "", fecha: "" })
-            }
-          >
-            Limpiar filtros
-          </Button>
-        </Card>
-      )}
-
-      {/* Tabla de Reservas */}
-      {!isLoading && !isError && reservasFiltradas.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-neutro-200 bg-white shadow-sm">
-          <table className="w-full min-w-[60rem] text-left text-sm text-neutro-800">
-            <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold uppercase tracking-wider text-neutro-600">
-              <tr>
-                <th className="px-3 py-3">{t.colId}</th>
-                <th className="px-3 py-3">{t.colCliente}</th>
-                <th className="px-3 py-3">{t.colSede}</th>
-                <th className="px-3 py-3">{t.colMesa}</th>
-                <th className="px-3 py-3">{t.colFecha}</th>
-                <th className="px-3 py-3">{t.colHorario}</th>
-                <th className="px-3 py-3">{t.colComensales}</th>
-                <th className="px-3 py-3">{t.colEstado}</th>
-                <th className="px-3 py-3 text-right">{t.colAcciones}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutro-200">
-              {reservasFiltradas.map((r) => {
-                const isCancelada = r.estado === "cancelada";
-                const estado = estadoReservaMesa(r.estado, t.estados);
-                const sedeNombre =
-                  r.Mesa?.Sucursal?.nombre || t.sedeId(r.Mesa?.sucursal_id ?? "");
-
-                return (
-                  <tr key={r.id} className="hover:bg-neutro-50 transition-colors">
-                    <td className="px-3 py-3 font-semibold text-neutro-900">
-                      #{r.id}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div>
-                        <p className="font-medium text-neutro-900">
-                          {r.Usuario?.nombre || t.clienteSinNombre}
-                        </p>
-                        <p className="text-xs text-neutro-500">
-                          {r.Usuario?.email || t.usuarioId(r.usuario_id)}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-neutro-700">{sedeNombre}</td>
-                    <td className="px-3 py-3">
-                      <div>
-                        <span className="whitespace-nowrap font-medium">{t.mesa(r.mesa_id)}</span>
-                        {r.Mesa?.zona && (
-                          <span className="text-xs text-neutro-500 block">
-                            {r.Mesa.zona}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-neutro-700">{formatAdminCalendarDate(r.fecha, locale)}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-neutro-700">{formatAdminTimeOfDay(r.hora, locale)}</td>
-                    <td className="px-3 py-3 text-neutro-700">
-                      {t.personas(r.numero_comensales)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span
-                        className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold ${estado.className}`}
-                        title={estado.conocido ? undefined : t.estadoRegistrado(r.estado)}
-                      >
-                        {estado.label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                      <Link
-                        to={RESTAURANTE_ROUTES.ADMIN_DETALLE_RESERVA(r.id)}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-bronce-700 hover:text-bronce-900"
-                      >
-                        <span>{t.verDetalle}</span>
-                        <ArrowRight className="size-3" aria-hidden="true" />
-                      </Link>
-
-                      {isCancelada ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          aria-label={t.reactivarAria(r.id)}
-                          className="shrink-0 whitespace-nowrap text-xs text-verde-700 hover:text-verde-800"
-                          onClick={() => handleOpenActionModal(r, "confirmada")}
-                        >
-                          <CheckCircle2 className="size-3.5 mr-1" aria-hidden="true" />
-                          {t.reactivarReserva}
-                        </Button>
-                      ) : r.estado === "confirmada" ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          aria-label={t.cancelarAria(r.id)}
-                          className="shrink-0 whitespace-nowrap text-xs text-error-600 hover:text-error-700"
-                          onClick={() => handleOpenActionModal(r, "cancelada")}
-                        >
-                          <XCircle className="size-3.5 mr-1" aria-hidden="true" />
-                          {t.cancelarReserva}
-                        </Button>
-                      ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+          <ul className="divide-y divide-neutro-200 overflow-hidden rounded-xl border border-neutro-200 bg-white xl:hidden">
+            {filtradas.map((r) => {
+              const estado = estadoReservaMesa(r.estado, t.estados);
+              return <li key={r.id} className="flex flex-col gap-2 px-4 py-3">
+                <Link to={RESTAURANTE_ROUTES.ADMIN_DETALLE_RESERVA(r.id)} aria-label={g.verReserva(r.id)} className="flex items-start justify-between gap-3">
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-neutro-900">#{r.id}</span><span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold", estado.className)}>{estado.label}</span></span>
+                    <span className="block text-sm text-neutro-800">{date(r.fecha)} · {time(r.hora)}</span>
+                    <span className="block truncate text-xs text-neutro-600">{t.mesa(r.mesa_id)} · <span lang="es">{r.Mesa?.zona}</span>{showSite && ` · ${r.Mesa?.Sucursal?.nombre ?? ""}`}</span>
+                    <span className="block truncate text-xs text-neutro-600">{r.Usuario?.nombre || t.clienteSinNombre} · {t.personas(r.numero_comensales)}</span>
+                  </span>
+                  <ChevronRight className="mt-1 size-4 shrink-0 text-neutro-400" aria-hidden="true" />
+                </Link>
+                {acciones(r) && <div className="-ml-2">{acciones(r)}</div>}
+              </li>;
+            })}
+          </ul>
+        </>}
+      </>}
 
       {/* Modal de Confirmación de Cambio de Estado */}
       <Modal

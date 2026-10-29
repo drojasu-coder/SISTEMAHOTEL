@@ -9,7 +9,6 @@ import {
   BedDouble,
   Layers,
   CalendarCheck,
-  Car,
   UtensilsCrossed,
   Sparkles,
   Dumbbell,
@@ -20,10 +19,11 @@ import {
   Users,
   Building2,
   Sliders,
+  Settings2,
   ChevronDown,
   ChevronRight,
   MapPin,
-  FileText,
+  BarChart3,
 } from 'lucide-react';
 import { Brand } from '@/components/shared/Brand';
 import { Drawer } from '@/components/ui/Drawer';
@@ -42,6 +42,8 @@ interface NavItem {
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   permission?: Permission;
+  /** Pantallas reservadas al administrador general (p. ej. reportes, solo admin en el servidor). */
+  adminOnly?: boolean;
 }
 
 interface NavSection {
@@ -62,7 +64,6 @@ const navSections: NavSection[] = [
       { id: 'habitaciones', label: 'Habitaciones', path: '/admin/habitaciones', icon: BedDouble },
       { id: 'tipos-habitacion', label: 'Tipos de habitación', path: '/admin/tipos-habitacion', icon: Layers, permission: 'habitaciones.configurar' },
       { id: 'reservas', label: 'Reservas', path: '/admin/reservas', icon: CalendarCheck, permission: 'reservas.gestionar' },
-      { id: 'parqueos', label: 'Estacionamiento', path: '/admin/parqueos', icon: Car, permission: 'reservas.gestionar' },
     ],
   },
   {
@@ -92,9 +93,16 @@ const navSections: NavSection[] = [
     title: 'Administración',
     icon: Receipt,
     items: [
+      { id: 'reportes', label: 'Reportes y análisis', path: '/admin/reportes', icon: BarChart3, adminOnly: true },
       { id: 'facturacion', label: 'Facturación', path: '/admin/facturacion', icon: Receipt, permission: 'facturas.gestionar' },
       { id: 'pagos', label: 'Pagos y reembolsos', path: '/admin/pagos', icon: CreditCard, permission: 'pagos.administrar' },
-      { id: 'personal', label: 'Personal y usuarios', path: '/admin/personal', icon: Users, permission: 'personal.administrar' },
+    ],
+  },
+  {
+    id: 'personal', title: 'Personal', icon: Users, requiredPermission: 'personal.administrar',
+    items: [
+      { id: 'personal', label: 'Personal', path: '/admin/personal?seccion=empleados', icon: Users },
+      { id: 'clientes', label: 'Clientes', path: '/admin/personal?seccion=clientes', icon: Users, adminOnly: true },
     ],
   },
   {
@@ -103,6 +111,7 @@ const navSections: NavSection[] = [
     icon: Sliders,
     requiredPermission: 'configuracion.administrar',
     items: [
+      { id: 'parametros', label: 'Parámetros generales', path: '/admin/configuracion', icon: Settings2 },
       { id: 'sedes', label: 'Sedes', path: '/admin/sedes', icon: Building2 },
       { id: 'inicio', label: 'Contenido del sitio', path: '/admin/inicio', icon: Sliders },
       { id: 'branding', label: 'Identidad visual', path: '/admin/branding', icon: Sparkles },
@@ -123,7 +132,7 @@ export const AdminLayoutContent: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   // Only list screens that actually consume this context present a site filter.
-  const supportsSedeFilter = ['/admin', '/admin/habitaciones', '/admin/tipos-habitacion', '/admin/reservas', '/admin/parqueos', '/admin/restaurante', '/admin/reservas-restaurante'].includes(location.pathname);
+  const supportsSedeFilter = ['/admin', '/admin/habitaciones', '/admin/tipos-habitacion', '/admin/reservas', '/admin/parqueos', '/admin/restaurante', '/admin/reservas-restaurante', '/admin/recursos-actividad', '/admin/reservas-actividades', '/admin/servicios-spa', '/admin/terapeutas', '/admin/citas-spa', '/admin/amenidades', '/admin/reservas-amenidades', '/admin/salones', '/admin/reservas-evento', '/admin/personal', '/admin/reportes'].includes(location.pathname);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { selectedSedeId, setSelectedSedeId, sedes, selectedSede, isLoadingSedes, isErrorSedes, isGlobalScope, refetchSedes } = useAdminScope();
@@ -137,6 +146,7 @@ export const AdminLayoutContent: React.FC = () => {
       servicios: true,
       administracion: true,
       configuracion: true,
+      personal: true,
     };
   });
 
@@ -146,7 +156,7 @@ export const AdminLayoutContent: React.FC = () => {
 
   useEffect(() => {
     setMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   if (!user) return null;
 
@@ -160,7 +170,7 @@ export const AdminLayoutContent: React.FC = () => {
     .filter((sec) => !sec.requiredPermission || hasPermission(user.rol, sec.requiredPermission))
     .map((sec) => ({
       ...sec,
-      items: sec.items.filter((item) => !item.permission || hasPermission(user.rol, item.permission)),
+      items: sec.items.filter((item) => (!item.adminOnly || user.rol === 'admin') && (!item.permission || hasPermission(user.rol, item.permission))),
     }))
     .filter((sec) => sec.items.length > 0);
 
@@ -172,10 +182,6 @@ export const AdminLayoutContent: React.FC = () => {
           <LayoutDashboard className="size-4 shrink-0 text-bronce-700" aria-hidden="true" />
           <span className="min-w-0 truncate">{t(es.navegacion.inicio)}</span>
         </NavLink>
-        {user.rol === 'admin' && <NavLink to="/admin/reportes" className={itemClass}>
-          <FileText className="size-4 shrink-0 text-bronce-700" aria-hidden="true" />
-          <span className="min-w-0 truncate">{locale === 'en' ? 'Reports' : 'Reportes'}</span>
-        </NavLink>}
       </div>
 
       {/* Grouped Sections */}
@@ -207,9 +213,14 @@ export const AdminLayoutContent: React.FC = () => {
                 {sec.items.map((item) => {
                   const ItemIcon = item.icon;
                   return (
-                    <NavLink key={item.id} to={item.path} className={itemClass}>
+                    <NavLink key={item.id} to={item.path} className={({ isActive }) => {
+                      const section = new URLSearchParams(location.search).get('seccion') ?? 'empleados';
+                      const esClientes = ['clientes', 'usuarios'].includes(section);
+                      const matchesSection = item.id === 'clientes' ? esClientes : !esClientes;
+                      return itemClass({ isActive: isActive && (!item.path.startsWith('/admin/personal') || matchesSection) });
+                    }}>
                       <ItemIcon className="size-4 shrink-0 text-neutro-500 group-hover:text-bronce-700 transition-colors" aria-hidden="true" />
-                      <span className="min-w-0 truncate">{t(item.id === 'personal' && user.rol !== 'admin' ? 'Personal' : item.label)}</span>
+                      <span className="min-w-0 truncate">{t(item.label)}</span>
                     </NavLink>
                   );
                 })}
@@ -290,13 +301,14 @@ export const AdminLayoutContent: React.FC = () => {
                 id="admin-global-sede-selector"
                 aria-label={t('Filtrar por sede')}
                 value={selectedSedeId}
-                disabled={isLoadingSedes || isErrorSedes}
+                disabled={isLoadingSedes || isErrorSedes || sedes.length <= 1 && !isGlobalScope}
                 title={selectedSede?.nombre ?? allSitesLabel}
                 onChange={(e) =>
                   setSelectedSedeId(e.target.value === 'all' ? 'all' : Number(e.target.value))
                 }
                 className="min-w-0 w-full cursor-pointer truncate bg-transparent pr-1 font-medium text-neutro-800 focus:outline-none disabled:cursor-wait"
               >
+                {!isLoadingSedes && !isErrorSedes && !isGlobalScope && sedes.length === 0 && <option value="all">{locale === 'en' ? 'No sites assigned' : 'Sin sedes asignadas'}</option>}
                 {(isGlobalScope || isLoadingSedes || isErrorSedes) && <option value="all">{isLoadingSedes ? (locale === 'en' ? 'Loading sites...' : 'Cargando sedes...') : isErrorSedes ? (locale === 'en' ? 'Sites unavailable' : 'Sedes no disponibles') : allSitesLabel}</option>}
                 {sedes.map((s) => (
                   <option key={s.id} value={s.id}>

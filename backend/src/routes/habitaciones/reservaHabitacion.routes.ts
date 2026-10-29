@@ -369,4 +369,114 @@ router.delete(
   reservaHabitacionController.deleteReservaHabitacion
 );
 
+/**
+ * @openapi
+ * /api/reservas-habitacion/{id}/cancelar:
+ *   patch:
+ *     tags:
+ *       - Reservas de habitación
+ *     summary: Cancelar una reserva propia pendiente
+ *     description: >
+ *       Exclusivo del cliente titular. Cancelación lógica de una reserva pendiente sin pago aprobado ni pago
+ *       en proceso. Responde 404 si la reserva no es del usuario autenticado. No cancela PaymentIntents.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Reserva cancelada (o ya cancelada)
+ *       404:
+ *         description: La reserva no existe o no pertenece al usuario
+ *       409:
+ *         description: La reserva no puede cancelarse (estado o pagos)
+ */
+router.patch(
+  "/:id/cancelar",
+  authMiddleware,
+  requireRole(ROLES.CLIENTE),
+  validateParams(reservaHabitacionIdSchema),
+  reservaHabitacionController.cancelOwnReservaHabitacion
+);
+
+/**
+ * @openapi
+ * /api/reservas-habitacion/{id}/continuar-pago:
+ *   post:
+ *     tags:
+ *       - Reservas de habitación
+ *     summary: Continuar con el pago de una reserva propia pendiente
+ *     description: >
+ *       Exclusivo del cliente titular. Reutiliza la reserva pendiente y la vincula de forma idempotente con un carrito
+ *       válido, sin crear una reserva nueva, sin ampliar su plazo y sin iniciar ningún pago.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Reserva lista en el carrito
+ *       404:
+ *         description: La reserva no existe o no pertenece al usuario
+ *       409:
+ *         description: No se puede continuar (estado, plazo vencido o pagos)
+ */
+router.post(
+  "/:id/continuar-pago",
+  authMiddleware,
+  requireRole(ROLES.CLIENTE),
+  validateParams(reservaHabitacionIdSchema),
+  reservaHabitacionController.resumeOwnReservaHabitacion
+);
+
+/**
+ * @openapi
+ * /api/reservas-habitacion/{id}/estado-pago:
+ *   get:
+ *     tags: [Reservas de habitación]
+ *     summary: Consultar acciones de pago de una reserva propia
+ *     description: Incluye pagos directos y de carritos históricos. No crea ni cancela pagos. Solo el titular cliente.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *     responses:
+ *       200:
+ *         description: Estado y referencia de pago accesible para el titular
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   required: [estado, pago_id, carrito_id]
+ *                   properties:
+ *                     estado:
+ *                       type: string
+ *                       enum: [pagable, pagada, no_disponible, incierto, reanudable]
+ *                     pago_id: { type: integer, nullable: true }
+ *                     carrito_id: { type: integer, nullable: true }
+ *       404:
+ *         description: Reserva inexistente o ajena
+ */
+router.get(
+  "/:id/estado-pago",
+  authMiddleware,
+  requireRole(ROLES.CLIENTE),
+  validateParams(reservaHabitacionIdSchema),
+  reservaHabitacionController.getOwnReservationPaymentStatus,
+);
+
 export default router;

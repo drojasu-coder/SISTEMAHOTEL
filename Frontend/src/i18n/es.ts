@@ -683,8 +683,7 @@ export const es = {
     avisoDisponibilidad:
       "La selección de mesa muestra los espacios físicos del restaurante. La disponibilidad efectiva para la fecha y horario seleccionados se confirma al enviar su solicitud al servidor.",
     reservaModalTitulo: "Reservar mesa en el restaurante",
-    reservaModalDesc:
-      "Seleccione la fecha, horario y número de comensales. La capacidad máxima de la mesa debe respetarse.",
+    reservaModalDesc: "Elija fecha, horario y número de comensales. La reserva es gratuita.",
     sedeLabel: "Sede del hotel",
     mesaLabel: "Mesa seleccionada",
     fechaLabel: "Fecha de la reserva",
@@ -717,6 +716,14 @@ export const es = {
       "El número de comensales excede la capacidad de la mesa seleccionada.",
     errorFechaPasada: "La fecha de la reserva no puede estar en el pasado.",
     errorHoraPasada: "La hora de la reserva no puede estar en el pasado.",
+    franjas: { manana: "Mañana", tarde: "Tarde", noche: "Noche" },
+    horarioAtencion: (apertura: string, cierre: string) => `Reservas de ${apertura} a ${cierre}`,
+    sinHorariosHoy: "Ya no quedan horarios para hoy. Elija otra fecha.",
+    horaRequerida: "Elija un horario.",
+    errorFueraHorario: "Elija un horario dentro del horario de reservas del restaurante.",
+    disponibilidadAlConfirmar: "La disponibilidad se confirma al reservar.",
+    menosComensales: "Una persona menos",
+    masComensales: "Una persona más",
     errorMesaOcupada:
       "La mesa ya se encuentra reservada para esa fecha y hora. Cambie la fecha o la hora e inténtelo de nuevo. No tenemos otros horarios verificados para ofrecerle.",
     errorMesaMantenimiento:
@@ -757,6 +764,14 @@ export const es = {
       verDetalle: "Ver detalle",
       reservaNoEncontrada:
         "La reserva de mesa solicitada no fue encontrada o no pertenece a su cuenta.",
+      cancelarReserva: "Cancelar reserva",
+      cancelarTitulo: "¿Cancelar esta reserva?",
+      cancelarDescripcion: (id: number, fecha: string, hora: string) =>
+        `La reserva #${id} del ${fecha} a las ${hora} hrs quedará cancelada y la mesa se liberará para ese horario. Esta acción no se puede deshacer.`,
+      cancelarConfirmar: "Sí, cancelar reserva",
+      cancelarVolver: "Conservar reserva",
+      cancelando: "Cancelando...",
+      cancelacionExitosa: (id: number) => `La reserva #${id} fue cancelada.`,
     },
     adminReservas: {
       titulo: "Reservas de Restaurante",

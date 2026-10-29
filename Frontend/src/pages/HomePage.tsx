@@ -9,6 +9,7 @@ import { ExperienciasSection } from '@/features/inicio/components/ExperienciasSe
 import { ContactoSection } from '@/features/inicio/components/ContactoSection';
 import type { InicioData } from '@/features/inicio/types';
 import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
+import { usePublicInterface } from '@/i18n/public';
 
 const DEFAULT_INICIO_DATA: InicioData = {
   id: 1,
@@ -72,9 +73,10 @@ const DEFAULT_INICIO_DATA: InicioData = {
 export const HomePage: React.FC = () => {
   const { data } = useInicioQuery();
   const { selected, sites } = usePublicPreferences();
+  const { p } = usePublicInterface();
   const { hash } = useLocation();
-  // Portada real de la sede activa (o de la primera sede si se ven todas), con su nombre correcto.
-  const coverSite = (typeof selected === 'number' ? sites.find((s) => s.id === selected) : undefined) ?? sites[0];
+  // Portada real de la sede activa; con "Todas las sedes" se usa la portada general de la marca, sin favorecer a ninguna sede.
+  const coverSite = typeof selected === 'number' ? sites.find((s) => s.id === selected) : undefined;
 
   const inicioData: InicioData = {
     ...DEFAULT_INICIO_DATA,
@@ -118,6 +120,16 @@ export const HomePage: React.FC = () => {
 
       {/* 6. Información de Contacto Directo */}
       <ContactoSection data={inicioData} />
+
+      {/* Atribución de la fotografía de portada, fuera de la composición visual */}
+      {inicioData.hero_imagen_creditos && (
+        <p className="mx-auto w-full max-w-7xl px-4 py-3 text-xs text-neutro-600 sm:px-6 lg:px-8">
+          {p('photo')}{' '}
+          <a href={inicioData.hero_imagen_creditos.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-neutro-900">
+            {inicioData.hero_imagen_creditos.texto}
+          </a>
+        </p>
+      )}
     </div>
   );
 };

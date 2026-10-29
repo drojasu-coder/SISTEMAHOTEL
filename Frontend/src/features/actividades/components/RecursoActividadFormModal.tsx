@@ -12,6 +12,9 @@ import {
   useRemoveRecursoActividadImageMutation,
 } from '../hooks/useActividades';
 import { textosActividades } from '../textos';
+import { TimeField } from '@/components/ui/TimeField';
+import { Input } from '@/components/ui/Input';
+import { useTextosHorarioAdmin } from '@/i18n/horariosAdmin';
 
 export interface RecursoActividadFormModalProps {
   isOpen: boolean;
@@ -36,6 +39,14 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
   const [precioHora, setPrecioHora] = useState<string>('0');
   const [precioEquipo, setPrecioEquipo] = useState<string>('0');
   const [precioInstructorHora, setPrecioInstructorHora] = useState<string>('0');
+  // Modalidad: por hora (uso exclusivo) o experiencia (salidas de duración fija con cupo y precio por persona).
+  const [modalidad, setModalidad] = useState<'por_hora' | 'experiencia'>('por_hora');
+  const [duracion, setDuracion] = useState<string>('');
+  const [cupo, setCupo] = useState<string>('');
+  const [precioPersona, setPrecioPersona] = useState<string>('');
+  const [horaApertura, setHoraApertura] = useState<string>('');
+  const [horaCierre, setHoraCierre] = useState<string>('');
+  const th = useTextosHorarioAdmin();
 
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -61,6 +72,12 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
           ? String(recurso.precio_instructor_hora)
           : '0'
       );
+      setModalidad(recurso.modalidad === 'experiencia' ? 'experiencia' : 'por_hora');
+      setDuracion(recurso.duracion_minutos ? String(recurso.duracion_minutos) : '');
+      setCupo(recurso.cupo_maximo ? String(recurso.cupo_maximo) : '');
+      setPrecioPersona(recurso.precio_persona != null ? String(recurso.precio_persona) : '');
+      setHoraApertura(recurso.hora_apertura?.slice(0, 5) ?? '');
+      setHoraCierre(recurso.hora_cierre?.slice(0, 5) ?? '');
     } else {
       setSucursalId(sedes.length > 0 ? String(sedes[0].id) : '');
       setTipo('');
@@ -68,6 +85,12 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
       setPrecioHora('0');
       setPrecioEquipo('0');
       setPrecioInstructorHora('0');
+      setModalidad('por_hora');
+      setDuracion('');
+      setCupo('');
+      setPrecioPersona('');
+      setHoraApertura('');
+      setHoraCierre('');
     }
     setErrorLocal(null);
     setImageError(null);
@@ -76,6 +99,15 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
     setUploadProgress(0);
     setIsUploading(false);
   }, [recurso, sedes, isOpen]);
+
+  // Escape cierra el diálogo, salvo mientras se guarda (igual que el botón Cancelar).
+  const busy = createMutation.isPending || updateMutation.isPending || isUploading;
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, busy, onClose]);
 
   if (!isOpen) return null;
 
@@ -105,12 +137,36 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
       return;
     }
 
+    // Horario: ambos valores o ninguno; el servidor comprueba además que quepa una reserva.
+    if (Boolean(horaApertura) !== Boolean(horaCierre)) {
+      setErrorLocal(th.errorHorarioIncompleto);
+      return;
+    }
+    if (horaApertura && horaCierre && horaApertura >= horaCierre) {
+      setErrorLocal(th.errorCierre);
+      return;
+    }
+    const horario = { hora_apertura: horaApertura || null, hora_cierre: horaCierre || null };
+
+    // Una experiencia necesita duración (30 a 720 min), cupo y precio por persona; el servidor lo vuelve a exigir.
+    const numDuracion = Number(duracion);
+    const numCupo = Number(cupo);
+    const numPrecioPersona = Number(precioPersona);
+    if (modalidad === 'experiencia' && (!Number.isInteger(numDuracion) || numDuracion < 30 || numDuracion > 720 || !Number.isInteger(numCupo) || numCupo < 1 || numCupo > 500 || precioPersona.trim() === '' || !(numPrecioPersona >= 0))) {
+      setErrorLocal(th.errorExperiencia);
+      return;
+    }
+    const modalidadPayload = modalidad === 'experiencia'
+      ? { modalidad, duracion_minutos: numDuracion, cupo_maximo: numCupo, precio_persona: numPrecioPersona }
+      : { modalidad };
+    let fueraDeHorario = 0;
+
     let targetId: number;
 
     try {
       if (isEditing && recurso?.id) {
         targetId = recurso.id;
-        await updateMutation.mutateAsync({
+        const actualizado = await updateMutation.mutateAsync({
           id: recurso.id,
           data: {
             tipo: tipoTrim,
@@ -118,8 +174,11 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
             precio_hora: numHora,
             precio_equipo: numEquipo,
             precio_instructor_hora: numInst,
+            ...modalidadPayload,
+            ...horario,
           },
         });
+        fueraDeHorario = Number((actualizado as { reservas_fuera_de_horario?: number }).reservas_fuera_de_horario) || 0;
       } else {
         const sucursalNum = parseInt(sucursalId, 10);
         if (!sucursalNum || sucursalNum <= 0) {
@@ -134,6 +193,8 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
           precio_hora: numHora,
           precio_equipo: numEquipo,
           precio_instructor_hora: numInst,
+          ...modalidadPayload,
+          ...horario,
         });
         targetId = Number(created.id);
       }
@@ -172,7 +233,10 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
       }
     }
 
-    onSuccess(textosActividades.recursoGuardadoExito);
+    // Las reservas futuras no se modifican al cambiar el horario: solo se informa cuántas quedan fuera.
+    onSuccess(fueraDeHorario > 0
+      ? `${textosActividades.recursoGuardadoExito} ${th.fueraDeHorario(fueraDeHorario)}`
+      : textosActividades.recursoGuardadoExito);
     onClose();
   };
 
@@ -336,6 +400,38 @@ export const RecursoActividadFormModal: React.FC<RecursoActividadFormModalProps>
               {textosActividades.notaTarifasRecurso}
             </p>
           </div>
+
+          {/* Modalidad: define cómo se reserva el recurso */}
+          <fieldset className="flex flex-col gap-2 border-t border-neutro-200 pt-3">
+            <legend className="text-xs font-semibold text-neutro-700">{th.modalidad}</legend>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={th.modalidad}>
+              {(['por_hora', 'experiencia'] as const).map((opcion) => (
+                <label key={opcion} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs ${modalidad === opcion ? 'border-bronce-600 bg-bronce-50 font-semibold text-bronce-800' : 'border-neutro-300 text-neutro-700'}`}>
+                  <input type="radio" name="modalidad" value={opcion} checked={modalidad === opcion} onChange={() => setModalidad(opcion)} disabled={isPending} />
+                  {opcion === 'por_hora' ? th.porHora : th.experiencia}
+                </label>
+              ))}
+            </div>
+            {modalidad === 'experiencia' ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Input label={th.duracionMin} id="recurso-duracion" type="number" min={30} max={720} step={30} value={duracion} onChange={(e) => setDuracion(e.target.value)} disabled={isPending} />
+                <Input label={th.cupoSalida} id="recurso-cupo" type="number" min={1} max={500} value={cupo} onChange={(e) => setCupo(e.target.value)} disabled={isPending} />
+                <Input label={th.precioPersona} id="recurso-precio-persona" type="number" min={0} step="0.01" value={precioPersona} onChange={(e) => setPrecioPersona(e.target.value)} disabled={isPending} />
+              </div>
+            ) : (
+              <p className="text-[11px] text-neutro-500 leading-tight">{th.ayudaPorHora}</p>
+            )}
+          </fieldset>
+
+          {/* Horario: define las franjas (o salidas, en experiencias) que el cliente puede reservar */}
+          <fieldset className="flex flex-col gap-2 border-t border-neutro-200 pt-3">
+            <legend className="text-xs font-semibold text-neutro-700">{th.horarioReserva}</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <TimeField label={th.apertura} id="recurso-apertura" step={1800} value={horaApertura} onChange={(e) => setHoraApertura(e.target.value)} disabled={isPending} />
+              <TimeField label={th.cierre} id="recurso-cierre" step={1800} value={horaCierre} onChange={(e) => setHoraCierre(e.target.value)} disabled={isPending} />
+            </div>
+            <p className="text-[11px] text-neutro-500 leading-tight">{th.ayudaRecurso}</p>
+          </fieldset>
 
           {/* Fotografía principal en AWS S3 */}
           <div className="border-t border-neutro-200 pt-3">

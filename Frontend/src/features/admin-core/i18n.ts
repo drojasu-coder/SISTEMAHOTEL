@@ -10,6 +10,7 @@ export const adminEnglish: Record<string, string> = {
   'Documento anterior con precios base. El precio unitario se registra sin IVA.': 'Previous document with base prices. Unit prices are entered before VAT.',
   'Cambiar rol': 'Change role', 'Confirmar cambio de rol': 'Confirm role change', 'Rol': 'Role', 'Continuar': 'Continue',
   'El nuevo rol determina los permisos de esta cuenta.': 'The new role determines the permissions of this account.',
+  'Usuarios y roles': 'Users and roles', 'Clientes': 'Customers', 'Empleados y turnos': 'Staff and shifts', 'Choferes y vehículos': 'Drivers and vehicles', 'Transporte': 'Transport',
   'Gerente de sede': 'Site manager', 'Encargado de habitaciones': 'Rooms supervisor', 'Sedes adicionales': 'Additional sites', 'Área y contratación': 'Department and hire date', 'admin': 'Administrator', 'recepcionista': 'Receptionist', 'gerente_restaurante': 'Restaurant manager', 'gerente_habitaciones': 'Site manager', 'empleado_operativo': 'Rooms supervisor', 'cliente': 'Customer',
   'Menú de navegación administrativo': 'Administration navigation menu', 'Cerrar menú de navegación': 'Close navigation menu', 'Abrir menú de navegación': 'Open navigation menu',
   'Estas son las áreas de gestión habilitadas para su rol.': 'These are the management areas available to your role.',
@@ -42,7 +43,7 @@ export const adminEnglish: Record<string, string> = {
   'Indique descripción, cantidad entera positiva y un precio no negativo.': 'Enter a description, a positive whole quantity and a nonnegative price.',
   'Concepto agregado y totales recalculados por el servidor.': 'Item added and totals recalculated by the server.',
   'Concepto eliminado; totales actualizados.': 'Item removed; totals updated.',
-  'Gestión fiscal': 'Billing records', 'Facturación': 'Billing',
+  'Gestión fiscal': 'Billing records', 'Facturación': 'Billing', 'Reportes y análisis': 'Reports and analytics',
   'Registre documentos internos, consulte conceptos e importes y mantenga la trazabilidad de cada factura.': 'Record internal documents and review their items and amounts.',
   'Documentos internos. No equivale a certificación FEL ante SAT.': 'Internal documents. These are not SAT-certified electronic tax invoices.',
   'Nueva factura': 'New invoice', 'Registradas': 'Recorded', 'Pendientes': 'Pending',
@@ -119,7 +120,7 @@ export const adminEnglish: Record<string, string> = {
   'Al desactivar una cuenta se restringirá su acceso. El servidor verifica permisos y evita desactivar la cuenta propia.': 'Deactivating an account restricts its access. The server checks permissions and prevents deactivating your own account.',
   'Eliminar {0}': 'Delete {0}', 'Esta acción no se puede deshacer. Si existen relaciones asociadas, el servidor la rechazará.': 'This cannot be undone. The server rejects deletion when related records prevent it.',
   'Eliminar definitivamente': 'Delete permanently', 'Confirmar': 'Confirm',
-  'Habitaciones': 'Rooms', 'Restaurante': 'Restaurant', 'Servicios': 'Services', 'Personal': 'Staff and users', 'Configuración': 'Settings', 'Pagos': 'Payments',
+  'Habitaciones': 'Rooms', 'Restaurante': 'Restaurant', 'Servicios': 'Services', 'Personal': 'Staff', 'Configuración': 'Settings', 'Pagos': 'Payments',
   'Inicio': 'Home', 'Volver al sitio': 'Back to website', 'Mi cuenta': 'My account', 'Cerrar sesión': 'Sign out', 'Panel administrativo': 'Administration panel',
   'Menú administrativo': 'Administration menu', 'Cerrar menú administrativo': 'Close administration menu', 'Abrir menú administrativo': 'Open administration menu',
   'Saltar al contenido': 'Skip to content', 'Bienvenido': 'Welcome',
@@ -138,7 +139,7 @@ export const adminEnglish: Record<string, string> = {
   'Ver todas las reservas': 'View all reservations', 'Ver facturación': 'View billing', 'Ver pagos': 'View payments',
   'Servicios de hoy': "Today's services", 'Citas de spa': 'Spa appointments', 'Mesas reservadas': 'Reserved tables',
   'Tours y actividades': 'Tours and activities', 'Salones ocupados': 'Venues reserved', 'Identidad visual': 'Branding and identity',
-  'Contenido del sitio': 'Site content', 'Sedes': 'Hotel sites', 'General': 'Overview',
+  'Contenido del sitio': 'Site content', 'Parámetros generales': 'General settings', 'Sedes': 'Hotel sites', 'General': 'Overview',
   'No fue posible conectar con el servidor. Verifique su conexión e intente de nuevo.': 'Unable to connect. Check your connection and try again.',
   'No fue posible completar la solicitud. Intente de nuevo más tarde.': 'Unable to complete the request. Please try again later.',
   'No fue posible completar la solicitud.': 'Unable to complete the request.',
@@ -146,7 +147,7 @@ export const adminEnglish: Record<string, string> = {
   'La operación no tiene un resultado confirmado. Actualice los registros antes de volver a enviarla.': 'The result is unconfirmed. Refresh records before submitting again.',
 };
 export function translateAdmin(locale: 'es' | 'en', key: string, params: Record<string, unknown> = {}): string {
-  const roles: Record<string, string> = { admin: 'Administrador general', gerente_habitaciones: 'Gerente de sede', recepcionista: 'Recepcionista', empleado_operativo: 'Encargado de habitaciones', cliente: 'Cliente', gerente_restaurante: 'Gerente de restaurante (histórico)' };
+  const roles: Record<string, string> = { admin: 'Administrador general', gerente_habitaciones: 'Gerente de sede', recepcionista: 'Recepcionista', empleado_operativo: 'Encargado de habitaciones', cliente: 'Cliente', gerente_restaurante: 'Gerente de restaurante' };
   let text = locale === 'en' ? adminEnglish[key] ?? key : roles[key] ?? key;
   for (const [name, value] of Object.entries(params)) text = text.replaceAll(`{${name}}`, String(value ?? ''));
   return text;

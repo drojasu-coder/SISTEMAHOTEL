@@ -5,6 +5,7 @@ import {
 } from "express";
 
 import * as reservaHabitacionService from "../../services/habitaciones/reservaHabitacion.service";
+import { removeCancelledRoomReservationFromActiveCarts } from "../../services/carrito/carritoItem.service";
 
 import {
   ROLES,
@@ -122,19 +123,29 @@ export const createReservaHabitacion =
           usuarioId,
       };
 
-      const reserva =
+      // Solo el cliente puede pedir la vinculación automática al carrito; el campo nunca llega al servicio.
+      const agregarAlCarrito = isCliente && req.body.agregar_al_carrito === true;
+      delete (reservaData as { agregar_al_carrito?: boolean }).agregar_al_carrito;
+      const result: any =
         await reservaHabitacionService.createReservaHabitacion(
           reservaData,
-          await staffScope(req)
+          await staffScope(req),
+          { agregarAlCarrito }
         );
+      const reserva = agregarAlCarrito
+        ? { ...result.reserva.toJSON(), reutilizada: result.reutilizada, carrito: result.carrito }
+        : result;
+      if (agregarAlCarrito) res.setHeader("Cache-Control", "private, no-store");
 
+      const reutilizada = agregarAlCarrito && result.reutilizada === true;
       res
-        .status(201)
+        .status(reutilizada ? 200 : 201)
         .json({
           success: true,
-          statusCode: 201,
-          message:
-            "Reserva de habitación creada correctamente",
+          statusCode: reutilizada ? 200 : 201,
+          message: reutilizada
+            ? "La reserva pendiente ya existía y está lista para pagar"
+            : "Reserva de habitación creada correctamente",
           data: reserva,
         });
     } catch (error) {
@@ -200,3 +211,52 @@ export const deleteReservaHabitacion =
       next(error);
     }
   };
+/** PATCH /api/reservas-habitacion/:id/cancelar — el cliente cancela su propia reserva pendiente. */
+export const cancelOwnReservaHabitacion = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { reserva, ya_cancelada } = await reservaHabitacionService.cancelOwnReservaHabitacion(Number(req.params.id), req.user!.id);
+    // Limpieza recuperable y posterior: si falla, la cancelación ya está confirmada y el artículo sigue sin poder pagarse.
+    let carritoActualizado = false;
+    try {
+      carritoActualizado = await removeCancelledRoomReservationFromActiveCarts(Number(req.params.id), req.user!.id);
+    } catch {
+      carritoActualizado = false;
+    }
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: ya_cancelada ? "La reserva ya estaba cancelada" : "Reserva cancelada correctamente",
+      data: reserva,
+      carrito_actualizado: carritoActualizado,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** POST /api/reservas-habitacion/:id/continuar-pago — vincula la reserva pendiente propia con un carrito válido (sin pagar). */
+export const resumeOwnReservaHabitacion = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { reserva, carrito } = await reservaHabitacionService.resumeOwnReservaHabitacion(Number(req.params.id), req.user!.id);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).json({
+      success: true,
+      statusCode: 200,
+      message: "La reserva está lista para continuar con el pago",
+      data: { ...reserva.toJSON(), reutilizada: true, carrito },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+/** GET /api/reservas-habitacion/:id/estado-pago — consulta propia sin iniciar cobros. */
+export const getOwnReservationPaymentStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await reservaHabitacionService.getOwnReservationPaymentStatus(Number(req.params.id), req.user!.id);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).json({ success: true, statusCode: 200, message: "Estado de pago consultado", data });
+  } catch (error) { next(error); }
+};

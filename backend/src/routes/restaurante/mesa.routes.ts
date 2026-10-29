@@ -5,6 +5,7 @@ import * as mesaController from "../../controllers/restaurante/mesa.controller";
 import {
   validateBody,
   validateParams,
+  validateQuery,
 } from "../../middlewares/validate.middleware";
 
 import { authMiddleware } from "../../middlewares/auth.middleware";
@@ -14,6 +15,7 @@ import { ROLES } from "../../constants/roles";
 import {
   createMesaSchema,
   updateMesaSchema,
+  disponibilidadMesaQuerySchema,
 } from "../../validators/restaurante/mesa.validator";
 
 import { idParamSchema } from "../../validators/common.validator";
@@ -39,6 +41,57 @@ const router = Router();
 router.get(
   "/",
   mesaController.getAll
+);
+
+/**
+ * @openapi
+ * /api/mesas/configuracion:
+ *   get:
+ *     tags:
+ *       - Mesas
+ *     summary: Obtener la configuración y horarios del restaurante
+ *     responses:
+ *       200:
+ *         description: Configuración obtenida correctamente
+ */
+router.get(
+  "/configuracion",
+  mesaController.getConfiguracion
+);
+
+/**
+ * @openapi
+ * /api/mesas/{id}/disponibilidad:
+ *   get:
+ *     tags:
+ *       - Mesas
+ *     summary: Consultar disponibilidad de franjas horarias de una mesa
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *       - in: query
+ *         name: fecha
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Disponibilidad de franjas horarias obtenida correctamente
+ *       400:
+ *         description: Parámetros inválidos
+ *       404:
+ *         description: Mesa no encontrada
+ */
+router.get(
+  "/:id/disponibilidad",
+  validateParams(idParamSchema),
+  validateQuery(disponibilidadMesaQuerySchema),
+  mesaController.getDisponibilidad
 );
 
 /**
@@ -74,12 +127,13 @@ router.get(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- */
+ *       */
 router.get(
   "/:id",
   validateParams(idParamSchema),
   mesaController.getById
 );
+
 
 /**
  * @openapi

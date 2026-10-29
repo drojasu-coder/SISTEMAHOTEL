@@ -74,6 +74,30 @@ export const getMyReservationById =
     }
   };
 
+export const cancelMyReservation =
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const data =
+        await reservaMesaService.cancelForUser(
+          Number(
+            req.params.id
+          ),
+          req.user!.id
+        );
+
+      res.status(200).json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
 export const getById =
   async (
     req: Request,
@@ -151,3 +175,26 @@ export const updateStatus =
       next(error);
     }
   };
+
+export const getDisponibilidad =
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const data =
+        await reservaMesaService.getDisponibilidadMesa(
+          Number(req.query.mesa_id),
+          String(req.query.fecha)
+        );
+
+      res.status(200).json({
+        status: "success",
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+

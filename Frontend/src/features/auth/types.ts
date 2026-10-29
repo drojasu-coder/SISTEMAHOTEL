@@ -53,6 +53,20 @@ export interface LoginResponse {
   usuario: AuthUser;
 }
 
+/** Contrato de googleAuth.routes.ts; la respuesta de sesión es LoginResponse. */
+export interface GoogleChallenge {
+  challengeId: string;
+  nonce: string;
+  expiresAt: string;
+  clientId: string;
+}
+
+export interface GoogleLoginRequest {
+  credential: string;
+  challengeId: string;
+  password?: string;
+}
+
 /** Envoltorio estándar de respuestas exitosas del backend. */
 export interface ApiEnvelope<T> {
   success: boolean;

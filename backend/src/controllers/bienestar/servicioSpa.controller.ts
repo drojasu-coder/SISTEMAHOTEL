@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as service from "../../services/bienestar/servicioSpa.service";
+import { getDisponibilidadServicio } from "../../services/bienestar/citaSpa.service";
 
 export const getAll = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -72,4 +73,11 @@ export const deleteImage = async (req: Request, res: Response, next: NextFunctio
   } catch (error) {
     next(error);
   }
+};
+
+export const getDisponibilidad = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getDisponibilidadServicio(Number(req.params.id), String(req.query.fecha ?? ""));
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
 };

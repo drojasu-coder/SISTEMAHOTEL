@@ -1,3 +1,4 @@
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import type { usePublicTexts } from '@/i18n/public';
 import type { ReservaHabitacion } from '@/features/reservas';
 import { textosMisReservas } from './textos';
@@ -145,3 +146,14 @@ export function resolverNombreSede(
     textos.sedePorIdentificador(sucursalId)
   );
 }
+
+/** La salida es hoy o ya pasó (fecha de Guatemala): no quedan noches por pagar. */
+export const estanciaTerminada = (reserva: { fecha_salida: string }): boolean =>
+  reserva.fecha_salida.slice(0, 10) <= getTodayInGuatemala();
+
+export type VistaReservas = 'todas' | 'proximas' | 'pendientes' | 'historial';
+export const vistaDeReserva = (reserva: { estado: string; fecha_salida: string }): Exclude<VistaReservas, 'todas'> => {
+  const terminada = estanciaTerminada(reserva);
+  if (['cancelada', 'expirada', 'finalizada'].includes(reserva.estado) || terminada) return 'historial';
+  return reserva.estado === 'pendiente' ? 'pendientes' : 'proximas';
+};

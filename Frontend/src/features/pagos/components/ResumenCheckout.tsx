@@ -1,5 +1,5 @@
 import { MoneyReference } from '@/components/ui/MoneyReference';
-import { usePublicTexts } from '@/i18n/public';
+import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import React from 'react';
 import { Card } from '@/components/ui/Card';
 import type { ResumenPagoData } from '../types';
@@ -9,69 +9,53 @@ import { MONEY_PRESENTATION } from '@/lib/money';
 interface ResumenCheckoutProps {
   resumen: ResumenPagoData;
   cantidadArticulos: number;
+  /** Detalle completo de la compra (artículos, cuenta); se muestra solo al expandir. */
+  children?: React.ReactNode;
 }
 
 /**
- * Resumen calculado por el backend. No se recalcula ningún importe ni se
- * interpreta el saldo como un pago ya aprobado.
+ * Resumen compacto calculado por el backend: importe a pagar siempre visible y el detalle a demanda.
+ * No se recalcula ningún importe ni se interpreta el saldo como un pago ya aprobado.
  */
-export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({
-  resumen,
-  cantidadArticulos,
-}) => { const { t } = useLocale(); const textosCheckout = usePublicTexts('checkout'); return (
-  <Card className="flex flex-col gap-4 bg-bronce-50 lg:sticky lg:top-6">
-    <div className="flex flex-col gap-1">
-      <p className="eyebrow">{textosCheckout.resumen.titulo}</p>
-      <p className="rounded-lg border border-bronce-200 bg-white p-3 text-xs text-neutro-700">{t('currencyCharge').replace('{rate}', MONEY_PRESENTATION.gtqPerUsd.toFixed(2))}</p>
-      <p className="text-xs text-neutro-600">{t('finalPricesPolicy')}</p>
-      <p className="text-xs text-neutro-600">
-        {textosCheckout.articulos(cantidadArticulos)}
-      </p>
+export const ResumenCheckout: React.FC<ResumenCheckoutProps> = ({ resumen, cantidadArticulos, children }) => {
+  const { t } = useLocale();
+  const { p } = usePublicInterface();
+  const textosCheckout = usePublicTexts('checkout');
+  const fila = (etiqueta: string, valor: number | string) => (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <dt className="text-neutro-700">{etiqueta}</dt>
+      <dd className="font-semibold text-neutro-900"><MoneyReference amount={valor} /></dd>
     </div>
-
-    <dl className="flex flex-col gap-3 text-sm">
+  );
+  return (
+    <Card className="flex flex-col gap-4 bg-bronce-50">
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-neutro-700">{textosCheckout.resumen.total}</dt>
-        <dd className="font-semibold text-neutro-900">
-          <MoneyReference amount={resumen.total} />
-        </dd>
+        <h2 className="font-serif text-lg font-semibold text-neutro-900">{textosCheckout.resumen.titulo}</h2>
+        <p className="text-xs text-neutro-600">{textosCheckout.articulos(cantidadArticulos)}</p>
       </div>
-
-      {resumen.anticipo_requerido > 0 && (
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-neutro-700">
-            {textosCheckout.resumen.anticipo}
-          </dt>
-          <dd className="font-semibold text-neutro-900">
-            <MoneyReference amount={resumen.anticipo_requerido} />
-          </dd>
+      <dl className="flex flex-col gap-2">
+        {(resumen.aprobado > 0 || resumen.anticipo_requerido > 0) && fila(textosCheckout.resumen.total, resumen.total)}
+        {resumen.anticipo_requerido > 0 && fila(textosCheckout.resumen.anticipo, resumen.anticipo_requerido)}
+        {resumen.aprobado > 0 && fila(textosCheckout.resumen.aprobado, resumen.aprobado)}
+        <div className="flex items-baseline justify-between gap-3 border-t border-bronce-200 pt-3">
+          <dt className="text-sm font-semibold text-neutro-900">{resumen.aprobado > 0 || resumen.anticipo_requerido > 0 ? textosCheckout.resumen.saldo : p('purchaseToPay')}</dt>
+          <dd className="font-serif text-2xl font-semibold leading-tight text-neutro-900"><MoneyReference amount={resumen.saldo} /></dd>
         </div>
+      </dl>
+      <p className="rounded-lg border border-bronce-200 bg-white p-3 text-xs text-neutro-700">{t('currencyCharge').replace('{rate}', MONEY_PRESENTATION.gtqPerUsd.toFixed(2))}</p>
+      {children && (
+        <details className="group border-t border-bronce-200 pt-3">
+          <summary className="inline-flex min-h-10 cursor-pointer items-center text-sm font-semibold text-bronce-700 hover:underline">{p('purchaseDetailsToggle')}</summary>
+          <div className="mt-3 flex flex-col gap-5">
+            {children}
+            <div className="flex flex-col gap-1.5 text-xs text-neutro-600">
+              <p>{t('finalPricesPolicy')}</p>
+              <p>{textosCheckout.resumen.nota}</p>
+              <p>{textosCheckout.resumen.notaSaldo}</p>
+            </div>
+          </div>
+        </details>
       )}
-
-      <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-neutro-700">
-          {textosCheckout.resumen.aprobado}
-        </dt>
-        <dd className="font-semibold text-neutro-900">
-          <MoneyReference amount={resumen.aprobado} />
-        </dd>
-      </div>
-
-      <div className="flex items-baseline justify-between gap-3 border-t border-bronce-200 pt-3">
-        <dt className="text-sm font-semibold text-neutro-900">
-          {textosCheckout.resumen.saldo}
-        </dt>
-        <dd className="font-serif text-2xl font-semibold leading-tight text-neutro-900">
-          <MoneyReference amount={resumen.saldo} />
-        </dd>
-      </div>
-    </dl>
-
-    <p className="text-xs text-neutro-600">
-      {textosCheckout.resumen.nota}
-    </p>
-    <p className="border-t border-bronce-200 pt-3 text-xs text-neutro-600">
-      {textosCheckout.resumen.notaSaldo}
-    </p>
-  </Card>
-); };
+    </Card>
+  );
+};

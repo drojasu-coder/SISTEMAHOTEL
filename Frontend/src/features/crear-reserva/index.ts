@@ -6,3 +6,4 @@ export * from './components/CriteriosBusquedaForm';
 export * from './components/HabitacionesDisponiblesList';
 export * from './components/ResumenReservaModal';
 export * from './components/ReservaConfirmadaCard';
+export * from './components/ReservaDirecta';

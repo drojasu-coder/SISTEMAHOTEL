@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, CalendarCheck, Users } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { UtensilsCrossed } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonStyles } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { MoneyReference } from '@/components/ui/MoneyReference';
@@ -17,7 +17,7 @@ import { CATEGORIAS_MENU, type CategoriaMenu, type ProductoMenu, type Restaurant
  * Identidad del restaurante de la sede activa. La carta (informativa) se abre en un diálogo
  * con "Ver carta"; un enlace directo a #carta la abre al cargar la página.
  */
-export function RestauranteMenu() {
+export function RestauranteMenu({ media, tablesHref }: { media?: ReactNode; tablesHref?: string } = {}) {
   const copy = useMenuCopy();
   const scope = usePublicPreferences();
   const query = useRestaurantesQuery();
@@ -70,16 +70,27 @@ export function RestauranteMenu() {
   }
 
   if (!restaurante) return <Alert tone="info"><p>{copy('noRestaurant')}</p></Alert>;
-  return <section aria-labelledby="restaurante-titulo" className="surface flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-6">
-    <div className="space-y-1">
-      <p className="eyebrow text-bronce-700">{copy('sectionEyebrow')}</p>
-      <h2 id="restaurante-titulo" className="font-serif text-2xl font-semibold text-neutro-900" lang="es">{restaurante.nombre}</h2>
-      {restaurante.descripcion && <p className="max-w-2xl text-sm text-neutro-600" lang="es">{restaurante.descripcion}</p>}
-      {restaurante.mesas && <p className="text-sm text-neutro-600">{copy('tablesSummary', { tables: restaurante.mesas.total, seats: restaurante.mesas.plazas })}</p>}
+  // Presentación del restaurante de la sede: fotografía y datos en un mismo bloque equilibrado.
+  return <section aria-labelledby="restaurante-titulo" className="surface grid overflow-hidden md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+    {media && <div className="min-w-0 self-center">{media}</div>}
+    <div className="flex min-w-0 flex-col justify-center gap-4 p-5 sm:p-8">
+      <div className="space-y-2">
+        <p className="eyebrow text-bronce-700">{copy('sectionEyebrow')}</p>
+        <h2 id="restaurante-titulo" className="font-serif text-3xl font-semibold leading-tight text-neutro-900" lang="es">{restaurante.nombre}</h2>
+        {restaurante.descripcion && <p className="text-sm leading-relaxed text-neutro-600" lang="es">{restaurante.descripcion}</p>}
+      </div>
+      {restaurante.mesas && <p className="inline-flex items-center gap-2 text-sm text-neutro-700">
+        <Users className="size-4 text-bronce-600" aria-hidden="true" />{copy('tablesSummary', { tables: restaurante.mesas.total, seats: restaurante.mesas.plazas })}
+      </p>}
+      <div className="flex flex-wrap gap-3 border-t border-neutro-200 pt-4">
+        <Button variant="secondary" aria-haspopup="dialog" onClick={() => setCartaAbierta(true)}>
+          <BookOpen className="size-4" aria-hidden="true" />{copy('viewMenu')}
+        </Button>
+        {tablesHref && <a href={tablesHref} className={cn(buttonStyles({ variant: 'primary' }), 'gap-2')}>
+          <CalendarCheck className="size-4" aria-hidden="true" />{copy('tablesTitle')}
+        </a>}
+      </div>
     </div>
-    <Button variant="secondary" className="shrink-0" aria-haspopup="dialog" onClick={() => setCartaAbierta(true)}>
-      <BookOpen className="size-4" aria-hidden="true" />{copy('viewMenu')}
-    </Button>
     {cartaAbierta && <Modal open presentation="service" title={`${copy('menuTitle')} · ${restaurante.nombre}`} description={copy('priceNote')} closeLabel={copy('close')} onClose={cerrarCarta}>
       <RestauranteCarta key={restaurante.id} restaurante={restaurante} />
     </Modal>}

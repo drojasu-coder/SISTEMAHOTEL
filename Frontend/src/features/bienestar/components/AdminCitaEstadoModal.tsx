@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEscapeToClose } from '@/lib/useEscapeToClose';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertTriangle, AlertCircle } from 'lucide-react';
@@ -63,6 +64,8 @@ export const AdminCitaEstadoModal: React.FC<AdminCitaEstadoModalProps> = ({
       }
     }
   };
+
+  useEscapeToClose(onClose, isSubmitting);
 
   return (
     <div

@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { createUsuarioAdminSchema } from "../usuarios/usuario.validator";
+import { ROLES } from "../../constants/roles";
+const cuentaSchema = createUsuarioAdminSchema.extend({
+  rol: z.enum([ROLES.GERENTE_HABITACIONES, ROLES.RECEPCIONISTA, ROLES.EMPLEADO_OPERATIVO, ROLES.GERENTE_RESTAURANTE]),
+  activo: z.boolean().default(true),
+});
 const additionalSites = z.array(z.number().int().positive()).max(50).refine(ids => new Set(ids).size === ids.length, "No repita sedes adicionales").optional();
 
 const fechaSchema = z
@@ -11,12 +17,13 @@ const fechaSchema = z
 export const createEmpleadoSchema = z
   .object({
     sedes_adicionales: additionalSites,
+    cuenta: cuentaSchema.optional(),
     usuario_id: z
       .number()
       .int()
       .positive(
         "El usuario debe ser válido"
-      ),
+      ).optional(),
 
     sucursal_id: z
       .number()
@@ -42,7 +49,8 @@ export const createEmpleadoSchema = z
         .optional()
         .nullable(),
   })
-  .strict();
+  .strict()
+  .refine(data => Boolean(data.usuario_id) !== Boolean(data.cuenta), { message: "Indique una cuenta nueva o un usuario existente, no ambos", path: ["usuario_id"] });
 
 export const updateEmpleadoSchema = z
   .object({

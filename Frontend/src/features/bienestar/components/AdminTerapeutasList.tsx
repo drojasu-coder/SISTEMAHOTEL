@@ -1,149 +1,130 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { User, Plus, Edit, AlertCircle, ArrowLeft } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { useTerapeutasQuery } from '../hooks/useBienestar';
+import React, { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { CalendarCheck, Pencil, Plus, Search, X } from 'lucide-react';
+import { Button, buttonStyles } from '@/components/ui/Button';
+import { Alert, LoadingNotice } from '@/components/ui/Feedback';
+import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
+import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
+import { cn } from '@/lib/cn';
+import { useAdminCitasSpaQuery, useServiciosSpaQuery, useTerapeutasQuery } from '../hooks/useBienestar';
+import { BIENESTAR_ROUTES } from '../constants/routes';
+import { useTextosGestionBienestar } from '../gestionTextos';
 import { TerapeutaFormModal } from './TerapeutaFormModal';
-import { textosBienestar } from '../textos';
+import { BienestarAdminNav } from './BienestarAdminNav';
 import type { Terapeuta } from '../types';
 
+/**
+ * Terapeutas por la sede global, con los servicios que pueden atender según la
+ * regla del servidor (servicios activos de su sede) y sus próximas citas.
+ * El backend no registra especialidad ni horario propio del terapeuta.
+ */
 export const AdminTerapeutasList: React.FC = () => {
+  const t = useTextosGestionBienestar();
+  const { selectedSedeId } = useAdminScope();
   const terapeutasQuery = useTerapeutasQuery();
-  const [terapeutaEnEdicion, setTerapeutaEnEdicion] = useState<Terapeuta | null | undefined>(
-    undefined
-  );
+  const serviciosQuery = useServiciosSpaQuery();
+  const citasQuery = useAdminCitasSpaQuery();
+  const sedesQuery = useSedesQuery();
+  const [terapeutaEnEdicion, setTerapeutaEnEdicion] = useState<Terapeuta | null | undefined>(undefined);
+  const [params, setParams] = useSearchParams();
+  const update = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) value ? next.set(key, value) : next.delete(key);
+    setParams(next, { replace: true });
+  };
 
-  const terapeutas = terapeutasQuery.data ?? [];
+  const sedesMap = useMemo(() => new Map((sedesQuery.data ?? []).map((sede) => [sede.id, sede.nombre])), [sedesQuery.data]);
+  const enSede = useMemo(() => (terapeutasQuery.data ?? []).filter((x) => selectedSedeId === 'all' || x.sucursal_id === selectedSedeId), [terapeutasQuery.data, selectedSedeId]);
+  const today = getTodayInGuatemala();
+  const proximas = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const c of citasQuery.data ?? []) if (c.estado === 'confirmada' && c.terapeuta_id && (c.fecha ?? '') >= today) counts.set(c.terapeuta_id, (counts.get(c.terapeuta_id) ?? 0) + 1);
+    return counts;
+  }, [citasQuery.data, today]);
+  const serviciosDe = (x: Terapeuta) => (serviciosQuery.data ?? []).filter((s) => s.activo !== false && s.sucursal_id != null && s.sucursal_id === x.sucursal_id).length;
+
+  const q = params.get('q') ?? '';
+  const estado = ['activo', 'inactivo'].includes(params.get('estado') ?? '') ? params.get('estado')! : '';
+  const hasFilters = Boolean(q || estado);
+  const term = q.trim().toLowerCase();
+  const filtrados = enSede.filter((x) => (!term || (x.nombre ?? '').toLowerCase().includes(term)) && (!estado || (estado === 'activo') === Boolean(x.activo)));
+  const sede = (x: Terapeuta) => x.sucursal_id == null ? t.general : sedesMap.get(x.sucursal_id) ?? `#${x.sucursal_id}`;
+  const estadoBadge = (x: Terapeuta) => <span className={cn('inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold', x.activo ? 'border-exito-600/20 bg-exito-50 text-exito-700' : 'border-neutro-300 bg-neutro-100 text-neutro-600')}>{x.activo ? t.activo : t.inactivo}</span>;
+  const acciones = (x: Terapeuta, compact = false) => <div className={cn('flex items-center gap-1', !compact && 'justify-end')}>
+    <Link to={`${BIENESTAR_ROUTES.ADMIN_CITAS}?vista=proximas&terapeuta=${x.id}`} aria-label={t.citasDe(x.nombre ?? '')} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5' })}>
+      <CalendarCheck className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.citas}</span></Link>
+    <button type="button" onClick={() => setTerapeutaEnEdicion(x)} aria-label={t.editarDe(x.nombre ?? '')} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5' })}>
+      <Pencil className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.editar}</span></button>
+  </div>;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-12">
-      {/* Retorno */}
-      <Link
-        to="/admin/servicios"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-neutro-600 hover:text-bronce-700 transition-colors"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        <span>Volver a servicios</span>
-      </Link>
-
-      {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{textosBienestar.adminCitasSubtitulo}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem] font-serif font-semibold">
-            {textosBienestar.adminTerapeutasTitulo}
-          </h1>
-          <p className="max-w-2xl text-sm text-neutro-600">
-            {textosBienestar.adminTerapeutasDesc}
-          </p>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-neutro-500">{t.modulo}</p>
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{t.nav.terapeutas}</h1>
+          {terapeutasQuery.isSuccess && <p className="mt-1 text-sm text-neutro-600">{t.terapeutasResumen(enSede.length, enSede.filter((x) => x.activo).length)}</p>}
         </div>
+        <Button type="button" onClick={() => setTerapeutaEnEdicion(null)}><Plus className="size-4" aria-hidden="true" />{t.nuevoTerapeuta}</Button>
+      </header>
+      <BienestarAdminNav />
+      <p className="text-xs text-neutro-500">{t.terapeutasNota}</p>
 
-        <Button
-          type="button"
-          variant="primary"
-          onClick={() => setTerapeutaEnEdicion(null)}
-          className="inline-flex items-center gap-2 self-start sm:self-center"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          <span>{textosBienestar.nuevoTerapeuta}</span>
-        </Button>
-      </div>
-
-      {/* Estado: Cargando */}
-      {terapeutasQuery.isPending && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-busy="true">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="p-6">
-              <div className="h-5 w-1/3 animate-pulse rounded bg-neutro-200 mb-2" />
-              <div className="h-4 w-1/4 animate-pulse rounded bg-neutro-200" />
-            </Card>
-          ))}
+      {terapeutasQuery.isPending && <LoadingNotice label={t.cargando} />}
+      {terapeutasQuery.isError && <Alert tone="error"><Button variant="secondary" onClick={() => void terapeutasQuery.refetch()}>{t.reintentar}</Button></Alert>}
+      {terapeutasQuery.isSuccess && enSede.length === 0 && <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">{t.sinTerapeutasRegistrados}</p>}
+      {terapeutasQuery.isSuccess && enSede.length > 0 && <>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="relative min-w-0"><span className="sr-only">{t.buscarTerapeuta}</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-500" aria-hidden="true" />
+            <input type="search" value={q} placeholder={t.buscarTerapeuta} onChange={(event) => update({ q: event.target.value || null })} className="field-control !pl-9" /></label>
+          <label className="min-w-0"><span className="sr-only">{t.estado}</span>
+            <select value={estado} onChange={(event) => update({ estado: event.target.value || null })} className="field-control">
+              <option value="">{t.todosEstados}</option>
+              <option value="activo">{t.activos}</option>
+              <option value="inactivo">{t.inactivos}</option>
+            </select></label>
         </div>
-      )}
+        {hasFilters && <div><Button variant="text" size="sm" onClick={() => update({ q: null, estado: null })}><X className="size-3.5" aria-hidden="true" />{t.limpiar}</Button></div>}
+        {filtrados.length === 0 ? <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">{t.sinResultados}</p> : <>
+          <div className="relative hidden overflow-x-auto rounded-xl border border-neutro-200 bg-white lg:block">
+            <table className="w-full text-left text-sm text-neutro-800">
+              <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold text-neutro-600">
+                <tr>
+                  <th scope="col" className="px-3 py-3">{t.colT.terapeuta}</th>
+                  <th scope="col" className="px-3 py-3">{t.colT.sede}</th>
+                  <th scope="col" className="px-3 py-3">{t.colT.estado}</th>
+                  <th scope="col" className="px-3 py-3">{t.colT.servicios}</th>
+                  <th scope="col" className="px-3 py-3">{t.colT.proximas}</th>
+                  <th scope="col" className="px-3 py-3 text-right"><span className="sr-only">{t.colT.acciones}</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutro-100">
+                {filtrados.map((x) => <tr key={x.id} className="hover:bg-bronce-50/40">
+                  <td className="px-3 py-2.5 font-semibold text-neutro-900" lang="es">{x.nombre}</td>
+                  <td className="px-3 py-2.5" lang="es">{sede(x)}</td>
+                  <td className="px-3 py-2.5">{estadoBadge(x)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">{serviciosQuery.isSuccess ? t.serviciosN(serviciosDe(x)) : '—'}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{citasQuery.isSuccess ? proximas.get(x.id ?? 0) ?? 0 : '—'}</td>
+                  <td className="px-3 py-1.5">{acciones(x)}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          <ul className="divide-y divide-neutro-200 overflow-hidden rounded-xl border border-neutro-200 bg-white lg:hidden">
+            {filtrados.map((x) => <li key={x.id} className="flex items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-neutro-900" lang="es">{x.nombre}</span>{estadoBadge(x)}</span>
+                <span className="block truncate text-xs text-neutro-600"><span lang="es">{sede(x)}</span>{serviciosQuery.isSuccess && ` · ${t.serviciosN(serviciosDe(x))}`}{citasQuery.isSuccess && ` · ${t.colT.proximas}: ${proximas.get(x.id ?? 0) ?? 0}`}</span>
+              </span>
+              {acciones(x, true)}
+            </li>)}
+          </ul>
+        </>}
+      </>}
 
-      {/* Estado: Error */}
-      {terapeutasQuery.isError && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center border-rojo-200 bg-rojo-50">
-          <AlertCircle className="size-12 text-rojo-500 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">
-            Error al consultar los terapeutas
-          </h2>
-          <p className="text-sm text-neutro-600 max-w-md mb-6">
-            Ocurrió un error al cargar la lista de terapeutas registrados.
-          </p>
-          <Button type="button" variant="primary" onClick={() => terapeutasQuery.refetch()}>
-            {textosBienestar.reintentar}
-          </Button>
-        </Card>
-      )}
-
-      {/* Estado: Vacío */}
-      {!terapeutasQuery.isPending && !terapeutasQuery.isError && terapeutas.length === 0 && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center">
-          <User className="size-12 text-neutro-400 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">
-            {textosBienestar.sinTerapeutasTitulo}
-          </h2>
-          <p className="text-sm text-neutro-600 max-w-md mb-6">
-            {textosBienestar.sinTerapeutasDesc}
-          </p>
-          <Button type="button" variant="primary" onClick={() => setTerapeutaEnEdicion(null)}>
-            <Plus className="size-4 mr-2" aria-hidden="true" />
-            <span>{textosBienestar.nuevoTerapeuta}</span>
-          </Button>
-        </Card>
-      )}
-
-      {/* Lista de Terapeutas */}
-      {!terapeutasQuery.isPending && !terapeutasQuery.isError && terapeutas.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {terapeutas.map((t) => (
-            <Card
-              key={t.id}
-              className="flex items-center justify-between p-5 transition-all hover:border-neutro-300"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-serif font-bold text-neutro-900 text-base">
-                    {t.nombre}
-                  </h3>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold uppercase ${
-                      t.activo
-                        ? 'bg-selva-100 text-selva-800'
-                        : 'bg-neutro-100 text-neutro-600'
-                    }`}
-                  >
-                    {t.activo ? textosBienestar.terapeutaActivo : textosBienestar.terapeutaInactivo}
-                  </span>
-                </div>
-                <p className="text-xs text-neutro-500">ID del profesional: #{t.id}</p>
-              </div>
-
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setTerapeutaEnEdicion(t)}
-                className="inline-flex items-center gap-1.5 text-xs"
-              >
-                <Edit className="size-3.5" aria-hidden="true" />
-                <span>{textosBienestar.editarTerapeuta}</span>
-              </Button>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Modal Crear / Editar */}
-      {terapeutaEnEdicion !== undefined && (
-        <TerapeutaFormModal
-          terapeuta={terapeutaEnEdicion}
-          onClose={() => setTerapeutaEnEdicion(undefined)}
-          onSuccess={() => terapeutasQuery.refetch()}
-        />
-      )}
+      {terapeutaEnEdicion !== undefined && <TerapeutaFormModal terapeuta={terapeutaEnEdicion} onClose={() => setTerapeutaEnEdicion(undefined)} onSuccess={() => void terapeutasQuery.refetch()} />}
     </div>
   );
 };

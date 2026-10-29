@@ -126,3 +126,11 @@ export type CreatePagoResponse = ApiResponse<CreatePagoSuccessData>;
 export type IntentoActivoPagoResponse = ApiResponse<IntentoActivoData | null>;
 export type PagoResponse = ApiResponse<Pago>;
 export type PagosResponse = ApiResponse<Pago[]>;
+
+/** Pago aprobado que incluye una reserva y tiene comprobante interno descargable. */
+export interface ComprobanteDisponible {
+  id: number;
+  fecha_pago: string;
+  monto: number;
+  moneda: string;
+}

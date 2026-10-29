@@ -12,7 +12,8 @@ export interface ImageUploaderProps {
   selectedFile: File | null;
   removeMarked: boolean;
   onFileSelect: (file: File | null) => void;
-  onRemoveCurrent: () => void;
+  /** Sin manejador no se ofrece quitar la imagen actual. */
+  onRemoveCurrent?: () => void;
   disabled?: boolean;
   isUploading?: boolean;
   uploadProgress?: number;
@@ -20,6 +21,12 @@ export interface ImageUploaderProps {
   currentImageLabel?: string;
   currentImageStatus?: string;
   className?: string;
+  /** 'contain' muestra logotipos completos en la miniatura. */
+  previewFit?: 'cover' | 'contain';
+  /** Fondo de la miniatura: 'dark' para logotipos en negativo. */
+  previewTone?: 'light' | 'dark';
+  /** 'lg' amplía la vista previa a un recuadro horizontal (fotografías de portada). */
+  previewSize?: 'sm' | 'lg';
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MiB
@@ -43,6 +50,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   currentImageLabel,
   currentImageStatus,
   className = '',
+  previewFit = 'cover',
+  previewTone = 'light',
+  previewSize = 'sm',
 }) => {
   const { locale } = useLocale();
   const en = locale === 'en';
@@ -120,13 +130,13 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       {/* 1. Previsualización de nuevo archivo local seleccionado */}
       {previewUrl && selectedFile && (
-        <div className="flex items-center gap-3 rounded-lg border border-neutro-300 bg-white p-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutro-300 bg-white p-3 shadow-xs">
           <img
             src={previewUrl}
             alt={selectedFile.name}
-            className="size-16 rounded-md object-cover border border-neutro-200 bg-neutro-50"
+            className={`${previewSize === 'lg' ? 'h-24 w-36' : 'size-16'} shrink-0 rounded-md border ${previewFit === 'contain' ? 'object-contain p-1' : 'object-cover'} ${previewTone === 'dark' ? 'border-neutro-700 bg-neutro-900' : 'border-neutro-200 bg-neutro-50'}`}
           />
-          <div className="flex-1 min-w-0">
+          <div className="min-w-[8rem] flex-1 basis-40">
             <p className="truncate text-xs font-semibold text-neutro-900">{selectedFile.name}</p>
             <p className="text-[11px] text-neutro-500">
               {(selectedFile.size / 1024).toFixed(0)} KB · {en ? 'New file selected' : 'Nuevo archivo seleccionado'}
@@ -158,17 +168,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
       {/* 2. Imagen existente en el servidor (sin selección local nueva) */}
       {!previewUrl && currentImageUrl && !removeMarked && (
-        <div className="flex items-center gap-3 rounded-lg border border-neutro-300 bg-white p-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-neutro-300 bg-white p-3 shadow-xs">
           <img
             src={currentImageUrl}
             alt={currentImageLabel}
-            className="size-16 rounded-md object-cover border border-neutro-200 bg-neutro-50"
+            className={`${previewSize === 'lg' ? 'h-24 w-36' : 'size-16'} shrink-0 rounded-md border ${previewFit === 'contain' ? 'object-contain p-1' : 'object-cover'} ${previewTone === 'dark' ? 'border-neutro-700 bg-neutro-900' : 'border-neutro-200 bg-neutro-50'}`}
           />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-neutro-900">{currentImageLabel}</p>
+          <div className="min-w-[8rem] flex-1 basis-40">
+            <p className="break-words text-xs font-semibold text-neutro-900">{currentImageLabel}</p>
             <p className="text-[11px] text-exito-700 font-medium">{currentImageStatus}</p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <Button
               type="button"
               variant="ghost"
@@ -179,7 +189,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               <RotateCw className="size-3.5 mr-1" />
               <span className="text-xs">{en ? 'Change' : 'Cambiar'}</span>
             </Button>
-            <Button
+            {onRemoveCurrent && <Button
               type="button"
               variant="ghost"
               size="sm"
@@ -189,14 +199,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               aria-label={en ? 'Remove image' : 'Quitar imagen'}
             >
               <Trash2 className="size-3.5" />
-            </Button>
+            </Button>}
           </div>
         </div>
       )}
 
       {/* 3. Indicador de imagen previa marcada para retirar */}
       {!previewUrl && currentImageUrl && removeMarked && (
-        <div className="flex items-center justify-between rounded-lg border border-error-200 bg-error-50 p-3 text-xs text-error-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-error-200 bg-error-50 p-3 text-xs text-error-800">
           <div className="flex items-center gap-2">
             <Trash2 className="size-4 shrink-0 text-error-600" />
             <span>{en ? 'The current image will be removed when you save.' : 'La imagen actual será retirada al guardar los cambios.'}</span>

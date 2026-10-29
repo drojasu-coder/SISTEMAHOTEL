@@ -54,6 +54,7 @@ router.get("/", amenidadController.getAll);
  *       404:
  *         description: Amenidad no encontrada
  */
+router.get("/:id/disponibilidad", validateParams(idParamSchema), amenidadController.getDisponibilidad);
 router.get("/:id", validateParams(idParamSchema), amenidadController.getById);
 
 router.use(authMiddleware);

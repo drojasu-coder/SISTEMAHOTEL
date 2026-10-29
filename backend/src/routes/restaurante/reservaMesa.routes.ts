@@ -1,10 +1,12 @@
 import { Router } from "express";
+import { z } from "zod";
 
 import * as controller from "../../controllers/restaurante/reservaMesa.controller";
 
 import {
   validateBody,
   validateParams,
+  validateQuery,
 } from "../../middlewares/validate.middleware";
 
 import {
@@ -22,6 +24,7 @@ import {
 import {
   createReservaMesaSchema,
   updateReservaMesaSchema,
+  disponibilidadReservaMesaQuerySchema,
 } from "../../validators/restaurante/reservaMesa.validator";
 
 import {
@@ -31,8 +34,36 @@ import {
 const router = Router();
 
 /**
- * Todas las operaciones del módulo requieren
- * un usuario autenticado.
+ * @openapi
+ * /api/reservas-mesa/disponibilidad:
+ *   get:
+ *     tags:
+ *       - Reservas de Mesa
+ *     summary: Consultar disponibilidad de franjas horarias de una mesa
+ *     parameters:
+ *       - in: query
+ *         name: mesa_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: fecha
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: Disponibilidad de franjas horarias obtenida correctamente
+ */
+router.get(
+  "/disponibilidad",
+  validateQuery(disponibilidadReservaMesaQuerySchema),
+  controller.getDisponibilidad
+);
+
+/**
+ * Las siguientes operaciones requieren un usuario autenticado.
  */
 router.use(authMiddleware);
 
@@ -174,6 +205,55 @@ router.get(
     idParamSchema
   ),
   controller.getMyReservationById
+);
+
+/**
+ * @openapi
+ * /api/reservas-mesa/mis-reservas/{id}/cancelar:
+ *   patch:
+ *     tags:
+ *       - Reservas de Mesa
+ *     summary: Cancelar una reserva de mesa propia
+ *     description: >
+ *       El cliente propietario cancela una reserva confirmada antes de su
+ *       fecha y hora. Conserva el registro histórico con estado cancelada y
+ *       libera el horario de la mesa. No genera cobros ni reembolsos.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *     responses:
+ *       200:
+ *         description: Reserva cancelada; devuelve la reserva actualizada
+ *       401:
+ *         description: Usuario no autenticado
+ *       403:
+ *         description: La reserva pertenece a otro usuario o el rol no es cliente
+ *       404:
+ *         description: Reserva no encontrada
+ *       409:
+ *         description: La reserva ya está cancelada o su estado no permite cancelarla
+ *       422:
+ *         description: La fecha y hora de la reserva ya llegaron
+ */
+// El cliente solo puede cancelar sus propias reservas; el servicio lo verifica.
+router.patch(
+  "/mis-reservas/:id/cancelar",
+  requireRole(
+    ROLES.CLIENTE
+  ),
+  validateParams(
+    idParamSchema
+  ),
+  validateBody(
+    z.object({}).strict().optional()
+  ),
+  controller.cancelMyReservation
 );
 
 /**

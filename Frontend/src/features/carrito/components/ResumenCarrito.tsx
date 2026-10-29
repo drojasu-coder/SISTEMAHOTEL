@@ -26,11 +26,7 @@ export const ResumenCarrito: React.FC<ResumenCarritoProps> = ({
     <p className="font-serif text-[2rem] font-semibold leading-tight text-neutro-900">
       <MoneyReference amount={total} />
     </p>
-    <p className="text-xs text-neutro-600">{textosCarrito.notaTotal}</p>
-    <p className="text-xs text-neutro-500">{textosCarrito.notaCarrito}</p>
-    <p className="border-t border-bronce-200 pt-2 text-xs text-neutro-600">
-      {textosCarrito.articulos(cantidadArticulos)}
-    </p>
+    <p className="text-xs text-neutro-600">{textosCarrito.articulos(cantidadArticulos)}</p>
 
     {cantidadArticulos > 0 && (
       <Link

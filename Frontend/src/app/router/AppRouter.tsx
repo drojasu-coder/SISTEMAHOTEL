@@ -12,6 +12,7 @@ import { AccountPage } from '@/pages/AccountPage';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { ReportesPage } from '@/features/reportes/ReportesPage';
+import { ConfiguracionPage } from '@/pages/ConfiguracionPage';
 import { SedesPage } from '@/pages/SedesPage';
 import { BrandingPage } from '@/pages/BrandingPage';
 import { AdminInicioPage } from '@/pages/AdminInicioPage';
@@ -22,7 +23,6 @@ import { ServiciosPage } from '@/pages/ServiciosPage';
 import { AmenidadesPage } from '@/pages/AmenidadesPage';
 import { AdminReservasAmenidadesPage } from '@/pages/AdminReservasAmenidadesPage';
 import { AdminDetalleReservaAmenidadPage } from '@/pages/AdminDetalleReservaAmenidadPage';
-import { ParqueosPage } from '@/pages/ParqueosPage';
 import { AdminReservasPage } from '@/pages/AdminReservasPage';
 import { AdminReservaDetallePage } from '@/pages/AdminReservaDetallePage';
 import { FacturacionPage } from '@/pages/FacturacionPage';
@@ -33,6 +33,7 @@ import { NotFoundPage } from '@/pages/NotFoundPage';
 import { RESERVAS_ROUTES } from '@/features/reservas';
 import { CrearReservaPage } from '@/pages/CrearReservaPage';
 import { MisReservasPage } from '@/pages/MisReservasPage';
+import { MiViajePage } from '@/pages/MiViajePage';
 import { DetalleReservaHabitacionPage } from '@/pages/DetalleReservaHabitacionPage';
 import { CarritoPage } from '@/pages/CarritoPage';
 import { CARRITO_ROUTES } from '@/features/carrito';
@@ -74,6 +75,8 @@ import { AdminSalonesPage } from '@/pages/AdminSalonesPage';
 import { AdminServiciosEventoPage } from '@/pages/AdminServiciosEventoPage';
 import { AdminReservasEventosPage } from '@/pages/AdminReservasEventosPage';
 import { AdminDetalleReservaEventoPage } from '@/pages/AdminDetalleReservaEventoPage';
+import { legalRoutes } from '@/features/legal';
+import { ScrollManager } from '@/components/shared/ScrollManager';
 import { RequireAuth } from '@/features/auth/components/RequireAuth';
 import { PANEL_MODULES } from '@/features/auth/permissions';
 
@@ -85,6 +88,7 @@ export function LegacyReservaRedirect() {
 export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
+      <ScrollManager />
       <Routes>
         {/* Rutas públicas y de cliente */}
         <Route element={<GuestLayout />}>
@@ -94,6 +98,7 @@ export const AppRouter: React.FC = () => {
           <Route path="/habitaciones/:id" element={<RoomDetail />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/registro" element={<RegisterPage />} />
+          {legalRoutes()}
           <Route path="/403" element={<ForbiddenPage />} />
 
           {/* Rutas de cliente que requieren sesión */}
@@ -102,6 +107,7 @@ export const AppRouter: React.FC = () => {
             <Route path={CARRITO_ROUTES.CARRITO} element={<CarritoPage />} />
             <Route path={PAGOS_ROUTES.CHECKOUT} element={<CheckoutPage />} />
             <Route path="/pagos/:id/resultado" element={<PagoResultadoPage />} />
+            <Route path="/mi-viaje" element={<MiViajePage />} />
           </Route>
 
           {/* Flujo de restaurante del cliente */}
@@ -174,7 +180,7 @@ export const AppRouter: React.FC = () => {
                     ) : module.id === 'personal' ? (
                       <PersonalPage />
                     ) : module.id === 'configuracion' ? (
-                      <SedesPage />
+                      <ConfiguracionPage />
                     ) : module.id === 'habitaciones' ? (
                       <HabitacionesPage />
                     ) : module.id === 'restaurante' ? (
@@ -240,7 +246,8 @@ export const AppRouter: React.FC = () => {
 
             {/* Espacios de parqueo */}
             <Route element={<RequireAuth permission="reservas.gestionar" />}>
-              <Route path="parqueos" element={<ParqueosPage />} />
+              {/* Estacionamiento retirado de la navegación: el enlace antiguo vuelve a Habitaciones. */}
+              <Route path="parqueos" element={<Navigate to="/admin/habitaciones" replace />} />
             </Route>
 
             {/* Consulta administrativa de reservas de habitación */}

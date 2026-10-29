@@ -94,7 +94,8 @@
 }
 
 /* El menú público ocupa el viewport y su contenido tiene scroll propio. */
-.public-mobile-menu > div { padding: 0; }
+.public-mobile-menu > div { padding: 0; display: flex; }
+@media (min-width: 1024px) { .public-mobile-menu > div { display: none; } }
 [aria-current="page"] { text-decoration: underline; text-underline-offset: 0.3em; }
 
 .room-calendar .rdp-root {
@@ -111,4 +112,75 @@
 
 @media (max-width: 380px) {
   .room-calendar .rdp-root { --rdp-day-width: 36px; --rdp-day_button-width: 36px; }
+}
+
+@layer components {
+  .header-control {
+    @apply inline-flex min-h-11 min-w-11 items-center rounded-md px-3 text-sm font-medium text-neutro-700 transition-colors duration-150 hover:bg-bronce-50 hover:text-bronce-800;
+  }
+  .header-option {
+    @apply flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm font-medium text-neutro-800 transition-colors duration-150 hover:bg-bronce-50;
+  }
+  .header-option[aria-selected="true"], .header-option[aria-pressed="true"] {
+    @apply bg-bronce-50 text-bronce-800;
+  }
+}
+.public-header [aria-current="page"], .public-mobile-menu [aria-current="page"] {
+  @apply bg-bronce-50 text-bronce-800 no-underline;
+}
+.public-header :focus-visible, .public-mobile-menu :focus-visible {
+  @apply outline-none ring-2 ring-bronce-600 ring-offset-2;
+}
+.header-site > .header-popover { left: 0; right: auto; }
+.public-mobile-menu .header-popover { position: relative; width: 100%; max-width: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .header-popover { animation: header-reveal 180ms ease-out; }
+  @keyframes header-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+}
+
+.public-mobile-menu nav .header-control { display: flex; }
+
+/* La marca conserva su tamaño; la sede cede espacio antes que el logo. */
+.public-header .header-site { min-width: 0; }
+.public-header .header-site-compact { gap: 0.375rem; padding-inline: 0.375rem; }
+.public-header .header-site-compact > span { max-width: 5.5rem; }
+.public-header .header-site > .header-popover { position: fixed; top: 4.75rem; left: 1rem; }
+@media (min-width: 768px) {
+  .public-header .header-site-compact > span { max-width: 9rem; }
+}
+@media (min-width: 1024px) {
+  .public-header .header-site > .header-popover { position: absolute; top: 100%; left: 0; }
+  .public-header .header-site-compact > span { max-width: 4rem; }
+  .header-nav .header-control { padding-inline: 0.5rem; font-size: 0.75rem; }
+  .header-auth { gap: 0.25rem; flex-wrap: nowrap; }
+  .header-auth > a { padding-inline: 0.625rem; font-size: 0.75rem; }
+}
+@media (min-width: 1280px) {
+  .public-header .header-site-compact > span { max-width: 6rem; }
+  .header-nav { gap: 0.25rem; }
+  .header-nav .header-control { padding-inline: 0.625rem; font-size: 0.875rem; }
+  .header-auth { gap: 0.5rem; }
+  .header-auth > a { padding-inline: 0.75rem; font-size: 0.875rem; }
+}
+/* Escritorio (≥1024): dos filas. Arriba marca, sede y acciones; abajo la
+   navegación centrada, para que la sede y "Reservar" no se compriman. El
+   contenido está limitado a max-w-7xl, así que una sola fila no cabe en español. */
+@media (min-width: 1024px) {
+  .public-header .header-row { flex-wrap: wrap; row-gap: 0; padding-bottom: 0; }
+  .public-header .header-nav {
+    order: 3; flex-basis: 100%; justify-content: center; gap: 0.25rem;
+    margin-top: 0.75rem; padding-block: 0.25rem; border-top: 1px solid theme('colors.neutro.200');
+  }
+  .public-header .header-nav .header-control { padding-inline: 0.875rem; font-size: 0.875rem; }
+  .public-header .header-site-compact > span { max-width: 12rem; }
+  .header-auth > a { padding-inline: 0.75rem; font-size: 0.875rem; }
+}
+/* Tablet y móvil: "Reservar" compacto en la fila; la marca y la sede ceden antes de solaparse. */
+@media (max-width: 1023px) {
+  .public-header .header-reserve { padding-inline: 0.75rem; }
+}
+@media (max-width: 379px) {
+  .public-header .header-site-compact { gap: 0.25rem; padding-inline: 0.25rem; }
+  .public-header .header-site-compact > span { max-width: 3.25rem; }
+  .public-header .header-site-compact > svg:last-child { display: none; }
 }

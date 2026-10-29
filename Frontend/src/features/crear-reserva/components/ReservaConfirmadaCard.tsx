@@ -11,9 +11,12 @@ import { RESERVAS_ROUTES } from '@/features/reservas/constants/routes';
 import { BotonAnadirAlCarrito } from '@/features/carrito';
 
 import type { ReservaHabitacion } from '../types';
+import type { ReservaHabitacionConCarrito } from '@/features/reservas/types';
+import { Countdown } from '@/components/ui/Countdown';
+import { CARRITO_ROUTES } from '@/features/carrito/constants/routes';
 
 export interface ReservaConfirmadaCardProps {
-  reserva: ReservaHabitacion;
+  reserva: ReservaHabitacionConCarrito;
   onReset: () => void;
 }
 
@@ -113,18 +116,39 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
         </div>
       </div>
 
-      {/* Acción para añadir la reserva recién creada al carrito */}
-      <div className="rounded-lg border border-bronce-200 bg-bronce-50/50 p-4">
-        <p className="mb-3 text-xs font-medium text-neutro-700">
-          {' '}{p('includeCart')}{' '}</p>
-        <BotonAnadirAlCarrito
-          publicInterface
-          reservaId={reserva.id}
-          reservaEstado={reserva.estado}
-          variant="secondary"
-          size="sm"
-        />
-      </div>
+      {/* La reserva ya queda preparada en el carrito; el pago solo comienza cuando el cliente lo decide. */}
+      {isPendiente && reserva.carrito?.vinculada ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-bronce-200 bg-bronce-50/50 p-4">
+          <p className="text-sm font-medium text-neutro-800">
+            {reserva.reutilizada ? p('reservedExisting') : p('reservedInCart')}
+          </p>
+          {reserva.carrito.expira_en && <p className="text-xs font-semibold text-neutro-700">{p('payWithin')}</p>}
+          {reserva.carrito.expira_en && (
+            <Countdown expiresAt={reserva.carrito.expira_en} label={p('payWithin')} warningText={p('purchaseSoon')} expiredText={p('purchaseExpired')} />
+          )}
+          <p className="text-xs text-neutro-600">{p('paymentNotCharged')}</p>
+          <div>
+            <Link
+              to={CARRITO_ROUTES.CARRITO}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-selva-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-selva-700"
+            >
+              {p('continueToPayment')}
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </div>
+      ) : isPendiente ? (
+        <div className="rounded-lg border border-bronce-200 bg-bronce-50/50 p-4">
+          <p className="mb-3 text-xs font-medium text-neutro-700">{p('cartLinkFailed')}</p>
+          <BotonAnadirAlCarrito
+            publicInterface
+            reservaId={reserva.id}
+            reservaEstado={reserva.estado}
+            variant="secondary"
+            size="sm"
+          />
+        </div>
+      ) : null}
 
       {/* Acciones y Enlaces usando RESERVAS_ROUTES */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -139,13 +163,6 @@ export const ReservaConfirmadaCard: React.FC<ReservaConfirmadaCardProps> = ({
         </Button>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Link
-            to={RESERVAS_ROUTES.MIS_RESERVAS}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-selva-600 bg-white px-4 py-3 text-sm font-semibold text-selva-700 transition-colors hover:bg-selva-50"
-          >
-            {textosCrearReserva.botonMisReservas}
-          </Link>
-
           <Link
             to={RESERVAS_ROUTES.DETALLE(reserva.id)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-selva-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-selva-700"

@@ -23,12 +23,31 @@ import type {
   AddServicioToReservaResponse,
 } from '../types';
 
+export interface DisponibilidadSalon {
+  fecha: string;
+  capacidad_maxima: number | null;
+  horario: { apertura: string; cierre: string } | null;
+  intervalo_minutos: number;
+  horarios: { inicio: string; fines: string[] }[];
+  ocupado: { desde: string; hasta: string; estado: 'confirmada' | 'cotizacion' }[];
+}
+
 export const eventosApi = {
   // Salones
   getSalones: async (params?: { sucursal_id?: number }): Promise<Salon[]> => {
     const response = await api.get<SalonesResponse>('/salones', {
       params: params as Record<string, string | number | boolean | undefined | null>,
     });
+    return response.data;
+  },
+
+  /**
+   * Franjas del salón calculadas por el servidor: inicios cada 30 minutos dentro de su horario y,
+   * para cada uno, las horas de fin libres. `horario` es null si el salón aún no lo tiene configurado.
+   * La solicitud se valida de nuevo al enviarla.
+   */
+  getDisponibilidadSalon: async (id: number, fecha: string): Promise<DisponibilidadSalon> => {
+    const response = await api.get<{ data: DisponibilidadSalon }>(`/salones/${id}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
     return response.data;
   },
 

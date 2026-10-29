@@ -1,332 +1,195 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { BedDouble, CalendarX, ArrowLeft, Bed, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button, buttonStyles } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import React, { useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, ChevronRight as Go, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { getApiErrorMessage } from '@/api/errors';
 import { useAdminScope } from '@/features/admin-core/AdminScopeContext';
+import { formatAdminCalendarDate } from '@/features/admin-core/adminDates';
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import { useAdminReservasQuery } from '@/features/reservas/admin/hooks/useAdminReservas';
-import { AdminReservasFilters } from '@/features/reservas/admin/components/AdminReservasFilters';
-import { AdminReservasList } from '@/features/reservas/admin/components/AdminReservasList';
 import { useTextosAdminReservas } from '@/features/reservas/admin/textos';
-import type { ReservasAdminFiltersState } from '@/features/reservas/admin/types';
+import { useTextosRecepcion } from '@/features/reservas/admin/recepcionTextos';
+import { ESTADOS_RESERVA_HABITACION, type ReservaHabitacion } from '@/features/reservas/types';
+import { ReservaEstadoBadge } from '@/features/mis-reservas/components/ReservaEstadoBadge';
+import { calcularNoches, formatGTQ, resolverNombreSede } from '@/features/mis-reservas/formato';
+import { useLocale } from '@/i18n/LocaleContext';
+import { cn } from '@/lib/cn';
 
+const VISTAS = ['llegadas', 'salidas', 'pendientes', 'proximas', 'todas'] as const;
+type Vista = typeof VISTAS[number];
+const PAGE_SIZE = 20;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Vista de recepción: las listas de trabajo del día primero y el registro completo
+ * después. "Llegan/Salen hoy" usan el mismo criterio que el resumen del panel
+ * (reservas confirmadas). Filtros y vista viven en la URL para conservarse al
+ * volver desde el detalle.
+ */
 export const AdminReservasPage: React.FC = () => {
-  const textosAdminReservas = useTextosAdminReservas();
+  const t = useTextosRecepcion();
+  const tr = useTextosAdminReservas();
+  const { locale } = useLocale();
   const { selectedSedeId } = useAdminScope();
-  // La sede del selector global se aplica en el servidor; aquí solo se filtra por búsqueda y estado.
   const reservasQuery = useAdminReservasQuery(selectedSedeId);
   const sedesQuery = useSedesQuery();
+  const [params, setParams] = useSearchParams();
 
-  const [filters, setFilters] = useState<ReservasAdminFiltersState>({
-    search: '',
-    sucursalId: selectedSedeId ?? 'all',
-    estado: 'all',
-  });
-
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
-
-  useEffect(() => {
-    if (selectedSedeId !== undefined) {
-      setFilters((prev) => ({
-        ...prev,
-        sucursalId: selectedSedeId,
-      }));
-    }
-  }, [selectedSedeId]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [filters]);
-
-  const sedes = sedesQuery.data ?? [];
-  const reservas = reservasQuery.data ?? [];
-
-  const sedesMap = useMemo(() => {
-    const mapa = new Map<number, string>();
-    for (const sede of sedes) {
-      mapa.set(sede.id, sede.nombre);
-    }
-    return mapa;
-  }, [sedes]);
-
-  const filteredReservas = useMemo(() => {
-    return reservas.filter((reserva) => {
-      // Filtro por término de búsqueda (ID, cliente, correo, habitación)
-      const term = filters.search.trim().toLowerCase();
-      if (term) {
-        const idMatch = String(reserva.id).includes(term);
-        const clienteMatch = reserva.Usuario?.nombre?.toLowerCase().includes(term);
-        const emailMatch = reserva.Usuario?.email?.toLowerCase().includes(term);
-        const habitacionMatch = reserva.Habitacion?.numero?.toLowerCase().includes(term);
-
-        if (!idMatch && !clienteMatch && !emailMatch && !habitacionMatch) {
-          return false;
-        }
-      }
-
-      // Filtro por estado
-      if (filters.estado !== 'all' && reserva.estado !== filters.estado) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [reservas, filters]);
-
-  const isLoading = reservasQuery.isLoading || sedesQuery.isLoading;
-  const isError = reservasQuery.isError;
-  const handleRefetch = () => {
-    reservasQuery.refetch();
-    sedesQuery.refetch();
+  const vista: Vista = (VISTAS as readonly string[]).includes(params.get('vista') ?? '') ? params.get('vista') as Vista : 'llegadas';
+  const q = params.get('q') ?? '';
+  const estado = (ESTADOS_RESERVA_HABITACION as readonly string[]).includes(params.get('estado') ?? '') ? params.get('estado')! : '';
+  const desde = ISO_DATE.test(params.get('desde') ?? '') ? params.get('desde')! : '';
+  const hasta = ISO_DATE.test(params.get('hasta') ?? '') ? params.get('hasta')! : '';
+  const rawPage = Number(params.get('pagina'));
+  const update = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) value ? next.set(key, value) : next.delete(key);
+    if (!('pagina' in changes)) next.delete('pagina');
+    setParams(next, { replace: true });
   };
 
-  const counts = useMemo(() => {
-    const base = reservas;
-    return {
-      total: base.length,
-      pendiente: base.filter((r) => r.estado === 'pendiente').length,
-      confirmada: base.filter((r) => r.estado === 'confirmada').length,
-      finalizada: base.filter((r) => r.estado === 'finalizada').length,
-      cancelada: base.filter((r) => r.estado === 'cancelada').length,
+  const today = getTodayInGuatemala();
+  const reservas = reservasQuery.data ?? [];
+  const sedesMap = useMemo(() => new Map((sedesQuery.data ?? []).map((sede) => [sede.id, sede.nombre])), [sedesQuery.data]);
+
+  const enVista = useMemo(() => {
+    const byArrival = (a: ReservaHabitacion, b: ReservaHabitacion) => a.fecha_entrada.localeCompare(b.fecha_entrada) || a.id - b.id;
+    const groups: Record<Vista, ReservaHabitacion[]> = {
+      llegadas: reservas.filter((r) => r.estado === 'confirmada' && r.fecha_entrada === today).sort(byArrival),
+      salidas: reservas.filter((r) => r.estado === 'confirmada' && r.fecha_salida === today).sort(byArrival),
+      pendientes: reservas.filter((r) => r.estado === 'pendiente').sort(byArrival),
+      proximas: reservas.filter((r) => (r.estado === 'confirmada' || r.estado === 'pendiente') && r.fecha_entrada > today).sort(byArrival),
+      todas: [...reservas].sort((a, b) => b.id - a.id),
     };
-  }, [reservas]);
+    return groups;
+  }, [reservas, today]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredReservas.length / pageSize));
-  const paginatedReservas = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredReservas.slice(start, start + pageSize);
-  }, [filteredReservas, page, pageSize]);
+  const term = q.trim().toLowerCase();
+  const filtered = enVista[vista].filter((r) => {
+    if (term && ![String(r.id), r.Usuario?.nombre, r.Usuario?.email, r.Habitacion?.numero].some((value) => value?.toLowerCase().includes(term))) return false;
+    if (vista === 'todas' && estado && r.estado !== estado) return false;
+    if (desde && r.fecha_entrada < desde) return false;
+    if (hasta && r.fecha_entrada > hasta) return false;
+    return true;
+  });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Number.isSafeInteger(rawPage) && rawPage >= 1 ? Math.min(rawPage, totalPages) : 1;
+  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasFilters = Boolean(q || estado || desde || hasta);
+  const showSite = selectedSedeId === 'all';
+  const date = (value: string) => formatAdminCalendarDate(value, locale);
 
-  return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12">
-      {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{textosAdminReservas.subtitulo}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem]">
-            {textosAdminReservas.titulo}
-          </h1>
-          <p className="max-w-2xl text-sm text-neutro-600">
-            {textosAdminReservas.descripcion}
-          </p>
-        </div>
+  return <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{t.titulo}</h1>
+        {reservasQuery.isSuccess && <p className="mt-1 text-sm text-neutro-600">{t.resumen(reservas.length)} · {t.hoy} {date(today)}</p>}
+      </div>
+    </header>
 
-        <div className="flex flex-wrap items-center gap-3 self-start sm:self-center">
-          <Link
-            to="/admin"
-            className={buttonStyles({ variant: 'ghost' })}
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            <span>{textosAdminReservas.volverAlPanel}</span>
-          </Link>
-          <Link
-            to="/admin/habitaciones"
-            className={buttonStyles({ variant: 'secondary' })}
-          >
-            <Bed className="size-4" aria-hidden="true" />
-            <span>{textosAdminReservas.irAHabitaciones}</span>
-          </Link>
-        </div>
+    {reservasQuery.isLoading && <LoadingNotice label={tr.listado.cargando} />}
+    {reservasQuery.isError && <Alert tone="error" title={tr.listado.errorTitulo}>
+      <p>{getApiErrorMessage(reservasQuery.error)}</p>
+      <Button className="mt-3" variant="secondary" onClick={() => void reservasQuery.refetch()}>{tr.listado.reintentar}</Button>
+    </Alert>}
+
+    {reservasQuery.isSuccess && <>
+      {/* Listas de trabajo del día con su conteo. */}
+      <div role="group" aria-label={t.vistasLabel} className="flex gap-1 overflow-x-auto rounded-xl border border-neutro-200 bg-white p-1">
+        {VISTAS.map((key) => <button key={key} type="button" aria-pressed={vista === key} onClick={() => update({ vista: key === 'llegadas' ? null : key, estado: null })}
+          className={cn('inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors',
+            vista === key ? 'bg-bronce-50 text-bronce-800' : 'text-neutro-600 hover:bg-neutro-50 hover:text-neutro-900')}>
+          {t.vistas[key]}
+          <span className={cn('rounded-full px-1.5 text-xs tabular-nums', vista === key ? 'bg-bronce-600 text-white' : 'bg-neutro-100 text-neutro-700')}>{enVista[key].length}</span>
+        </button>)}
       </div>
 
-      {/* Tarjetas rápidas de estado de reservas */}
-      {!isLoading && !isError && reservas.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <button
-            type="button"
-            onClick={() => setFilters((p) => ({ ...p, estado: 'all' }))}
-            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-              filters.estado === 'all'
-                ? 'border-bronce-500 bg-bronce-50/70 shadow-xs ring-1 ring-bronce-500'
-                : 'border-neutro-200 bg-white hover:border-neutro-300'
-            }`}
-          >
-            <span className="text-[11px] font-medium text-neutro-500 uppercase tracking-wider">{textosAdminReservas.tarjetas.total}</span>
-            <span className="font-serif text-2xl font-bold text-neutro-900">{counts.total}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setFilters((p) => ({
-                ...p,
-                estado: p.estado === 'pendiente' ? 'all' : 'pendiente',
-              }))
-            }
-            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-              filters.estado === 'pendiente'
-                ? 'border-advertencia-500 bg-advertencia-50 shadow-xs ring-1 ring-advertencia-500'
-                : 'border-neutro-200 bg-white hover:border-neutro-300'
-            }`}
-          >
-            <span className="text-[11px] font-medium text-advertencia-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.pendientes}</span>
-            <span className="font-serif text-2xl font-bold text-advertencia-800">{counts.pendiente}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setFilters((p) => ({
-                ...p,
-                estado: p.estado === 'confirmada' ? 'all' : 'confirmada',
-              }))
-            }
-            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-              filters.estado === 'confirmada'
-                ? 'border-exito-500 bg-exito-50 shadow-xs ring-1 ring-exito-500'
-                : 'border-neutro-200 bg-white hover:border-neutro-300'
-            }`}
-          >
-            <span className="text-[11px] font-medium text-exito-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.confirmadas}</span>
-            <span className="font-serif text-2xl font-bold text-exito-800">{counts.confirmada}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setFilters((p) => ({
-                ...p,
-                estado: p.estado === 'finalizada' ? 'all' : 'finalizada',
-              }))
-            }
-            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-              filters.estado === 'finalizada'
-                ? 'border-info-500 bg-info-50 shadow-xs ring-1 ring-info-500'
-                : 'border-neutro-200 bg-white hover:border-neutro-300'
-            }`}
-          >
-            <span className="text-[11px] font-medium text-info-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.finalizadas}</span>
-            <span className="font-serif text-2xl font-bold text-info-800">{counts.finalizada}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setFilters((p) => ({
-                ...p,
-                estado: p.estado === 'cancelada' ? 'all' : 'cancelada',
-              }))
-            }
-            className={`flex flex-col rounded-xl border p-3 text-left transition-all ${
-              filters.estado === 'cancelada'
-                ? 'border-error-500 bg-error-50 shadow-xs ring-1 ring-error-500'
-                : 'border-neutro-200 bg-white hover:border-neutro-300'
-            }`}
-          >
-            <span className="text-[11px] font-medium text-error-700 uppercase tracking-wider">{textosAdminReservas.tarjetas.canceladas}</span>
-            <span className="font-serif text-2xl font-bold text-error-800">{counts.cancelada}</span>
-          </button>
+      {/* Filtros del módulo; la sede se elige en la barra superior. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+        <label className="relative min-w-0 sm:col-span-2 lg:col-span-1">
+          <span className="sr-only">{t.buscar}</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-500" aria-hidden="true" />
+          <input type="search" value={q} placeholder={t.buscar} onChange={(event) => update({ q: event.target.value || null })} className="field-control !pl-9" />
+        </label>
+        {vista === 'todas' && <label className="min-w-0">
+          <span className="sr-only">{t.estado}</span>
+          <select value={estado} onChange={(event) => update({ estado: event.target.value || null })} className="field-control">
+            <option value="">{t.todosEstados}</option>
+            {ESTADOS_RESERVA_HABITACION.map((value) => <option key={value} value={value}>{tr.estados[value]}</option>)}
+          </select>
+        </label>}
+        {vista !== 'llegadas' && vista !== 'salidas' && <>
+          <label className="flex min-w-0 flex-col gap-1 text-xs text-neutro-600">{t.llegadaDesde}
+            <input type="date" value={desde} max={hasta || undefined} onChange={(event) => update({ desde: event.target.value || null })} className="field-control" /></label>
+          <label className="flex min-w-0 flex-col gap-1 text-xs text-neutro-600">{t.llegadaHasta}
+            <input type="date" value={hasta} min={desde || undefined} onChange={(event) => update({ hasta: event.target.value || null })} className="field-control" /></label>
+        </>}
+      </div>
+      {hasFilters && <div><Button variant="text" size="sm" onClick={() => update({ q: null, estado: null, desde: null, hasta: null })}><X className="size-3.5" aria-hidden="true" />{t.limpiar}</Button></div>}
+
+      {filtered.length === 0 ? <p role="status" className="rounded-xl border border-dashed border-neutro-300 bg-white px-4 py-10 text-center text-sm text-neutro-600">
+        {hasFilters ? t.vacio.filtros : t.vacio[vista]}
+      </p> : <>
+        {/* Escritorio: tabla compacta. */}
+        <div className="relative hidden overflow-x-auto rounded-xl border border-neutro-200 bg-white xl:block">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">{t.vistas[vista]}</caption>
+            <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold text-neutro-600">
+              <tr>
+                <th scope="col" className="px-4 py-3">{t.col.reserva}</th>
+                <th scope="col" className="px-4 py-3">{t.col.huesped}</th>
+                <th scope="col" className="px-4 py-3">{t.col.habitacion}</th>
+                {showSite && <th scope="col" className="px-4 py-3">{t.col.sede}</th>}
+                <th scope="col" className="px-4 py-3">{t.col.estancia}</th>
+                <th scope="col" className="px-4 py-3 text-right">{t.col.importe}</th>
+                <th scope="col" className="px-4 py-3">{t.col.estado}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutro-100">
+              {visible.map((r) => <tr key={r.id} className="hover:bg-bronce-50/40">
+                <td className="whitespace-nowrap px-4 py-3"><Link to={`/admin/reservas/${r.id}`} aria-label={t.verReserva(r.id)} className="inline-flex min-h-9 items-center gap-1 font-semibold text-bronce-700 underline-offset-2 hover:underline">#{r.id}<Go className="size-3.5" aria-hidden="true" /></Link></td>
+                <td className="px-4 py-3"><span className="block font-medium text-neutro-900">{r.Usuario?.nombre ?? t.sinHuesped}</span>
+                  {r.Usuario?.email && <span className="hidden max-w-[14rem] truncate text-xs text-neutro-500 2xl:block">{r.Usuario.email}</span>}</td>
+                <td className="px-4 py-3"><span className="block font-medium text-neutro-900">{r.Habitacion ? t.hab(r.Habitacion.numero) : t.sinHabitacion}</span>
+                  {r.Habitacion?.TipoHabitacion?.nombre && <span className="block text-xs text-neutro-500">{r.Habitacion.TipoHabitacion.nombre} · {t.noches(calcularNoches(r.fecha_entrada, r.fecha_salida) ?? 0)}</span>}</td>
+                {showSite && <td className="px-4 py-3 text-neutro-700">{resolverNombreSede(r, sedesMap)}</td>}
+                <td className="whitespace-nowrap px-4 py-3 text-neutro-700"><span className={cn(r.fecha_entrada === today && 'font-semibold text-bronce-800')}>{date(r.fecha_entrada)}</span>
+                  <span className="text-neutro-400"> → </span><span className={cn(r.fecha_salida === today && 'font-semibold text-bronce-800')}>{date(r.fecha_salida)}</span>
+                  <span className="block text-xs text-neutro-500">{tr.detalle.valores.formatoHuespedes(r.numero_huespedes)}</span></td>
+                <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-neutro-800">{formatGTQ(r.total)}</td>
+                <td className="px-4 py-3"><ReservaEstadoBadge estado={r.estado} /></td>
+
+              </tr>)}
+            </tbody>
+          </table>
         </div>
-      )}
 
-      {/* Estados de carga y error */}
-      {isLoading && (
-        <div className="flex justify-center py-12">
-          <LoadingNotice label={textosAdminReservas.listado.cargando} />
-        </div>
-      )}
+        {/* Móvil: lista compacta, una reserva por fila. */}
+        <ul className="divide-y divide-neutro-200 overflow-hidden rounded-xl border border-neutro-200 bg-white xl:hidden">
+          {visible.map((r) => <li key={r.id}>
+            <Link to={`/admin/reservas/${r.id}`} aria-label={t.verReserva(r.id)} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-bronce-50/40">
+              <span className="min-w-0 space-y-0.5">
+                <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-neutro-900">#{r.id}</span><ReservaEstadoBadge estado={r.estado} /></span>
+                <span className="block truncate text-sm text-neutro-800">{r.Usuario?.nombre ?? t.sinHuesped}</span>
+                <span className="block text-xs text-neutro-600">{r.Habitacion ? t.hab(r.Habitacion.numero) : t.sinHabitacion}{showSite && ` · ${resolverNombreSede(r, sedesMap)}`}</span>
+                <span className="block text-xs text-neutro-600">{date(r.fecha_entrada)} → {date(r.fecha_salida)} · {formatGTQ(r.total)}</span>
+              </span>
+              <Go className="mt-1 size-4 shrink-0 text-neutro-400" aria-hidden="true" />
+            </Link>
+          </li>)}
+        </ul>
 
-      {isError && (
-        <Card className="flex flex-col items-start gap-4">
-          <Alert
-            tone="error"
-            title={textosAdminReservas.listado.errorTitulo}
-          >
-            {getApiErrorMessage(reservasQuery.error) ||
-              textosAdminReservas.listado.errorDescripcion}
-          </Alert>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleRefetch}
-          >
-            {textosAdminReservas.listado.reintentar}
-          </Button>
-        </Card>
-      )}
-
-      {/* Catálogo vacío global */}
-      {!isLoading && !isError && reservas.length === 0 && (
-        <Card className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-          <BedDouble className="size-12 text-neutro-400" aria-hidden="true" />
-          <div className="flex max-w-md flex-col gap-1">
-            <h2 className="text-lg font-serif font-semibold text-neutro-800">
-              {textosAdminReservas.listado.vacioTitulo}
-            </h2>
-            <p className="text-xs text-neutro-600">
-              {textosAdminReservas.listado.vacioDescripcion}
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {/* Catálogo con datos y filtros */}
-      {!isLoading && !isError && reservas.length > 0 && (
-        <div className="flex flex-col gap-6">
-          <AdminReservasFilters
-            filters={filters}
-            onChange={setFilters}
-            totalResults={filteredReservas.length}
-            totalCatalog={reservas.length}
-          />
-
-          {filteredReservas.length === 0 ? (
-            <Card className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-              <CalendarX className="size-10 text-neutro-400" aria-hidden="true" />
-              <h3 className="text-base font-semibold text-neutro-800">
-                {textosAdminReservas.listado.sinResultadosTitulo}
-              </h3>
-              <p className="max-w-md text-xs text-neutro-600">
-                {textosAdminReservas.listado.sinResultadosDescripcion}
-              </p>
-            </Card>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <AdminReservasList
-                reservas={paginatedReservas}
-                sedesPorId={sedesMap}
-              />
-
-              {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-neutro-200 pt-4 text-xs text-neutro-600">
-                  <span>
-                    Mostrando {(page - 1) * pageSize + 1} a{' '}
-                    {Math.min(page * pageSize, filteredReservas.length)} de{' '}
-                    {filteredReservas.length} reservas
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      className="px-2.5 py-1 text-xs"
-                    >
-                      <ChevronLeft className="size-3.5" aria-hidden="true" />
-                      <span>{textosAdminReservas.paginacion.anterior}</span>
-                    </Button>
-                    <span className="px-2 font-medium text-neutro-900">
-                      {textosAdminReservas.paginacion.pagina(page, totalPages)}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={page >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      className="px-2.5 py-1 text-xs"
-                    >
-                      <span>{textosAdminReservas.paginacion.siguiente}</span>
-                      <ChevronRight className="size-3.5" aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+        {totalPages > 1 && <nav className="flex items-center justify-between gap-3 text-xs text-neutro-600" aria-label={tr.paginacion.pagina(page, totalPages)}>
+          <span>{t.pagina((page - 1) * PAGE_SIZE + 1, Math.min(page * PAGE_SIZE, filtered.length), filtered.length)}</span>
+          <span className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" aria-label={t.anterior} disabled={page <= 1} onClick={() => update({ pagina: page - 1 > 1 ? String(page - 1) : null })}><ChevronLeft className="size-4" aria-hidden="true" /></Button>
+            <span className="px-1 font-medium text-neutro-900">{tr.paginacion.pagina(page, totalPages)}</span>
+            <Button variant="ghost" size="sm" aria-label={t.siguiente} disabled={page >= totalPages} onClick={() => update({ pagina: String(page + 1) })}><ChevronRight className="size-4" aria-hidden="true" /></Button>
+          </span>
+        </nav>}
+      </>}
+    </>}
+  </div>;
 };

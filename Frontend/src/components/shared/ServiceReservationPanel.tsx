@@ -11,8 +11,12 @@ import { safeReturnPath } from '@/features/auth/secureReturn';
 import type { ServiceKind } from '@/features/auth/serviceDraft';
 
 /** Solo composición visual. Cada servicio conserva su formulario y su contrato. */
-export function ServiceReservationPanel({ name, siteId, siteName, media, children, ...modal }: ModalProps & {
+export function ServiceReservationPanel({ name, siteId, siteName, media, children, details, compact = false, ...modal }: ModalProps & {
   name: ReactNode; siteId?: number; siteName?: string; media: ComponentProps<typeof ServiceMedia>;
+  /** Datos breves del recurso bajo el nombre (p. ej. zona y capacidad). */
+  details?: ReactNode;
+  /** Oculta los avisos generales del lateral cuando el formulario ya los resume. */
+  compact?: boolean;
 }) {
   const { sites } = usePublicPreferences();
   const { p } = usePublicInterface();
@@ -20,11 +24,13 @@ export function ServiceReservationPanel({ name, siteId, siteName, media, childre
   return <Modal {...modal} presentation="service">
     <div className="grid min-w-0 gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] sm:gap-8">
       <aside className="min-w-0 space-y-4">
-        <div className="overflow-hidden rounded-lg border border-neutro-200"><ServiceMedia {...media} /></div>
+        {/* Sin imagen alojada en S3 no se muestra un recuadro vacío: el nombre y la sede bastan. */}
+        {media.src && <div className="overflow-hidden rounded-lg border border-neutro-200"><ServiceMedia {...media} /></div>}
         <h3 className="font-serif text-xl font-semibold" lang="es">{name}</h3>
         {siteId ? <p className="text-sm text-bronce-700">{p('siteLabel')} <span lang="es">{site || `#${siteId}`}</span></p> : <p className="text-sm text-neutro-600">{p('serviceGeneralCatalog')}</p>}
-        <p className="text-sm text-neutro-600">{p('serviceAvailabilityNotice')}</p>
-        <p className="text-xs text-neutro-500">{p('serviceTimezone')}</p>
+        {details}
+        {!compact && <p className="text-sm text-neutro-600">{p('serviceAvailabilityNotice')}</p>}
+        {!compact && <p className="text-xs text-neutro-500">{p('serviceTimezone')}</p>}
       </aside>
       <div className="min-w-0">{children}</div>
     </div>

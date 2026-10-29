@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Info } from 'lucide-react';
 import { PageContainer, PageHeader } from '@/components/shared/PageContainer';
 import { formatAdminCalendarDate } from '@/features/admin-core/adminDates';
 import { LEGAL_ORDER, LEGAL_ROUTES, LEGAL_UPDATED_AT } from './routes';
@@ -17,8 +16,7 @@ const Block: React.FC<{ block: LegalBlock }> = ({ block }) =>
   );
 
 /**
- * Documento legal público: índice navegable, fecha de actualización, aviso de
- * proyecto académico y enlaces al resto de documentos.
+ * Documento legal público: índice navegable, fecha de actualización y enlaces relacionados.
  */
 export const LegalDocumentPage: React.FC<{ slug: LegalSlug }> = ({ slug }) => {
   const { locale, docs, ui } = useLegalDocuments();
@@ -43,14 +41,6 @@ export const LegalDocumentPage: React.FC<{ slug: LegalSlug }> = ({ slug }) => {
           </p>
         }
       />
-
-      <aside aria-labelledby={`legal-academic-${slug}`} className="flex gap-3 rounded-xl border border-bronce-200 bg-bronce-50 p-4 text-sm text-neutro-800">
-        <Info className="mt-0.5 size-5 shrink-0 text-bronce-700" aria-hidden="true" />
-        <div>
-          <p id={`legal-academic-${slug}`} className="font-semibold text-neutro-900">{ui.academicTitle}</p>
-          <p className="mt-1">{ui.academic}</p>
-        </div>
-      </aside>
 
       <div className="grid gap-8 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <nav aria-labelledby={tocId} className="lg:sticky lg:top-28 lg:self-start">

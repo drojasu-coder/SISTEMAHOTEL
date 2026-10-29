@@ -18,6 +18,7 @@ import {
   confirmImageSchema,
 } from "../../modules/sucursales/sucursal.validator";
 
+import { getResumenRecursos } from "../../modules/sucursales/sucursal.resumen";
 import { idParamSchema } from "../../validators/common.validator";
 
 const router = Router();
@@ -87,6 +88,14 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+// Conteo de recursos por sede (solo administrador general). Debe declararse antes de "/:id".
+router.get("/recursos-resumen", authMiddleware, requireRole(ROLES.ADMIN), async (_req, res, next) => {
+  try {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ status: "success", data: await getResumenRecursos() });
+  } catch (error) { next(error); }
+});
+
 router.get(
   "/:id",
   validateParams(idParamSchema),

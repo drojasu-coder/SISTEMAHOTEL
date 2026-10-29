@@ -1,3 +1,4 @@
+import { getTodayInGuatemala } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import React, { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -230,7 +231,7 @@ export const AdminReservaDetallePage: React.FC = () => {
                 </Button>
               )}
 
-              {reserva.estado === 'confirmada' && (
+              {reserva.estado === 'confirmada' && reserva.fecha_salida <= getTodayInGuatemala() && (
                 <Button
                   type="button"
                   variant="secondary"
@@ -306,7 +307,9 @@ export const AdminReservaDetallePage: React.FC = () => {
                   {textosAdminReservas.detalle.valores.formatoHuespedes(reserva.numero_huespedes)}
                 </DatoFila>
                 <DatoFila etiqueta={textosAdminReservas.detalle.campos.habitacionNumero}>
-                  {habitacion ? textosAdminReservas.detalle.valores.habitacion(habitacion.numero) : textosAdminReservas.detalle.valores.sinHabitacion}
+                  {habitacion
+                    ? <Link to={'/admin/habitaciones?q=' + encodeURIComponent(habitacion.numero)} className="text-bronce-700 underline-offset-2 hover:underline">{textosAdminReservas.detalle.valores.habitacion(habitacion.numero)}</Link>
+                    : textosAdminReservas.detalle.valores.sinHabitacion}
                 </DatoFila>
                 <DatoFila etiqueta={textosAdminReservas.detalle.campos.habitacionTipo}>
                   {tipo?.nombre ?? textosAdminReservas.detalle.valores.sinTipo}

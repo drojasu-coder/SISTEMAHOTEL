@@ -3,7 +3,7 @@ export const actividadesQueryKeys = {
   recursos: () => [...actividadesQueryKeys.all, 'recursos'] as const,
   recursoDetail: (id: number) => [...actividadesQueryKeys.all, 'recursos', id] as const,
   instructores: () => [...actividadesQueryKeys.all, 'instructores'] as const,
-  salidas: (recursoId: number, fecha: string) => [...actividadesQueryKeys.all, 'salidas', recursoId, fecha] as const,
+  salidas: (recursoId: number, fecha: string, instructorId?: number) => [...actividadesQueryKeys.all, 'salidas', recursoId, fecha, instructorId ?? null] as const,
   reservas: {
     all: ['reservas-actividad'] as const,
     list: (userId?: number) =>

@@ -43,7 +43,7 @@ export const PERMISSIONS: Record<Permission, readonly Role[]> = {
   'pagos.administrar': [ADMIN],
 
   // Catálogo y reservas de restaurante: admin global o gerente en sus sedes.
-  'restaurante.gestionar': [ADMIN, 'gerente_habitaciones'],
+  'restaurante.gestionar': [ADMIN, 'gerente_habitaciones', 'gerente_restaurante'],
 
   // Catálogos y estados de reservas: admin global o gerente en sus sedes.
   'servicios.administrar': [ADMIN, 'gerente_habitaciones'],
@@ -89,11 +89,13 @@ export function canAccessPanel(role: unknown): boolean {
 
 /**
  * Destino inicial tras autenticarse, siempre válido para un rol conocido:
- * - con módulos de panel → /admin
+ * - restaurante y encargado → su módulo operativo
+ * - administrador, gerente de sede y recepción → /admin
  * - cliente → sitio público
- * - rol histórico conocido sin módulos → /cuenta
  */
 export function getHomeRouteForUser(user: Pick<AuthUser, 'rol'>): string {
+  if (user.rol === 'gerente_restaurante') return '/admin/restaurante';
+  if (user.rol === 'empleado_operativo') return '/admin/habitaciones';
   if (canAccessPanel(user.rol)) return '/admin';
   if (user.rol === 'cliente') return '/';
   return '/cuenta';

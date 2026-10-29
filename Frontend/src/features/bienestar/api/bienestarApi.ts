@@ -1,4 +1,15 @@
 import { api } from '@/api/client/http';
+
+export interface DisponibilidadBienestar {
+  fecha: string;
+  duracion_minutos: number;
+  descanso_minutos: number;
+  intervalo_minutos: number;
+  /** Horario de atención del servicio; null si aún no está configurado. */
+  horario: { apertura: string; cierre: string } | null;
+  /** Inicios disponibles (HH:MM) por terapeuta, ya sin citas ocupadas ni descansos. */
+  terapeutas: { id: number; nombre: string; horarios: string[] }[];
+}
 import { uploadEntityImage } from '@/api/mediaUpload';
 import type {
   ServicioBienestar,
@@ -22,6 +33,11 @@ export const bienestarApi = {
   // Servicios de Bienestar
   getServicios: async (): Promise<ServicioBienestar[]> => {
     const response = await api.get<ServiciosBienestarResponse>('/servicios-spa');
+    return response.data;
+  },
+
+  getDisponibilidad: async (servicioId: number, fecha: string): Promise<DisponibilidadBienestar> => {
+    const response = await api.get<{ data: DisponibilidadBienestar }>(`/servicios-spa/${servicioId}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
     return response.data;
   },
 

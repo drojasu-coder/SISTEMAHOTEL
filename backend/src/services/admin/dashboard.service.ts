@@ -8,7 +8,25 @@ const { sequelize, Habitacion, TipoHabitacion, Sucursal, ReservaHabitacion } = r
 export interface DashboardFilter {
   sucursal_id?: number;
   vista?: "alcance";
+  dias?: number;
+  meses?: number;
 }
+
+const HOTEL_TZ = () => env.APP_TIMEZONE || "America/Guatemala";
+/** Suma días a una fecha de calendario AAAA-MM-DD (sin zona horaria). */
+const addDays = (day: string, amount: number) => {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + amount)).toISOString().slice(0, 10);
+};
+/** Mes de calendario de Guatemala (AAAA-MM) de un instante. */
+const hotelMonth = (value: Date) => new Intl.DateTimeFormat("en-CA", {
+  timeZone: HOTEL_TZ(), year: "numeric", month: "2-digit",
+}).format(value).slice(0, 7);
+const shiftMonth = (month: string, amount: number) => {
+  const [y, m] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + amount, 1));
+  return date.toISOString().slice(0, 7);
+};
 
 const hotelToday = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: env.APP_TIMEZONE || "America/Guatemala",
@@ -26,6 +44,8 @@ async function authorizedSites(scope: Awaited<ReturnType<typeof getSedeScope>>) 
 /** Site options for the panel's global selector, for every staff role with a panel. */
 export async function getAdminScope(requester: ScopeRequester) {
   const scope = await getSedeScope(requester);
+  // Personal sin sede asignada: respuesta vacía válida (no un error), sin ampliar su alcance.
+  if (!scope.global && scope.sucursalIds.length === 0) return { global: false, sedes: [] };
   return { global: scope.global, sedes: await authorizedSites(scope) };
 }
 
@@ -98,6 +118,38 @@ export async function getAdminDashboardData(filter: DashboardFilter, requester: 
       habitaciones_limpieza: countState("limpieza"),
     };
     const knownRooms = Object.values(operational).reduce((sum, value) => sum + value, 0);
+
+    // Ocupación prevista: por día, habitaciones distintas con estancia confirmada sobre el inventario actual.
+    const dias = filter.dias ?? 30;
+    const windowEnd = addDays(today, dias);
+    const stays = await ReservaHabitacion.findAll({
+      where: { estado: "confirmada", fecha_entrada: { [Op.lt]: windowEnd }, fecha_salida: { [Op.gt]: today } },
+      include: [{ model: Habitacion, required: true, where: roomWhere, attributes: [] }],
+      attributes: ["habitacion_id", "fecha_entrada", "fecha_salida"], raw: true, transaction,
+    });
+    const ocupacion_prevista = Array.from({ length: dias }, (_, index) => {
+      const day = addDays(today, index);
+      const occupied = new Set(stays.filter((stay: any) => stay.fecha_entrada <= day && stay.fecha_salida > day).map((stay: any) => stay.habitacion_id)).size;
+      return { fecha: day, habitaciones: occupied, porcentaje: rooms.length ? Number((occupied * 100 / rooms.length).toFixed(1)) : null };
+    });
+
+    // Reservas registradas por mes (fecha de creación, calendario de Guatemala) y estado.
+    const meses = filter.meses ?? 6;
+    const currentMonth = hotelMonth(new Date());
+    const months = Array.from({ length: meses }, (_, index) => shiftMonth(currentMonth, index - meses + 1));
+    // Margen de un día: el límite exacto se aplica con el mes de Guatemala.
+    const since = new Date(Date.parse(months[0] + "-01T00:00:00Z") - 86400000);
+    const created = await ReservaHabitacion.findAll({
+      where: { createdAt: { [Op.gte]: since } },
+      include: [{ model: Habitacion, required: true, where: roomWhere, attributes: [] }],
+      attributes: ["id", "estado", "createdAt"], raw: true, transaction,
+    });
+    const reservas_por_mes = months.map((month) => {
+      const inMonth = created.filter((row: any) => hotelMonth(new Date(row.createdAt)) === month);
+      const by = (state: string) => inMonth.filter((row: any) => row.estado === state).length;
+      const confirmada = by("confirmada"), pendiente = by("pendiente"), cancelada = by("cancelada");
+      return { mes: month, confirmada, pendiente, cancelada, otros: inMonth.length - confirmada - pendiente - cancelada, total: inMonth.length };
+    });
     return {
       ...alcance, fecha_consulta: today, consultado_en: new Date().toISOString(),
       sucursal_filtro: filter.sucursal_id ?? null,
@@ -112,6 +164,7 @@ export async function getAdminDashboardData(filter: DashboardFilter, requester: 
       llegadas: arrivals.map(normalize),
       salidas: departures.map(normalize),
       reservas_recientes: recent.map(normalize),
+      tendencias: { dias, meses, ocupacion_prevista, reservas_por_mes },
       pendientes_atencion: pending.map((reservation: any) => ({
         tipo: "reserva_pendiente", id: reservation.id,
         habitacion_numero: reservation.Habitacion.numero,

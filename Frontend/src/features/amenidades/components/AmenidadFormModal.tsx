@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TimeField } from "@/components/ui/TimeField";
 import { Alert } from "@/components/ui/Feedback";
 import { ImageUploader } from "@/components/ui/ImageUploader";
 import { ApiError } from "@/api/client/http";
@@ -25,6 +26,7 @@ import {
 } from "../hooks/useAmenidades";
 import type { Amenidad } from "../types";
 import type { Sucursal } from "@/features/sedes/types";
+import { useTextosHorarioAdmin } from '@/i18n/horariosAdmin';
 
 interface AmenidadFormModalProps {
   open?: boolean;
@@ -61,6 +63,7 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
   const uploadImageMutation = useUploadAmenidadImageMutation();
   const removeImageMutation = useRemoveAmenidadImageMutation();
   const activeMutation = isEditing ? updateMutation : createMutation;
+  const th = useTextosHorarioAdmin();
 
   // Manejo de imagen de la amenidad
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -82,6 +85,9 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
       sucursal_id: "",
       nombre: "",
       aforo_maximo: "",
+      hora_apertura: "",
+      hora_cierre: "",
+      duracion_minutos: "",
     },
   });
 
@@ -102,12 +108,18 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
             amenidad.aforo_maximo !== undefined && amenidad.aforo_maximo !== null
               ? String(amenidad.aforo_maximo)
               : "",
+          hora_apertura: amenidad.hora_apertura?.slice(0, 5) ?? "",
+          hora_cierre: amenidad.hora_cierre?.slice(0, 5) ?? "",
+          duracion_minutos: amenidad.duracion_minutos ? String(amenidad.duracion_minutos) : "",
         });
       } else {
         reset({
           sucursal_id: sedes.length > 0 ? String(sedes[0].id) : "",
           nombre: "",
           aforo_maximo: "",
+          hora_apertura: "",
+          hora_cierre: "",
+          duracion_minutos: "",
         });
       }
       createMutation.reset();
@@ -120,15 +132,17 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
   const onSubmit = async (data: AmenidadFormData) => {
     setImageError(null);
     let targetId: number;
+    let fueraDeHorario = 0;
 
     try {
       if (isEditing && amenidad) {
         targetId = amenidad.id;
         const payload = sanitizeUpdateAmenidad(data);
-        await updateMutation.mutateAsync({
+        const actualizada = await updateMutation.mutateAsync({
           id: amenidad.id,
           data: payload,
         });
+        fueraDeHorario = Number((actualizada as { reservas_fuera_de_horario?: number }).reservas_fuera_de_horario) || 0;
       } else if (persistedId) {
         targetId = persistedId;
         const payload = sanitizeUpdateAmenidad(data);
@@ -184,11 +198,11 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
       }
     }
 
-    onSuccess(
-      isEditing
-        ? textosAmenidades.actualizadaExito
-        : textosAmenidades.creadaExito
-    );
+    // Las reservas futuras no se modifican al cambiar el horario: solo se informa cuántas quedan fuera.
+    const mensaje = isEditing ? textosAmenidades.actualizadaExito : textosAmenidades.creadaExito;
+    onSuccess(fueraDeHorario > 0
+      ? `${mensaje} ${th.fueraDeHorario(fueraDeHorario)}`
+      : mensaje);
     onClose();
   };
 
@@ -262,6 +276,17 @@ export const AmenidadFormModal: React.FC<AmenidadFormModalProps> = ({
           disabled={isPending}
           {...register("aforo_maximo")}
         />
+
+        {/* Horario de reserva: define las franjas que el cliente puede reservar */}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-xs font-semibold text-neutro-700">{th.horarioReserva}</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <TimeField label={th.apertura} id="amenidad-apertura" step={1800} disabled={isPending} error={errors.hora_apertura?.message} {...register("hora_apertura")} />
+            <TimeField label={th.cierre} id="amenidad-cierre" step={1800} disabled={isPending} error={errors.hora_cierre?.message} {...register("hora_cierre")} />
+            <Input label={th.duracionReserva} id="amenidad-duracion" type="text" inputMode="numeric" placeholder="60" disabled={isPending} error={errors.duracion_minutos?.message} {...register("duracion_minutos")} />
+          </div>
+          <p className="text-xs text-neutro-600">{th.ayudaAmenidad}</p>
+        </fieldset>
 
         {/* Fotografía de la amenidad */}
         <ImageUploader

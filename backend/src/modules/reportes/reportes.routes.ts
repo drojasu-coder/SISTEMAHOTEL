@@ -9,6 +9,8 @@ import { getRoomReservationsReport } from "./reportes.service";
 import { OperationalFilters, RoomReportFilters } from "./reportes.types";
 import { activitiesReportQuerySchema, eventsReportQuerySchema, restaurantReportQuerySchema, roomReportQuerySchema } from "./reportes.validator";
 import { getOperationalReport } from "./reportes.operativos";
+import { getPanorama } from "./reportes.panorama";
+import { panoramaQuerySchema } from "./reportes.validator";
 
 const router = Router();
 router.use(authMiddleware, requireRole(ROLES.ADMIN));
@@ -84,5 +86,13 @@ for (const [kind, schema] of [
     } catch (error) { next(error); }
   });
 }
+
+// GET /api/reportes/panorama: agregados de solo lectura para gráficas (mismo guard de administrador general).
+router.get("/panorama", validateQuery(panoramaQuerySchema), async (req, res, next) => {
+  try {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ success: true, statusCode: 200, data: await getPanorama(req.query as never, req.user!) });
+  } catch (error) { next(error); }
+});
 
 export default router;

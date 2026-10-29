@@ -1,119 +1,89 @@
 import React from 'react';
-import { Edit2, MapPin, Tag, Compass } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Link } from 'react-router-dom';
+import { CalendarCheck, ImageOff, Pencil } from 'lucide-react';
+import { buttonStyles } from '@/components/ui/Button';
+import { cn } from '@/lib/cn';
+import { formatearGTQ } from '../textos';
+import { ACTIVIDADES_ROUTES } from '../constants/routes';
+import { useTextosGestionActividades } from '../gestionTextos';
 import type { RecursoActividad } from '../types';
-import { formatearGTQ, textosActividades } from '../textos';
+import { HorarioBadge } from '@/components/ui/HorarioBadge';
 
 interface RecursosActividadListProps {
   recursos: RecursoActividad[];
   onEdit: (recurso: RecursoActividad) => void;
+  canEdit?: boolean;
+  sedeNombre: (recurso: RecursoActividad) => string;
+  showSite?: boolean;
 }
 
-export const RecursosActividadList: React.FC<RecursosActividadListProps> = ({
-  recursos,
-  onEdit,
-}) => {
-  if (recursos.length === 0) {
-    return (
-      <Card className="flex flex-col items-center justify-center p-8 text-center">
-        <h3 className="font-serif text-lg font-bold text-neutro-800">
-          {textosActividades.sinRecursosTitulo}
-        </h3>
-        <p className="mt-1 text-xs text-neutro-500">
-          {textosActividades.sinRecursosDesc}
-        </p>
-      </Card>
-    );
-  }
+const hasAmount = (value: unknown) => value !== null && value !== undefined && value !== '' && Number(value) > 0;
 
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {recursos.map((recurso) => (
-        <Card
-          key={recurso.id}
-          className="flex flex-col justify-between overflow-hidden p-0 border border-neutro-200 transition-all hover:border-bronce-300"
-        >
-          <div>
-            {recurso.imagen_url ? (
-              <div className="relative aspect-[16/9] w-full overflow-hidden bg-neutro-100">
-                <img
-                  src={recurso.imagen_url}
-                  alt={recurso.nombre}
-                  className="h-full w-full object-cover"
-                />
-                {recurso.imagen_creditos?.autor && (
-                  <span className="absolute bottom-1 right-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                    Foto: {recurso.imagen_creditos.autor}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="flex aspect-[16/9] w-full items-center justify-center bg-sand-100 text-neutro-400">
-                <Compass className="size-8 text-bronce-400" aria-hidden="true" />
-              </div>
-            )}
+/**
+ * Recursos en tabla compacta (escritorio) o filas (móvil). La tarifa se presenta
+ * según la modalidad real del recurso; sin importes, se indica «Sin tarifa».
+ */
+export const RecursosActividadList: React.FC<RecursosActividadListProps> = ({ recursos, onEdit, canEdit = true, sedeNombre, showSite = true }) => {
+  const t = useTextosGestionActividades();
+  const tarifa = (r: RecursoActividad) => {
+    if (r.modalidad === 'experiencia') return hasAmount(r.precio_persona) ? [t.porPersona(formatearGTQ(r.precio_persona))] : [t.sinTarifa];
+    const lines = hasAmount(r.precio_hora) ? [t.porHora(formatearGTQ(r.precio_hora))] : [t.sinTarifa];
+    if (hasAmount(r.precio_equipo)) lines.push(t.equipo(formatearGTQ(r.precio_equipo)));
+    if (hasAmount(r.precio_instructor_hora)) lines.push(t.instructorHora(formatearGTQ(r.precio_instructor_hora)));
+    return lines;
+  };
+  const detalles = (r: RecursoActividad) => r.modalidad === 'experiencia'
+    ? [r.duracion_minutos ? t.minutos(r.duracion_minutos) : null, r.cupo_maximo ? t.cupo(r.cupo_maximo) : null].filter(Boolean).join(' · ') || '—'
+    : '—';
+  const thumb = (r: RecursoActividad, size: string) => r.imagen_url
+    ? <img src={r.imagen_url} alt="" loading="lazy" className={cn(size, 'shrink-0 rounded-md border border-neutro-200 object-cover')} />
+    : <span title={t.sinFoto} className={cn(size, 'flex shrink-0 items-center justify-center rounded-md border border-dashed border-neutro-300 bg-neutro-50 text-neutro-400')}><ImageOff className="size-4" aria-hidden="true" /><span className="sr-only">{t.sinFoto}</span></span>;
+  const acciones = (r: RecursoActividad, compact = false) => <div className={cn('flex items-center gap-1', !compact && 'justify-end')}>
+    <Link to={`${ACTIVIDADES_ROUTES.ADMIN_RESERVAS}?vista=todas&recurso=${r.id}`} aria-label={t.reservasDe(r.nombre ?? "")} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5' })}>
+      <CalendarCheck className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.reservas}</span></Link>
+    {canEdit && <button type="button" onClick={() => onEdit(r)} aria-label={t.editarDe(r.nombre ?? "")} className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'gap-1.5' })}>
+      <Pencil className="size-4" aria-hidden="true" /><span className={compact ? 'sr-only' : 'hidden 2xl:inline'}>{t.editar}</span></button>}
+  </div>;
+  const modalidad = (r: RecursoActividad) => r.modalidad ? t.modalidades[r.modalidad] : '—';
 
-            <div className="flex flex-col gap-2.5 p-5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-selva-50 px-2.5 py-0.5 text-[11px] font-semibold text-selva-800 uppercase tracking-wide">
-                  <Tag className="size-3" aria-hidden="true" />
-                  {recurso.tipo}
-                </span>
-                <span className="text-[11px] font-mono text-neutro-400">
-                  #{recurso.id}
-                </span>
-              </div>
-
-              <h3 className="font-serif text-base font-bold text-neutro-900">
-                {recurso.nombre}
-              </h3>
-
-              {recurso.Sucursal && (
-                <p className="flex items-center gap-1.5 text-xs text-neutro-600">
-                  <MapPin className="size-3.5 text-neutro-400 shrink-0" aria-hidden="true" />
-                  <span>{recurso.Sucursal.nombre}</span>
-                </p>
-              )}
-
-              {/* Tarifas configuradas */}
-              <div className="mt-2 rounded-lg bg-neutro-50 p-3 border border-neutro-200 text-xs space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-neutro-600">Tarifa horaria:</span>
-                  <span className="font-semibold text-neutro-900">
-                    {formatearGTQ(recurso.precio_hora)} / h
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutro-600">Equipamiento:</span>
-                  <span className="font-medium text-neutro-800">
-                    {formatearGTQ(recurso.precio_equipo)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutro-600">Instructor:</span>
-                  <span className="font-medium text-neutro-800">
-                    {formatearGTQ(recurso.precio_instructor_hora)} / h
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 pt-0 flex justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => onEdit(recurso)}
-              className="inline-flex items-center gap-1.5 w-full justify-center"
-            >
-              <Edit2 className="size-3.5" aria-hidden="true" />
-              <span>{textosActividades.editarRecurso}</span>
-            </Button>
-          </div>
-        </Card>
-      ))}
+  return <>
+    <div className="relative hidden overflow-x-auto rounded-xl border border-neutro-200 bg-white xl:block">
+      <table className="w-full text-left text-sm text-neutro-800">
+        <thead className="border-b border-neutro-200 bg-neutro-50 text-xs font-semibold text-neutro-600">
+          <tr>
+            <th scope="col" className="px-3 py-3">{t.col.recurso}</th>
+            {showSite && <th scope="col" className="px-3 py-3">{t.col.sede}</th>}
+            <th scope="col" className="px-3 py-3">{t.col.modalidad}</th>
+            <th scope="col" className="px-3 py-3">{t.col.tarifa}</th>
+            <th scope="col" className="px-3 py-3">{t.col.detalles}</th>
+            <th scope="col" className="px-3 py-3 text-right"><span className="sr-only">{t.col.acciones}</span></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutro-100">
+          {recursos.map((r) => { const lines = tarifa(r); return <tr key={r.id} className="hover:bg-bronce-50/40">
+            <td className="px-3 py-2.5"><span className="flex items-center gap-3">{thumb(r, 'size-10')}
+              <span className="min-w-0"><span className="block font-semibold text-neutro-900" lang="es">{r.nombre}</span><span className="block text-xs capitalize text-neutro-500" lang="es">{r.tipo}</span><span className="mt-1 block"><HorarioBadge registro={r} /></span></span></span></td>
+            {showSite && <td className="px-3 py-2.5 text-neutro-700" lang="es">{sedeNombre(r)}</td>}
+            <td className="whitespace-nowrap px-3 py-2.5">{modalidad(r)}</td>
+            <td className="whitespace-nowrap px-3 py-2.5"><span className="block font-medium tabular-nums text-neutro-900">{lines[0]}</span>
+              {lines.slice(1).map((line) => <span key={line} className="block text-xs tabular-nums text-neutro-500">{line}</span>)}</td>
+            <td className="whitespace-nowrap px-3 py-2.5 text-neutro-700">{detalles(r)}</td>
+            <td className="px-3 py-1.5">{acciones(r)}</td>
+          </tr>; })}
+        </tbody>
+      </table>
     </div>
-  );
+    <ul className="divide-y divide-neutro-200 overflow-hidden rounded-xl border border-neutro-200 bg-white xl:hidden">
+      {recursos.map((r) => { const lines = tarifa(r); return <li key={r.id} className="flex items-center gap-3 px-3 py-3">
+        {thumb(r, 'size-12')}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold text-neutro-900" lang="es">{r.nombre}</span>
+          <span className="mt-1 block"><HorarioBadge registro={r} /></span>
+          <span className="block truncate text-xs text-neutro-600"><span className="capitalize" lang="es">{r.tipo}</span> · {modalidad(r)}{showSite && <> · <span lang="es">{sedeNombre(r)}</span></>}</span>
+          <span className="block truncate text-xs tabular-nums text-neutro-800">{lines.join(' · ')}{r.modalidad === 'experiencia' && detalles(r) !== '—' && ` · ${detalles(r)}`}</span>
+        </span>
+        {acciones(r, true)}
+      </li>; })}
+    </ul>
+  </>;
 };

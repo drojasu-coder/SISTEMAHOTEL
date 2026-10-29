@@ -1,11 +1,13 @@
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
 
 import { AppError } from "../../utils/AppError";
 
-import { reservationFinancialExposure } from "../pago.service";
+import { getIntentoActivo, reservationFinancialExposure } from "../pago.service";
 
 import { ROLES, Role } from "../../constants/roles";
 import { env } from "../../config/env";
+import { computeExpiration, getReservationPaymentDeadline, isUncertainReservationPayment, isStayEnded, stampPendingReservationExpiration } from "./reservaExpiracion.policy";
+import { attachRoomReservationToCart } from "../carrito/carritoItem.service";
 import { SedeScope, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
 
 
@@ -1190,7 +1192,8 @@ export const createReservaHabitacion =
 
     data:
       CreateReservaHabitacionData,
-    scope?: SedeScope
+    scope?: SedeScope,
+    options?: { agregarAlCarrito?: boolean }
   ) => {
 
     /**
@@ -1278,6 +1281,34 @@ export const createReservaHabitacion =
          * Si otra petición ya creó una reserva mientras esperábamos,
          * ahora será visible y devolveremos 409.
          */
+        if (options?.agregarAlCarrito) {
+          /**
+           * Reintento idempotente (doble clic, error de red, dos pestañas): si el mismo cliente ya tiene una reserva
+           * pendiente idéntica, se reutiliza y solo se garantiza su vínculo con el carrito. Las solicitudes idénticas se
+           * serializan por el bloqueo de la habitación que toma validateLockedReferences; el carrito se serializa por usuario.
+           */
+          const existente = await ReservaHabitacion.findOne({
+            where: {
+              usuario_id: data.usuario_id,
+              habitacion_id: data.habitacion_id,
+              fecha_entrada: data.fecha_entrada,
+              fecha_salida: data.fecha_salida,
+              numero_huespedes: data.numero_huespedes,
+              estado: "pendiente",
+            },
+            transaction,
+          });
+          if (existente) {
+            // Reutilizar NUNCA extiende un plazo vencido ni reinicia el límite de la reserva.
+            const limite = await getReservationPaymentDeadline(existente.id, transaction);
+            if (limite && limite.getTime() <= Date.now()) {
+              throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar la reserva venció. Cancélela y cree una nueva");
+            }
+            const plazo = limite ?? new Date(Date.now() + env.CART_EXPIRATION_MINUTES * 60_000); // sin límite almacenado: plazo clásico del carrito
+            const carrito = await attachRoomReservationToCart(existente.id, data.usuario_id, plazo, transaction);
+            return { reserva: existente, reutilizada: true, carrito };
+          }
+        }
         await validateOverlap(
 
           data.habitacion_id,
@@ -1310,7 +1341,7 @@ export const createReservaHabitacion =
 
 
 
-        return ReservaHabitacion.create(
+        const reservaCreada = await ReservaHabitacion.create(
 
           {
 
@@ -1361,6 +1392,14 @@ export const createReservaHabitacion =
           }
 
         );
+        // Plazo de pago de la reserva pendiente (inerte mientras la política esté desactivada).
+        await stampPendingReservationExpiration(reservaCreada.id, transaction);
+        if (options?.agregarAlCarrito) {
+          // Mismo plazo inicial que la reserva: un carrito nuevo vence cuando vence el límite de pago de la reserva.
+          const carrito = await attachRoomReservationToCart(reservaCreada.id, data.usuario_id, computeExpiration(new Date()), transaction);
+          return { reserva: reservaCreada, reutilizada: false, carrito };
+        }
+        return reservaCreada;
 
       }
 
@@ -2089,3 +2128,190 @@ export const deleteReservaHabitacion =
     return reservaHabitacion;
 
   });
+
+
+const isDeadlock = (error: any) => error?.original?.code === "40P01" || error?.parent?.code === "40P01";
+
+/**
+ * Cancelación voluntaria de una reserva PROPIA (cliente). Cancelación lógica solo de reservas pendientes
+ * sin pago aprobado ni pago que todavía pueda completarse.
+ *
+ * - La titularidad se toma de la sesión; una reserva ajena se informa como inexistente (404).
+ * - Mismo orden de bloqueos que createPago: Carrito -> ReservaHabitacion -> Pago, por lo que una cancelación y la
+ *   creación de un pago concurrente se serializan: o bien el pago ya existe y se ve aquí, o bien la reserva queda
+ *   cancelada y createPago la rechaza.
+ * - Idempotente: repetir la cancelación de una reserva ya cancelada propia responde igual sin cambios.
+ * - No cancela PaymentIntents, no modifica pagos ni carritos.
+ */
+export const cancelOwnReservaHabitacion = async (id: number, userId: number) => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await sequelize.transaction(async (transaction: any) => {
+        const q = (sql: string, replacements: Record<string, unknown>) =>
+          sequelize.query(sql, { replacements, type: QueryTypes.SELECT, transaction }) as Promise<Array<Record<string, any>>>;
+        const cartRows = await q(
+          `SELECT DISTINCT carrito_id FROM carrito_items WHERE tipo_item = 'habitacion' AND referencia_id = :id ORDER BY carrito_id`,
+          { id },
+        );
+        const cartIds = cartRows.map(row => Number(row.carrito_id));
+        if (cartIds.length) await q(`SELECT id FROM carritos WHERE id IN (:ids) ORDER BY id FOR UPDATE`, { ids: cartIds });
+        const [row] = await q(`SELECT id, usuario_id, estado FROM reservas_habitacion WHERE id = :id FOR UPDATE`, { id });
+        if (!row || Number(row.usuario_id) !== Number(userId)) {
+          throw new AppError(404, "RESERVA_HABITACION_NOT_FOUND", "La reserva de habitación no fue encontrada");
+        }
+        if (row.estado === "cancelada") {
+          return { reserva: await ReservaHabitacion.findByPk(id, { transaction }), ya_cancelada: true };
+        }
+        if (row.estado !== "pendiente") {
+          throw new AppError(
+            409,
+            "RESERVATION_NOT_CANCELLABLE",
+            row.estado === "confirmada"
+              ? "Una reserva confirmada y pagada no puede cancelarse desde aquí"
+              : "La reserva ya no puede cancelarse",
+          );
+        }
+        // Volver a descubrir vínculos después del bloqueo: checkout puede haber
+        // añadido un carrito y registrado su pago mientras esperábamos la reserva.
+        const payments = await getRoomPayments(id, transaction, true);
+        if (payments.some(p => ["aprobado", "reembolsado", "reembolsado_parcial"].includes(String(p.estado)))) {
+          throw new AppError(409, "RESERVATION_HAS_APPROVED_PAYMENT", "La reserva tiene un pago aprobado y no puede cancelarse desde aquí");
+        }
+        if (payments.some(isUncertainReservationPayment)) {
+          throw new AppError(409, "RESERVATION_PAYMENT_IN_PROGRESS",
+            "No podemos cancelar mientras el estado del pago sea incierto. Consulte su estado o contacte con el hotel; la reserva permanece protegida");
+        }
+        await ReservaHabitacion.update({ estado: "cancelada" }, { where: { id, estado: "pendiente" }, transaction });
+        return { reserva: await ReservaHabitacion.findByPk(id, { transaction }), ya_cancelada: false };
+      });
+    } catch (error) {
+      // Un interbloqueo con el webhook de pago se reintenta; la transacción se revierte por completo.
+      if (isDeadlock(error) && attempt < 2) continue;
+      if (isDeadlock(error)) throw new AppError(409, "RESERVATION_BUSY", "La reserva está siendo procesada. Inténtelo de nuevo en unos segundos");
+      throw error;
+    }
+  }
+};
+
+
+/**
+ * "Continuar con el pago": reanuda una reserva PROPIA pendiente que ya no está en un carrito vigente (p. ej. el carrito
+ * venció antes que la reserva). Reutiliza la reserva existente y la vincula, de forma idempotente, con un carrito válido.
+ *
+ * - No crea una reserva nueva ni amplía expira_en: el carrito nuevo vence, como máximo, en el límite original de la reserva.
+ * - No toca los demás artículos ni el vencimiento de un carrito existente con artículos (ver attachRoomReservationToCart).
+ * - Se rechaza si la reserva venció, ya no es pendiente, tiene un cobro aprobado o un pago en curso, o si el carrito
+ *   activo tiene un pago en procesamiento. Nunca abre Stripe ni crea pagos.
+ * - Orden de bloqueos: Usuario -> Carrito -> Reserva -> Pago (compatible con createPago).
+ */
+export const resumeOwnReservaHabitacion = async (id: number, userId: number) => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await sequelize.transaction(async (transaction: any) => {
+        const q = (sql: string, replacements: Record<string, unknown>) =>
+          sequelize.query(sql, { replacements, type: QueryTypes.SELECT, transaction }) as Promise<Array<Record<string, any>>>;
+        const [pre] = await q(`SELECT usuario_id, estado, fecha_salida FROM reservas_habitacion WHERE id = :id`, { id });
+        if (!pre || Number(pre.usuario_id) !== Number(userId)) {
+          throw new AppError(404, "RESERVA_HABITACION_NOT_FOUND", "La reserva de habitación no fue encontrada");
+        }
+        if (pre.estado !== "pendiente") {
+          throw new AppError(409, "RESERVATION_NOT_PAYABLE", "La reserva ya no está pendiente de pago");
+        }
+        if (isStayEnded(pre.fecha_salida)) {
+          throw new AppError(409, "RESERVATION_STAY_ENDED", "La estancia de esta reserva ya terminó y no puede pagarse");
+        }
+        const limite = await getReservationPaymentDeadline(id, transaction);
+        if (limite && limite.getTime() <= Date.now()) {
+          throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar la reserva venció. Cancélela y cree una nueva");
+        }
+        const plazo = limite ?? new Date(Date.now() + env.CART_EXPIRATION_MINUTES * 60_000);
+        const carrito = await attachRoomReservationToCart(id, userId, plazo, transaction);
+        // Reconfirmación bajo el bloqueo de la reserva y de sus pagos (incluidos los de carritos anteriores).
+        const [row] = await q(`SELECT estado, fecha_salida FROM reservas_habitacion WHERE id = :id FOR UPDATE`, { id });
+        if (!row || row.estado !== "pendiente") throw new AppError(409, "RESERVATION_NOT_PAYABLE", "La reserva ya no está pendiente de pago");
+        if (isStayEnded(row.fecha_salida)) {
+          throw new AppError(409, "RESERVATION_STAY_ENDED", "La estancia de esta reserva ya terminó y no puede pagarse");
+        }
+        const currentDeadline = await getReservationPaymentDeadline(id, transaction);
+        if (currentDeadline && currentDeadline.getTime() <= Date.now()) {
+          throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar la reserva venció");
+        }
+        const payments = await getRoomPayments(id, transaction, true);
+        if (payments.some(p => ["aprobado", "reembolsado", "reembolsado_parcial"].includes(String(p.estado)))) {
+          throw new AppError(409, "RESERVATION_HAS_APPROVED_PAYMENT", "La reserva ya tiene un pago aprobado");
+        }
+        if (payments.some(isUncertainReservationPayment)) {
+          throw new AppError(409, "RESERVATION_PAYMENT_IN_PROGRESS", "La reserva tiene un pago pendiente de verificar. Consulte su estado o contacte con el hotel");
+        }
+        return { reserva: await ReservaHabitacion.findByPk(id, { transaction }), carrito };
+      });
+    } catch (error) {
+      if (isDeadlock(error) && attempt < 2) continue;
+      if (isDeadlock(error)) throw new AppError(409, "RESERVATION_BUSY", "La reserva está siendo procesada. Inténtelo de nuevo en unos segundos");
+      throw error;
+    }
+  }
+};
+
+
+/** Pagos directos y de todos los carritos históricos, incluyendo vínculos recién confirmados. */
+const getRoomPayments = async (id: number, transaction: any, lock = false): Promise<any[]> =>
+  sequelize.query(
+    `SELECT p.* FROM pagos p WHERE p.reserva_habitacion_id = :id OR p.carrito_id IN (
+      SELECT carrito_id FROM carrito_items WHERE tipo_item = 'habitacion' AND referencia_id = :id
+    ) ORDER BY p.id ${lock ? 'FOR UPDATE OF p' : ''}`,
+    { replacements: { id }, type: QueryTypes.SELECT, transaction },
+  );
+
+/** Lectura propia: no crea reservas, carritos, pagos ni intentos de Stripe. */
+export const getOwnReservationPaymentStatus = async (id: number, userId: number) => {
+  const snapshot = await sequelize.transaction({ isolationLevel: "REPEATABLE READ" }, async (transaction: any) => {
+    const reservation = await ReservaHabitacion.findByPk(id, { transaction });
+    if (!reservation || Number(reservation.usuario_id) !== userId) {
+      throw new AppError(404, "RESERVA_HABITACION_NOT_FOUND", "La reserva de habitación no fue encontrada");
+    }
+    const payments = await getRoomPayments(id, transaction);
+    const deadline = await getReservationPaymentDeadline(id, transaction);
+    const unavailable = reservation.estado !== "pendiente" || isStayEnded(reservation.fecha_salida) ||
+      Boolean(deadline && deadline.getTime() <= Date.now());
+    const paid = payments.some(p => ["aprobado", "reembolsado", "reembolsado_parcial"].includes(p.estado));
+    const uncertain = payments.filter(isUncertainReservationPayment);
+    return { unavailable, paid, uncertain };
+  });
+  const data: {
+    estado: "pagable" | "pagada" | "no_disponible" | "incierto" | "reanudable";
+    pago_id: number | null;
+    carrito_id: number | null;
+  } = { estado: "pagable", pago_id: null, carrito_id: null };
+  if (snapshot.paid) return { ...data, estado: "pagada" as const };
+  if (snapshot.uncertain.length) {
+    data.estado = "incierto";
+    const payment = snapshot.uncertain[0];
+    // Solo se publica un enlace cuyo pago pertenece también al titular.
+    // Un carrito histórico no autoriza por sí solo acceso a un pago ajeno.
+    if (payment.carrito_id == null) data.pago_id = Number(payment.id);
+    else {
+      const [cart] = await sequelize.query(`SELECT usuario_id FROM carritos WHERE id = :id`, {
+        replacements: { id: payment.carrito_id }, type: QueryTypes.SELECT,
+      }) as Array<{ usuario_id: number }>;
+      if (Number(cart?.usuario_id) === userId) data.pago_id = Number(payment.id);
+    }
+    if (!snapshot.unavailable && snapshot.uncertain.length === 1 && data.pago_id &&
+        payment.carrito_id != null && payment.metodo === "tarjeta" && payment.estado === "procesando" && payment.id_transaccion_externo) {
+      try {
+        // Consulta remota fuera de la transacción. El checkout reutiliza este intento;
+        // aquí no se llama a continuar-pago ni se agrega la reserva a otro carrito.
+        const intent = await getIntentoActivo({ carrito_id: Number(payment.carrito_id) }, { id: userId, rol: ROLES.CLIENTE });
+        if (intent?.pago_id === data.pago_id && intent.puede_confirmar && intent.client_secret) {
+          data.estado = "reanudable";
+          data.carrito_id = Number(payment.carrito_id);
+        }
+      } catch {
+        // Una consulta fallida no demuestra ausencia de pago: conservar "incierto".
+      }
+    }
+    return data;
+  }
+  if (snapshot.unavailable) data.estado = "no_disponible";
+  return data;
+};

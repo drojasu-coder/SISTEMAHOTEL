@@ -1,9 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
-  BedDouble,
-  UtensilsCrossed,
-  Sparkles,
   Compass,
   Plus,
   Calendar,
@@ -11,20 +8,24 @@ import {
   MapPin,
   User,
   AlertCircle,
-  Eye,
+  ChevronRight,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button, buttonStyles } from '@/components/ui/Button';
+import { LoadingNotice } from '@/components/ui/Feedback';
 import { useAuth } from '@/features/auth/AuthContext';
 import { useMisReservasActividadQuery } from '../hooks/useReservasActividad';
-import { RESERVAS_ROUTES } from '@/features/reservas';
-import { RESTAURANTE_ROUTES } from '@/features/restaurante';
-import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ACTIVIDADES_ROUTES } from '../constants/routes';
-import { BIENESTAR_ROUTES } from '@/features/bienestar';
-import { Heart } from 'lucide-react';
 import { textosActividades, formatearGTQ } from '../textos';
+import { MisReservasLayout } from '@/features/mis-reservas/components/MisReservasLayout';
 import { BotonAnadirAlCarrito } from '@/features/carrito/components/BotonAnadirAlCarrito';
+import { cn } from '@/lib/cn';
+
+const estadoBadgeClass = (estado: string) => {
+  if (estado === 'confirmada') return 'border-exito-600/20 bg-exito-50 text-exito-700';
+  if (estado === 'completada') return 'border-info-600/20 bg-info-50 text-info-700';
+  return 'border-neutro-200 bg-neutro-100 text-neutro-600';
+};
 
 export const MisReservasActividadesList: React.FC = () => {
   const { user } = useAuth();
@@ -32,231 +33,179 @@ export const MisReservasActividadesList: React.FC = () => {
   const reservas = reservasQuery.data ?? [];
 
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      {/* Pestañas de navegación de Mis Reservas */}
-      <div className="flex border-b border-neutro-200 overflow-x-auto">
-        <Link
-          to={RESERVAS_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
-        >
-          <BedDouble className="size-4" aria-hidden="true" />
-          <span>{textosActividades.pestanaHabitaciones}</span>
-        </Link>
-        <Link
-          to={RESTAURANTE_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
-        >
-          <UtensilsCrossed className="size-4" aria-hidden="true" />
-          <span>{textosActividades.pestanaRestaurante}</span>
-        </Link>
-        <Link
-          to={AMENIDADES_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
-        >
-          <Sparkles className="size-4" aria-hidden="true" />
-          <span>{textosActividades.pestanaAmenidades}</span>
-        </Link>
-        <Link
-          to={ACTIVIDADES_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-bronce-600 px-4 py-3 text-sm font-semibold text-bronce-700 whitespace-nowrap"
-          aria-current="page"
-        >
-          <Compass className="size-4" aria-hidden="true" />
-          <span>{textosActividades.pestanaActividades}</span>
-        </Link>
-        <Link
-          to={BIENESTAR_ROUTES.MIS_RESERVAS}
-          className="flex items-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-neutro-600 hover:border-neutro-300 hover:text-neutro-900 transition-colors whitespace-nowrap"
-        >
-          <Heart className="size-4" aria-hidden="true" />
-          <span>Bienestar y Spa</span>
-        </Link>
-      </div>
-
-      {/* Encabezado */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{textosActividades.misReservasSubtitulo}</p>
-          <h1 className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem] font-serif font-semibold">
-            {textosActividades.misReservasTitulo}
-          </h1>
-          <p className="max-w-2xl text-sm text-neutro-600">
-            {textosActividades.misReservasDescripcion}
-          </p>
-        </div>
-
-        <Link
-          to={ACTIVIDADES_ROUTES.CATALOGO}
-          className="inline-flex items-center gap-2 rounded-md bg-bronce-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-bronce-700 transition-colors self-start sm:self-center"
-        >
-          <Plus className="size-4" aria-hidden="true" />
-          <span>{textosActividades.reservarActividad}</span>
-        </Link>
-      </div>
-
-      {/* Estado: Cargando */}
-      {reservasQuery.isPending && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" aria-busy="true">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="p-6 space-y-4">
-              <div className="h-6 w-1/3 animate-pulse rounded bg-neutro-200" />
-              <div className="h-4 w-2/3 animate-pulse rounded bg-neutro-200" />
-              <div className="h-10 w-full animate-pulse rounded bg-neutro-200" />
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Estado: Error */}
-      {reservasQuery.isError && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center border-rojo-200 bg-rojo-50">
-          <AlertCircle className="size-12 text-rojo-500 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">
-            {textosActividades.errorCargarReservas}
-          </h2>
-          <p className="text-sm text-neutro-600 max-w-md mb-6">
-            Ocurrió un inconveniente al consultar sus reservas recreativas.
-          </p>
-          <Button type="button" variant="primary" onClick={() => reservasQuery.refetch()}>
-            {textosActividades.reintentar}
-          </Button>
-        </Card>
-      )}
-
-      {/* Estado: Vacío */}
-      {!reservasQuery.isPending && !reservasQuery.isError && reservas.length === 0 && (
-        <Card className="flex flex-col items-center justify-center p-12 text-center">
-          <Compass className="size-12 text-neutro-400 mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-neutro-900 mb-2">
-            {textosActividades.sinReservasTitulo}
-          </h2>
-          <p className="text-sm text-neutro-600 max-w-md mb-6">
-            {textosActividades.sinReservasDesc}
-          </p>
+    <MisReservasLayout>
+      <div className="flex flex-col gap-6">
+        {/* Encabezado */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-0.5">
+            <h1 className="text-xl font-serif font-semibold text-neutro-900 sm:text-2xl">
+              {textosActividades.pestanaActividades}
+            </h1>
+            {!reservasQuery.isPending && !reservasQuery.isError && reservas.length > 0 && (
+              <p className="text-xs text-neutro-500">
+                {reservas.length === 1 ? "1 reserva" : `${reservas.length} reservas`}
+              </p>
+            )}
+          </div>
           <Link
             to={ACTIVIDADES_ROUTES.CATALOGO}
-            className={buttonStyles({ variant: 'primary' })}
+            className="inline-flex items-center gap-2 self-start rounded-md bg-bronce-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-bronce-700 transition-colors sm:self-center"
           >
-            {textosActividades.reservarActividad}
+            <Plus className="size-4" aria-hidden="true" />
+            <span>{textosActividades.reservarActividad}</span>
           </Link>
-        </Card>
-      )}
+        </div>
 
-      {/* Listado de reservas */}
-      {!reservasQuery.isPending && !reservasQuery.isError && reservas.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {reservas.map((reserva) => {
-            const estadoClave = reserva.estado || 'confirmada';
-            const estadoTexto = textosActividades.estados[estadoClave] || estadoClave;
+        {/* Cargando */}
+        {reservasQuery.isPending && (
+          <div className="flex justify-center py-12">
+            <LoadingNotice label="Cargando sus actividades…" />
+          </div>
+        )}
 
-            const estadoBadgeColor =
-              estadoClave === 'confirmada'
-                ? 'bg-verde-100 text-verde-800'
-                : estadoClave === 'completada'
-                  ? 'bg-azul-100 text-azul-800'
-                  : 'bg-neutro-100 text-neutro-800';
+        {/* Error */}
+        {reservasQuery.isError && (
+          <Card className="flex flex-col items-center justify-center p-10 text-center">
+            <AlertCircle className="size-10 text-error-500 mb-3" aria-hidden="true" />
+            <h2 className="text-base font-semibold text-neutro-900 mb-2">
+              {textosActividades.errorCargarReservas}
+            </h2>
+            <Button type="button" variant="primary" size="sm" onClick={() => reservasQuery.refetch()}>
+              {textosActividades.reintentar}
+            </Button>
+          </Card>
+        )}
 
-            return (
-              <Card
-                key={reserva.id}
-                className="flex flex-col justify-between p-6 border-neutro-200 hover:shadow-md transition-shadow"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="text-xs font-semibold text-neutro-500">
+        {/* Estado vacío */}
+        {!reservasQuery.isPending && !reservasQuery.isError && reservas.length === 0 && (
+          <Card className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+            <Compass className="size-10 text-neutro-300" aria-hidden="true" />
+            <div className="flex max-w-sm flex-col gap-1">
+              <h2 className="text-base font-serif font-semibold text-neutro-800">
+                {textosActividades.sinReservasTitulo}
+              </h2>
+              <p className="text-xs text-neutro-500">{textosActividades.sinReservasDesc}</p>
+            </div>
+            <Link
+              to={ACTIVIDADES_ROUTES.CATALOGO}
+              className={buttonStyles({ variant: 'primary', size: 'sm' })}
+            >
+              {textosActividades.reservarActividad}
+            </Link>
+          </Card>
+        )}
+
+        {/* Listado */}
+        {!reservasQuery.isPending && !reservasQuery.isError && reservas.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {reservas.map((reserva) => {
+              const estadoClave = reserva.estado || 'confirmada';
+              const estadoTexto = textosActividades.estados[estadoClave] || estadoClave;
+
+              return (
+                <article
+                  key={reserva.id}
+                  className="surface flex flex-col gap-3 p-4 transition-shadow hover:shadow-md"
+                >
+                  {/* Cabecera */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <p className="text-[0.6875rem] font-semibold uppercase tracking-wider text-bronce-700">
                         Reserva #{reserva.id}
-                      </span>
-                      <h3 className="text-lg font-serif font-semibold text-neutro-900">
+                      </p>
+                      <h2 className="truncate text-sm font-semibold text-neutro-900">
                         {reserva.RecursoActividad?.nombre || `Actividad #${reserva.recurso_id}`}
-                      </h3>
+                      </h2>
                       {reserva.RecursoActividad?.tipo && (
-                        <p className="text-xs text-neutro-500 uppercase tracking-wider font-medium">
+                        <p className="text-xs uppercase tracking-wide text-neutro-400">
                           {reserva.RecursoActividad.tipo}
                         </p>
                       )}
                     </div>
                     <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoBadgeColor}`}
+                      className={cn(
+                        'inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold',
+                        estadoBadgeClass(estadoClave),
+                      )}
                     >
                       {estadoTexto}
                     </span>
                   </div>
 
-                  <div className="space-y-2 text-sm text-neutro-700">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="size-4 text-neutro-400 shrink-0" aria-hidden="true" />
-                      <span>{reserva.fecha}</span>
+                  {/* Detalles compactos */}
+                  <dl className="flex flex-col gap-1.5 text-xs text-neutro-600">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="size-3.5 shrink-0 text-neutro-400" aria-hidden="true" />
+                      <dt className="sr-only">Fecha</dt>
+                      <dd>{reserva.fecha}</dd>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-4 text-neutro-400 shrink-0" aria-hidden="true" />
-                      <span>
-                        {reserva.hora_inicio?.slice(0, 5)} - {reserva.hora_fin?.slice(0, 5)}
-                      </span>
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="size-3.5 shrink-0 text-neutro-400" aria-hidden="true" />
+                      <dt className="sr-only">Hora</dt>
+                      <dd>
+                        {reserva.hora_inicio?.slice(0, 5)} – {reserva.hora_fin?.slice(0, 5)}
+                      </dd>
                     </div>
-
                     {reserva.RecursoActividad?.Sucursal?.nombre && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="size-4 text-neutro-400 shrink-0" aria-hidden="true" />
-                        <span>Sede: {reserva.RecursoActividad.Sucursal.nombre}</span>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="size-3.5 shrink-0 text-neutro-400" aria-hidden="true" />
+                        <dt className="sr-only">Sede</dt>
+                        <dd className="truncate">{reserva.RecursoActividad.Sucursal.nombre}</dd>
                       </div>
                     )}
-
                     {reserva.Instructor ? (
-                      <div className="flex items-center gap-2">
-                        <User className="size-4 text-neutro-400 shrink-0" aria-hidden="true" />
-                        <span>
-                          Instructor: {reserva.Instructor.nombre}
-                          {reserva.Instructor.especialidad ? ` (${reserva.Instructor.especialidad})` : ''}
-                        </span>
+                      <div className="flex items-center gap-1.5">
+                        <User className="size-3.5 shrink-0 text-neutro-400" aria-hidden="true" />
+                        <dt className="sr-only">Instructor</dt>
+                        <dd className="truncate">
+                          {reserva.Instructor.nombre}
+                          {reserva.Instructor.especialidad
+                            ? ` (${reserva.Instructor.especialidad})`
+                            : ''}
+                        </dd>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-neutro-500 text-xs">
-                        <User className="size-4 text-neutro-400 shrink-0" aria-hidden="true" />
-                        <span>{textosActividades.sinInstructor}</span>
+                      <div className="flex items-center gap-1.5 text-neutro-400">
+                        <User className="size-3.5 shrink-0" aria-hidden="true" />
+                        <dd>{textosActividades.sinInstructor}</dd>
                       </div>
                     )}
-
                     {reserva.con_equipo && (
-                      <div className="text-xs text-bronce-700 font-medium">
+                      <p className="text-[0.6875rem] font-medium text-bronce-700">
                         ✓ {textosActividades.conEquipo}
-                      </div>
+                      </p>
                     )}
-                  </div>
+                  </dl>
 
-                  <div className="pt-3 border-t border-neutro-100 flex justify-between items-baseline">
-                    <span className="text-xs text-neutro-500">{textosActividades.totalCalculado}:</span>
-                    <span className="text-base font-semibold text-bronce-800">
+                  {/* Pie: importe + acciones */}
+                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-neutro-100 pt-3">
+                    <span className="text-sm font-semibold text-neutro-900">
                       {formatearGTQ(reserva.total)}
                     </span>
+                    <div className="flex items-center gap-2">
+                      {estadoClave === 'confirmada' && (
+                        <BotonAnadirAlCarrito
+                          reservaId={reserva.id!}
+                          reservaEstado={reserva.estado || 'confirmada'}
+                          tipo_item="actividad"
+                          size="sm"
+                        />
+                      )}
+                      <Link
+                        to={ACTIVIDADES_ROUTES.DETALLE_RESERVA(reserva.id!)}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-bronce-700 hover:text-bronce-900 transition-colors"
+                      >
+                        <span>Ver</span>
+                        <ChevronRight className="size-4" aria-hidden="true" />
+                      </Link>
+                    </div>
                   </div>
-                </div>
-
-                <div className="pt-4 mt-4 border-t border-neutro-100 flex flex-wrap items-center justify-between gap-3">
-                  <Link
-                    to={ACTIVIDADES_ROUTES.DETALLE_RESERVA(reserva.id!)}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-bronce-700 hover:text-bronce-800"
-                  >
-                    <Eye className="size-3.5" aria-hidden="true" />
-                    <span>Ver detalle</span>
-                  </Link>
-
-                  {/* Botón para añadir a carrito activo y pagar si está confirmada */}
-                  {estadoClave === 'confirmada' && (
-                    <BotonAnadirAlCarrito
-                      reservaId={reserva.id!}
-                      reservaEstado={reserva.estado || 'confirmada'}
-                      tipo_item="actividad"
-                      size="sm"
-                    />
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </section>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </MisReservasLayout>
   );
 };

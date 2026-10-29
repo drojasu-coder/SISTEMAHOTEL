@@ -52,6 +52,17 @@
 
 ## BE-014 · Documentación OpenAPI, esquemas de contrato y recuperación de intento activo en pagos
 
+
+**Actualización de seguridad — 2026-10-29, recuperación del árbol local:** el cierre histórico siguiente no acredita la seguridad de la cancelación actual. Queda **pendiente la conciliación duradera de pagos sin referencia o con resultado incierto**. Se conserva el bloqueo; ni la ausencia de `id_transaccion_externo`, ni la antigüedad, ni un rechazo de tarjeta prueban que ya no pueda cobrarse. Las claves de Stripe tienen retención limitada ([idempotencia](https://docs.stripe.com/api/idempotent_requests)); un intento rechazado puede volver a intentarse ([ciclo de vida](https://docs.stripe.com/payments/paymentintents/lifecycle)).
+
+- Cancelación propia y vencimiento revisan pagos directos y de carritos históricos después de bloquear la reserva. Pagos aprobados/reembolsados e inciertos impiden liberar capacidad. La exposición financiera de habitaciones conserva también rechazos de tarjeta heredados y cierres locales sin referencia.
+- Checkout conserva la fila `procesando` ante errores de creación/enlace. El reintento explícito usa la misma clave y parámetros durante la ventana conservadora de 20 horas; fuera de ella queda bloqueado para revisión. GET de intento activo ya no crea intentos ni cancela pagos, y consulta Stripe fuera de la transacción. El vencimiento automático omite pagos que requieran conciliación: no crea/cancela intentos mientras sostiene su advisory lock. Los rechazos nuevos del webhook conservan `procesando` y su exposición; eventos tardíos no degradan aprobados/reembolsados ni reabren cancelados con un fallo.
+- Contrato disponible: `GET /api/reservas-habitacion/:id/estado-pago`, solo cliente titular, 404 para reservas ajenas, sin escrituras; devuelve `estado` (`pagable`, `pagada`, `no_disponible`, `incierto`, `reanudable`), `pago_id` y `carrito_id` anulables. Considera fecha de salida, plazo y pagos históricos. `reanudable` solo se ofrece para un único pago en procesamiento, con intento confirmable verificado y carrito válido. Se reutiliza el checkout existente; los demás casos inciertos ofrecen consulta de estado/contacto, nunca otro cobro. Tipado manual en `features/reservas/types.ts` y OpenAPI en la ruta; regeneración global de esquemas pendiente.
+- Para desbloquear cancelaciones con pagos inciertos: protocolo persistente que coordine creación/enlace del intento, titularidad, clave original, cancelación y webhook; identificación positiva de la operación y resultado terminal de Stripe, revalidación bajo bloqueos y pruebas de concurrencia autorizadas. Un registro vacío o un timeout no bastan. Los intentos directos sin un checkout compatible permanecen en consulta/revisión.
+- Límite de alcance: siguen existiendo llamadas heredadas a Stripe dentro de transacciones en `assertEventReservationCanBeMutated` y `createReembolso` (`services/pago.service.ts`). No se reestructuran eventos/reembolsos en esta corrección de habitaciones. Por ello no se afirma que **todo** el backend esté libre de llamadas remotas bajo transacción; los flujos intervenidos de checkout/cancelación/vencimiento/consulta sí lo están.
+- Verificación de esta continuación: TypeScript de backend y frontend y build de frontend; revisión estática de estados, titularidad, idempotencia y orden de bloqueos. Sin pruebas de integración ni concurrencia ejecutadas, sin mocks o scripts de prueba, sin tocar `hotel_db`, migraciones ni operaciones reales de Stripe. La reserva #19 no fue operada. La advertencia de tamaño de bundle de Vite permanece.
+
+
 - **Categoría:** mejora de documentación / contrato OpenAPI y recuperación funcional de pagos
 - **Revisión inspeccionada:** 2026-10-24 · `refactor/backend-architecture`
 - **Flujo afectado:** operaciones de checkout y pagos (`/api/pagos`, `/api/pagos/intento-activo`, `/api/pagos/resumen`, `/api/pagos/:id`, `/api/pagos/stripe/webhook`).
@@ -168,6 +179,17 @@ La lectura de las rutas y del servicio vigentes confirma que `GET /api/habitacio
 
 ## BE-022 · Textos legales aprobados y aceptación persistida
 
+
+**Actualización de presentación comercial, 2026-10-29:** las cinco páginas públicas (términos, privacidad, reservas/cancelaciones/reembolsos, cookies/almacenamiento y preguntas frecuentes) están redactadas en ES/EN como información de HOTEL HUNAHPÚ. Se retiraron el aviso académico común, las referencias a demostración y las secciones internas pendientes. Las decisiones siguientes se conservan aquí, fuera de las páginas públicas.
+
+- **Coherencia verificada en código:** habitaciones pendientes cancelables sin pagos aprobados/inciertos; pagos ya existentes reutilizados solo con verificación; plazos configurables y no renovables por recarga, sin prometer 15 minutos universales; restaurante con cancelación propia antes del horario; actividades/bienestar/amenidades con gestión del personal; eventos como cotización sujeta a confirmación. No se agregan funciones.
+- **Información material:** las páginas de pago informan brevemente que el formulario actual no genera cargos reales y no deben introducirse tarjetas reales. El formulario muestra la misma aclaración al detectar la clave pública TEST, sin cambiar configuración ni mecanismos financieros. Los comprobantes siguen identificados como internos, no FEL. No se afirma registro, certificación o cumplimiento normativo no acreditado.
+- **Decisiones comerciales pendientes:** identidad legal del operador, datos fiscales, contacto formal para privacidad/reclamos y validación de los contactos publicados por sede; horarios de llegada/salida; política aprobada de cancelaciones, penalizaciones, no presentación y devoluciones por servicio; tiempos de atención y acreditación; conservación/eliminación de información; facturación fiscal y requisitos de registro aplicables. Ninguna se publica como un hecho ya definido.
+- **Aceptación y cuentas:** no existe aceptación persistida de versiones legales ni autoservicio completo de edición, eliminación, recuperación de contraseña o desvinculación Google. No se añade una casilla de consentimiento ficticia ni se promete eliminación automática. Ver BE-020, BE-021 y BE-023.
+- **Referencia para revisión jurídica:** [Ley de Protección al Consumidor y Usuario, DIACO](https://diaco.gob.gt/ley_proteccion_al_usuario/). Los artículos y porcentajes del contenido anterior no se adoptan como política contractual del hotel. La publicación editorial no acredita revisión jurídica integral ni registro oficial.
+- **Estado:** presentación bilingüe implementada; definición comercial/jurídica y contrato de aceptación persistida pendientes. Se mantiene el historial de esta entrada.
+
+
 - **Categoría / estado:** decisión pendiente; capacidad de backend pendiente si se exige aceptación (José/producto).
 - **Inspección:** misma revisión de BE-020; no se encontraron textos legales aprobados/rutas públicas en el repositorio. `registerSchema.strict()` acepta únicamente nombre, email, password y teléfono opcional; Usuario y servicio no guardan aceptación ni versión de términos.
 - **Actual:** 3B no publica borradores legales, no añade enlaces rotos ni una casilla que finja persistencia.
@@ -227,6 +249,46 @@ La lectura de las rutas y del servicio vigentes confirma que `GET /api/habitacio
 - **Desbloqueo verificable de ampliaciones:** decisiones aprobadas, campos/endpoints documentados y pruebas de persistencia, autorización y concurrencia apropiadas; después integrar únicamente la capacidad respaldada. El flujo básico actual no depende de estas ampliaciones. Ficha 4C fuera del alcance.
 
 ## BE-029 · Datos de terapeutas y ampliaciones de Bienestar
+
+
+**Inventario y propuesta de normalización, 2026-10-29 — pendiente de autorización del propietario.** Lectura directa de `hotel_db` mediante `BEGIN READ ONLY`, consultas `SELECT` y `ROLLBACK`; sin escrituras, migraciones, cuentas nuevas ni cambios financieros. Esta propuesta es interna y no se publica como plantilla real contratada.
+
+Se identificaron 20 terapeutas activos con nombres numerados (IDs 21–40): Antigua 4, Atitlán 5, Xela 4, Capital 7. No hay instructores registrados. No se encontraron nombres literales «Terapeuta A/B/C» en este catálogo. Propuesta de nombres ficticios naturales exclusivamente para los perfiles de muestra ya existentes; no agrega credenciales, especialidades ni certificaciones.
+
+| ID terapeuta | Sede | Nombre actual | Nombre propuesto | Citas vinculadas observadas |
+| --- | --- | --- | --- | ---: |
+| 21 | Antigua | Terapeuta Antigua 01 | Lucía Gabriela Morales | 2 |
+| 22 | Antigua | Terapeuta Antigua 02 | Andrés Esteban Cabrera | 1 |
+| 23 | Antigua | Terapeuta Antigua 03 | Mariana Isabel Estrada | 1 |
+| 24 | Antigua | Terapeuta Antigua 04 | Daniel Alejandro Méndez | 0 |
+| 25 | Atitlán | Terapeuta Atitlán 01 | Ana Sofía Castillo | 2 |
+| 26 | Atitlán | Terapeuta Atitlán 02 | José Miguel Vásquez | 0 |
+| 27 | Atitlán | Terapeuta Atitlán 03 | Elena Patricia Mendoza | 0 |
+| 28 | Atitlán | Terapeuta Atitlán 04 | Luis Fernando Castañeda | 0 |
+| 29 | Atitlán | Terapeuta Atitlán 05 | Camila Andrea Ramírez | 0 |
+| 30 | Xela | Terapeuta Xela 01 | Gabriela Alejandra Pérez | 0 |
+| 31 | Xela | Terapeuta Xela 02 | Ricardo Antonio López | 0 |
+| 32 | Xela | Terapeuta Xela 03 | Natalia Beatriz Fuentes | 0 |
+| 33 | Xela | Terapeuta Xela 04 | Carlos Eduardo Aguilar | 0 |
+| 34 | Capital | Terapeuta Capital 01 | Valeria Fernanda Rojas | 0 |
+| 35 | Capital | Terapeuta Capital 02 | Diego Alejandro Herrera | 0 |
+| 36 | Capital | Terapeuta Capital 03 | Sofía Isabel Alvarado | 0 |
+| 37 | Capital | Terapeuta Capital 04 | Pablo Andrés Salazar | 0 |
+| 38 | Capital | Terapeuta Capital 05 | Adriana Lucía Sandoval | 0 |
+| 39 | Capital | Terapeuta Capital 06 | Mateo Sebastián Reyes | 0 |
+| 40 | Capital | Terapeuta Capital 07 | Andrea Gabriela Flores | 0 |
+
+**Alcance propuesto de una autorización posterior:** cambiar únicamente `terapeutas.nombre` de esos 20 IDs tras releer nombre actual, sede, estado y relaciones. Conservar IDs, sedes, estado activo, todas las citas y todos los pagos. Los IDs 21, 22, 23 y 25 tienen seis citas vinculadas; al mostrar el nombre mediante la relación también cambiaría su etiqueta en consultas históricas, aunque no se modificarían filas de citas. Este efecto requiere autorización expresa. No se ha aplicado ningún nombre propuesto ni un alias de presentación que oculte los datos actuales.
+
+**Cuentas de validación identificadas (16):**
+
+- Activas: usuarios 22 (Verificación funcional Hunahpú), 23 (Verificación comercial temporal), 33 (QA Itinerario), 34 (QA Vacio). El 22 tiene dos reservas de habitación, una de mesa, dos carritos y dos pagos. El 23 no tiene relaciones en los dominios de reservas/carritos/pagos consultados. **33 y 34 quedan excluidos de cualquier limpieza: corresponden al trabajo paralelo del itinerario** y tienen reservas vinculadas.
+- Inactivas: 15, 19, 21, 24, 25, 26, 27, 28, 29, 30, 31 y 9999. Los usuarios 27, 29 y 30 conservan reservas y carritos; el 31 conserva una reserva, un carrito y un pago. No se deben borrar.
+- Los usuarios 24, 25 y 26 siguen siendo cuentas de verificación, vinculadas a empleados 3, 4 y 5 de Antigua, con áreas de verificación de gerencia, recepción y encargado. No tienen turnos ni sedes adicionales en la lectura realizada. **No convertirlos en empleados operativos mediante un cambio de nombre**, ni reactivarlos. Conservar identidades y relaciones; cualquier exclusión visual del listado operativo debe acordarse por estado, sin ocultarlos del historial o la administración.
+- Propuesta para QA: mantener las cuentas inactivas y sus historiales. Revisar con el propietario el retiro de acceso de 22/23 cuando termine su uso; no renombrarlas como huéspedes o empleados, ni desactivarlas sin autorización. Releer relaciones antes de cualquier actuación, pues el árbol y los datos se comparten con otros agentes.
+
+La presentación pública del personal seguirá mostrando los nombres actuales hasta que se autorice y aplique la sustitución de catálogo. No se promete disponibilidad de instructores ni se crean personas o cuentas para llenar ese catálogo.
+
 
 **Actualización de integración comercial (2026-10-27):** se resolvió la falta de datos operativos descrita en el inventario inicial de esta entrada. Las lecturas reales de `hotel_db` por `:4000` entregan **21 servicios activos y 20 terapeutas activos**, distribuidos por `sucursal_id` entre Antigua (5/4), Atitlán (6/5), Xela (4/4) y Capital (6/7). Son registros existentes; esta verificación no los creó, modificó ni eliminó. Los servicios y terapeutas ahora tienen relación con sede; el servicio de creación rechaza `THERAPIST_BRANCH_MISMATCH`. El formulario público muestra la sede y únicamente terapeutas activos de la sede del servicio. Chromium verificó selección anónima, retorno del login con los campos preservados y preparación autenticada, sin enviar citas. Las afirmaciones históricas siguientes sobre ausencia de sede o terapeutas describen el estado inicial, no el entorno actual.
 

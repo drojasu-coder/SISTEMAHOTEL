@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as amenidadService from "../../services/amenidades/amenidad.service";
+import { getDisponibilidadAmenidad } from "../../services/amenidades/reservaAmenidad.service";
 
 export const getAll = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -83,4 +84,11 @@ export const deleteImage = async (
   } catch (error) {
     next(error);
   }
+};
+
+export const getDisponibilidad = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getDisponibilidadAmenidad(Number(req.params.id), String(req.query.fecha ?? ""));
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
 };

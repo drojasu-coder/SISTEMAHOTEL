@@ -17,6 +17,8 @@ import type {
   TiposHabitacionFiltersState,
 } from "@/features/tipos-habitacion/types";
 import { getApiErrorMessage } from "@/api/errors";
+import { useHabitacionesQuery } from "@/features/habitaciones/hooks/useHabitaciones";
+import { useTextosInventario } from "@/features/habitaciones/inventarioTextos";
 
 export const TiposHabitacionPage: React.FC = () => {
   const textosTiposHabitacion = useTiposHabitacionTexts();
@@ -33,6 +35,14 @@ export const TiposHabitacionPage: React.FC = () => {
 
   const { data: tipos, isLoading, isError, error, refetch } =
     useTiposHabitacionQuery(Boolean(user));
+  const ti = useTextosInventario();
+  // Habitaciones por tipo dentro de la sede visible, contadas por id real del tipo.
+  const habitacionesQuery = useHabitacionesQuery(selectedSedeId);
+  const roomCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const hab of habitacionesQuery.data ?? []) counts.set(hab.tipo_habitacion_id, (counts.get(hab.tipo_habitacion_id) ?? 0) + 1);
+    return counts;
+  }, [habitacionesQuery.data]);
 
   const [filters, setFilters] = useState<TiposHabitacionFiltersState>({
     search: "",
@@ -65,34 +75,19 @@ export const TiposHabitacionPage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 pb-12">
-      {/* Encabezado */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-1 basis-72 flex-col gap-1.5">
-          <p className="eyebrow">{textosTiposHabitacion.subtitulo}</p>
-          <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900 sm:text-3xl">
-            {textosTiposHabitacion.titulo}
-          </h1>
-          <p className="text-sm text-neutro-600 max-w-2xl">
-            {textosTiposHabitacion.descripcion}
-          </p>
+    <div className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-5 pb-12">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{textosTiposHabitacion.titulo}</h1>
+          {tipos && <p className="mt-1 text-sm text-neutro-600">{ti.tiposResumen(filteredTipos.length)}</p>}
         </div>
-
-        <div className="flex max-w-full flex-wrap items-center gap-3 self-start">
-          {canManageTipos && (
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleOpenCreate}
-              disabled={authorized.isLoading || authorized.isError}
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              <span>{textosTiposHabitacion.nuevoTipo}</span>
-            </Button>
-          )}
-        </div>
-      </div>
-
+        {canManageTipos && (
+          <Button type="button" variant="primary" onClick={handleOpenCreate} disabled={authorized.isLoading || authorized.isError}>
+            <Plus className="size-4" aria-hidden="true" />
+            <span>{textosTiposHabitacion.nuevoTipo}</span>
+          </Button>
+        )}
+      </header>
       {/* Alerta de confirmación */}
       {feedbackMessage && (
         <Alert tone="success">
@@ -112,7 +107,6 @@ export const TiposHabitacionPage: React.FC = () => {
       {canManageTipos && authorized.isError && <Alert tone="error">{textosTiposHabitacion.scopeError}
         <Button variant="text" onClick={() => void authorized.refetch()}>{textosTiposHabitacion.retry}</Button>
       </Alert>}
-      <p className="text-xs text-neutro-600">{textosTiposHabitacion.siteNote}</p>
 
       {/* Barra de búsqueda */}
       {!isLoading && !isError && tipos && tipos.length > 0 && (
@@ -194,6 +188,9 @@ export const TiposHabitacionPage: React.FC = () => {
           isEditable={canEditTipo}
           sedes={authorized.data?.sedes ?? []}
           onEdit={handleOpenEdit}
+          roomCounts={habitacionesQuery.isSuccess ? roomCounts : undefined}
+          roomsLabel={ti.colTipo.habitaciones}
+          roomsLinkLabel={ti.verHabitaciones}
         />
       )}
 

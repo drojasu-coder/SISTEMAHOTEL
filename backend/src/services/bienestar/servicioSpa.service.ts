@@ -3,8 +3,10 @@ import { AppError } from "../../utils/AppError";
 import * as mediaUploadService from "../storage/mediaUpload.service";
 import * as s3Service from "../storage/s3.service";
 import { getAssetCredits } from "../storage/credits";
+import { ahoraEnGuatemala, contarFueraDeHorario, leerHorario, validarHorarioConfigurado } from "../../utils/franjasHorarias";
 
 const db = require("../../models");
+const { Op } = require("sequelize");
 
 const {
   ServicioBienestar,
@@ -68,6 +70,7 @@ export const create = async (
   data: any
 ) => {
   await assertSucursalExists(data.sucursal_id);
+  validarHorarioConfigurado(data, Number(data.duracion_minutos));
   const servicio = await ServicioBienestar.create({
     nombre: data.nombre,
     duracion_minutos:
@@ -76,6 +79,8 @@ export const create = async (
     imagen_key: data.imagen_key ?? null,
     sucursal_id: data.sucursal_id ?? null,
     activo: data.activo ?? true,
+    hora_apertura: data.hora_apertura ?? null,
+    hora_cierre: data.hora_cierre ?? null,
   });
   return serializeServicioBienestar(servicio);
 };
@@ -94,9 +99,27 @@ export const update = async (
   }
 
   await assertSucursalExists(data.sucursal_id);
+  // El horario se valida con los valores resultantes, aunque solo cambie uno de ellos o la duración.
+  const resultante = { ...servicio.get({ plain: true }), ...data };
+  validarHorarioConfigurado(
+    { hora_apertura: resultante.hora_apertura?.slice(0, 5) ?? null, hora_cierre: resultante.hora_cierre?.slice(0, 5) ?? null },
+    Number(resultante.duracion_minutos),
+  );
   await servicio.update(data);
 
-  return getById(id);
+  // Las citas futuras se conservan; solo se informa cuántas quedan fuera del nuevo horario.
+  const futuras = await CitaBienestar.findAll({
+    where: { servicio_bienestar_id: id, fecha: { [Op.gte]: ahoraEnGuatemala().fecha }, estado: "confirmada" },
+    attributes: ["hora_inicio", "hora_fin"],
+    raw: true,
+  });
+  return {
+    ...(await getById(id)),
+    reservas_fuera_de_horario: contarFueraDeHorario(
+      (futuras as any[]).map((c) => ({ inicio: c.hora_inicio, fin: c.hora_fin })),
+      leerHorario(resultante),
+    ),
+  };
 };
 
 export const remove = async (

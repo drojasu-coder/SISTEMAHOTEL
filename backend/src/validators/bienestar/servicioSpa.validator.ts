@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { horaOperacionSchema } from "../../utils/franjasHorarias";
 
 // NULL = servicio general (registros anteriores a la vinculación por sede).
 const sucursalId = z.number().int().positive("La sucursal debe ser válida").nullable();
@@ -37,6 +38,10 @@ export const createServicioSpaSchema =
     sucursal_id: sucursalId.optional(),
 
     activo: z.boolean().optional(),
+
+    hora_apertura: horaOperacionSchema,
+
+    hora_cierre: horaOperacionSchema,
   })
   .strict();
 
@@ -63,6 +68,10 @@ export const updateServicioSpaSchema =
     sucursal_id: sucursalId.optional(),
 
     activo: z.boolean().optional(),
+
+    hora_apertura: horaOperacionSchema,
+
+    hora_cierre: horaOperacionSchema,
   })
   .strict()
   .refine(

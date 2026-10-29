@@ -4,6 +4,7 @@ import {
   NextFunction,
 } from "express";
 
+import { getDisponibilidadSalon } from "../../services/eventos/reservaEvento.service";
 import * as salonService
   from "../../services/eventos/salon.service";
 
@@ -161,4 +162,11 @@ export const deleteImage = async (req: Request, res: Response, next: NextFunctio
   } catch (error) {
     next(error);
   }
+};
+
+export const getDisponibilidad = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getDisponibilidadSalon(Number(req.params.id), String(req.query.fecha ?? ""));
+    res.status(200).json({ status: "success", data });
+  } catch (error) { next(error); }
 };

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { verifyCartPayment } from '@/features/compra/verifyCartPayment';
-import { groupItems, itemTypeLabel } from '@/features/compra/itemGroups';
+import { groupItems } from '@/features/compra/itemGroups';
 import { PurchaseSteps } from '@/features/compra/PurchaseSteps';
 import { CartExpiry } from '@/features/compra/CartExpiry';
 import { useCartPaymentLock } from '@/features/compra/useCartPaymentLock';
@@ -119,7 +119,7 @@ function describirErrorRetiro(error: unknown): MensajeCarrito {
 
 const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
   const textosCarrito = usePublicTexts('carrito');
-  const { p, locale } = usePublicInterface();
+  const { p } = usePublicInterface();
   const retiringRef = useRef(false);
   const queryClient = useQueryClient();
   const [knownPaymentId, setKnownPaymentId] = useState<number | null>(null);
@@ -290,51 +290,21 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
   return (
     <section
       aria-labelledby="titulo-carrito"
-      className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8"
+      className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8"
     >
       <PurchaseSteps current={0} />
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1.5">
-          <p className="eyebrow">{textosCarrito.subtitulo}</p>
-          <h1
-            id="titulo-carrito"
-            className="text-[2rem] leading-[2.375rem] text-neutro-900 md:text-[2.5rem] md:leading-[3rem]"
-          >
-            {textosCarrito.titulo}
-          </h1>
-          <p className="max-w-2xl text-sm text-neutro-600">
-            {textosCarrito.descripcion}
-          </p>
-          {carritoValido && (
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-neutro-500">
-              {textosCarrito.carritoNumero(carritoValido.id)}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Link
-            to={RESERVAS_ROUTES.NUEVA}
-            className={buttonStyles({ className: 'w-full sm:w-auto' })}
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {textosCarrito.reservar}
-          </Link>
-          <Link
-            to={RESERVAS_ROUTES.MIS_RESERVAS}
-            className={buttonStyles({
-              variant: 'ghost',
-              className: 'w-full sm:w-auto',
-            })}
-          >
-            <CalendarDays className="size-4" aria-hidden="true" />
-            {textosCarrito.irMisReservas}
-          </Link>
-        </div>
+      <div className="flex flex-col gap-1">
+        <p className="eyebrow text-xs">{textosCarrito.subtitulo}</p>
+        <h1
+          id="titulo-carrito"
+          className="text-[1.75rem] leading-[2.125rem] text-neutro-900 md:text-[2rem] md:leading-[2.5rem]"
+        >
+          {textosCarrito.titulo}
+        </h1>
       </div>
 
       {mensaje && (
-        <div className="flex flex-col items-start gap-3">
+        <div className="flex flex-col items-start gap-2">
           <Alert tone={mensaje.tono}>{textosCarrito[mensaje.texto]}</Alert>
           <div className="flex flex-wrap gap-2">
             {mensaje.comprobar && (
@@ -445,14 +415,11 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
         itemsQuery.isSuccess &&
         !datosInvalidos &&
         items.length > 0 && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-            <div className="flex flex-col gap-4">
-              <p className="text-xs text-neutro-500">
-                {textosCarrito.articulos(items.length)}
-              </p>
-              {groupItems(items).map((group) => <section key={group.type} className="flex flex-col gap-3"><h2 className="font-serif text-xl">{itemTypeLabel(group.type, locale)}</h2><ul className="flex flex-col gap-4">
-                {group.entries.map((item) => (
-                  <li key={item.id}>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+            <div className="flex min-w-0 flex-col gap-2">
+              <ul className="divide-y divide-neutro-200/50 rounded-xl border border-neutro-200/60 bg-white">
+                {groupItems(items).flatMap((group) => group.entries).map((item) => (
+                  <li key={item.id} className="p-3 sm:p-4">
                     <CarritoItemCard
                       item={item}
                       onRetirar={abrirConfirmacion}
@@ -460,7 +427,15 @@ const ContenidoCarrito: React.FC<{ userId: number }> = ({ userId }) => {
                     />
                   </li>
                 ))}
-              </ul></section>)}
+              </ul>
+              <div className="flex flex-wrap gap-x-4">
+                <Link to={RESERVAS_ROUTES.NUEVA} className={buttonStyles({ variant: 'text', size: 'sm' })}>
+                  <Plus className="size-4" aria-hidden="true" />{p('purchaseAddAnother')}
+                </Link>
+                <Link to={RESERVAS_ROUTES.MIS_RESERVAS} className={buttonStyles({ variant: 'text', size: 'sm' })}>
+                  <CalendarDays className="size-4" aria-hidden="true" />{textosCarrito.irMisReservas}
+                </Link>
+              </div>
             </div>
 
             <ResumenCarrito

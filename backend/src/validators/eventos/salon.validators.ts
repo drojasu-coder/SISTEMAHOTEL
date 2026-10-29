@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { moneySchema } from "../common.validator";
+import { horaOperacionSchema } from "../../utils/franjasHorarias";
 
 export const createSalonSchema = z
   .object({
@@ -33,6 +34,10 @@ export const createSalonSchema = z
       .max(1000, "La descripción es demasiado larga")
       .optional()
       .nullable(),
+
+    hora_apertura: horaOperacionSchema,
+
+    hora_cierre: horaOperacionSchema,
   })
   .strict();
 
@@ -69,6 +74,10 @@ export const updateSalonSchema = z
       .max(1000)
       .nullable()
       .optional(),
+
+    hora_apertura: horaOperacionSchema,
+
+    hora_cierre: horaOperacionSchema,
   })
   .strict()
   .refine(

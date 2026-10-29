@@ -1,5 +1,6 @@
 import { AppError } from "../utils/AppError";
 import { stripeService, toStripeAmount } from "./stripe.service";
+import { isReservationPastPaymentDeadline, isStayEnded, isUncertainReservationPayment } from "./habitaciones/reservaExpiracion.policy";
 import Stripe from "stripe";
 import { Op } from "sequelize";
 import { env } from "../config/env";
@@ -279,19 +280,13 @@ export const reservationFinancialExposure = async (
   const payments = await Pago.findAll({
     where: {
       [Op.or]: origins,
-      estado: {
-        [Op.in]: [
-          "aprobado",
-          "reembolsado_parcial",
-          "reembolsado",
-          "procesando",
-        ],
-      },
     },
     attributes: [
       "id",
       "monto",
       "estado",
+      "metodo",
+      "id_transaccion_externo",
       "carrito_id",
       "reserva_habitacion_id",
     ],
@@ -357,13 +352,17 @@ export const reservationFinancialExposure = async (
       "reembolsado_parcial",
       "reembolsado",
     ].includes(String(payment.estado));
+    // Los rechazos de tarjeta heredados y cierres sin referencia también
+    // reservan capacidad: no pueden permitir otro cobro ni liberar la habitación.
+    const isProcessing = payment.estado === "procesando" ||
+      (payment.metodo === "tarjeta" && isUncertainReservationPayment(payment));
     const paymentCents = isApproved
       ? Math.max(
           0,
           toCents(payment.monto) -
             toCents(refundedByPayment.get(Number(payment.id)) ?? 0),
         )
-      : payment.estado === "procesando"
+      : isProcessing
         ? toCents(payment.monto)
         : 0;
 
@@ -372,7 +371,7 @@ export const reservationFinancialExposure = async (
     if (directReservationId !== null) {
       if (directReservationId === Number(reservationId)) {
         if (isApproved) approvedCents += paymentCents;
-        if (payment.estado === "procesando") processingCents += paymentCents;
+        if (isProcessing) processingCents += paymentCents;
       }
       continue;
     }
@@ -1105,6 +1104,21 @@ const cartTotals = async (
       }
       if (item.tipo_item === "habitacion") {
         const reservation = await ReservaHabitacion.findByPk(item.referencia_id, { transaction });
+        // Un pago nuevo no puede apuntar a una reserva cancelada, expirada o finalizada. En los flujos que ya
+        // reconocen pagos aprobados (allowPaidReservations) no se rechaza, para no interferir con webhooks.
+        if (!allowPaidReservations && (!reservation || !payableRoomStates.has(String(reservation.estado).toLowerCase()))) {
+          throw new AppError(
+            409,
+            "CART_REFERENCE_NOT_AVAILABLE",
+            "La reserva seleccionada ya no se encuentra disponible",
+          );
+        }
+        if (!allowPaidReservations && reservation && await isReservationPastPaymentDeadline(reservation.id, transaction)) {
+          throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar esta reserva venció");
+        }
+        if (!allowPaidReservations && reservation && isStayEnded(reservation.fecha_salida)) {
+          throw new AppError(409, "RESERVATION_STAY_ENDED", "La estancia de esta reserva ya terminó y no puede pagarse");
+        }
         if (
           !allowPaidReservations &&
           reservation &&
@@ -1131,6 +1145,15 @@ const cartTotals = async (
             "CART_REFERENCE_NOT_AVAILABLE",
             "La reserva de actividad ya no se encuentra disponible",
           );
+        }
+      }
+      if (!allowPaidReservations && (item.tipo_item === "mesa" || item.tipo_item === "amenidad")) {
+        // Un pago nuevo no puede cubrir una reserva de mesa o amenidad cancelada, vencida o ya utilizada.
+        const model = item.tipo_item === "mesa" ? db.ReservaMesa : db.ReservaAmenidad;
+        const reservation = await model.findByPk(item.referencia_id, { transaction });
+        const state = String(reservation?.estado ?? "").toLowerCase();
+        if (!reservation || ["cancelada", "cancelado", "expirada", "expirado", "usada", "finalizada", "completada"].includes(state)) {
+          throw new AppError(409, "CART_REFERENCE_NOT_AVAILABLE", "Una reserva del carrito ya no se encuentra disponible");
         }
       }
       if (item.tipo_item === "bienestar") {
@@ -1166,10 +1189,13 @@ const cartTotals = async (
       return eventTotal * quantity;
     }))).reduce((sum, itemTotal) => sum + itemTotal, 0));
   const isOnlyRoom = items.length > 0 && items.every((item: any) => item.tipo_item === "habitacion");
+  // Los pagos se registran por carrito, no por artículo: un cobro parcial contaría como cubierto para la habitación.
+  const hasRoom = items.some((item: any) => item.tipo_item === "habitacion");
   return {
     total,
     requiredAdvance,
     isOnlyRoom,
+    hasRoom,
     wellnessAppointmentIds,
     wellnessAppointments: [...lockedWellnessAppointments.values()],
   };
@@ -1296,7 +1322,7 @@ const validateOpenOrigin = async (
     });
     if (!cart) throw new AppError(404, "CART_NOT_FOUND", "El carrito solicitado no existe");
     if (cart.estado === "activo" && cart.expira_en && new Date(cart.expira_en).getTime() <= Date.now()) {
-      await cart.update({ estado: "expirado" }, { transaction });
+      throw new AppError(409, "CART_NOT_AVAILABLE", "El carrito ya no se encuentra disponible para pagos");
     }
     if ((!allowPaid && terminal.has(String(cart.estado).toLowerCase())) ||
         (cart.estado !== "activo" && !(allowPaid && cart.estado === "pagado"))) {
@@ -1343,6 +1369,12 @@ const validateOpenOrigin = async (
   if (!payableRoomStates.has(String(reservation.estado).toLowerCase())) {
     throw new AppError(409, "RESERVATION_NOT_AVAILABLE", "La reserva ya no se encuentra disponible para pagos");
   }
+  if (!allowPaid && await isReservationPastPaymentDeadline(reservation.id, transaction)) {
+    throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar esta reserva venció");
+  }
+  if (!allowPaid && isStayEnded(reservation.fecha_salida)) {
+    throw new AppError(409, "RESERVATION_STAY_ENDED", "La estancia de esta reserva ya terminó y no puede pagarse");
+  }
   if (
     !allowPaid &&
     await isReservationFullyPaid(reservation.id, reservation.total, transaction)
@@ -1354,6 +1386,7 @@ const validateOpenOrigin = async (
     total: round(Number(reservation.total)),
     requiredAdvance: 0,
     isOnlyRoom: true,
+    hasRoom: true,
     origin: reservation,
     roomReservationIds: [Number(reservation.id)],
     roomReservations: [reservation],
@@ -1613,24 +1646,18 @@ const findIdempotencyReplay = async (
   }
 
   if (existing.metodo === "tarjeta" && existing.id_transaccion_externo) {
-    try {
-      const intent = await stripeService.retrievePaymentIntent(
-        existing.id_transaccion_externo,
-      );
-      return { payment: existing, intent };
-    } catch {
-      throw new AppError(
-        502,
-        "STRIPE_RETRIEVAL_FAILED",
-        "No fue posible recuperar el pago en Stripe",
-      );
-    }
+    return { payment: existing, retrieveIntent: true };
   }
 
+  // Reintento de una operación cuya fila local ya existe pero aún no tiene PaymentIntent (p. ej. caída entre fases):
+  // se completa con la misma clave de idempotencia de Stripe, que devuelve el intento original si ya se creó.
+  if (existing.metodo === "tarjeta" && existing.estado === "procesando" && !existing.id_transaccion_externo) {
+    return { payment: existing, deferredIntent: true };
+  }
   return existing;
 };
 
-const reconcileCanceledStripePayments = async (
+const assertNoUnresolvedPayments = async (
   originKey: Record<string, unknown>,
   details: { origin: any; total: number; roomReservationIds?: number[]; eventReservationIds?: number[] },
   transaction: any
@@ -1663,80 +1690,19 @@ const reconcileCanceledStripePayments = async (
   }
 
   const candidates = await Pago.findAll({
-    where: {
-      [Op.or]: origins,
-      metodo: "tarjeta",
-      estado: { [Op.in]: ["procesando", "rechazado"] },
-      id_transaccion_externo: { [Op.ne]: null },
-    },
+    where: { [Op.or]: origins },
     order: [["id", "ASC"]],
     transaction,
     lock: transaction.LOCK.UPDATE,
   });
-
-  for (const p of candidates) {
-    try {
-      const intent = await stripeService.retrievePaymentIntent(p.id_transaccion_externo);
-      if (intent.status === "canceled") {
-        await p.update({ estado: "cancelado" }, { transaction });
-      } else if (intent.status === "succeeded" && p.estado !== "aprobado") {
-        await p.update(
-          {
-            estado: "aprobado",
-            fecha_pago: new Date(),
-            codigo_error_externo: null,
-            mensaje_error: null,
-          },
-          { transaction }
-        );
-        const paid = await approvedAmount(originKey, transaction);
-        await applyCartPaid(details.origin, details.total, paid, transaction);
-        if (details.origin?.constructor?.name === "ReservaHabitacion") {
-          await confirmReservationIfFullyPaid(details.origin.id, transaction);
-        }
-      } else if (
-        ["requires_payment_method", "requires_confirmation", "requires_action", "processing"].includes(
-          intent.status
-        )
-      ) {
-        if (p.carrito_id && originKey.carrito_id && Number(p.carrito_id) !== Number(originKey.carrito_id)) {
-          const oldCart = await Carrito.findByPk(p.carrito_id, { transaction });
-          if (oldCart && ["expirado", "cancelado"].includes(String(oldCart.estado).toLowerCase())) {
-            // Un intento en estado "processing" no es cancelable en Stripe y debe retener capacidad financiera
-            if (intent.status === "processing") {
-              if (p.estado === "rechazado") {
-                await p.update({ estado: "procesando" }, { transaction });
-              }
-              continue;
-            }
-
-            try {
-              const canceled = await stripeService.cancelPaymentIntent(p.id_transaccion_externo);
-              if (canceled?.status === "canceled") {
-                await p.update({ estado: "cancelado" }, { transaction });
-                continue;
-              }
-            } catch {
-              // Fallo de red, error de Stripe o resultado incierto:
-              // NO se registra como cancelado. Se promueve a procesando para reservar capacidad.
-            }
-
-            if (p.estado === "rechazado") {
-              await p.update({ estado: "procesando" }, { transaction });
-            }
-            continue;
-          }
-        }
-        // Intento recuperable: en pasarela sigue activo; reservar capacidad para evitar cobro concurrente incompatible
-        if (p.estado === "rechazado") {
-          await p.update({ estado: "procesando" }, { transaction });
-        }
-      }
-    } catch {
-      // Ignorar fallos de red hacia Stripe durante la reconciliación silenciosa
-    }
+  // Un fallo de intento no invalida su client_secret. Se conserva la exposición
+  // hasta que la verificación/webhook pruebe un resultado terminal. Sin red bajo locks.
+  if (candidates.some((p: any) => isUncertainReservationPayment(p))) {
+    throw new AppError(409, "RESERVATION_PAYMENT_IN_PROGRESS",
+      "Existe un pago pendiente de verificar. Consulte su estado antes de intentar otro pago");
   }
 };
+
 const reconcileIdempotentPaymentIntent = async (
   result: any,
   data: CreatePagoData,
@@ -1871,7 +1837,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     );
     if (serializedReplay) return serializedReplay;
 
-    await reconcileCanceledStripePayments(details.key, details, transaction);
+    await assertNoUnresolvedPayments(details.key, details, transaction);
 
     const amountCents = toCents(amount);
     const isCartOrigin = details.key.carrito_id !== undefined;
@@ -1912,8 +1878,8 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     if (amountCents > remainingCents) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && amountCents < originRemainingCents) {
-      throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
+    if ((details.isOnlyRoom || details.hasRoom) && amountCents < originRemainingCents) {
+      throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "Un carrito con habitaciones debe pagarse completo: no se admiten pagos parciales ni anticipos");
     }
     if (tipo === "anticipo") {
       if (!details.requiredAdvance) {
@@ -1939,51 +1905,9 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       fecha_pago: approved ? new Date() : null,
     }, { transaction });
     if (data.metodo === "tarjeta") {
-      let intent: Awaited<ReturnType<typeof stripeService.createPaymentIntent>>;
-
-      try {
-        intent = await stripeService.createPaymentIntent(amount, PAYMENT_CURRENCY, {
-          pago_id: String(payment.id),
-          ...(payment.carrito_id ? { carrito_id: String(payment.carrito_id) } : {}),
-          ...(payment.reserva_habitacion_id ? { reserva_habitacion_id: String(payment.reserva_habitacion_id) } : {}),
-          tipo_pago: tipo,
-        }, data.idempotency_key);
-      } catch (error: any) {
-        if (error instanceof AppError) throw error;
-        throw new AppError(502, "STRIPE_PAYMENT_INTENT_FAILED", "No fue posible crear el pago en Stripe");
-      }
-
-      try {
-        await payment.update({ id_transaccion_externo: intent.id }, { transaction });
-      } catch (localError: any) {
-        try {
-          const canceledIntent = await stripeService.cancelPaymentIntent(intent.id);
-          if (canceledIntent.status !== "canceled") {
-            throw new Error("Stripe no confirmó la cancelación del PaymentIntent");
-          }
-        } catch (compensationError: any) {
-          const error = new AppError(
-            502,
-            "PAYMENT_COMPENSATION_FAILED",
-            "El PaymentIntent fue creado, pero no fue posible persistir ni compensar la operación",
-          );
-          (error as AppError & { cause?: unknown }).cause = {
-            localError,
-            compensationError,
-          };
-          throw error;
-        }
-
-        const error = new AppError(
-          500,
-          "PAYMENT_LOCAL_PERSISTENCE_FAILED",
-          "El PaymentIntent fue creado y compensado, pero no pudo persistirse su asociación local",
-        );
-        (error as AppError & { cause?: unknown }).cause = localError;
-        throw error;
-      }
-
-      return { payment, intent };
+      // El PaymentIntent se crea FUERA de esta transacción (ver completeCardPayment): no se mantienen bloqueos de
+      // PostgreSQL durante la llamada a Stripe y un fallo del COMMIT ya no puede dejar un intento huérfano.
+      return { payment, deferredIntent: true };
     }
     if (approved) {
       await applyCartPaid(details.origin, details.total, round(paid + amount), transaction);
@@ -1994,8 +1918,78 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
     return payment;
   });
 
+  if (result?.deferredIntent) {
+    const finished = await completeCardPayment(result.payment, amount, tipo, data.idempotency_key ?? null);
+    await reconcileIdempotentPaymentIntent(finished, data, amount, tipo);
+    return finished;
+  }
+  if (result?.retrieveIntent) {
+    try {
+      result.intent = await stripeService.retrievePaymentIntent(result.payment.id_transaccion_externo);
+    } catch {
+      throw new AppError(502, "STRIPE_RETRIEVAL_FAILED", "No fue posible recuperar el pago en Stripe");
+    }
+  }
   await reconcileIdempotentPaymentIntent(result, data, amount, tipo);
   return result;
+};
+
+/** Los reintentos sin referencia solo son seguros dentro de la retención de la clave original. */
+const IDEMPOTENCY_SAFE_WINDOW_MS = 20 * 60 * 60_000;
+
+/**
+ * Segunda fase, FUERA de PostgreSQL. Un error de red, configuración o persistencia
+ * nunca prueba la inexistencia del intento: la fila conserva su bloqueo financiero.
+ * No hay compensaciones que puedan cancelar el intento que otra petición está usando.
+ */
+const completeCardPayment = async (payment: any, amount: number, tipo: PagoTipo, idempotencyKey: string | null) => {
+  const durable = await Pago.findByPk(payment.id);
+  if (!durable || durable.metodo !== "tarjeta" || durable.pasarela !== "stripe" ||
+      !["procesando", "rechazado"].includes(durable.estado)) {
+    throw new AppError(409, "PAYMENT_NOT_PENDING", "El pago ya no está pendiente");
+  }
+  if (durable.id_transaccion_externo) {
+    const intent = await stripeService.retrievePaymentIntent(durable.id_transaccion_externo);
+    return { payment: durable, intent };
+  }
+  const age = Date.now() - new Date(durable.createdAt).getTime();
+  if (!Number.isFinite(age) || age < 0 || age >= IDEMPOTENCY_SAFE_WINDOW_MS) {
+    throw new AppError(409, "PAYMENT_REQUIRES_REVIEW",
+      "El pago requiere revisión. No se iniciará otro cobro ni se liberará la reserva; contacte con el hotel");
+  }
+  let intent: Awaited<ReturnType<typeof stripeService.createPaymentIntent>>;
+  try {
+    intent = await stripeService.createPaymentIntent(amount, PAYMENT_CURRENCY, {
+      pago_id: String(durable.id),
+      ...(durable.carrito_id ? { carrito_id: String(durable.carrito_id) } : {}),
+      ...(durable.reserva_habitacion_id ? { reserva_habitacion_id: String(durable.reserva_habitacion_id) } : {}),
+      tipo_pago: tipo,
+    }, idempotencyKey ?? `pago-${durable.id}`);
+  } catch {
+    throw new AppError(502, "STRIPE_PAYMENT_INTENT_FAILED",
+      "No se pudo confirmar el estado del pago. La reserva permanece protegida; consulte su estado antes de reintentar");
+  }
+  if ((env.NODE_ENV !== "production" && intent.livemode) ||
+      intent.amount !== toStripeAmount(durable.monto, durable.moneda) ||
+      intent.currency.toUpperCase() !== durable.moneda ||
+      intent.metadata?.pago_id !== String(durable.id) ||
+      (intent.metadata?.carrito_id ?? null) !== (durable.carrito_id ? String(durable.carrito_id) : null) ||
+      (intent.metadata?.reserva_habitacion_id ?? null) !== (durable.reserva_habitacion_id ? String(durable.reserva_habitacion_id) : null)) {
+    throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
+  }
+  try {
+    await Pago.update({ id_transaccion_externo: intent.id }, {
+      where: { id: durable.id, estado: "procesando", id_transaccion_externo: null },
+    });
+    const linked = await Pago.findByPk(durable.id);
+    if (!linked || linked.id_transaccion_externo !== intent.id) {
+      throw new Error("La asociación local no pudo confirmarse");
+    }
+    return { payment: linked, intent };
+  } catch {
+    throw new AppError(502, "PAYMENT_LOCAL_PERSISTENCE_FAILED",
+      "No se pudo vincular el pago. La reserva permanece protegida y requiere consultar su estado");
+  }
 };
 
 interface VerifiedPaymentContext {
@@ -2010,55 +2004,18 @@ export const processStripeWebhook = async (object: any, eventType: string, verif
     const isRefundEvent = eventType.includes("refund");
     const intentId = isRefundEvent ? (typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id) : object.id;
 
-    let payment: any;
-    if (!isRefundEvent && eventType === "payment_intent.succeeded") {
-      const unlockedPayment = await Pago.findOne({
-        where: { id_transaccion_externo: intentId },
-        transaction,
-      });
-      if (!unlockedPayment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
-
-      if (unlockedPayment.carrito_id !== null && unlockedPayment.carrito_id !== undefined) {
-        const discoveredPayment = {
-          id: Number(unlockedPayment.id),
-          externalId: unlockedPayment.id_transaccion_externo,
-          carritoId: Number(unlockedPayment.carrito_id),
-          reservaHabitacionId: unlockedPayment.reserva_habitacion_id ?? null,
-        };
-
-        const cart = await Carrito.findByPk(discoveredPayment.carritoId, {
-          transaction,
-          lock: transaction.LOCK.UPDATE,
-        });
-        if (!cart) throw new AppError(404, "CART_NOT_FOUND", "El carrito solicitado no existe");
-
-        payment = await Pago.findOne({
-          where: { id_transaccion_externo: intentId },
-          transaction,
-          lock: transaction.LOCK.UPDATE,
-        });
-        if (
-          !payment ||
-          Number(payment.id) !== discoveredPayment.id ||
-          payment.id_transaccion_externo !== discoveredPayment.externalId ||
-          Number(payment.carrito_id) !== discoveredPayment.carritoId ||
-          (payment.reserva_habitacion_id ?? null) !== discoveredPayment.reservaHabitacionId
-        ) {
-          throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
-        }
-      } else {
-        payment = await Pago.findOne({
-          where: { id_transaccion_externo: intentId },
-          transaction,
-          lock: transaction.LOCK.UPDATE,
-        });
-      }
-    } else {
-      payment = await Pago.findOne({
-        where: { id_transaccion_externo: intentId },
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
+    const discovered = await Pago.findOne({ where: { id_transaccion_externo: intentId }, transaction });
+    if (!discovered) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
+    if (discovered.carrito_id != null) {
+      await Carrito.findByPk(discovered.carrito_id, { transaction, lock: transaction.LOCK.UPDATE });
+      await lockRoomReservations(await roomReservationIdsForCart(discovered.carrito_id, transaction), transaction);
+    } else if (discovered.reserva_habitacion_id != null) {
+      await lockRoomReservations([Number(discovered.reserva_habitacion_id)], transaction);
+    }
+    const payment = await Pago.findByPk(discovered.id, { transaction, lock: transaction.LOCK.UPDATE });
+    if (payment && (payment.id_transaccion_externo !== intentId ||
+        payment.carrito_id !== discovered.carrito_id || payment.reserva_habitacion_id !== discovered.reserva_habitacion_id)) {
+      throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
     }
     if (!payment) throw new AppError(404, "PAYMENT_NOT_FOUND", "No existe un pago para este evento de Stripe");
 
@@ -2134,10 +2091,11 @@ export const processStripeWebhook = async (object: any, eventType: string, verif
       throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
     }
     const target = eventType === "payment_intent.succeeded" ? "aprobado" :
-      eventType === "payment_intent.payment_failed" ? "rechazado" : "cancelado";
+      eventType === "payment_intent.payment_failed" ? "procesando" : "cancelado";
     const shouldUpdate =
       payment.estado !== target &&
-      !(payment.estado === "aprobado" && target !== "aprobado") &&
+      !(["aprobado", "reembolsado", "reembolsado_parcial"].includes(payment.estado) && target !== "aprobado") &&
+      !(payment.estado === "cancelado" && target === "procesando") &&
       !(target === "aprobado" && ["reembolsado", "reembolsado_parcial"].includes(payment.estado));
     if (shouldUpdate) {
       const update: Record<string, unknown> = { estado: target };
@@ -2145,7 +2103,7 @@ export const processStripeWebhook = async (object: any, eventType: string, verif
         update.fecha_pago = new Date();
         update.codigo_error_externo = null;
         update.mensaje_error = null;
-      } else if (target === "rechazado") {
+      } else if (target === "procesando") {
         update.codigo_error_externo = intent.last_payment_error?.code ?? "payment_failed";
         update.mensaje_error = (intent.last_payment_error?.message ?? "El pago fue rechazado").slice(0, 255);
       }
@@ -2243,8 +2201,8 @@ export const approveTransferencia = async (pagoId: number) =>
     if (amountCents > remainingCents) {
       throw new AppError(409, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo pendiente");
     }
-    if (details.isOnlyRoom && amountCents < originRemainingCents) {
-      throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "La reserva de habitación requiere el pago total");
+    if ((details.isOnlyRoom || details.hasRoom) && amountCents < originRemainingCents) {
+      throw new AppError(422, "ROOM_PAYMENT_MUST_BE_FULL", "Un carrito con habitaciones debe pagarse completo: no se admiten pagos parciales ni anticipos");
     }
     if (type === "anticipo") {
       if (!details.requiredAdvance) {
@@ -2480,88 +2438,107 @@ export const getIntentoActivo = async (
     ? { carrito_id: origin.carrito_id }
     : { reserva_habitacion_id: origin.reserva_habitacion_id };
 
-  return sequelize.transaction(async (transaction: any) => {
-    await assertPaymentOriginOwnership(origin, requester, transaction);
+  await assertPaymentOriginOwnership(origin, requester);
 
-    const payment = await Pago.findOne({
-      where: {
-        ...originKey,
-        metodo: "tarjeta",
-        estado: {
-          [Op.in]: ["procesando", "rechazado", "pendiente"],
-        },
+  const payment = await Pago.findOne({
+    where: {
+      ...originKey,
+      metodo: "tarjeta",
+      estado: {
+        [Op.in]: ["procesando", "rechazado", "pendiente"],
       },
-      order: [["id", "DESC"]],
-      transaction,
-    });
+    },
+    order: [["id", "DESC"]],
+  });
 
-    if (!payment) {
-      return null;
-    }
+  if (!payment) {
+    return null;
+  }
 
-    if (!payment.id_transaccion_externo) {
-      return {
-        pago_id: payment.id,
-        payment_intent_id: null,
-        client_secret: null,
-        estado_local: payment.estado,
-        estado_pasarela: "sin_identificador",
-        estado_intento: "procesando",
-        monto: Number(payment.monto),
-        moneda: payment.moneda,
-        puede_confirmar: false,
-      };
-    }
-
-    let intent: Awaited<ReturnType<typeof stripeService.retrievePaymentIntent>>;
-    try {
-      intent = await stripeService.retrievePaymentIntent(payment.id_transaccion_externo);
-    } catch {
-      throw new AppError(
-        502,
-        "STRIPE_RETRIEVAL_FAILED",
-        "No fue posible consultar el estado del pago en Stripe",
-      );
-    }
-
-    let estado_intento: IntentoActivoEstado;
-    let puede_confirmar = false;
-
-    switch (intent.status) {
-      case "requires_payment_method":
-      case "requires_confirmation":
-      case "requires_action":
-        estado_intento = "requiere_confirmacion";
-        puede_confirmar = true;
-        break;
-      case "processing":
-        estado_intento = "procesando";
-        puede_confirmar = false;
-        break;
-      case "succeeded":
-        estado_intento = "completado_en_pasarela";
-        puede_confirmar = false;
-        break;
-      case "canceled":
-        estado_intento = "cancelado";
-        puede_confirmar = false;
-        break;
-      default:
-        estado_intento = "procesando";
-        puede_confirmar = false;
-        break;
-    }
-
+  if (!payment.id_transaccion_externo) {
     return {
       pago_id: payment.id,
-      payment_intent_id: intent.id,
-      client_secret: puede_confirmar ? intent.client_secret : null,
+      payment_intent_id: null,
+      client_secret: null,
       estado_local: payment.estado,
-      estado_pasarela: intent.status,
-      estado_intento,
+      estado_pasarela: "sin_identificador",
+      estado_intento: "procesando",
       monto: Number(payment.monto),
       moneda: payment.moneda,
-      puede_confirmar,
+      puede_confirmar: false,
     };
-  });
+  }
+
+  let intent: Awaited<ReturnType<typeof stripeService.retrievePaymentIntent>>;
+  try {
+    intent = await stripeService.retrievePaymentIntent(payment.id_transaccion_externo);
+  } catch {
+    throw new AppError(
+      502,
+      "STRIPE_RETRIEVAL_FAILED",
+      "No fue posible consultar el estado del pago en Stripe",
+    );
+  }
+
+  let estado_intento: IntentoActivoEstado;
+  let puede_confirmar = false;
+
+  switch (intent.status) {
+    case "requires_payment_method":
+    case "requires_confirmation":
+    case "requires_action":
+      estado_intento = "requiere_confirmacion";
+      puede_confirmar = true;
+      break;
+    case "processing":
+      estado_intento = "procesando";
+      puede_confirmar = false;
+      break;
+    case "succeeded":
+      estado_intento = "completado_en_pasarela";
+      puede_confirmar = false;
+      break;
+    case "canceled":
+      estado_intento = "cancelado";
+      puede_confirmar = false;
+      break;
+    default:
+      estado_intento = "procesando";
+      puede_confirmar = false;
+      break;
+  }
+
+  // La respuesta remota puede llegar después de un webhook o del vencimiento.
+  // Revalidar estado y origen antes de entregar un secreto reutilizable.
+  if (puede_confirmar) {
+    puede_confirmar = await sequelize.transaction(async (transaction: any) => {
+      await assertPaymentOriginOwnership(origin, requester, transaction);
+      try {
+        await validateOpenOrigin({ ...origin, monto: payment.monto, metodo: "tarjeta" }, transaction);
+      } catch (error) {
+        if (error instanceof AppError && error.statusCode === 409) return false;
+        throw error;
+      }
+      const current = await Pago.findByPk(payment.id, { transaction });
+      return Boolean(current && ["procesando", "rechazado", "pendiente"].includes(current.estado) && current.id_transaccion_externo === intent.id);
+    });
+  }
+  if (intent.id !== payment.id_transaccion_externo || (env.NODE_ENV !== "production" && intent.livemode) ||
+      intent.amount !== toStripeAmount(payment.monto, payment.moneda) ||
+      intent.currency.toUpperCase() !== payment.moneda || intent.metadata?.pago_id !== String(payment.id) ||
+      (intent.metadata?.carrito_id ?? null) !== (payment.carrito_id ? String(payment.carrito_id) : null) ||
+      (intent.metadata?.reserva_habitacion_id ?? null) !== (payment.reserva_habitacion_id ? String(payment.reserva_habitacion_id) : null)) {
+    throw new AppError(409, "STRIPE_PAYMENT_MISMATCH", "El PaymentIntent no corresponde al pago esperado");
+  }
+  return {
+    pago_id: payment.id,
+    payment_intent_id: intent.id,
+    client_secret: puede_confirmar ? intent.client_secret : null,
+    estado_local: payment.estado,
+    estado_pasarela: intent.status,
+    estado_intento,
+    monto: Number(payment.monto),
+    moneda: payment.moneda,
+    puede_confirmar,
+  };
 };

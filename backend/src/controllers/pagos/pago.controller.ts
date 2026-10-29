@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import * as pagoService from "../../services/pago.service";
+import { getComprobantePago, listComprobantesDeReserva, renderComprobantePdf } from "../../services/comprobantePago.service";
 import { stripeService } from "../../services/stripe.service";
 import Stripe from "stripe";
 import { AppError } from "../../utils/AppError";
@@ -52,6 +53,25 @@ export const getById = async (req: Request, res: Response, next: NextFunction) =
   try {
     const pago = await pagoService.getPagoById(Number(req.params.id), req.user!);
     res.status(200).json({ success: true, statusCode: 200, message: "Pago obtenido correctamente", data: pago });
+  } catch (error) { next(error); }
+};
+
+export const comprobantesDeReserva = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await listComprobantesDeReserva(String(req.query.tipo_item), Number(req.query.referencia_id), req.user!);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).json({ success: true, statusCode: 200, message: "Comprobantes disponibles obtenidos correctamente", data });
+  } catch (error) { next(error); }
+};
+
+export const comprobante = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getComprobantePago(Number(req.params.id), req.user!);
+    const pdf = await renderComprobantePdf(data);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="comprobante-pago-${data.pago_id}.pdf"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).send(pdf);
   } catch (error) { next(error); }
 };
 

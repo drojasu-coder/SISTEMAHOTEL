@@ -12,6 +12,9 @@ export type Salon = components['schemas']['Salon'] & {
   imagen_url?: string | null;
   imagen_expires_at?: string | null;
   imagen_creditos?: AssetCreditInfo | null;
+  /** Horario de uso (HH:MM:SS); sin ambos valores no se aceptan solicitudes en línea. */
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
   sucursal?: {
     id?: number;
     nombre?: string;
@@ -26,6 +29,8 @@ export type CreateSalonInput = {
   tarifa_base: number;
   descripcion?: string | null;
   imagen_key?: string | null;
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
 };
 
 export type UpdateSalonInput = Partial<CreateSalonInput>;

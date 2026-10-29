@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.local
+.env.*.local
 dist/
 build/
 *.log
@@ -7,3 +9,41 @@ coverage/
 /backend/openapi.json
 backend/backups/
 graphify-out/
+
+# Cachés y artefactos regenerables
+*.tsbuildinfo
+.vite/
+.tmp-shots/
+
+# Configuración local de editores y archivos personales
+.obsidian/
+.trash/
+planificacion.zip
+
+# Archivos y configuraciones exclusivas de asistentes de IA (mantener localmente)
+AGENTS.md
+CLAUDE.md
+.claude/
+.codex/
+.opencode/
+.agent/
+.agents/
+.antigravity/
+**/.claude/
+**/.codex/
+**/.opencode/
+**/.agent/
+**/.agents/
+**/.antigravity/
+*.prompt.md
+prompts/
+**/prompts/
+.ai/
+**/.ai/
+cursor*
+.aider*
+.continue/
+cline_mcp_settings.json
+mcp_settings.json
+*.session.json
+*.history

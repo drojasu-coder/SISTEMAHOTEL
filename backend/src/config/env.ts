@@ -47,12 +47,22 @@ const envSchema = z.object({
     .int()
     .positive("CART_EXPIRATION_MINUTES debe ser mayor que cero")
     .default(15),
+  // Expiración de reservas de habitación pendientes. Desactivada por defecto: se habilita
+  // explícitamente solo después de aplicar la migración expira_en y regularizar las reservas históricas.
+  RESERVA_PENDIENTE_EXPIRACION_ACTIVA: booleanFromEnv,
+  RESERVA_PENDIENTE_TTL_MINUTOS: z.coerce.number().int().min(5).max(1440).default(30),
+  RESERVA_EXPIRACION_INTERVALO_SEGUNDOS: z.coerce.number().int().min(15).max(3600).default(60),
+  RESERVA_EXPIRACION_GRACIA_PAGO_MINUTOS: z.coerce.number().int().min(5).max(1440).default(30),
+  RESERVA_EXPIRACION_LOTE: z.coerce.number().int().min(1).max(500).default(50),
   PARK_TICKET_PRICE_ADULT: z.coerce.number().positive("PARK_TICKET_PRICE_ADULT debe ser mayor que cero"),
   PARK_TICKET_PRICE_CHILD: z.coerce.number().positive("PARK_TICKET_PRICE_CHILD debe ser mayor que cero"),
   PARK_TICKET_PRICE_FAMILY: z.coerce.number().positive("PARK_TICKET_PRICE_FAMILY debe ser mayor que cero"),
 
   JWT_SECRET: z.string().min(32, "JWT_SECRET debe tener al menos 32 caracteres"),
   JWT_EXPIRES_IN: z.string().min(1).default("1h"),
+  GOOGLE_LOGIN_ENABLED: booleanFromEnv,
+  GOOGLE_CLIENT_ID: z.preprocess(emptyToUndefined,
+    z.string().regex(/^[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/).optional()),
   DATABASE_URL: optionalString,
   TEST_DATABASE_URL: optionalString,
   STRIPE_ENABLED: booleanFromEnv,
@@ -151,6 +161,9 @@ export const loadEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
 
   validateDatabase(result.data);
   validateStripe(result.data);
+  if (result.data.GOOGLE_LOGIN_ENABLED && !result.data.GOOGLE_CLIENT_ID) {
+    throw new Error("GOOGLE_CLIENT_ID es obligatoria cuando GOOGLE_LOGIN_ENABLED=true");
+  }
   return result.data;
 };
 

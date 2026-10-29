@@ -7,6 +7,10 @@ import { LEGAL_ORDER, LEGAL_ROUTES } from './routes';
  * público para que compartan encabezado y pie de página.
  */
 export const legalRoutes = () =>
-  LEGAL_ORDER.map((slug) => (
-    <Route key={slug} path={LEGAL_ROUTES[slug]} element={<LegalDocumentPage slug={slug} />} />
-  ));
+  <>
+    {LEGAL_ORDER.map((slug) => (
+      <Route key={slug} path={LEGAL_ROUTES[slug]} element={<LegalDocumentPage slug={slug} />} />
+    ))}
+    <Route path="/legal/terminos-y-condiciones" element={<LegalDocumentPage slug="terminos" />} />
+    <Route path="/legal/privacidad" element={<LegalDocumentPage slug="privacidad" />} />
+  </>;

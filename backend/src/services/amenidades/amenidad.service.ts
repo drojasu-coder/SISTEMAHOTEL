@@ -3,8 +3,10 @@ import * as mediaUploadService from "../storage/mediaUpload.service";
 import { AppError } from "../../utils/AppError";
 import * as s3Service from "../storage/s3.service";
 import { getAssetCredits } from "../storage/credits";
+import { ahoraEnGuatemala, contarFueraDeHorario, leerHorario, validarHorarioConfigurado } from "../../utils/franjasHorarias";
 
 const db = require("../../models");
+const { Op } = require("sequelize");
 
 const { Amenidad, Sucursal, ReservaAmenidad } = db;
 
@@ -14,6 +16,9 @@ interface CreateAmenidadData {
   aforo_maximo: number;
   imagen_key?: string | null;
   reservable?: boolean;
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
+  duracion_minutos?: number | null;
 }
 
 interface UpdateAmenidadData {
@@ -21,6 +26,9 @@ interface UpdateAmenidadData {
   aforo_maximo?: number;
   imagen_key?: string | null;
   reservable?: boolean;
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
+  duracion_minutos?: number | null;
 }
 
 export async function serializeAmenidad(amenidad: any): Promise<any> {
@@ -58,6 +66,7 @@ export const create = async (data: CreateAmenidadData) => {
     throw new AppError(404, "BRANCH_NOT_FOUND", "La sucursal indicada no existe");
   }
 
+  validarHorarioConfigurado(data, data.duracion_minutos ?? null);
   const amenidad = await Amenidad.create(data);
   return serializeAmenidad(amenidad);
 };
@@ -67,8 +76,27 @@ export const update = async (id: number, data: UpdateAmenidadData) => {
   if (!amenidad) {
     throw new AppError(404, "AMENITY_NOT_FOUND", "La amenidad solicitada no existe");
   }
+  // El horario se valida con los valores resultantes, aunque solo cambie uno de ellos o la duración.
+  const resultante = { ...amenidad.get({ plain: true }), ...data };
+  validarHorarioConfigurado(
+    { hora_apertura: resultante.hora_apertura?.slice(0, 5) ?? null, hora_cierre: resultante.hora_cierre?.slice(0, 5) ?? null },
+    resultante.duracion_minutos ?? null,
+  );
   await amenidad.update(data);
-  return serializeAmenidad(amenidad);
+
+  // Las reservas futuras se conservan; solo se informa cuántas quedan fuera del nuevo horario.
+  const futuras = await ReservaAmenidad.findAll({
+    where: { amenidad_id: id, fecha: { [Op.gte]: ahoraEnGuatemala().fecha }, estado: "confirmada" },
+    attributes: ["franja_horaria"],
+    raw: true,
+  });
+  return {
+    ...(await serializeAmenidad(amenidad)),
+    reservas_fuera_de_horario: contarFueraDeHorario(
+      (futuras as any[]).map((r) => { const [inicio, fin] = String(r.franja_horaria).split("-"); return { inicio, fin }; }),
+      leerHorario(resultante),
+    ),
+  };
 };
 
 export const remove = async (id: number) => {

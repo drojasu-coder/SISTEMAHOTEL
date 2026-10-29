@@ -25,8 +25,10 @@ export const actividadesApi = {
    * GET /api/recursos-actividad
    */
   /** Salidas confirmadas de una fecha con lugares disponibles (público). */
-  getSalidas: async (recursoId: number, fecha: string): Promise<SalidasActividad> => {
-    const response = await api.get<{ status: string; data: SalidasActividad }>(`/recursos-actividad/${recursoId}/salidas?fecha=${encodeURIComponent(fecha)}`);
+  /** Con instructor elegido, el servidor excluye además las franjas que chocan con sus otras clases. */
+  getSalidas: async (recursoId: number, fecha: string, instructorId?: number): Promise<SalidasActividad> => {
+    const instructor = instructorId ? `&instructor_id=${instructorId}` : '';
+    const response = await api.get<{ status: string; data: SalidasActividad }>(`/recursos-actividad/${recursoId}/salidas?fecha=${encodeURIComponent(fecha)}${instructor}`);
     return response.data;
   },
 

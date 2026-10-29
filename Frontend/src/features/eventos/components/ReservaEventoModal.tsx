@@ -1,5 +1,6 @@
 import { DateField } from '@/components/ui/DateField';
-import { TimeField } from '@/components/ui/TimeField';
+import { SlotPicker } from '@/components/ui/SlotPicker';
+import { formatearHoraFranja, useTextosFranjas } from '@/i18n/franjas';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { MoneyReference } from '@/components/ui/MoneyReference';
@@ -15,6 +16,7 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/Button';
+import { useQuery } from '@tanstack/react-query';
 import { Alert } from '@/components/ui/Feedback';
 import { useAuth } from '@/features/auth/AuthContext';
 import { publicEventCopy, publicVenueSite, usePublicEventQuoteMutation } from '../publicEventExperience';
@@ -72,6 +74,7 @@ export const ReservaEventoModal: React.FC<ReservaEventoModalProps> = ({
   const {
     register,
     watch,
+    setValue,
     handleSubmit,
     trigger,
     formState: { errors, isSubmitting },
@@ -88,6 +91,32 @@ export const ReservaEventoModal: React.FC<ReservaEventoModalProps> = ({
   }, [watch, draft.save]);
 
   useRevalidateErrors(locale, () => trigger(), Object.keys(errors).length > 0);
+
+  const fechaElegida = watch('fecha');
+  const inicioElegido = watch('hora_inicio');
+  const finElegido = watch('hora_fin');
+  const disponibilidadQuery = useQuery({
+    queryKey: ['salon-disponibilidad', salon.id, fechaElegida],
+    queryFn: () => eventosApi.getDisponibilidadSalon(salon.id!, fechaElegida),
+    enabled: isOpen && Boolean(salon.id) && /^\d{4}-\d{2}-\d{2}$/.test(fechaElegida ?? ''),
+    staleTime: 30_000,
+    retry: false,
+  });
+  // Franjas del backend: horario del salón, solicitudes y eventos existentes.
+  const { t: tf, locale: localeFranjas } = useTextosFranjas();
+  const disponibilidad = disponibilidadQuery.data;
+  const franjas = disponibilidad?.horarios ?? [];
+  const franjaElegida = franjas.find((franja) => franja.inicio === (inicioElegido ?? '').slice(0, 5));
+  const fines = franjaElegida?.fines ?? [];
+  const horarioValido = Boolean(franjaElegida) && fines.includes((finElegido ?? '').slice(0, 5));
+
+  // Al cambiar de fecha, un horario que ya no se ofrece deja de estar elegido.
+  useEffect(() => {
+    if (!disponibilidadQuery.isSuccess) return;
+    if (inicioElegido && !franjaElegida) { setValue('hora_inicio', ''); setValue('hora_fin', ''); }
+    else if (finElegido && !fines.includes(finElegido.slice(0, 5))) setValue('hora_fin', '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disponibilidadQuery.data]);
 
   if (!isOpen) return null;
 
@@ -121,6 +150,8 @@ export const ReservaEventoModal: React.FC<ReservaEventoModalProps> = ({
       if (currentUser.current !== actor) return;
       if (!(err instanceof ApiError) || err.status === 0 || err.status === 408 || err.status >= 500) { setUncertain(true); return; }
       markAttempt(false);
+      if (err.code && tf.errores[err.code]) { setErrorMessage(tf.errores[err.code]); void disponibilidadQuery.refetch(); return; }
+      if (err.code === 'EVENT_ROOM_NOT_AVAILABLE') void disponibilidadQuery.refetch();
       const messages: Record<string, string> = { EVENT_ROOM_NOT_AVAILABLE: copy.conflict, EVENT_CAPACITY_EXCEEDED: copy.capacityError, BRANCH_INACTIVE: copy.inactive, EVENT_DATE_IN_PAST: copy.dateError, INVALID_EVENT_DATE: copy.dateError, INVALID_EVENT_TIME_RANGE: copy.timeError, EVENT_ROOM_NOT_FOUND: copy.notFound };
       setErrorMessage(messages[err.code ?? ''] ?? copy.requestError);
     }
@@ -143,7 +174,7 @@ export const ReservaEventoModal: React.FC<ReservaEventoModalProps> = ({
   };
 
   return (
-    <ServiceReservationPanel name={salon.nombre} siteId={salon.sucursal_id} siteName={publicVenueSite(salon, sites) || copy.siteUnknown} media={{ src: salon.imagen_url, alt: salon.nombre, credits: salon.imagen_creditos }} open={isOpen} onClose={close} closeLabel={p('closeModal')} title={createdQuote ? copy.success : textosEventos.modalReservaTitulo} description={createdQuote ? copy.financialNotice : copy.quoteDescription} busy={createMutation.isPending || isSubmitting || checking} busyLabel={p('processingRequest')}>
+    <ServiceReservationPanel compact name={salon.nombre} siteId={salon.sucursal_id} siteName={publicVenueSite(salon, sites) || copy.siteUnknown} media={{ src: salon.imagen_url, alt: salon.nombre, credits: salon.imagen_creditos }} open={isOpen} onClose={close} closeLabel={p('closeModal')} title={createdQuote ? copy.success : textosEventos.modalReservaTitulo} description={createdQuote ? copy.financialNotice : copy.quoteDescription} busy={createMutation.isPending || isSubmitting || checking} busyLabel={p('processingRequest')}>
       {createdQuote ? <div className="space-y-5">
         <Alert tone="success"><p>{copy.reference}: <strong>#{createdQuote.id}</strong></p></Alert>
         <dl className="grid gap-3 rounded-lg border border-neutro-200 bg-neutro-50 p-4 text-sm">
@@ -195,9 +226,18 @@ export const ReservaEventoModal: React.FC<ReservaEventoModalProps> = ({
             {(Object.keys(etiquetasTipoEvento) as TipoEvento[]).map((tipo) => <option key={tipo} value={tipo}>{etiquetasTipoEvento[tipo]}</option>)}
           </Select>
           <DateField label={textosEventos.campoFecha} id="fecha" min={getTodayInGuatemala()} {...register('fecha')} error={errors.fecha?.message} />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <TimeField label={textosEventos.campoHoraInicio} id="hora_inicio" {...register('hora_inicio')} error={errors.hora_inicio?.message} />
-            <TimeField label={textosEventos.campoHoraFin} id="hora_fin" {...register('hora_fin')} error={errors.hora_fin?.message} />
+          {/* Franjas del backend: inicio dentro del horario del salón y finalizaciones libres */}
+          <div className="flex flex-col gap-3" aria-live="polite">
+            {disponibilidadQuery.isPending && disponibilidadQuery.fetchStatus !== 'idle' ? <p className="text-xs text-neutro-600">{tf.cargando}</p>
+              : disponibilidadQuery.isError ? <Alert tone="error"><p className="text-xs">{tf.error}</p><Button type="button" variant="ghost" size="sm" onClick={() => void disponibilidadQuery.refetch()}>{tf.reintentar}</Button></Alert>
+              : disponibilidad && !disponibilidad.horario ? <Alert tone="info" title={tf.sinHorarioTitulo}><p className="text-xs">{tf.sinHorario}</p></Alert>
+              : disponibilidad?.horario && <>
+                <p className="text-xs text-neutro-600">{tf.horarioAtencion(formatearHoraFranja(disponibilidad.horario.apertura, localeFranjas), formatearHoraFranja(disponibilidad.horario.cierre, localeFranjas))}</p>
+                {franjas.length === 0 ? <p className="rounded-md border border-neutro-200 bg-neutro-50 p-3 text-xs text-neutro-700">{tf.sinFranjas}</p> : <>
+                  <SlotPicker label={tf.horaInicio} slots={franjas.map((franja) => franja.inicio)} value={inicioElegido ?? ''} onChange={(value) => { setValue('hora_inicio', value, { shouldDirty: true, shouldValidate: true }); setValue('hora_fin', '', { shouldDirty: true }); }} error={errors.hora_inicio?.message} />
+                  {franjaElegida && <SlotPicker label={tf.horaFin} slots={fines} value={finElegido ?? ''} onChange={(value) => setValue('hora_fin', value, { shouldDirty: true, shouldValidate: true })} error={errors.hora_fin?.message} />}
+                </>}
+              </>}
           </div>
           <Input label={`${textosEventos.campoInvitados}${salon.capacidad_maxima != null ? ` (${p('maxShort')} ${salon.capacidad_maxima})` : ''}`} id="numero_invitados" type="number" {...register('numero_invitados', { valueAsNumber: true })} min={1} max={salon.capacidad_maxima} error={errors.numero_invitados?.message} />
 
@@ -211,7 +251,7 @@ export const ReservaEventoModal: React.FC<ReservaEventoModalProps> = ({
             <Button
               type="submit"
               variant="primary"
-              disabled={status !== 'authenticated' || !user || isSubmitting || createMutation.isPending}
+              disabled={status !== 'authenticated' || !user || isSubmitting || createMutation.isPending || !horarioValido}
             >
               {isSubmitting || createMutation.isPending
                 ? textosEventos.creandoCotizacion

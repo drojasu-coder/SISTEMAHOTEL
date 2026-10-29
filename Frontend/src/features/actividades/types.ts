@@ -22,6 +22,9 @@ export type RecursoActividad = components['schemas']['RecursoActividad'] & {
   duracion_minutos?: number | null;
   cupo_maximo?: number | null;
   precio_persona?: number | string | null;
+  /** Horario de reserva o de salidas (HH:MM:SS); sin ambos valores no se ofrecen franjas. */
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
 };
 
 /** GET /api/recursos-actividad/:id/salidas?fecha= */
@@ -31,6 +34,11 @@ export interface SalidasActividad {
   modalidad: 'por_hora' | 'experiencia';
   cupo_maximo: number | null;
   salidas: { hora_inicio: string; hora_fin: string; participantes: number; disponibles: number }[];
+  /** Horario del recurso; null si aún no está configurado (no se ofrecen franjas). */
+  horario?: { apertura: string; cierre: string } | null;
+  intervalo_minutos?: number;
+  /** Franjas calculadas por el servidor: experiencias con plazas libres; recursos por hora con duraciones válidas. */
+  horarios?: { inicio: string; fin?: string; disponibles?: number; duraciones?: number[] }[];
 }
 
 export type Instructor = components['schemas']['Instructor'];
@@ -56,8 +64,10 @@ export type CreateReservaActividadInput = Omit<components['schemas']['CreateRese
 };
 export type UpdateReservaActividadInput = components['schemas']['UpdateReservaActividadRequest'];
 
-export type CreateRecursoActividadInput = components['schemas']['CreateRecursoActividadRequest'];
-export type UpdateRecursoActividadInput = components['schemas']['UpdateRecursoActividadRequest'];
+/** Horario de reserva o de salidas, editable desde el panel (HH:MM o null para quitarlo). */
+type HorarioRecursoInput = { hora_apertura?: string | null; hora_cierre?: string | null };
+export type CreateRecursoActividadInput = components['schemas']['CreateRecursoActividadRequest'] & HorarioRecursoInput;
+export type UpdateRecursoActividadInput = components['schemas']['UpdateRecursoActividadRequest'] & HorarioRecursoInput;
 
 export type CreateInstructorInput = components['schemas']['CreateInstructorRequest'];
 export type UpdateInstructorInput = components['schemas']['UpdateInstructorRequest'];

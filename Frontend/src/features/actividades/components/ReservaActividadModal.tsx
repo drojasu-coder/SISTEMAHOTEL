@@ -1,5 +1,6 @@
 import { DateField } from '@/components/ui/DateField';
-import { TimeField } from '@/components/ui/TimeField';
+import { SlotPicker } from '@/components/ui/SlotPicker';
+import { formatearHoraFranja, sumarMinutos, useTextosFranjas } from '@/i18n/franjas';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { MoneyReference } from '@/components/ui/MoneyReference';
@@ -11,14 +12,14 @@ import { usePublicTexts, usePublicInterface } from '@/i18n/public';
 import { useDraftSiteGuard, DraftSiteNotice } from '@/features/preferencias/SiteContextNotice';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { CheckCircle } from 'lucide-react';
 import { Button, buttonStyles } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
 import { ApiError } from '@/api/client/http';
 import { getApiErrorMessage } from '@/api/errors';
 import { useAuth } from '@/features/auth/AuthContext';
-import { BotonAnadirAlCarrito } from '@/features/carrito/components/BotonAnadirAlCarrito';
+import { CarritoAutomatico } from '@/features/carrito/components/CarritoAutomatico';
 import type { RecursoActividad, ReservaActividad } from '../types';
 import { useInstructoresQuery, useSalidasActividadQuery } from '../hooks/useActividades';
 import { experienceEnd, formatDuration, useExperienceCopy, type ExperienceCopyKey } from '../experienceCopy';
@@ -46,7 +47,6 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
   const textosActividades = usePublicTexts('actividades');
   const { p, date: calendarDate, money } = usePublicInterface();
   const xp = useExperienceCopy();
-  const navigate = useNavigate();
   const siteBlocked = useDraftSiteGuard(recurso?.id, recurso?.sucursal_id);
   const { user } = useAuth();
   const isCliente = user?.rol === 'cliente';
@@ -66,10 +66,25 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
   const duracion = Number(recurso?.duracion_minutos) || 0;
   const cupo = Number(recurso?.cupo_maximo) || 1;
   const horaFinCalculada = esExperiencia && horaInicio ? experienceEnd(horaInicio, duracion) : null;
-  const salidasQuery = useSalidasActividadQuery(recurso?.id, fecha, isOpen && esExperiencia);
-  const salidas = salidasQuery.data?.salidas ?? [];
-  const salidaElegida = salidas.find((salida) => salida.hora_inicio.slice(0, 5) === horaInicio);
+  // Franjas del backend: horario del recurso, salidas y cupo (experiencias) o duraciones libres (por hora).
+  const { t: tf, locale: localeFranjas } = useTextosFranjas();
+  const salidasQuery = useSalidasActividadQuery(recurso?.id, fecha, isOpen, !esExperiencia && instructorId ? Number(instructorId) : undefined);
+  const franjasServidor = salidasQuery.data?.horarios ?? [];
+  const horarioRecurso = salidasQuery.data?.horario ?? null;
+  const franjas = franjasServidor.filter((franja) => (esExperiencia ? (franja.disponibles ?? 0) > 0 : (franja.duraciones ?? []).length > 0));
+  const franjaElegida = franjas.find((franja) => franja.inicio === horaInicio.slice(0, 5));
+  const salidaElegida = esExperiencia && franjaElegida ? { disponibles: franjaElegida.disponibles ?? 0 } : undefined;
   const maxParticipantes = Math.max(1, salidaElegida ? salidaElegida.disponibles : cupo);
+  const finesPosibles = !esExperiencia && franjaElegida ? (franjaElegida.duraciones ?? []).map((d) => sumarMinutos(franjaElegida.inicio, d)) : [];
+  const [errorFranja, setErrorFranja] = useState<string | null>(null);
+
+  // Al cambiar de fecha, una hora que ya no se ofrece deja de estar elegida.
+  useEffect(() => {
+    if (!salidasQuery.isSuccess) return;
+    if (horaInicio && !franjas.some((franja) => franja.inicio === horaInicio.slice(0, 5))) { setHoraInicio(''); setHoraFin(''); }
+    else if (!esExperiencia && horaFin && !finesPosibles.includes(horaFin.slice(0, 5))) setHoraFin('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salidasQuery.data]);
 
   const [errorLocal, setErrorLocal] = useState<LocalizedError | null>(null);
   const [falloIncierto, setFalloIncierto] = useState<boolean>(false);
@@ -99,6 +114,7 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
     e.preventDefault();
     setErrorLocal(null);
     setXpError(null);
+    setErrorFranja(null);
     setFalloIncierto(false);
 
     if (!isCliente) {
@@ -126,7 +142,8 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
         setReservaCreada(created);
       } catch (err: unknown) {
         const code = err instanceof ApiError ? err.code : '';
-        if (code === 'ACTIVITY_CAPACITY_EXCEEDED') { setXpError('errorCapacity'); void salidasQuery.refetch(); }
+        if (code && tf.errores[code]) { setErrorFranja(code); void salidasQuery.refetch(); }
+        else if (code === 'ACTIVITY_CAPACITY_EXCEEDED') { setXpError('errorCapacity'); void salidasQuery.refetch(); }
         else if (code === 'RESOURCE_OVERLAP') { setXpError('errorOverlap'); void salidasQuery.refetch(); }
         else if (code === 'INVALID_ACTIVITY_DURATION') setXpError('errorSameDay');
         else if (code === 'PAST_DATE_TIME' || code === 'ACTIVITY_DATE_IN_PAST' || code === 'ACTIVITY_TIME_IN_PAST') setErrorLocal({ section: 'actividades', key: 'errorFechaPasada' });
@@ -173,7 +190,10 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
       const code = err instanceof ApiError ? err.code : '';
       const msgLower = msg.toLowerCase();
 
-      if (
+      if (code && tf.errores[code]) {
+        setErrorFranja(code);
+        void salidasQuery.refetch();
+      } else if (
         code === 'RESOURCE_OVERLAP' ||
         msgLower.includes('ocupad') ||
         msgLower.includes('traslape') ||
@@ -225,6 +245,7 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
     setReservaCreada(null);
     setErrorLocal(null);
     setXpError(null);
+    setErrorFranja(null);
     setFalloIncierto(false);
     onClose();
   };
@@ -275,19 +296,8 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
             </div>
 
             <div className="flex flex-col sm:flex-row w-full gap-3 pt-3">
-              {/* Botón de añadir al carrito activo para proceder al pago */}
               <div className="flex-1">
-                <BotonAnadirAlCarrito
-          publicInterface
-                  reservaId={reservaCreada.id!}
-                  reservaEstado={reservaCreada.estado || 'confirmada'}
-                  tipo_item="actividad"
-                  variant="primary"
-                  className="w-full justify-center"
-                  onSuccess={() => {
-                    navigate('/carrito');
-                  }}
-                />
+                <CarritoAutomatico reservaId={reservaCreada.id!} reservaEstado={reservaCreada.estado || 'confirmada'} tipo_item="actividad" />
               </div>
 
               <Link
@@ -342,25 +352,21 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
               </Alert>
             )}
 
+            {errorFranja && <Alert tone="warning"><p className="text-xs">{tf.errores[errorFranja]}</p></Alert>}
+
             {esExperiencia ? <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <DateField label={textosActividades.campoFecha} id="fecha" min={hoy} value={fecha} onChange={(e) => { setFecha(e.target.value); setXpError(null); }} required />
-                <TimeField label={textosActividades.campoHoraInicio} id="hora_inicio" value={horaInicio} onChange={(e) => { setHoraInicio(e.target.value); setXpError(null); }} required />
-              </div>
-              <p className="text-sm text-neutro-700" aria-live="polite">{horaFinCalculada ? xp('endsAt', { time: horaFinCalculada }) : horaInicio ? xp('errorSameDay') : xp('chooseStart')} · {xp('duration')}: {formatDuration(duracion)}</p>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-neutro-800">{xp('departuresTitle')}</p>
-                {salidasQuery.isPending && <p className="text-xs text-neutro-600">{xp('departuresLoading')}</p>}
-                {salidasQuery.isError && <Alert tone="error"><p className="text-xs">{xp('departuresError')}</p><Button type="button" variant="ghost" size="sm" onClick={() => { void salidasQuery.refetch(); }}>{p('retry')}</Button></Alert>}
-                {salidasQuery.isSuccess && (salidas.length === 0
-                  ? <p className="text-xs text-neutro-600">{xp('departuresNone')}</p>
-                  : <div className="flex flex-wrap gap-2">{salidas.map((salida) => {
-                      const time = salida.hora_inicio.slice(0, 5);
-                      const lleno = salida.disponibles <= 0;
-                      return <Button key={salida.hora_inicio} type="button" size="sm" variant={horaInicio === time ? 'primary' : 'secondary'} disabled={lleno} aria-pressed={horaInicio === time} aria-label={lleno ? `${time} · ${xp('full')}` : xp('joinDeparture', { time })} onClick={() => { setHoraInicio(time); setXpError(null); }}>
-                        {time} · {lleno ? xp('full') : xp('spotsLeft', { n: salida.disponibles })}
-                      </Button>;
-                    })}</div>)}
+              <DateField label={textosActividades.campoFecha} id="fecha" min={hoy} value={fecha} onChange={(e) => { setFecha(e.target.value); setXpError(null); }} required />
+              <p className="text-sm text-neutro-700">{xp('duration')}: {formatDuration(duracion)}</p>
+              {/* Salidas del backend: horario del recurso, sin solapes entre salidas y con plazas libres */}
+              <div className="space-y-2" aria-live="polite">
+                {salidasQuery.isPending && salidasQuery.fetchStatus !== 'idle' ? <p className="text-xs text-neutro-600">{tf.cargando}</p>
+                  : salidasQuery.isError ? <Alert tone="error"><p className="text-xs">{tf.error}</p><Button type="button" variant="ghost" size="sm" onClick={() => { void salidasQuery.refetch(); }}>{tf.reintentar}</Button></Alert>
+                  : salidasQuery.isSuccess && !horarioRecurso ? <Alert tone="info" title={tf.sinHorarioTitulo}><p className="text-xs">{tf.sinHorario}</p></Alert>
+                  : horarioRecurso && <>
+                    <p className="text-xs text-neutro-600">{tf.horarioAtencion(formatearHoraFranja(horarioRecurso.apertura, localeFranjas), formatearHoraFranja(horarioRecurso.cierre, localeFranjas))}</p>
+                    {franjas.length === 0 ? <p className="rounded-md border border-neutro-200 bg-neutro-50 p-3 text-xs text-neutro-700">{tf.sinFranjas}</p>
+                      : <SlotPicker label={xp('departuresTitle')} slots={franjas.map((franja) => franja.inicio)} value={horaInicio} onChange={(value) => { setHoraInicio(value); setXpError(null); }} durationMinutes={duracion} />}
+                  </>}
               </div>
               <ParticipantStepper value={participantes} max={maxParticipantes} onChange={(n) => { setParticipantes(n); setXpError(null); }} label={xp('participants')} decreaseLabel={xp('decrease')} increaseLabel={xp('increase')} hint={salidaElegida ? xp('maxForDeparture', { n: salidaElegida.disponibles }) : xp('capacityPerDeparture') + ': ' + xp('people', { n: cupo })} />
               <div className="flex flex-col gap-1 rounded-lg border border-bronce-200 bg-bronce-50/40 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -370,11 +376,6 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
               <p className="text-xs text-neutro-600">{xp('estimatedTotalNote', { n: participantes, price: money(recurso.precio_persona) })}</p>
             </div> : <div className="space-y-4">
               <DateField label={textosActividades.campoFecha} id="fecha" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)} required />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TimeField label={textosActividades.campoHoraInicio} id="hora_inicio" value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} required />
-                <TimeField label={textosActividades.campoHoraFin} id="hora_fin" value={horaFin} onChange={(e) => setHoraFin(e.target.value)} required />
-              </div>
-              <p className="text-xs text-neutro-600">{textosActividades.duracionRegla}</p>
               {instructorsQuery.isError && <Alert tone="error"><p>{p('serviceOptionsError')}</p><Button variant="ghost" onClick={() => { void instructorsQuery.refetch(); }}>{p('retry')}</Button></Alert>}
               <div className="space-y-1">
                 <Select disabled={instructorsQuery.isPending || instructorsQuery.isError || sinInstructores} label={textosActividades.campoInstructor} id="instructor_id" value={sinInstructores ? '' : instructorId} onChange={(e) => setInstructorId(e.target.value)}>
@@ -382,6 +383,19 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
                   {instructoresActivos.map((inst) => <option lang="es" key={inst.id} value={inst.id}>{inst.nombre} {inst.especialidad ? `(${inst.especialidad})` : ''}</option>)}
                 </Select>
                 <p className="text-xs text-neutro-600">{sinInstructores ? xp('noInstructors') : tarifaInstructor > 0 ? xp('instructorCharge', { price: money(tarifaInstructor) }) : xp('instructorNoCharge')}</p>
+              </div>
+              {/* Franjas del backend: inicio dentro del horario y fines que no se solapan ni pasan del cierre */}
+              <div className="space-y-3" aria-live="polite">
+                {salidasQuery.isPending && salidasQuery.fetchStatus !== 'idle' ? <p className="text-xs text-neutro-600">{tf.cargando}</p>
+                  : salidasQuery.isError ? <Alert tone="error"><p className="text-xs">{tf.error}</p><Button type="button" variant="ghost" size="sm" onClick={() => { void salidasQuery.refetch(); }}>{tf.reintentar}</Button></Alert>
+                  : salidasQuery.isSuccess && !horarioRecurso ? <Alert tone="info" title={tf.sinHorarioTitulo}><p className="text-xs">{tf.sinHorario}</p></Alert>
+                  : horarioRecurso && <>
+                    <p className="text-xs text-neutro-600">{tf.horarioAtencion(formatearHoraFranja(horarioRecurso.apertura, localeFranjas), formatearHoraFranja(horarioRecurso.cierre, localeFranjas))} {textosActividades.duracionRegla}</p>
+                    {franjas.length === 0 ? <p className="rounded-md border border-neutro-200 bg-neutro-50 p-3 text-xs text-neutro-700">{tf.sinFranjas}</p> : <>
+                      <SlotPicker label={tf.horaInicio} slots={franjas.map((franja) => franja.inicio)} value={horaInicio} onChange={(value) => { setHoraInicio(value); setHoraFin(''); }} />
+                      {franjaElegida && <SlotPicker label={tf.horaFin} slots={finesPosibles} value={horaFin} onChange={setHoraFin} />}
+                    </>}
+                  </>}
               </div>
               {/* El equipamiento con tarifa no tiene unidad de cobro definida: el servidor lo rechaza, así que no se ofrece. */}
               {equipoSinCargo
@@ -414,7 +428,7 @@ export const ReservaActividadModal: React.FC<ReservaActividadModalProps> = ({
               <Button
                 type="submit"
                 variant="primary"
-                disabled={!isCliente || createMutation.isPending}
+                disabled={!isCliente || createMutation.isPending || !franjaElegida || (!esExperiencia && !finesPosibles.includes(horaFin.slice(0, 5)))}
                 isLoading={createMutation.isPending}
               >
                 {createMutation.isPending

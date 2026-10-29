@@ -15,7 +15,7 @@ import type {
 export const mesasApi = {
   /**
    * Listado de mesas (consulta pública en el backend).
-   * El backend no admite filtros ni paginación: devuelve todas las mesas
+   * Admite el filtro opcional ?sucursal_id=; sin él devuelve todas las mesas
    * ordenadas por zona e incluye el nombre de la sede.
    */
   getAll: async (): Promise<Mesa[]> => {

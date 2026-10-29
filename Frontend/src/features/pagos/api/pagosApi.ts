@@ -9,6 +9,7 @@ import type {
   PagoResponse,
   ResumenPagoData,
   ResumenPagoResponse,
+  ComprobanteDisponible,
 } from '../types';
 
 /**
@@ -64,6 +65,34 @@ export const pagosApi = {
    */
   getById: async (id: number): Promise<Pago> => {
     const response = await api.get<PagoResponse>(`/pagos/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Descarga el comprobante interno PDF de un pago aprobado (no es factura FEL).
+   * Endpoint: GET /api/pagos/:id/comprobante
+   */
+  descargarComprobante: async (id: number): Promise<void> => {
+    const blob = await api.get<Blob>(`/pagos/${id}/comprobante`, { responseType: 'blob', headers: { Accept: 'application/pdf' } });
+    if (!blob.size || !blob.type.includes('application/pdf')) throw new Error('INVALID_RECEIPT_FILE');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `comprobante-pago-${id}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+
+  /**
+   * Pagos aprobados del cliente que incluyen una reserva, para ofrecer su comprobante.
+   * Endpoint: GET /api/pagos/comprobantes
+   */
+  comprobantesDeReserva: async (tipoItem: string, referenciaId: number, signal?: AbortSignal): Promise<ComprobanteDisponible[]> => {
+    const response = await api.get<{ data: ComprobanteDisponible[] }>('/pagos/comprobantes', {
+      params: { tipo_item: tipoItem, referencia_id: referenciaId }, signal,
+    });
     return response.data;
   },
 

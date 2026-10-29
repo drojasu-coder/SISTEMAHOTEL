@@ -2,7 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   Sparkles,
-  Car,
   CalendarCheck,
   ChevronRight,
   Dumbbell,
@@ -13,7 +12,6 @@ import {
 import { Card } from '@/components/ui/Card';
 import { buttonStyles } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
-import { hasPermission } from '@/features/auth/permissions';
 import { AMENIDADES_ROUTES } from '@/features/amenidades';
 import { ACTIVIDADES_ROUTES } from '@/features/actividades';
 import { BIENESTAR_ROUTES } from '@/features/bienestar';
@@ -38,10 +36,6 @@ import { es } from '@/i18n/es';
  */
 export const ServiciosPage: React.FC = () => {
   const { user } = useAuth();
-  const canManageParqueos = user
-    ? hasPermission(user.rol, 'habitaciones.gestionar')
-    : false;
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 pb-12">
       {/* Encabezado */}
@@ -356,34 +350,6 @@ export const ServiciosPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Tarjeta de Parqueos: enlace funcional visible para quien tiene habitaciones.gestionar */}
-        {canManageParqueos && (
-          <Card className="flex flex-col justify-between gap-6 p-6 transition-all hover:border-selva-300 hover:shadow-soft">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-selva-100 text-selva-800">
-                  <Car className="size-5" aria-hidden="true" />
-                </div>
-                <h2 className="font-serif text-lg font-bold text-neutro-900">
-                  {es.servicios.parqueosTitulo}
-                </h2>
-              </div>
-              <p className="text-sm text-neutro-600">
-                {es.servicios.parqueosDescripcion}
-              </p>
-            </div>
-
-            <div className="pt-2">
-              <Link
-                to="/admin/parqueos"
-                className={buttonStyles({ variant: 'primary', className: 'w-full justify-between' })}
-              >
-                <span>{es.servicios.parqueosBoton}</span>
-                <ChevronRight className="size-4" aria-hidden="true" />
-              </Link>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   );

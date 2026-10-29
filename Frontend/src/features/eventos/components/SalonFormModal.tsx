@@ -15,6 +15,8 @@ import {
 import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import type { Salon } from '../types';
 import { getApiErrorMessage } from '@/api/errors';
+import { TimeField } from '@/components/ui/TimeField';
+import { useTextosHorarioAdmin } from '@/i18n/horariosAdmin';
 
 const salonSchema = z.object({
   sucursal_id: z.string().min(1, 'Debe seleccionar una sede'),
@@ -35,6 +37,15 @@ const salonSchema = z.object({
       message: 'La tarifa base debe ser un valor mayor o igual a 0',
     }),
   descripcion: z.string().optional(),
+  // Horario de uso: ambos valores o ninguno. Sin horario, el salón no acepta solicitudes en línea.
+  hora_apertura: z.string().regex(/^$|^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no válida'),
+  hora_cierre: z.string().regex(/^$|^([01]\d|2[0-3]):[0-5]\d$/, 'Hora no válida'),
+}).superRefine((data, ctx) => {
+  if (Boolean(data.hora_apertura) !== Boolean(data.hora_cierre)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [data.hora_apertura ? 'hora_cierre' : 'hora_apertura'], message: 'Indique apertura y cierre, o deje ambos vacíos' });
+  } else if (data.hora_apertura && data.hora_cierre && data.hora_apertura >= data.hora_cierre) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hora_cierre'], message: 'El cierre debe ser posterior a la apertura' });
+  }
 });
 
 type SalonFormData = z.infer<typeof salonSchema>;
@@ -56,6 +67,8 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
   const removeImageMutation = useRemoveSalonImageMutation();
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [avisoHorario, setAvisoHorario] = useState<string | null>(null);
+  const th = useTextosHorarioAdmin();
   const [imageError, setImageError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [removeMarked, setRemoveMarked] = useState(false);
@@ -76,12 +89,15 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
       capacidad_maxima: salon?.capacidad_maxima ? String(salon.capacidad_maxima) : '',
       tarifa_base: salon?.tarifa_base !== undefined ? String(salon.tarifa_base) : '',
       descripcion: salon?.descripcion ?? '',
+      hora_apertura: salon?.hora_apertura?.slice(0, 5) ?? '',
+      hora_cierre: salon?.hora_cierre?.slice(0, 5) ?? '',
     },
   });
 
   useEffect(() => {
     if (isOpen) {
       setErrorMessage(null);
+      setAvisoHorario(null);
       setImageError(null);
       setSelectedFile(null);
       setRemoveMarked(false);
@@ -94,6 +110,8 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
         capacidad_maxima: salon?.capacidad_maxima ? String(salon.capacidad_maxima) : '',
         tarifa_base: salon?.tarifa_base !== undefined ? String(salon.tarifa_base) : '',
         descripcion: salon?.descripcion ?? '',
+      hora_apertura: salon?.hora_apertura?.slice(0, 5) ?? '',
+      hora_cierre: salon?.hora_cierre?.slice(0, 5) ?? '',
       });
     }
   }, [isOpen, salon, reset]);
@@ -103,10 +121,11 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
     setImageError(null);
 
     let targetId: number;
+    let fueraDeHorario = 0;
     try {
       if (isEditing && salon?.id) {
         targetId = salon.id;
-        await updateMutation.mutateAsync({
+        const actualizado = await updateMutation.mutateAsync({
           id: salon.id,
           data: {
             sucursal_id: Number(data.sucursal_id),
@@ -114,8 +133,11 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
             capacidad_maxima: Number(data.capacidad_maxima),
             tarifa_base: Number(data.tarifa_base),
             descripcion: data.descripcion,
+            hora_apertura: data.hora_apertura || null,
+            hora_cierre: data.hora_cierre || null,
           },
         });
+        fueraDeHorario = Number((actualizado as { reservas_fuera_de_horario?: number }).reservas_fuera_de_horario) || 0;
       } else if (persistedId) {
         targetId = persistedId;
         await updateMutation.mutateAsync({
@@ -126,6 +148,8 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
             capacidad_maxima: Number(data.capacidad_maxima),
             tarifa_base: Number(data.tarifa_base),
             descripcion: data.descripcion,
+            hora_apertura: data.hora_apertura || null,
+            hora_cierre: data.hora_cierre || null,
           },
         });
       } else {
@@ -135,6 +159,8 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
           capacidad_maxima: Number(data.capacidad_maxima),
           tarifa_base: Number(data.tarifa_base),
           descripcion: data.descripcion,
+          hora_apertura: data.hora_apertura || null,
+          hora_cierre: data.hora_cierre || null,
         });
         targetId = Number(created.id);
         setPersistedId(Number(created.id));
@@ -174,6 +200,11 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
       }
     }
 
+    // Las solicitudes y eventos futuros no se modifican: si quedan fuera del horario se avisa y no se cierra.
+    if (fueraDeHorario > 0) {
+      setAvisoHorario(th.fueraDeHorario(fueraDeHorario));
+      return;
+    }
     onClose();
   };
 
@@ -186,6 +217,7 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
       className="max-w-lg"
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {avisoHorario && <Alert tone="warning"><p className="text-xs">{avisoHorario}</p></Alert>}
         {errorMessage && (
           <Alert tone="error">
             <span className="text-xs">{errorMessage}</span>
@@ -278,6 +310,16 @@ export const SalonFormModal: React.FC<SalonFormModalProps> = ({ salon, isOpen, o
             )}
           </div>
         </div>
+
+        {/* Horario de uso: define los inicios y finalizaciones que el cliente puede solicitar */}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="field-label">{th.horarioUso}</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <TimeField label={th.apertura} id="salon-apertura" step={1800} disabled={isSubmitting || isUploading} error={errors.hora_apertura?.message} {...register('hora_apertura')} />
+            <TimeField label={th.cierre} id="salon-cierre" step={1800} disabled={isSubmitting || isUploading} error={errors.hora_cierre?.message} {...register('hora_cierre')} />
+          </div>
+          <p className="text-xs text-neutro-600">{th.ayudaSalon}</p>
+        </fieldset>
 
         {/* Descripción */}
         <div>

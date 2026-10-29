@@ -9,6 +9,9 @@ const querySchema = z.object({
     z.string().regex(/^[1-9]\d*$/).transform(Number).refine(value => Number.isSafeInteger(value) && value <= 2147483647),
   ]).optional(),
   vista: z.literal("alcance").optional(),
+  // Períodos de las tendencias del resumen: ocupación prevista (días) y reservas registradas (meses).
+  dias: z.enum(["30", "90"]).transform(Number).optional(),
+  meses: z.enum(["6", "12"]).transform(Number).optional(),
 }).strict();
 
 /** Sedes autorizadas del usuario para el selector global del panel (sin métricas). */

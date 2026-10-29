@@ -3,8 +3,10 @@ import { AppError } from "../../utils/AppError";
 import * as mediaUploadService from "../storage/mediaUpload.service";
 import * as s3Service from "../storage/s3.service";
 import { getAssetCredits } from "../storage/credits";
+import { ahoraEnGuatemala, contarFueraDeHorario, leerHorario, validarHorarioConfigurado, INTERVALO_FRANJAS_MINUTOS } from "../../utils/franjasHorarias";
 
 const db = require("../../models");
+const { Op } = require("sequelize");
 
 const {
   Salon,
@@ -19,6 +21,8 @@ interface CreateSalonData {
   tarifa_base: number;
   descripcion?: string | null;
   imagen_key?: string | null;
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
 }
 
 interface UpdateSalonData {
@@ -28,6 +32,8 @@ interface UpdateSalonData {
   tarifa_base?: number;
   descripcion?: string | null;
   imagen_key?: string | null;
+  hora_apertura?: string | null;
+  hora_cierre?: string | null;
 }
 
 export async function serializeSalon(salon: any): Promise<any> {
@@ -119,6 +125,8 @@ export const create = async (
   await validateSucursal(
     data.sucursal_id
   );
+  // Una solicitud mínima ocupa 30 minutos: el horario debe dar cabida al menos a una.
+  validarHorarioConfigurado(data, INTERVALO_FRANJAS_MINUTOS);
 
   const salon = await Salon.create({
     sucursal_id: data.sucursal_id,
@@ -129,6 +137,8 @@ export const create = async (
     descripcion:
       data.descripcion ?? null,
     imagen_key: data.imagen_key ?? null,
+    hora_apertura: data.hora_apertura ?? null,
+    hora_cierre: data.hora_cierre ?? null,
   });
 
   return getById(salon.id);
@@ -156,9 +166,25 @@ export const update = async (
     );
   }
 
+  const resultante = { ...salon.get({ plain: true }), ...data };
+  const horario = { hora_apertura: resultante.hora_apertura?.slice(0, 5) ?? null, hora_cierre: resultante.hora_cierre?.slice(0, 5) ?? null };
+  validarHorarioConfigurado(horario, INTERVALO_FRANJAS_MINUTOS);
+
   await salon.update(data);
 
-  return getById(id);
+  // Las solicitudes y eventos futuros se conservan; solo se informa cuántos quedan fuera del horario.
+  const futuras = await ReservaEvento.findAll({
+    where: { salon_id: id, fecha: { [Op.gte]: ahoraEnGuatemala().fecha }, estado: { [Op.in]: ["cotizacion", "confirmada"] } },
+    attributes: ["hora_inicio", "hora_fin"],
+    raw: true,
+  });
+  return {
+    ...(await getById(id)),
+    reservas_fuera_de_horario: contarFueraDeHorario(
+      (futuras as any[]).map((r) => ({ inicio: r.hora_inicio, fin: r.hora_fin })),
+      leerHorario(horario),
+    ),
+  };
 };
 
 export const remove = async (

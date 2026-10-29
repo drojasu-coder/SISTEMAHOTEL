@@ -139,14 +139,14 @@ router.use((req, res, next) => {
   authMiddleware(req, res, error => {
     if (error) return next(error);
     if (financial.has(prefix) && [ROLES.RECEPCIONISTA, ROLES.GERENTE_HABITACIONES, ROLES.EMPLEADO_OPERATIVO].includes(req.user!.rol as any)) return next(forbidden());
-    // Keep the legacy identity valid without exposing a fifth management interface.
-    if (req.user!.rol === ROLES.GERENTE_RESTAURANTE && operations[prefix] && (!catalogs.some(([url]) => url === prefix) || !["GET", "HEAD"].includes(req.method))) return next(forbidden());
+    // Restaurant management reuses only its existing tables/reservation operations.
+    if (req.user!.rol === ROLES.GERENTE_RESTAURANTE && operations[prefix] && !["mesas", "reservas-mesa"].includes(prefix)) return next(forbidden());
     if (globalCatalogs.has(prefix)) {
       if (!["GET", "HEAD"].includes(req.method) && req.user!.rol !== ROLES.ADMIN) return next(forbidden());
       return next("router");
     }
     if (roomReservations.has(prefix)) return req.user!.rol === ROLES.EMPLEADO_OPERATIVO ? next(forbidden()) : next("router");
-    if (![ROLES.GERENTE_HABITACIONES, ROLES.EMPLEADO_OPERATIVO].includes(req.user!.rol as any)) return next("router");
+    if (![ROLES.GERENTE_HABITACIONES, ROLES.EMPLEADO_OPERATIVO, ROLES.GERENTE_RESTAURANTE].includes(req.user!.rol as any)) return next("router");
     next();
   });
 });
@@ -154,6 +154,8 @@ router.use(async (req, res, next) => {
   try {
     const [prefix, rawId, action] = req.path.split("/").filter(Boolean);
     const scope = await getSedeScope(req.user!); assertHasSede(scope);
+    // Public booking configuration is not a record identifier.
+    if (prefix === "mesas" && rawId === "configuracion" && !action && req.method === "GET" && req.user!.rol !== ROLES.EMPLEADO_OPERATIVO) return next("router");
     const id = rawId === undefined ? undefined : Number(rawId);
     if (rawId !== undefined && (!/^\d+$/.test(rawId) || !Number.isSafeInteger(id) || id! < 1)) throw new AppError(400, "VALIDATION_ERROR", "Identificador inválido");
     req.params.id = id === undefined ? "" : String(id);
@@ -196,6 +198,10 @@ router.use(async (req, res, next) => {
     }
     if (req.method === "PATCH" && id && !action) {
       req.body = validBody(spec.update, req.body);
+      if (spec.parent && Object.prototype.hasOwnProperty.call(req.body, spec.parent.key)) {
+        const parent = await db[spec.parent.model].findByPk(req.body[spec.parent.key]);
+        assertSedeAccess(scope, parent?.sucursal_id);
+      }
       if (Object.prototype.hasOwnProperty.call(req.body, "sucursal_id")) assertSedeAccess(scope, req.body.sucursal_id);
       return spec.controller.update(req, res, next);
     }

@@ -23,6 +23,7 @@ import { RESERVAS_ROUTES } from '@/features/reservas/constants/routes';
 import { PAGOS_ROUTES } from '../constants/routes';
 
 import type { Pago } from '../types';
+import { DescargarComprobanteButton } from './DescargarComprobante';
 
 export interface PagoResultadoCardProps {
   pago: Pago;
@@ -104,6 +105,13 @@ export const PagoResultadoCard: React.FC<PagoResultadoCardProps> = ({ pago, allo
 
       {pollingPaused && isProcesando && <Alert tone="warning">{p('purchasePollingPaused')}</Alert>}
       <div><Button variant="ghost" onClick={() => { void (async () => { try { await navigator.clipboard.writeText(`${locale === 'en' ? 'Payment' : 'Pago'} #${pago.id}`); setCopied('success'); } catch { setCopied('error'); } })(); }}>{p('purchaseCopy')}</Button>{copied && <p role="status" className="text-xs">{p(copied === 'success' ? 'purchaseCopied' : 'purchaseCopyError')}</p>}</div>
+      {/* Comprobante interno: solo para pagos aprobados; el servidor lo vuelve a validar. */}
+      {isAprobado && (
+        <div className="flex flex-col gap-1">
+          <DescargarComprobanteButton pagoId={pago.id} />
+          <p className="text-xs text-neutro-500">{textosPagos.notaComprobante}</p>
+        </div>
+      )}
       {/* Datos históricos del pago; no se reconstruyen con catálogo actual. */}
       <div className="rounded-xl border border-neutro-200 bg-neutro-50 p-5">
         <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-neutro-500">

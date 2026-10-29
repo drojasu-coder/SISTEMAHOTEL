@@ -14,9 +14,9 @@ export function formatGTQ(monto: number | string | null | undefined): string {
 }
 
 export const textosCrearReserva = {
-  tituloPagina: 'Reservar habitación',
+  tituloPagina: 'Reserva tu estancia',
   subtituloPagina:
-    'Consulte la disponibilidad de habitaciones en nuestras sedes y realice su reserva en línea.',
+    'Selecciona tus fechas y encuentra tu habitación',
 
   // Búsqueda
   seccionBusqueda: 'Criterios de estancia',
@@ -27,7 +27,7 @@ export const textosCrearReserva = {
   huespedesLabel: 'Número de huéspedes',
   huespedesPlaceholder: 'Ej. 2',
   tipoHabitacionLabel: 'Tipo de habitación (opcional)',
-  tipoHabitacionTodos: 'Todos los tipos disponibles',
+  tipoHabitacionTodos: 'Sin preferencia',
   botonBuscar: 'Buscar disponibilidad',
   buscando: 'Consultando disponibilidad...',
 
@@ -55,6 +55,7 @@ export const textosCrearReserva = {
     noches === 1 ? '1 noche' : `${noches} noches`,
 
   // Resumen y confirmación
+  aceptacionReserva: 'Acepto los términos y la política de reservas, cancelaciones y reembolsos.',
   resumenTitulo: 'Resumen de su reserva',
   resumenDesc:
     'Por favor verifique los datos de su estancia antes de confirmar la reserva.',

@@ -13,14 +13,13 @@ import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { TranslatedError } from '@/i18n/public';
 import { ApiError } from '@/api/client/http';
 import { usePublicPreferences } from '@/features/preferencias/PublicPreferences';
-import { CatalogSiteNotice } from '@/features/preferencias/SiteContextNotice';
+import type { ReservaHabitacionConCarrito } from '@/features/reservas/types';
 import { habitacionesApi } from '@/features/habitaciones/api/habitacionesApi';
 
-import { useDisponibilidadQuery, useCreateReservaMutation, CriteriosBusquedaForm, HabitacionesDisponiblesList, ResumenReservaModal, ReservaConfirmadaCard, type DisponibilidadHabitacionQuery, type ReservaHabitacion, type CreateReservaHabitacionInput } from '@/features/crear-reserva';
+import { useDisponibilidadQuery, useCreateReservaMutation, CriteriosBusquedaForm, HabitacionesDisponiblesList, ResumenReservaModal, ReservaConfirmadaCard, ReservaDirecta, type DisponibilidadHabitacionQuery, type CreateReservaHabitacionInput } from '@/features/crear-reserva';
 import type { HabitacionDisponiblePublico, TipoHabitacion } from '@/features/habitaciones/types';
 import { busquedaReservaFormSchema, toDisponibilidadQuery } from '@/features/crear-reserva/schemas/busquedaReservaSchema';
 import { calendarNights } from '@/lib/dates';
-import { LegalNotice } from '@/features/legal';
 
 const SELECTION_DRAFT_KEY = 'hunahpu.crear-reserva-selection.v1';
 
@@ -83,10 +82,21 @@ export const CrearReservaPage: React.FC = () => {
     useState<HabitacionDisponiblePublico | null>(() => restoreSelectionDraft());
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [createdReserva, setCreatedReserva] =
-    useState<ReservaHabitacion | null>(null);
+    useState<ReservaHabitacionConCarrito | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedRoom = useRef(Number(searchParams.get('habitacion_id')) || null);
-  const [requestedRoomUnavailable, setRequestedRoomUnavailable] = useState(false);
+  // Habitación elegida desde el catálogo o el detalle: activa la reserva directa sin buscador general.
+  const [directId, setDirectId] = useState<number | null>(() => {
+    const raw = searchParams.get('habitacion_id');
+    return raw && /^[1-9]\d*$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : null;
+  });
+  const directRoomQuery = useQuery({
+    queryKey: ['reserva-directa-habitacion', directId],
+    queryFn: () => habitacionesApi.getPublicById(directId as number),
+    enabled: directId !== null,
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  });
+  const directSiteId = Number(searchParams.get('sucursal_id')) || directRoomQuery.data?.sucursal?.id || null;
   const [paramQueryApplied, setParamQueryApplied] = useState(false);
 
   const incompatibleSite = scope.managed && submittedQuery !== null &&
@@ -97,7 +107,7 @@ export const CrearReservaPage: React.FC = () => {
 
   useEffect(() => {
     if (paramQueryApplied) return;
-    const sucursalIdParam = searchParams.get('sucursal_id');
+    const sucursalIdParam = searchParams.get('sucursal_id') ?? (directId !== null && directRoomQuery.data?.sucursal ? String(directRoomQuery.data.sucursal.id) : null);
     const fechaEntradaParam = searchParams.get('fecha_entrada');
     const fechaSalidaParam = searchParams.get('fecha_salida');
     const huespedesParam = searchParams.get('numero_huespedes');
@@ -123,7 +133,7 @@ export const CrearReservaPage: React.FC = () => {
       }
       setParamQueryApplied(true);
     }
-  }, [searchParams, paramQueryApplied, scope]);
+  }, [searchParams, paramQueryApplied, scope, directId, directRoomQuery.data]);
 
   // 4. Consulta de disponibilidad y mutación de creación
   const disponibilidadQuery = useDisponibilidadQuery(
@@ -132,26 +142,10 @@ export const CrearReservaPage: React.FC = () => {
   );
   const createMutation = useCreateReservaMutation();
 
-  // El ID del enlace expresa intención; solo una respuesta vigente permite seleccionarlo.
-  useEffect(() => {
-    if (!requestedRoom.current || !disponibilidadQuery.isSuccess || disponibilidadQuery.isFetching || criteriaChanged || incompatibleSite) return;
-    // Si esa unidad ya no está libre, se ofrece otra unidad disponible de la misma categoría.
-    const match = disponibilidadQuery.data.find((room) => room.id === requestedRoom.current)
-      ?? (submittedQuery?.tipo_habitacion_id !== undefined
-        ? disponibilidadQuery.data.find((room) => room.tipo?.id === submittedQuery.tipo_habitacion_id)
-        : undefined)
-      ?? null;
-    setSelectedHabitacion(match);
-    saveSelectionDraft(match);
-    setRequestedRoomUnavailable(!match);
-    requestedRoom.current = null;
-  }, [disponibilidadQuery.data, disponibilidadQuery.isSuccess, disponibilidadQuery.isFetching, criteriaChanged, incompatibleSite, submittedQuery]);
-
   // Invalida la selección actual al modificar cualquier campo del formulario
   const handleCriteriaChange = useCallback(() => {
     setCriteriaChanged(true);
     setSelectedHabitacion(null);
-    setRequestedRoomUnavailable(false);
   }, []);
 
   // Envío del formulario de búsqueda
@@ -162,14 +156,9 @@ export const CrearReservaPage: React.FC = () => {
     saveSelectionDraft(null);
     const next = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) next.set(key, String(value));
-    const roomId = searchParams.get('habitacion_id');
-    if (roomId && /^[1-9]\d*$/.test(roomId)) {
-      next.set('habitacion_id', roomId);
-      requestedRoom.current = Number(roomId);
-    }
     setSearchParams(next, { replace: true });
     createMutation.reset();
-  }, [createMutation, searchParams, setSearchParams]);
+  }, [createMutation, setSearchParams]);
 
   // Selección de una habitación para abrir el resumen
   const handleSelectHabitacion = useCallback((habitacion: HabitacionDisponiblePublico) => {
@@ -177,6 +166,37 @@ export const CrearReservaPage: React.FC = () => {
     saveSelectionDraft(habitacion);
     setModalOpen(true);
   }, []);
+
+  // Reserva directa: nuevas fechas sin perder la habitación elegida.
+  const handleDirectApply = useCallback((query: DisponibilidadHabitacionQuery) => {
+    setSubmittedQuery(query);
+    setSelectedHabitacion(null);
+    saveSelectionDraft(null);
+    const next = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) next.set(key, String(value));
+    if (directId !== null) next.set('habitacion_id', String(directId));
+    if (directRoomQuery.data?.tipo) next.set('tipo_habitacion_id', String(directRoomQuery.data.tipo.id));
+    setSearchParams(next, { replace: true });
+    createMutation.reset();
+  }, [createMutation, directId, directRoomQuery.data, setSearchParams]);
+
+  const handleDirectConfirm = useCallback((habitacion: HabitacionDisponiblePublico) => {
+    setSelectedHabitacion(habitacion);
+    saveSelectionDraft(habitacion);
+    setModalOpen(true);
+  }, []);
+
+  // Elegir otra habitación: se abandona la selección y vuelve el buscador general.
+  const handleChooseOther = useCallback(() => {
+    setDirectId(null);
+    setSelectedHabitacion(null);
+    saveSelectionDraft(null);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('habitacion_id');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // Actualización de disponibilidad tras un conflicto 409
   const handleActualizarDisponibilidad = useCallback(() => {
@@ -216,6 +236,8 @@ export const CrearReservaPage: React.FC = () => {
       fecha_entrada: submittedQuery.fecha_entrada,
       fecha_salida: submittedQuery.fecha_salida,
       numero_huespedes: submittedQuery.numero_huespedes,
+      // El servidor deja la reserva lista en el carrito (sin cobrar nada); el pago lo inicia el cliente.
+      agregar_al_carrito: true,
     };
 
     try {
@@ -240,9 +262,11 @@ export const CrearReservaPage: React.FC = () => {
     setSelectedHabitacion(null);
     setSubmittedQuery(null);
     setCriteriaChanged(false);
+    setDirectId(null);
+    setSearchParams({}, { replace: true });
     saveSelectionDraft(null);
     createMutation.reset();
-  }, [createMutation]);
+  }, [createMutation, setSearchParams]);
 
   // Bloqueo de renderizado durante la carga de autenticación
   if (isAuthLoading) {
@@ -258,7 +282,7 @@ export const CrearReservaPage: React.FC = () => {
   );
 
   return (
-    <PageContainer>
+    <PageContainer className="reservation-page">
       <PageHeader title={textosCrearReserva.tituloPagina} description={textosCrearReserva.subtituloPagina} />
 
       {/* Manejo de fallos en catálogos auxiliares */}
@@ -307,6 +331,20 @@ export const CrearReservaPage: React.FC = () => {
         />
       ) : (
         <>
+          {directId !== null ? (
+            <ReservaDirecta
+              room={directRoomQuery.data ?? null}
+              siteId={directSiteId}
+              query={submittedQuery}
+              available={disponibilidadQuery.data?.find((room) => room.id === directId) ?? null}
+              checking={Boolean(submittedQuery) && !disponibilidadQuery.isError && (!disponibilidadQuery.isSuccess || disponibilidadQuery.isFetching || incompatibleSite)}
+              loadError={directRoomQuery.isError || disponibilidadQuery.isError}
+              onApply={handleDirectApply}
+              onConfirm={handleDirectConfirm}
+              onChooseOther={handleChooseOther}
+            />
+          ) : (
+          <>
           {/* Formulario de búsqueda de disponibilidad */}
           <div ref={criteriaRef}>
           <CriteriosBusquedaForm
@@ -341,17 +379,12 @@ export const CrearReservaPage: React.FC = () => {
             }
           />
           </div>
-          <LegalNotice />
           {submittedQuery && disponibilidadQuery.isSuccess && !disponibilidadQuery.isFetching && !criteriaChanged && !incompatibleSite && (
             <Button variant="text" onClick={() => {
               resultsRef.current?.focus({ preventScroll: true });
               resultsRef.current?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
             }}>{p('stayViewResults')}</Button>
           )}
-
-          <CatalogSiteNotice />
-
-          {requestedRoomUnavailable && <Alert tone="info">{p('roomNotAvailable')}</Alert>}
 
           {/* Error en la consulta de disponibilidad */}
           {disponibilidadQuery.isError && (
@@ -378,7 +411,7 @@ export const CrearReservaPage: React.FC = () => {
                 <div><p className="text-xs font-semibold uppercase tracking-wide text-bronce-700">{p('stayResultsFor')}</p>
                   <p id="availability-criteria" className="mt-1 text-sm text-neutro-800"><span lang="es">{sedeSeleccionada?.nombre}</span> · {date(submittedQuery.fecha_entrada)} — {date(submittedQuery.fecha_salida)} · {submittedQuery.numero_huespedes} {p(submittedQuery.numero_huespedes === 1 ? 'guest' : 'guests')} · {textosCrearReserva.nochesCalculadas(calendarNights(submittedQuery.fecha_entrada, submittedQuery.fecha_salida) ?? 0)}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => criteriaRef.current?.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')?.focus()}>{p('stayEditCriteria')}</Button>
+                <Button variant="ghost" size="sm" onClick={() => criteriaRef.current?.querySelector<HTMLButtonElement>('[data-stay-arrival]')?.focus()}>{p('stayEditCriteria')}</Button>
               </div>
             <HabitacionesDisponiblesList
               habitaciones={disponibilidadQuery.data ?? []}
@@ -388,6 +421,9 @@ export const CrearReservaPage: React.FC = () => {
               onSelectHabitacion={handleSelectHabitacion}
             />
             </div>
+          )}
+
+          </>
           )}
 
           {/* Modal de resumen y confirmación */}

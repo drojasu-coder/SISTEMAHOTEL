@@ -30,3 +30,5 @@ export const roomReportQuerySchema = reportQuerySchema.extend({ estado: z.enum(R
 export const restaurantReportQuerySchema = reportQuerySchema.extend({ estado: z.enum(["confirmada", "cancelada"]).optional() }).superRefine(validatePeriod);
 export const activitiesReportQuerySchema = reportQuerySchema.extend({ estado: z.enum(["confirmada", "cancelada", "completada"]).optional() }).superRefine(validatePeriod);
 export const eventsReportQuerySchema = reportQuerySchema.extend({ estado: z.enum(["cotizacion", "confirmada", "cancelada", "finalizada"]).optional() }).superRefine(validatePeriod);
+
+export const panoramaQuerySchema = z.object({ desde: calendarDate, hasta: calendarDate, sucursal_id: integer(2147483647).optional() }).strict().superRefine(validatePeriod);

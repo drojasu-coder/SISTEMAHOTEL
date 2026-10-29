@@ -97,6 +97,10 @@ export const createReservaHabitacionSchema =
 
       numero_huespedes:
         reservaFields.numero_huespedes,
+
+      /** Solo clientes: vincula la reserva al carrito en la misma operación. */
+      agregar_al_carrito:
+        z.boolean().optional(),
     })
     .strict();
 

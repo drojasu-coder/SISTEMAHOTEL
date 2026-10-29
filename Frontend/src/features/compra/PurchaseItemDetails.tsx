@@ -29,7 +29,7 @@ async function limited<T>(signal: AbortSignal, load: () => Promise<T>): Promise<
     return result;
   } finally { if (waiting.length) waiting.shift()!(); else active--; }
 }
-export function PurchaseItemDetails({ item, allowNewSearch = false, showLink = true }: { item: Pick<CarritoItem, 'tipo_item' | 'referencia_id'>; allowNewSearch?: boolean; showLink?: boolean }) {
+export function PurchaseItemDetails({ item, allowNewSearch = false, showLink = true, compact = false }: { item: Pick<CarritoItem, 'tipo_item' | 'referencia_id'>; allowNewSearch?: boolean; showLink?: boolean; compact?: boolean }) {
   const { user, status } = useAuth(); const { p, date, stateLabel } = usePublicInterface(); const { sites } = usePublicPreferences();
   const load = loaders[item.tipo_item as keyof typeof loaders];
   // El loader se define por referencia para no consultar catálogos ni disponibilidad pública.
@@ -63,6 +63,25 @@ export function PurchaseItemDetails({ item, allowNewSearch = false, showLink = t
   const nights = arrival && departure ? calendarNights(arrival, departure) : null;
   const calendar = arrival && departure && data.id && data.estado ? roomCalendar({ id: data.id, arrival, departure, title: `${p('purchaseRoom')} #${item.referencia_id}${title ? ` · ${title}` : ''}`, state: data.estado }) : null;
   const params = new URLSearchParams({ ...(arrival ? { fecha_entrada: arrival } : {}), ...(departure ? { fecha_salida: departure } : {}), ...(guests ? { numero_huespedes: String(guests) } : {}), ...(siteId ? { sucursal_id: String(siteId) } : {}) });
+  if (compact) {
+    // Vista compacta de compra: lo esencial a la vista; teléfono, estado y accesos secundarios a demanda. Sin calendario antes de pagar.
+    const when = arrival && departure ? `${date(arrival)} — ${date(departure)}${nights !== null ? ` · ${nights} ${p('purchaseNights').toLowerCase()}` : ''}` : day ? `${date(day)}${start ? ` · ${start.slice(0, 5)}` : ''}${end ? ` — ${end.slice(0, 5)}` : ''}` : null;
+    const more = Boolean(phone || data.estado || (showLink && route) || (allowNewSearch && arrival && departure));
+    return <div className="flex min-w-0 flex-col gap-1 text-sm">
+      {title && <p lang="es" className="break-words font-serif text-base font-semibold text-neutro-900">{title}{room?.numero ? ` · ${room.numero}` : ''}</p>}
+      {siteName && <p className="text-neutro-700" lang="es">{siteName}</p>}
+      {when && <p className="text-neutro-800">{when}{guests !== undefined && ` · ${guests} ${guests === 1 ? p('guest') : p('guests')}`}</p>}
+      {more && <details className="text-xs text-neutro-700">
+        <summary className="inline-flex min-h-9 cursor-pointer items-center font-semibold text-bronce-700 hover:underline">{p('purchaseMoreDetails')}</summary>
+        <div className="mt-1 flex flex-col gap-1">
+          {data.estado && <p>{p('purchaseOperational')}: {stateLabel(data.estado)}</p>}
+          {phone && <a className="inline-flex min-h-9 items-center underline" href={phone.href}>{phone.display}</a>}
+          {showLink && route && <Link to={route} className="inline-flex min-h-9 items-center font-semibold text-bronce-700 underline">{p('purchaseView')} #{item.referencia_id}</Link>}
+          {allowNewSearch && arrival && departure && <Link to={`/reservar?${params}`} className="inline-flex min-h-9 items-center underline">{p('purchaseNewSearch')}</Link>}
+        </div>
+      </details>}
+    </div>;
+  }
   return <div className="flex flex-col gap-2 text-sm">
     {image && <div className="max-w-xs overflow-hidden rounded-lg"><ServiceMedia src={image} alt={title} credits={credits} /></div>}
     {title && <p lang="es" className="font-semibold">{title}{room?.numero ? ` · ${room.numero}` : ''}</p>}

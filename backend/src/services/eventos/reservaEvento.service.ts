@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import { ahoraEnGuatemala, horaDe, iniciosDelDia, leerHorario, minutosDe, validarInicioEnFranja, INTERVALO_FRANJAS_MINUTOS } from "../../utils/franjasHorarias";
 import { assertSedeAccess, getSedeScope, sedeWhere } from "../../utils/sedeScope";
 
 import { AppError }
@@ -100,20 +101,8 @@ const validateEventDate = (
     );
   }
 
-  const today = new Date();
-
-  today.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const eventDate = new Date(
-    `${fecha}T00:00:00`
-  );
-
-  if (eventDate < today) {
+  // Se compara con la fecha de Guatemala, no con la zona horaria del servidor.
+  if (fecha < ahoraEnGuatemala().fecha) {
     throw new AppError(
       422,
       "EVENT_DATE_IN_PAST",
@@ -385,6 +374,13 @@ export const create = async (
           data.salon_id,
           transaction
         );
+      // Inicio dentro del horario del salón (cada 30 minutos) y fin a más tardar al cierre.
+      validarInicioEnFranja(
+        leerHorario(salon),
+        minutosDe(data.hora_fin) - minutosDe(data.hora_inicio),
+        data.fecha,
+        data.hora_inicio,
+      );
 
       validateCapacity(
         salon,
@@ -803,4 +799,47 @@ export const updateStatus = async (
     await reserva.update({ estado }, { transaction });
     return getById(id, requesterId, requesterRole, transaction);
   });
+};
+
+
+/**
+ * Consulta informativa: tramos del día en que el salón ya está tomado por reservas bloqueantes (cotización o confirmada,
+ * la misma regla de validateAvailability). No inventa horarios de operación ni precios; no sustituye la validación final.
+ */
+export const getDisponibilidadSalon = async (salonId: number, fecha: string) => {
+  if (!isValidCalendarDate(fecha)) throw new AppError(400, "INVALID_DATE", "La fecha no es válida");
+  const salon = await Salon.findByPk(salonId, { attributes: ["id", "capacidad_maxima", "hora_apertura", "hora_cierre"] });
+  if (!salon) throw new AppError(404, "EVENT_ROOM_NOT_FOUND", "El salón solicitado no existe");
+  const reservas = await ReservaEvento.findAll({
+    where: { salon_id: salonId, fecha, estado: { [Op.in]: blockingStates } },
+    attributes: ["hora_inicio", "hora_fin", "estado"],
+    order: [["hora_inicio", "ASC"]],
+  });
+  // Inicios cada 30 minutos dentro del horario del salón y, para cada uno, las horas
+  // de finalización que no se solapan con solicitudes o eventos existentes.
+  const horario = leerHorario(salon);
+  const ocupadas = reservas.map((r: any) => ({ inicio: minutosDe(r.hora_inicio), fin: minutosDe(r.hora_fin) }));
+  const horarios = horario
+    ? iniciosDelDia(horario, INTERVALO_FRANJAS_MINUTOS, fecha).flatMap((hora) => {
+      const t = minutosDe(hora);
+      const fines: string[] = [];
+      for (let fin = t + INTERVALO_FRANJAS_MINUTOS; fin <= minutosDe(horario.cierre); fin += INTERVALO_FRANJAS_MINUTOS) {
+        if (ocupadas.some((o: { inicio: number; fin: number }) => o.inicio < fin && o.fin > t)) break;
+        fines.push(horaDe(fin));
+      }
+      return fines.length ? [{ inicio: hora, fines }] : [];
+    })
+    : [];
+  return {
+    fecha,
+    capacidad_maxima: salon.capacidad_maxima,
+    horario,
+    intervalo_minutos: INTERVALO_FRANJAS_MINUTOS,
+    horarios,
+    ocupado: reservas.map((reserva: any) => ({
+      desde: String(reserva.hora_inicio).slice(0, 5),
+      hasta: String(reserva.hora_fin).slice(0, 5),
+      estado: reserva.estado === "confirmada" ? "confirmada" : "cotizacion",
+    })),
+  };
 };

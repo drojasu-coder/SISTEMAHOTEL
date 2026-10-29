@@ -13,7 +13,25 @@ import type {
   UpdateReservaAmenidadEstadoInput,
 } from "../types";
 
+export interface DisponibilidadAmenidad {
+  fecha: string;
+  aforo_maximo: number;
+  /** Duración fija de cada reserva; null si la amenidad aún no la tiene configurada. */
+  duracion_minutos: number | null;
+  intervalo_minutos: number;
+  /** Horario de reserva; null si aún no está configurado (no se ofrecen franjas). */
+  horario: { apertura: string; cierre: string } | null;
+  /** Franjas del día con las plazas libres que quedan según el aforo. */
+  horarios: { inicio: string; fin: string; disponibles: number }[];
+}
+
 export const amenidadesApi = {
+  /** Franjas calculadas por el servidor; la reserva se valida de nuevo al confirmar. */
+  getDisponibilidad: async (id: number, fecha: string): Promise<DisponibilidadAmenidad> => {
+    const response = await api.get<{ data: DisponibilidadAmenidad }>(`/amenidades/${id}/disponibilidad?fecha=${encodeURIComponent(fecha)}`);
+    return response.data;
+  },
+
   /**
    * Consulta pública de todas las amenidades registradas.
    * El backend las entrega ordenadas alfabéticamente e incluye el nombre de la sucursal.

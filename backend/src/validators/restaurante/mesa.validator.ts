@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fechaSchema } from "./reservaMesa.validator";
 
 export const createMesaSchema = z
   .object({
@@ -54,3 +55,10 @@ export const updateMesaSchema = z
       message: "Debe enviar al menos un campo para actualizar",
     }
   );
+
+export const disponibilidadMesaQuerySchema = z
+  .object({
+    fecha: fechaSchema,
+  })
+  .strict();
+

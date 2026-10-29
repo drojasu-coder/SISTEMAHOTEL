@@ -5,7 +5,6 @@ import { Footer } from '@/components/shared/Footer';
 import { useLocale } from '@/i18n/LocaleContext';
 import { PublicPreferencesProvider } from '@/features/preferencias/PublicPreferences';
 import { FirstVisit } from '@/features/preferencias/FirstVisit';
-import { PublicTopBar } from '@/components/shared/PublicTopBar';
 
 export const GuestLayout: React.FC = () => {
  const { t, locale } = useLocale();
@@ -17,7 +16,7 @@ export const GuestLayout: React.FC = () => {
     <a href="#contenido" className="skip-link">
       {t('skip')}
     </a>
-    {!authPage && <><PublicTopBar /><Navbar /><FirstVisit /></>}
+    {!authPage && <><Navbar /><FirstVisit /></>}
     <main lang={privateRegion && !/^\/(carrito|checkout|pagos)(\/|$)/.test(pathname) ? 'es' : locale} id="contenido" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
       <Outlet />
     </main>

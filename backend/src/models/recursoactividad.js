@@ -67,6 +67,17 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         defaultValue: null,
       },
+      // Horario de reserva o de salidas (hora de Guatemala); sin ambos valores no se ofrecen franjas.
+      hora_apertura: {
+        type: DataTypes.TIME,
+        allowNull: true,
+        defaultValue: null,
+      },
+      hora_cierre: {
+        type: DataTypes.TIME,
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

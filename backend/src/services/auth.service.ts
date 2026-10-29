@@ -102,6 +102,11 @@ export const login = async (
     );
   }
 
+  return createAuthSession(usuario);
+};
+
+/** Mismo JWT y respuesta para todos los métodos de acceso. */
+export const createAuthSession = (usuario: { id: number; nombre: string; email: string; telefono: string | null; rol: string }) => {
   const accessToken = generateAccessToken({
     id: usuario.id,
   });

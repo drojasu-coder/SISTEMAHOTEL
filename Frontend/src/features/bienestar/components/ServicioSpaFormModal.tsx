@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useEscapeToClose } from '@/lib/useEscapeToClose';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { X, AlertCircle } from 'lucide-react';
@@ -14,6 +15,8 @@ import { servicioSpaSchema, type ServicioSpaFormValues } from '../schemas/bienes
 import { textosBienestar } from '../textos';
 import { ApiError } from '@/api/client/http';
 import type { ServicioBienestar } from '../types';
+import { TimeField } from '@/components/ui/TimeField';
+import { useTextosHorarioAdmin } from '@/i18n/horariosAdmin';
 
 interface ServicioSpaFormModalProps {
   servicio?: ServicioBienestar | null;
@@ -28,6 +31,8 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
 }) => {
   const isEditing = Boolean(servicio);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [avisoHorario, setAvisoHorario] = useState<string | null>(null);
+  const th = useTextosHorarioAdmin();
   const [imageError, setImageError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [removeMarked, setRemoveMarked] = useState(false);
@@ -51,6 +56,8 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
       nombre: servicio?.nombre ?? '',
       duracion_minutos: servicio?.duracion_minutos ?? 60,
       precio: servicio?.precio ? Number(servicio.precio) : 350,
+      hora_apertura: servicio?.hora_apertura?.slice(0, 5) ?? '',
+      hora_cierre: servicio?.hora_cierre?.slice(0, 5) ?? '',
     },
   });
 
@@ -59,8 +66,11 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
       nombre: servicio?.nombre ?? '',
       duracion_minutos: servicio?.duracion_minutos ?? 60,
       precio: servicio?.precio ? Number(servicio.precio) : 350,
+      hora_apertura: servicio?.hora_apertura?.slice(0, 5) ?? '',
+      hora_cierre: servicio?.hora_cierre?.slice(0, 5) ?? '',
     });
     setErrorMessage(null);
+    setAvisoHorario(null);
     setImageError(null);
     setSelectedFile(null);
     setRemoveMarked(false);
@@ -74,17 +84,21 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
     setImageError(null);
 
     let targetId: number;
+    let fueraDeHorario = 0;
     try {
       if (isEditing && servicio?.id) {
         targetId = servicio.id;
-        await updateMutation.mutateAsync({
+        const actualizado = await updateMutation.mutateAsync({
           id: servicio.id,
           data: {
             nombre: values.nombre,
             duracion_minutos: values.duracion_minutos,
             precio: values.precio,
+            hora_apertura: values.hora_apertura || null,
+            hora_cierre: values.hora_cierre || null,
           },
         });
+        fueraDeHorario = Number((actualizado as { reservas_fuera_de_horario?: number }).reservas_fuera_de_horario) || 0;
       } else if (persistedId) {
         targetId = persistedId;
         await updateMutation.mutateAsync({
@@ -93,6 +107,8 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
             nombre: values.nombre,
             duracion_minutos: values.duracion_minutos,
             precio: values.precio,
+            hora_apertura: values.hora_apertura || null,
+            hora_cierre: values.hora_cierre || null,
           },
         });
       } else {
@@ -100,6 +116,8 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
           nombre: values.nombre,
           duracion_minutos: values.duracion_minutos,
           precio: values.precio,
+          hora_apertura: values.hora_apertura || null,
+          hora_cierre: values.hora_cierre || null,
         });
         targetId = Number(created.id);
         setPersistedId(Number(created.id));
@@ -144,10 +162,16 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
     }
 
     onSuccess?.();
+    // Las citas futuras no se modifican: si quedan fuera del nuevo horario se avisa y no se cierra.
+    if (fueraDeHorario > 0) {
+      setAvisoHorario(th.fueraDeHorario(fueraDeHorario));
+      return;
+    }
     onClose();
   };
 
   const isPending = isSubmitting || isUploading;
+  useEscapeToClose(onClose, isPending);
 
   return (
     <div
@@ -174,6 +198,9 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
             </h2>
           </div>
 
+          {avisoHorario && (
+            <div role="status" className="rounded-md border border-advertencia-600/20 bg-advertencia-50 p-3 text-xs text-advertencia-700">{avisoHorario}</div>
+          )}
           {errorMessage && (
             <div className="rounded-md bg-rojo-50 p-3 border border-rojo-200 flex items-start gap-2.5 text-xs text-rojo-700">
               <AlertCircle className="size-4 shrink-0 mt-0.5" />
@@ -225,6 +252,16 @@ export const ServicioSpaFormModal: React.FC<ServicioSpaFormModalProps> = ({
               <p className="text-xs text-rojo-600">{errors.duracion_minutos.message}</p>
             )}
           </div>
+
+          {/* Horario de atención: define las franjas que el cliente puede reservar */}
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-xs font-semibold text-neutro-700">{th.horarioAtencion}</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <TimeField label={th.apertura} id="hora-apertura-servicio" step={1800} disabled={isPending} error={errors.hora_apertura?.message} {...register('hora_apertura')} />
+              <TimeField label={th.cierre} id="hora-cierre-servicio" step={1800} disabled={isPending} error={errors.hora_cierre?.message} {...register('hora_cierre')} />
+            </div>
+            <p className="text-xs text-neutro-600">{th.ayudaServicio}</p>
+          </fieldset>
 
           {/* Precio */}
           <div className="flex flex-col gap-1.5">
