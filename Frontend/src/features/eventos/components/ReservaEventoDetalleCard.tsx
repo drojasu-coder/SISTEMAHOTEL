@@ -338,10 +338,12 @@ export const ReservaEventoDetalleCard: React.FC<ReservaEventoDetalleCardProps> =
                   variant="primary"
                   size="md"
                   className="w-full justify-center"
+                  notaPagable={
+                    <p className="text-[0.6875rem] text-neutro-500 text-center">
+                      Al pagar el carrito podrá optar por liquidar el total o el anticipo reglamentario.
+                    </p>
+                  }
                 />
-                <p className="text-[0.6875rem] text-neutro-500 text-center">
-                  Al pagar el carrito podrá optar por liquidar el total o el anticipo reglamentario.
-                </p>
               </div>
             )}
 

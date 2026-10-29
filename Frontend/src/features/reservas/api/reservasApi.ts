@@ -1,6 +1,9 @@
 import { api } from '@/api/client/http';
 import type {
   CreateReservaHabitacionInput,
+  CreateReservaHuespedInput,
+  HuespedBusqueda,
+  SaldoReservaRecepcion,
   EstadoPagoReserva,
   DisponibilidadHabitacionQuery,
   DisponibilidadHabitacionesResponse,
@@ -65,6 +68,41 @@ export const reservasApi = {
       data
     );
     return response.data as ReservaHabitacionConCarrito;
+  },
+
+  /**
+   * Recepción registra una reserva a nombre de un huésped (cuenta de cliente activa).
+   * Endpoint: POST /api/reservas-habitacion con usuario_id. El servidor valida la sede del
+   * personal, el titular, la disponibilidad y calcula el total; la reserva queda pendiente
+   * de pago, sin carrito y sin iniciar cobros.
+   */
+  createForGuest: async (data: CreateReservaHuespedInput): Promise<ReservaHabitacion> => {
+    const response = await api.post<ReservaHabitacionCreatedResponse>('/reservas-habitacion', data);
+    return response.data as ReservaHabitacion;
+  },
+
+  /** Saldo de la reserva para recepción (solo lectura). Endpoint: GET /api/reservas-habitacion/:id/saldo. */
+  getSaldoRecepcion: async (id: number, signal?: AbortSignal): Promise<SaldoReservaRecepcion> => {
+    const response = await api.get<{ data: SaldoReservaRecepcion }>(`/reservas-habitacion/${id}/saldo`, { signal });
+    return response.data;
+  },
+
+  /**
+   * Recepción registra efectivo recibido físicamente. Endpoint: POST /api/reservas-habitacion/:id/pago-efectivo.
+   * Repetir la misma clave de idempotencia devuelve el mismo pago: nunca duplica el cobro.
+   */
+  registrarEfectivo: async (id: number, data: { monto: number; idempotency_key: string; efectivo_recibido: true }): Promise<{ reserva_estado: string | null }> => {
+    const response = await api.post<{ data: { reserva_estado: string | null } }>(`/reservas-habitacion/${id}/pago-efectivo`, data);
+    return response.data;
+  },
+
+  /**
+   * Busca cuentas de cliente activas por nombre, correo o número de cuenta (máx. 10).
+   * Endpoint: GET /api/reservas-habitacion/huespedes?q=. Exclusivo del personal con sede.
+   */
+  searchHuespedes: async (q: string, signal?: AbortSignal): Promise<HuespedBusqueda[]> => {
+    const response = await api.get<{ data: HuespedBusqueda[] }>('/reservas-habitacion/huespedes', { params: { q }, signal });
+    return response.data;
   },
 
   /**

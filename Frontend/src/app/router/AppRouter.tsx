@@ -24,6 +24,7 @@ import { AmenidadesPage } from '@/pages/AmenidadesPage';
 import { AdminReservasAmenidadesPage } from '@/pages/AdminReservasAmenidadesPage';
 import { AdminDetalleReservaAmenidadPage } from '@/pages/AdminDetalleReservaAmenidadPage';
 import { AdminReservasPage } from '@/pages/AdminReservasPage';
+import { AdminNuevaReservaPage } from '@/pages/AdminNuevaReservaPage';
 import { AdminReservaDetallePage } from '@/pages/AdminReservaDetallePage';
 import { FacturacionPage } from '@/pages/FacturacionPage';
 import { PagosAdminPage } from '@/pages/PagosAdminPage';
@@ -253,6 +254,7 @@ export const AppRouter: React.FC = () => {
             {/* Consulta administrativa de reservas de habitación */}
             <Route element={<RequireAuth permission="reservas.gestionar" />}>
               <Route path="reservas" element={<AdminReservasPage />} />
+              <Route path="reservas/nueva" element={<AdminNuevaReservaPage />} />
               <Route path="reservas/:id" element={<AdminReservaDetallePage />} />
             </Route>
           </Route>

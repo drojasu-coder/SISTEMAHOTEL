@@ -225,7 +225,8 @@ export const createHabitacion = async (
     imagen_key: data.imagen_key,
   });
 
-  return serializeHabitacion(habitacion);
+  // Se devuelve con sus relaciones (tipo y sede), igual que el listado, para que el panel la muestre completa.
+  return getHabitacionById(habitacion.id, scope);
 };
 
 export const updateHabitacion = async (
@@ -410,7 +411,15 @@ export const updateHabitacion = async (
 
   await habitacion.update(data, { transaction });
 
-  return serializeHabitacion(habitacion);
+  // Respuesta con tipo y sede vigentes (tras un posible cambio de sede o tipo).
+  const actualizada = await Habitacion.findByPk(habitacion.id, {
+    include: [
+      { model: TipoHabitacion, required: false },
+      { model: Sucursal, attributes: ["id", "nombre", "activa"], required: false },
+    ],
+    transaction,
+  });
+  return serializeHabitacion(actualizada ?? habitacion);
 });
 
 export const deleteHabitacion = async (
@@ -471,6 +480,9 @@ export const getHabitacionesDisponibles = async (
 
   validateDates(query.fecha_entrada, query.fecha_salida);
   validateNotPast(query.fecha_entrada);
+
+  // Una sede desactivada conserva su inventario e historial, pero no se ofrece para nuevas reservas.
+  if (!sucursal.activa) return [];
 
   const noches = getNights(query.fecha_entrada, query.fecha_salida);
 

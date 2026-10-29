@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, Plus, RefreshCw, Search } from 'lucide-react';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/features/auth/AuthContext';
@@ -9,12 +9,12 @@ import { useAdminScope } from './AdminScopeContext';
 import { useAdminDashboard, type DashboardReservaReciente } from './hooks/useAdminDashboard';
 
 const T = {
-  es: { hello: 'Recepción', today: 'Hoy', refresh: 'Actualizar', updated: 'Actualizado', search: 'Buscar reserva por número, huésped, correo o habitación', searchBtn: 'Buscar',
+  es: { hello: 'Recepción', newRes: 'Nueva reserva', today: 'Hoy', refresh: 'Actualizar', updated: 'Actualizado', search: 'Buscar reserva por número, huésped, correo o habitación', searchBtn: 'Buscar',
     arrivals: 'Llegadas de hoy', departures: 'Salidas de hoy', pending: 'Pendientes de confirmar', upcoming: 'Próximas llegadas', seeAll: 'Ver todas', open: 'Abrir',
     noArrivals: 'No hay llegadas confirmadas para hoy.', noDepartures: 'No hay salidas confirmadas para hoy.', noPending: 'No hay reservas pendientes.', upcomingHint: 'Reservas confirmadas con entrada posterior a hoy',
     room: 'Habitación', guests: 'huéspedes', stay: 'Estancia', error: 'No fue posible consultar el resumen de recepción.', retry: 'Reintentar', loading: 'Consultando recepción…',
     noSites: 'Su usuario no tiene ninguna sede asignada. Solicite a un administrador que se la asigne.', shown: (n: number, t: number) => `Mostrando ${n} de ${t}` },
-  en: { hello: 'Front desk', today: 'Today', refresh: 'Refresh', updated: 'Updated', search: 'Search a reservation by number, guest, email or room', searchBtn: 'Search',
+  en: { hello: 'Front desk', newRes: 'New reservation', today: 'Today', refresh: 'Refresh', updated: 'Updated', search: 'Search a reservation by number, guest, email or room', searchBtn: 'Search',
     arrivals: 'Arrivals today', departures: 'Departures today', pending: 'Awaiting confirmation', upcoming: 'Upcoming arrivals', seeAll: 'View all', open: 'Open',
     noArrivals: 'No confirmed arrivals for today.', noDepartures: 'No confirmed departures for today.', noPending: 'No pending reservations.', upcomingHint: 'Confirmed reservations arriving after today',
     room: 'Room', guests: 'guests', stay: 'Stay', error: 'The front desk summary could not be loaded.', retry: 'Retry', loading: 'Loading front desk…',
@@ -52,7 +52,9 @@ export function RecepcionInicio() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><p className="text-xs text-neutro-600">{user?.nombre}</p><h1 className="font-sans text-2xl font-semibold text-neutro-900">{t.hello}</h1>
           <p className="text-sm text-neutro-600"><strong className="font-semibold text-neutro-800">{scope.selectedSede?.nombre ?? (locale === 'en' ? 'All authorized sites' : 'Todas las sedes autorizadas')}</strong>{data && <> · {t.today} {fmt(data.fecha_consulta)}</>}</p></div>
-        <Button variant="secondary" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching || noSites}><RefreshCw className={'size-4 ' + (query.isFetching ? 'animate-spin' : '')} aria-hidden />{t.refresh}</Button>
+<div className="flex flex-wrap gap-2">
+          {!noSites && <Link to="/admin/reservas/nueva" className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-bronce-700 px-3 text-sm font-semibold text-white hover:bg-bronce-800"><Plus className="size-4" aria-hidden />{t.newRes}</Link>}
+                  <Button variant="secondary" size="sm" onClick={() => void query.refetch()} disabled={query.isFetching || noSites}><RefreshCw className={'size-4 ' + (query.isFetching ? 'animate-spin' : '')} aria-hidden />{t.refresh}</Button></div>
       </header>
       <form role="search" onSubmit={submit} className="flex gap-2">
         <label className="relative min-w-0 flex-1"><span className="sr-only">{t.search}</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutro-400" aria-hidden />

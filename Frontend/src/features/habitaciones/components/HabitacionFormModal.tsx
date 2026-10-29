@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle } from "lucide-react";
@@ -68,6 +69,9 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
     handleSubmit,
     reset,
     setError,
+    setValue,
+    getValues,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<HabitacionFormData>({
     resolver: zodResolver(habitacionFormSchema),
@@ -78,6 +82,29 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
       estado: "disponible",
     },
   });
+
+  /**
+   * Solo se ofrecen los tipos de la sede elegida: el servidor rechaza tipos de otra
+   * sede y el catálogo público no muestra los tipos generales (sin sede), así que una
+   * habitación nueva con ellos quedaría invisible para el cliente. Al editar se
+   * conserva el tipo actual aunque sea general, para no alterar habitaciones existentes.
+   */
+  const sedeSeleccionada = Number(watch("sucursal_id")) || undefined;
+  const tiposDeSede = useMemo(
+    () => tiposHabitacion.filter((tipo) =>
+      (sedeSeleccionada !== undefined && tipo.sucursal_id === sedeSeleccionada) ||
+      (habitacion && tipo.id === habitacion.tipo_habitacion_id && Number(habitacion.sucursal_id) === sedeSeleccionada)),
+    [tiposHabitacion, sedeSeleccionada, habitacion],
+  );
+  const sinTiposDeSede = sedeSeleccionada !== undefined && tiposDeSede.length === 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const actual = Number(getValues("tipo_habitacion_id"));
+    if (!tiposDeSede.some((tipo) => tipo.id === actual)) {
+      setValue("tipo_habitacion_id", (tiposDeSede[0]?.id ?? "") as unknown as number, { shouldValidate: false });
+    }
+  }, [open, tiposDeSede, getValues, setValue]);
 
   useEffect(() => {
     if (open) {
@@ -96,10 +123,10 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
           estado: habitacion.estado ?? "disponible",
         });
       } else {
+        const sedeInicial = sedes.length > 0 ? sedes[0].id : undefined;
         reset({
-          sucursal_id: sedes.length > 0 ? sedes[0].id : undefined,
-          tipo_habitacion_id:
-            tiposHabitacion.length > 0 ? tiposHabitacion[0].id : undefined,
+          sucursal_id: sedeInicial,
+          tipo_habitacion_id: tiposHabitacion.find((tipo) => tipo.sucursal_id === sedeInicial)?.id,
           numero: "",
           estado: "disponible",
         });
@@ -256,12 +283,19 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
             <option value="" disabled>
               {textosHabitaciones.tipoPlaceholder}
             </option>
-            {tiposHabitacion.map((tipo) => (
+            {tiposDeSede.map((tipo) => (
               <option key={tipo.id} value={tipo.id}>
                 {tipo.nombre} · Cap. {tipo.capacidad_maxima}
               </option>
             ))}
           </select>
+          {sinTiposDeSede && (
+            <p role="status" className="text-xs text-neutro-600">
+              Esta sede todavía no tiene tipos de habitación.{" "}
+              <Link to="/admin/tipos-habitacion" className="font-semibold text-bronce-700 underline">Cree primero un tipo para esta sede</Link>{" "}
+              y después registre la habitación.
+            </p>
+          )}
           {errors.tipo_habitacion_id && (
             <p id="habitacion-tipo-help" role="alert" className="flex items-start gap-2 text-xs text-error-600">
               <AlertCircle className="mt-px size-4 shrink-0" aria-hidden="true" />
@@ -338,7 +372,7 @@ export const HabitacionFormModal: React.FC<HabitacionFormModalProps> = ({
           >
             {textosHabitaciones.cancelar}
           </Button>
-          <Button type="submit" variant="primary" isLoading={isPending}>
+          <Button type="submit" variant="primary" isLoading={isPending} disabled={sinTiposDeSede}>
             {isPending ? textosHabitaciones.guardando : textosHabitaciones.guardar}
           </Button>
         </div>

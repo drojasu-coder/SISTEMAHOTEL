@@ -30,7 +30,26 @@ export type ReservaHabitacionHabitacion = Schemas["ReservaHabitacionHabitacion"]
 /**
  * Modelo representativo de una reserva de habitación en el sistema.
  */
-export type ReservaHabitacion = Schemas["ReservaHabitacion"];
+/** Huésped sin cuenta de una reserva presencial registrada en recepción. */
+export interface HuespedPresencial {
+  id: number;
+  nombre_completo: string;
+  telefono?: string | null;
+  email?: string | null;
+}
+
+export type ReservaHabitacion = Schemas["ReservaHabitacion"] & {
+  /** Titular sin cuenta (reserva presencial); excluyente con Usuario. */
+  huesped_id?: number | null;
+  Huesped?: HuespedPresencial | null;
+};
+
+/** Nombre y contacto del titular, tenga cuenta de cliente o sea un huésped sin cuenta. */
+export function titularReserva(reserva: Pick<ReservaHabitacion, "Usuario" | "Huesped">) {
+  if (reserva.Usuario) return { nombre: reserva.Usuario.nombre, email: reserva.Usuario.email ?? null, telefono: reserva.Usuario.telefono ?? null, sinCuenta: false };
+  if (reserva.Huesped) return { nombre: reserva.Huesped.nombre_completo, email: reserva.Huesped.email ?? null, telefono: reserva.Huesped.telefono ?? null, sinCuenta: true };
+  return null;
+}
 
 /**
  * Parámetros para la consulta de disponibilidad de habitaciones (GET /api/habitaciones/disponibles).
@@ -68,6 +87,30 @@ export type CreateReservaHabitacionInput = Omit<
   /** Solo clientes: el servidor vincula la reserva al carrito en la misma operación. */
   agregar_al_carrito?: boolean;
 };
+
+/** Reserva registrada por recepción: titular con cuenta (usuario_id) o huésped sin cuenta (huesped). */
+export type CreateReservaHuespedInput = Omit<CreateReservaHabitacionRequest, "usuario_id"> & (
+  | { usuario_id: number; huesped?: never }
+  | { usuario_id?: never; huesped: { nombre_completo: string; telefono?: string; email?: string } }
+);
+
+/** Saldo de una reserva calculado por el servidor para recepción. */
+export interface SaldoReservaRecepcion {
+  reserva_id: number;
+  estado: string;
+  total: number;
+  aprobado: number;
+  en_proceso: number;
+  saldo: number;
+}
+
+/** Cuenta de cliente devuelta por la búsqueda de huéspedes de recepción. */
+export interface HuespedBusqueda {
+  id: number;
+  nombre: string;
+  email: string;
+  telefono?: string | null;
+}
 
 /** Vínculo de una reserva pendiente con el carrito (respuesta de POST con agregar_al_carrito). */
 export interface ReservaCarritoVinculo {

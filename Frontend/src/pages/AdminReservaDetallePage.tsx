@@ -32,6 +32,8 @@ import {
   useCancelAdminReservaMutation,
 } from '@/features/reservas/admin/hooks/useAdminReservas';
 import { useTextosAdminReservas } from '@/features/reservas/admin/textos';
+import { titularReserva } from '@/features/reservas/types';
+import { CobroEfectivoPanel } from '@/features/reservas/admin/components/CobroEfectivoPanel';
 import { useLocale } from '@/i18n/LocaleContext';
 import { formatAdminCalendarDate, formatAdminTimestamp } from '@/features/admin-core/adminDates';
 
@@ -106,7 +108,8 @@ export const AdminReservaDetallePage: React.FC = () => {
 
   const habitacion = reserva?.Habitacion;
   const tipo = habitacion?.TipoHabitacion;
-  const cliente = reserva?.Usuario;
+  // Titular con cuenta de cliente o huésped sin cuenta (reserva presencial).
+  const cliente = reserva ? titularReserva(reserva) : null;
   const noches = reserva
     ? calcularNoches(reserva.fecha_entrada, reserva.fecha_salida)
     : null;
@@ -272,6 +275,7 @@ export const AdminReservaDetallePage: React.FC = () => {
                   icono={User}
                 >
                   {cliente?.nombre ?? textosAdminReservas.detalle.valores.sinTelefono}
+                  {cliente?.sinCuenta && <span className="ml-2 rounded-full bg-neutro-100 px-2 py-0.5 text-xs font-medium text-neutro-600">{locale === 'en' ? 'Guest without account' : 'Huésped sin cuenta'}</span>}
                 </DatoFila>
                 <DatoFila
                   etiqueta={textosAdminReservas.detalle.campos.clienteEmail}
@@ -370,6 +374,9 @@ export const AdminReservaDetallePage: React.FC = () => {
               </div>
             )}
           </Card>
+
+          {/* Cobro en efectivo de recepción: saldo calculado por el servidor */}
+          {reserva.estado === 'pendiente' && <CobroEfectivoPanel reservaId={reserva.id} estadoReserva={reserva.estado} />}
         </div>
       )}
     </div>

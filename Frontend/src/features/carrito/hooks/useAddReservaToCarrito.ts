@@ -64,6 +64,8 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
       void queryClient.invalidateQueries({
         queryKey: carritoQueryKeys.current(userId),
       });
+      // La reserva ya está en el carrito: su estado de carrito/pago debe reflejarlo.
+      void queryClient.invalidateQueries({ queryKey: [...carritoQueryKeys.all, 'estado-referencia'] });
       void queryClient.invalidateQueries({
         queryKey: carritoQueryKeys.items(carritoId, userId),
       });
@@ -84,6 +86,7 @@ export function useAddReservaToCarrito(options?: UseAddReservaToCarritoOptions) 
       void queryClient.invalidateQueries({
         queryKey: carritoQueryKeys.current(userId),
       });
+      void queryClient.invalidateQueries({ queryKey: [...carritoQueryKeys.all, 'estado-referencia'] });
 
       if (error instanceof ApiError) {
         if (error.code === 'CART_ITEM_ALREADY_EXISTS') {

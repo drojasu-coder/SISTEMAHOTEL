@@ -1,11 +1,15 @@
 import { usePublicInterface } from '@/i18n/public';
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Check } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ShoppingCart, Check, CircleCheck, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Feedback';
 import { useAuth } from '@/features/auth/AuthContext';
 import { CARRITO_ROUTES } from '../constants/routes';
+import { carritoQueryKeys } from '../constants/queryKeys';
+import { carritoApi, type TipoReferenciaConEstado } from '../api/carritoApi';
+import { formatGTQ } from '@/features/mis-reservas/formato';
 import { useAddReservaToCarrito } from '../hooks/useAddReservaToCarrito';
 import { textosCarrito } from '../textos';
 import type { TipoItemCarrito } from '../types';
@@ -20,6 +24,8 @@ export interface BotonAnadirAlCarritoProps {
   className?: string;
   onSuccess?: () => void;
   publicInterface?: boolean;
+  /** Indicación que solo aplica mientras la reserva todavía puede añadirse (se oculta si ya está pagada o en el carrito). */
+  notaPagable?: React.ReactNode;
 }
 
 /** Estados terminales según backend que no pueden agregarse a un carrito */
@@ -56,9 +62,23 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
   className,
   onSuccess,
   publicInterface = false,
+  notaPagable,
 }) => {
   const { p } = usePublicInterface();
   const { user } = useAuth();
+  const esTerminalPrevio = ESTADOS_TERMINALES.has(reservaEstado.toLowerCase());
+  // Estado financiero real (pagada, en proceso, ya en el carrito) para evento, actividad y bienestar:
+  // el estado operativo «confirmada» no indica si la reserva ya se pagó.
+  const tipoConEstado = (['evento', 'actividad', 'bienestar'] as const).includes(tipo_item as TipoReferenciaConEstado)
+    ? (tipo_item as TipoReferenciaConEstado) : null;
+  const estadoQuery = useQuery({
+    queryKey: carritoQueryKeys.estadoReferencia(tipo_item, reservaId, user?.id),
+    queryFn: ({ signal }) => carritoApi.getEstadoReferencia(tipoConEstado!, reservaId, signal),
+    enabled: Boolean(tipoConEstado) && user?.rol === 'cliente' && reservaId > 0 && !esTerminalPrevio,
+    staleTime: 0,
+    retry: false,
+  });
+  const estadoFinanciero = estadoQuery.data?.estado;
   const { anadirAlCarrito, isLoading, feedback, limpiarFeedback } =
     useAddReservaToCarrito({
       tipo_item,
@@ -70,7 +90,65 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
     return null;
   }
 
-  const esTerminal = ESTADOS_TERMINALES.has(reservaEstado.toLowerCase());
+  const esTerminal = esTerminalPrevio;
+  type ClaveTexto = 'cartRefPaid' | 'cartRefPartial' | 'cartRefProcessing' | 'cartRefInCart' | 'goCart' | 'cartRefDeposit' | 'cartRefPartialLabel' | 'cartRefProcessingLabel' | 'cartRefAmountPaid' | 'cartRefAmountProcessing' | 'cartRefBalance';
+  const txt = (key: ClaveTexto, es: string) => (publicInterface ? p(key) : es);
+  const enlaceCarrito = (label: string) => (
+    <Link to={CARRITO_ROUTES.CARRITO} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-bronce-300 bg-white px-3 py-2 text-xs font-semibold text-bronce-700 transition-colors hover:bg-bronce-50">
+      <ShoppingCart className="size-3.5" aria-hidden="true" /><span>{label}</span>
+    </Link>
+  );
+  const etiqueta = (texto: string, completo: boolean) => (
+    <span className={'inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ' + (completo ? 'border-exito-600/20 bg-exito-50 text-exito-700' : 'border-bronce-300 bg-bronce-50 text-bronce-800')}>
+      {completo ? <CircleCheck className="size-3.5" aria-hidden="true" /> : <Clock className="size-3.5" aria-hidden="true" />}{texto}
+    </span>
+  );
+  // Importes del evento tal como los calcula el servidor; el frontend no deduce saldos.
+  const montos = estadoQuery.data?.montos;
+  const detalleMontos = montos && (
+    <dl className="grid grid-cols-[auto_auto] justify-start gap-x-3 gap-y-0.5 text-xs text-neutro-600">
+      {montos.aprobado > 0 && <><dt>{txt('cartRefAmountPaid', textosCarrito.montoPagado)}</dt><dd className="font-semibold tabular-nums text-neutro-900">{formatGTQ(montos.aprobado)}</dd></>}
+      {montos.en_proceso > 0 && <><dt>{txt('cartRefAmountProcessing', textosCarrito.montoEnProceso)}</dt><dd className="font-semibold tabular-nums text-neutro-900">{formatGTQ(montos.en_proceso)}</dd></>}
+      <dt>{txt('cartRefBalance', textosCarrito.saldoPendiente)}</dt><dd className="font-semibold tabular-nums text-neutro-900">{formatGTQ(montos.saldo)}</dd>
+    </dl>
+  );
+
+  // Totalmente pagada: nunca se ofrece otra acción de carrito o cobro.
+  if (estadoFinanciero === 'pagada') {
+    return <div className="flex flex-col gap-1.5" role="status">{etiqueta(txt('cartRefPaid', textosCarrito.referenciaPagada), true)}{detalleMontos}</div>;
+  }
+  // Anticipo o pago parcial: hay dinero aprobado pero no se afirma que esté pagada; no se ofrece añadirla de nuevo.
+  if (estadoFinanciero === 'anticipo_pagado' || estadoFinanciero === 'pago_parcial') {
+    return (
+      <div className="flex flex-col gap-1.5" role="status">
+        {etiqueta(estadoFinanciero === 'anticipo_pagado' ? txt('cartRefDeposit', textosCarrito.referenciaAnticipo) : txt('cartRefPartialLabel', textosCarrito.referenciaPagoParcialEtiqueta), false)}
+        {detalleMontos}
+        <p className="text-xs text-neutro-500">{txt('cartRefPartial', textosCarrito.referenciaPagoParcial)}</p>
+      </div>
+    );
+  }
+  // Pago en procesamiento o incierto: se conserva el bloqueo y no se ofrece un segundo cobro.
+  if (estadoFinanciero === 'procesando') {
+    return (
+      <div className="flex flex-col gap-2" role="status">
+        {etiqueta(txt('cartRefProcessingLabel', textosCarrito.referenciaProcesandoEtiqueta), false)}
+        {detalleMontos}
+        <p className="text-xs text-neutro-600">{txt('cartRefProcessing', textosCarrito.referenciaProcesando)}</p>
+        <div>{enlaceCarrito(txt('goCart', textosCarrito.irAlCarrito))}</div>
+      </div>
+    );
+  }
+  // Ya está en el carrito activo: se dirige al carrito en lugar de volver a añadirla.
+  if (estadoFinanciero === 'en_carrito') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div>{enlaceCarrito(txt('goCart', textosCarrito.irAlCarrito))}</div>
+        <p className="text-xs text-neutro-500">{txt('cartRefInCart', textosCarrito.referenciaEnCarrito)}</p>
+      </div>
+    );
+  }
+  // Mientras se consulta el estado no se permite añadir (evita un clic sobre una reserva ya pagada).
+  const consultando = Boolean(tipoConEstado) && estadoQuery.isLoading;
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -88,7 +166,7 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
           size={size}
           onClick={handleClick}
           isLoading={isLoading}
-          disabled={isLoading || esTerminal}
+          disabled={isLoading || esTerminal || consultando}
           className={className}
           aria-label={(publicInterface ? p('addCart') : textosCarrito.anadirAlCarrito)}
         >
@@ -110,6 +188,8 @@ export const BotonAnadirAlCarrito: React.FC<BotonAnadirAlCarritoProps> = ({
           </Link>
         )}
       </div>
+
+      {!esTerminal && notaPagable}
 
       {esTerminal && (
         <p className="text-xs text-neutro-500">

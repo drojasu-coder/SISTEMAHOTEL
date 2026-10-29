@@ -49,6 +49,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(50),
         allowNull: true,
       },
+      /** Empleado que registró un cobro en efectivo en recepción (auditoría). */
+      registrado_por_usuario_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       idempotency_key: {
         type: DataTypes.STRING(150),
         allowNull: true,

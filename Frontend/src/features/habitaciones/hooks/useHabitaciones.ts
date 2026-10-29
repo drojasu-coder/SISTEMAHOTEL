@@ -25,6 +25,8 @@ export function useCreateHabitacionMutation() {
     mutationFn: (data: CreateHabitacionInput) => habitacionesApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+      // Catálogo y disponibilidad públicos: la habitación debe poder encontrarse sin recargar.
+      queryClient.invalidateQueries({ queryKey: ['habitaciones-public-ui'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     },
   });
@@ -37,6 +39,8 @@ export function useUpdateHabitacionMutation() {
       habitacionesApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+      // Catálogo y disponibilidad públicos: la habitación debe poder encontrarse sin recargar.
+      queryClient.invalidateQueries({ queryKey: ['habitaciones-public-ui'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     },
   });
@@ -56,6 +60,8 @@ export function useUploadHabitacionImageMutation() {
     }) => habitacionesApi.uploadImage(id, file, onProgress),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+      // Catálogo y disponibilidad públicos: la habitación debe poder encontrarse sin recargar.
+      queryClient.invalidateQueries({ queryKey: ['habitaciones-public-ui'] });
     },
   });
 }
@@ -66,6 +72,8 @@ export function useRemoveHabitacionImageMutation() {
     mutationFn: (id: number) => habitacionesApi.removeImage(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: HABITACIONES_QUERY_KEY });
+      // Catálogo y disponibilidad públicos: la habitación debe poder encontrarse sin recargar.
+      queryClient.invalidateQueries({ queryKey: ['habitaciones-public-ui'] });
     },
   });
 }

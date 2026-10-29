@@ -15,6 +15,7 @@ import {
   AppError,
 } from "../../utils/AppError";
 import { getSedeScope, parseSucursalIdQuery } from "../../utils/sedeScope";
+import { getSaldoReservaRecepcion, registrarEfectivoRecepcion } from "../../services/pago.service";
 
 /**
  * Alcance por sede del personal; el cliente se rige por la propiedad de sus
@@ -50,6 +51,17 @@ export const getAllReservaHabitaciones =
       next(error);
     }
   };
+
+/** GET /api/reservas-habitacion/huespedes?q= — recepción busca cuentas de cliente activas. */
+export const searchHuespedes = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const huespedes = await reservaHabitacionService.searchHuespedes(String(req.query.q ?? ""), await getSedeScope(req.user!));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).json({ success: true, statusCode: 200, message: "Huéspedes obtenidos correctamente", data: huespedes });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const getReservaHabitacionById =
   async (
@@ -102,17 +114,22 @@ export const createReservaHabitacion =
        * Siempre utilizamos el ID del JWT.
        */
       if (isCliente) {
+        // Solo recepción registra huéspedes sin cuenta.
+        if (req.body.huesped !== undefined) {
+          throw new AppError(403, "INSUFFICIENT_PERMISSIONS", "Solo el personal puede registrar huéspedes sin cuenta");
+        }
         usuarioId =
           req.user!.id;
       } else {
         usuarioId =
           req.body.usuario_id;
 
-        if (!usuarioId) {
+        // Personal: cuenta de cliente (usuario_id) o huésped sin cuenta (huesped), nunca ambos.
+        if (Boolean(usuarioId) === Boolean(req.body.huesped)) {
           throw new AppError(
             400,
             "VALIDATION_ERROR",
-            "usuario_id es requerido para usuarios administrativos"
+            "Indique usuario_id de un cliente o los datos del huésped sin cuenta, no ambos"
           );
         }
       }
@@ -120,7 +137,9 @@ export const createReservaHabitacion =
       const reservaData = {
         ...req.body,
         usuario_id:
-          usuarioId,
+          usuarioId ?? null,
+        // Auditoría: empleado que registra la reserva presencial.
+        ...(isCliente ? {} : { registrado_por_usuario_id: req.user!.id }),
       };
 
       // Solo el cliente puede pedir la vinculación automática al carrito; el campo nunca llega al servicio.
@@ -259,4 +278,31 @@ export const getOwnReservationPaymentStatus = async (req: Request, res: Response
     res.setHeader("Cache-Control", "private, no-store");
     res.status(200).json({ success: true, statusCode: 200, message: "Estado de pago consultado", data });
   } catch (error) { next(error); }
+};
+
+
+/** GET /api/reservas-habitacion/:id/saldo — recepción consulta total, pagado y saldo (solo lectura). */
+export const getSaldoRecepcion = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await getSaldoReservaRecepcion(Number(req.params.id), req.user!, await getSedeScope(req.user!));
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(200).json({ success: true, statusCode: 200, message: "Saldo de la reserva obtenido correctamente", data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** POST /api/reservas-habitacion/:id/pago-efectivo — recepción registra efectivo recibido en mostrador. */
+export const registrarPagoEfectivo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await registrarEfectivoRecepcion(
+      { reserva_id: Number(req.params.id), ...req.body },
+      req.user!,
+      await getSedeScope(req.user!),
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.status(201).json({ success: true, statusCode: 201, message: "Pago en efectivo registrado correctamente", data: result });
+  } catch (error) {
+    next(error);
+  }
 };

@@ -13,6 +13,7 @@ import {
 import {
   validateBody,
   validateParams,
+  validateQuery,
 } from "../../middlewares/validate.middleware";
 
 import {
@@ -25,6 +26,8 @@ import {
   createReservaHabitacionSchema,
   updateReservaHabitacionSchema,
   reservaHabitacionIdSchema,
+  searchHuespedesQuerySchema,
+  pagoEfectivoRecepcionSchema,
 } from "../../validators/habitaciones/reservaHabitacion.validator";
 
 const router =
@@ -77,6 +80,44 @@ router.get(
   "/",
   authMiddleware,
   reservaHabitacionController.getAllReservaHabitaciones
+);
+
+/**
+ * @openapi
+ * /api/reservas-habitacion/huespedes:
+ *   get:
+ *     tags:
+ *       - Reservas de Habitación
+ *     summary: Buscar huéspedes para registrar una reserva
+ *     description: Personal de recepción o gestión de habitaciones con sede asignada busca cuentas de cliente activas por nombre, correo o número de cuenta (máximo 10 resultados). Solo devuelve datos de identificación.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         required: true
+ *         schema:
+ *           type: string
+ *           minLength: 2
+ *           maxLength: 100
+ *     responses:
+ *       200:
+ *         description: Huéspedes encontrados
+ *       400:
+ *         description: Término de búsqueda inválido
+ *       403:
+ *         description: Rol sin permiso o personal sin sede asignada (SEDE_NOT_ASSIGNED)
+ */
+router.get(
+  "/huespedes",
+  authMiddleware,
+  requireRole(
+    ...rolesGestionHabitaciones
+  ),
+  validateQuery(
+    searchHuespedesQuerySchema
+  ),
+  reservaHabitacionController.searchHuespedes
 );
 
 /**
@@ -144,7 +185,7 @@ router.get(
  *     tags:
  *       - Reservas de Habitación
  *     summary: Crear una reserva de habitación
- *     description: Los clientes reservan para sí mismos utilizando el usuario del JWT (omiten usuario_id). Los usuarios administrativos deben indicar usuario_id en el cuerpo.
+ *     description: Los clientes reservan para sí mismos utilizando el usuario del JWT (omiten usuario_id). El personal (admin, recepción, gerencia de habitaciones) indica en usuario_id una cuenta de cliente activa y solo puede reservar habitaciones de sus sedes; la reserva queda pendiente de pago y nunca se vincula a un carrito ni inicia cobros.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -191,7 +232,7 @@ router.get(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *       422:
- *         description: Fechas inválidas, fecha pasada o capacidad excedida (FECHAS_INVALIDAS, ROOM_RESERVATION_DATE_IN_PAST, CAPACIDAD_EXCEDIDA)
+ *         description: Fechas inválidas, fecha pasada, capacidad excedida o titular que no es un cliente activo (FECHAS_INVALIDAS, ROOM_RESERVATION_DATE_IN_PAST, CAPACIDAD_EXCEDIDA, HUESPED_INVALIDO)
  *         content:
  *           application/json:
  *             schema:
@@ -477,6 +518,77 @@ router.get(
   requireRole(ROLES.CLIENTE),
   validateParams(reservaHabitacionIdSchema),
   reservaHabitacionController.getOwnReservationPaymentStatus,
+);
+
+/**
+ * @openapi
+ * /api/reservas-habitacion/{id}/saldo:
+ *   get:
+ *     tags: [Reservas de Habitación]
+ *     summary: Saldo de una reserva para recepción
+ *     description: Solo lectura. Admin, recepción o gerencia de habitaciones, únicamente en sus sedes. Total, aprobado, en proceso y saldo calculados por el servidor.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *     responses:
+ *       200: { description: Saldo de la reserva }
+ *       403: { description: Rol sin permiso o reserva de otra sede }
+ *       404: { description: Reserva inexistente }
+ */
+router.get(
+  "/:id/saldo",
+  authMiddleware,
+  requireRole(...rolesGestionHabitaciones),
+  validateParams(reservaHabitacionIdSchema),
+  reservaHabitacionController.getSaldoRecepcion
+);
+
+/**
+ * @openapi
+ * /api/reservas-habitacion/{id}/pago-efectivo:
+ *   post:
+ *     tags: [Reservas de Habitación]
+ *     summary: Registrar un cobro en efectivo en recepción
+ *     description: >
+ *       Admin, recepción o gerencia de habitaciones, solo para reservas de sus sedes. Exige efectivo_recibido=true y el
+ *       saldo completo (las habitaciones no admiten pagos parciales). Registra el pago aprobado con método efectivo y el
+ *       empleado que lo cobró; la reserva se confirma al quedar cubierta. No usa Stripe. Repetir la misma
+ *       idempotency_key devuelve el mismo pago en lugar de duplicarlo.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [monto, idempotency_key, efectivo_recibido]
+ *             properties:
+ *               monto: { type: number, minimum: 0.01 }
+ *               idempotency_key: { type: string, minLength: 16, maxLength: 150 }
+ *               efectivo_recibido: { type: boolean, enum: [true] }
+ *     responses:
+ *       201: { description: Pago en efectivo registrado }
+ *       403: { description: Rol sin permiso o reserva de otra sede }
+ *       409: { description: Importe mayor que el saldo, pago en proceso o reserva no pagable }
+ *       422: { description: Pago parcial o efectivo no confirmado }
+ */
+router.post(
+  "/:id/pago-efectivo",
+  authMiddleware,
+  requireRole(...rolesGestionHabitaciones),
+  validateParams(reservaHabitacionIdSchema),
+  validateBody(pagoEfectivoRecepcionSchema),
+  reservaHabitacionController.registrarPagoEfectivo
 );
 
 export default router;

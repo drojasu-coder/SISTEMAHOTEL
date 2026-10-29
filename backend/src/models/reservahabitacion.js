@@ -9,6 +9,8 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       ReservaHabitacion.belongsTo(models.Usuario, { foreignKey: "usuario_id" });
+      ReservaHabitacion.belongsTo(models.Huesped, { foreignKey: "huesped_id" });
+      ReservaHabitacion.belongsTo(models.Usuario, { foreignKey: "registrado_por_usuario_id", as: "registradoPor" });
       ReservaHabitacion.belongsTo(models.Habitacion, { foreignKey: "habitacion_id" });
       ReservaHabitacion.hasMany(models.ReservaParqueo, { foreignKey: "reserva_habitacion_id" });
       ReservaHabitacion.hasMany(models.Pago, { foreignKey: "reserva_habitacion_id" });
@@ -18,7 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     {
       usuario_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true, // NULL solo en reservas de huéspedes sin cuenta (CHECK: exactamente un titular)
       },
       habitacion_id: {
         type: DataTypes.INTEGER,
@@ -44,6 +46,16 @@ module.exports = (sequelize, DataTypes) => {
       total: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
+      },
+      /** Huésped sin cuenta registrado en recepción (alternativo a usuario_id). */
+      huesped_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      /** Empleado que registró la reserva presencial (auditoría). */
+      registrado_por_usuario_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
       },
     },
     {

@@ -1,3 +1,4 @@
+import { getEstadoCarritoReferencia, type TipoReferenciaConEstado } from "../../services/carrito/carritoItem.service";
 import {
   Request,
   Response,
@@ -22,6 +23,22 @@ export const getAll = async (
     message:
       "Carritos obtenidos correctamente",
     data: carritos,
+  });
+};
+
+/** GET /api/carritos/estado-referencia — solo lectura, para el titular de la reserva. */
+export const getEstadoReferencia = async (
+  req: Request,
+  res: Response
+) => {
+  const { tipo_item, referencia_id } = req.query as unknown as { tipo_item: TipoReferenciaConEstado; referencia_id: number };
+  const data = await getEstadoCarritoReferencia(tipo_item, referencia_id, req.user!.id);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: "Estado de la reserva obtenido correctamente",
+    data,
   });
 };
 

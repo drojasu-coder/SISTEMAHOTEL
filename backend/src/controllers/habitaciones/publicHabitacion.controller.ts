@@ -39,6 +39,7 @@ const serializePublicHabitacion = async (h: any): Promise<any> => {
         capacidad_maxima: plain.TipoHabitacion.capacidad_maxima,
         tarifa_noche: Number(plain.TipoHabitacion.tarifa_noche).toFixed(2),
         imagen_url: plain.TipoHabitacion.imagen_url ?? null,
+        imagen_expires_at: plain.TipoHabitacion.imagen_expires_at ?? null,
         imagen_creditos: plain.TipoHabitacion.imagen_creditos ?? null,
       }
     : null;
@@ -55,6 +56,8 @@ const serializePublicHabitacion = async (h: any): Promise<any> => {
     tipo,
     sucursal,
     imagen_url: plain.imagen_url ?? null,
+    // Vencimiento de una URL prefirmada: el portal la renueva antes de que caduque.
+    imagen_expires_at: plain.imagen_expires_at ?? null,
     imagen_creditos: plain.imagen_creditos ?? null,
     ...(plain.noches !== undefined && { noches: plain.noches }),
     ...(plain.tarifa_noche !== undefined && {
@@ -73,7 +76,9 @@ export const getPublicHabitaciones = async (
 ) => {
   try {
     const sucursalId = parseSucursalId(req.query.sucursal_id);
-    const todas = await habitacionService.getAllHabitaciones();
+    // Las sedes desactivadas conservan sus habitaciones, pero no se publican.
+    const todas = (await habitacionService.getAllHabitaciones())
+      .filter((h: any) => h.Sucursal?.activa === true);
     const habitaciones = sucursalId === undefined
       ? todas
       : todas.filter((h: any) => h.sucursal_id === sucursalId);
@@ -100,6 +105,9 @@ export const getPublicHabitacionById = async (
     const habitacion = await habitacionService.getHabitacionById(
       Number(req.params.id)
     );
+    if (habitacion.Sucursal?.activa !== true) {
+      throw new AppError(404, "HABITACION_NOT_FOUND", "La habitación no fue encontrada");
+    }
     const publicData = await serializePublicHabitacion(habitacion);
     res.status(200).json({
       success: true,

@@ -17,6 +17,8 @@ import {
   isPaymentAdministrator,
   RequesterContext,
 } from "../utils/paymentOwnership";
+import { ROLES, Role } from "../constants/roles";
+import { SedeScope, assertSedeAccess } from "../utils/sedeScope";
 
 const db = require("../models");
 const {
@@ -1780,12 +1782,22 @@ const reconcileIdempotentPaymentIntent = async (
   }
 };
 
-export const createPago = async (data: CreatePagoData, requester: RequesterContext) => {
+/**
+ * Cobro en efectivo de recepción: solo lo invoca registrarEfectivoRecepcion después de
+ * comprobar rol, sede y confirmación de recepción del dinero. No es accesible por HTTP.
+ */
+interface CobroRecepcionOptions {
+  cobroRecepcion?: { registradoPor: number };
+}
+
+export const createPago = async (data: CreatePagoData, requester: RequesterContext, options: CobroRecepcionOptions = {}) => {
   validateOrigin(data);
   if (!PAYMENT_METHODS.includes(data.metodo)) {
     throw new AppError(422, "INVALID_PAYMENT_METHOD", "El método de pago no es válido");
   }
-  if (data.metodo === "efectivo" && !isPaymentAdministrator(requester)) {
+  const cobroRecepcion = options.cobroRecepcion && data.metodo === "efectivo" && data.reserva_habitacion_id !== undefined
+    ? options.cobroRecepcion : undefined;
+  if (data.metodo === "efectivo" && !isPaymentAdministrator(requester) && !cobroRecepcion) {
     throw new AppError(
       403,
       "CASH_PAYMENT_FORBIDDEN",
@@ -1806,7 +1818,8 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
   const amount = money(data.monto);
 
   const result = await sequelize.transaction(async (transaction: any) => {
-    await assertPaymentOriginOwnership(data, requester, transaction);
+    // En el cobro de recepción la autorización es por sede (ya verificada), no por titularidad.
+    if (!cobroRecepcion) await assertPaymentOriginOwnership(data, requester, transaction);
     const earlyReplay = await findIdempotencyReplay(
       data,
       amount,
@@ -1903,6 +1916,7 @@ export const createPago = async (data: CreatePagoData, requester: RequesterConte
       pasarela: data.metodo === "tarjeta" ? "stripe" : null,
       idempotency_key: data.idempotency_key ?? null,
       fecha_pago: approved ? new Date() : null,
+      ...(cobroRecepcion ? { registrado_por_usuario_id: cobroRecepcion.registradoPor } : {}),
     }, { transaction });
     if (data.metodo === "tarjeta") {
       // El PaymentIntent se crea FUERA de esta transacción (ver completeCardPayment): no se mantienen bloqueos de
@@ -2541,4 +2555,76 @@ export const getIntentoActivo = async (
     moneda: payment.moneda,
     puede_confirmar,
   };
+};
+
+
+// ======================================================
+// COBRO EN EFECTIVO DESDE RECEPCIÓN
+// ======================================================
+
+/** Roles que pueden registrar efectivo recibido en mostrador para reservas de habitación de sus sedes. */
+export const ROLES_COBRO_EFECTIVO_RECEPCION: Role[] = [ROLES.ADMIN, ROLES.RECEPCIONISTA, ROLES.GERENTE_HABITACIONES];
+
+const reservaEnAlcance = async (reservaId: number, requester: RequesterContext, scope: SedeScope) => {
+  if (!ROLES_COBRO_EFECTIVO_RECEPCION.includes(requester.rol)) {
+    throw new AppError(403, "CASH_PAYMENT_FORBIDDEN", "Su rol no puede registrar cobros en efectivo");
+  }
+  const reserva = await ReservaHabitacion.findByPk(reservaId, {
+    attributes: ["id", "estado", "total", "habitacion_id"],
+    include: [{ model: db.Habitacion, attributes: ["id", "sucursal_id"] }],
+  });
+  if (!reserva) throw new AppError(404, "RESERVA_HABITACION_NOT_FOUND", "La reserva de habitación no fue encontrada");
+  assertSedeAccess(scope, reserva.Habitacion?.sucursal_id);
+  return reserva;
+};
+
+/**
+ * Saldo de una reserva para recepción (solo lectura): mismo cálculo que usa el cobro,
+ * aprobado y en proceso netos de reembolsos.
+ */
+export const getSaldoReservaRecepcion = async (reservaId: number, requester: RequesterContext, scope: SedeScope) => {
+  const reserva = await reservaEnAlcance(reservaId, requester, scope);
+  return sequelize.transaction({ isolationLevel: "REPEATABLE READ" }, async (transaction: any) => {
+    const exposure = await reservationFinancialExposure(reserva.id, transaction);
+    const total = round(Number(reserva.total));
+    return {
+      reserva_id: reserva.id,
+      estado: reserva.estado,
+      total,
+      aprobado: exposure.approved,
+      en_proceso: exposure.processing,
+      saldo: round(Math.max(0, total - exposure.total)),
+    };
+  });
+};
+
+/**
+ * Registra efectivo recibido físicamente en recepción para una reserva de habitación.
+ * - Exige confirmación explícita de que el dinero se recibió.
+ * - Solo el saldo completo (las habitaciones no admiten pagos parciales) y sin pagos en proceso.
+ * - Reutiliza createPago: bloqueo de la reserva, saldo, idempotencia y confirmación al quedar cubierta.
+ * - Deja trazado el empleado que registró el cobro. No usa Stripe ni crea PaymentIntents.
+ */
+export const registrarEfectivoRecepcion = async (
+  data: { reserva_id: number; monto: number; idempotency_key: string; efectivo_recibido: boolean },
+  requester: RequesterContext,
+  scope: SedeScope,
+) => {
+  if (data.efectivo_recibido !== true) {
+    throw new AppError(422, "CASH_RECEIPT_NOT_CONFIRMED", "Confirme que recibió el efectivo antes de registrar el cobro");
+  }
+  await reservaEnAlcance(data.reserva_id, requester, scope);
+  const pago = await createPago(
+    {
+      reserva_habitacion_id: data.reserva_id,
+      monto: data.monto,
+      metodo: "efectivo",
+      tipo_pago: "total",
+      idempotency_key: data.idempotency_key,
+    } as CreatePagoData,
+    requester,
+    { cobroRecepcion: { registradoPor: requester.id } },
+  );
+  const reserva = await ReservaHabitacion.findByPk(data.reserva_id, { attributes: ["id", "estado"] });
+  return { pago, reserva_estado: reserva?.estado ?? null };
 };

@@ -228,23 +228,38 @@ export async function deleteStorageObject(
 }
 
 /**
+ * Medios definitivos de una sede creada desde la administración (sedes/<slug>/...),
+ * fuera de las carpetas fijas que publica la distribución de CloudFront. Nunca
+ * incluye las carpetas temporales de subida.
+ */
+const TEMP_STORAGE_PREFIXES = ["sedes/temp/", "branding/temp/"] as const;
+
+export function isPrivateSedeMediaKey(key: string): boolean {
+  if (!isAllowedKey(key)) return false;
+  const normalized = key.trim();
+  return normalized.startsWith("sedes/") && !TEMP_STORAGE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+/**
  * Resuelve la URL de lectura y su fecha de expiración ISO para un objeto de almacenamiento público.
- * - Solo procesa claves públicas autorizadas (CLOUDFRONT_PUBLIC_PREFIXES).
- * - Claves temporales (branding/temp, sedes/temp) o no elegibles nunca se entregan como URLs públicas (devuelve null).
- * - Si CloudFront está configurado: genera la URL de CloudFront (expiresAt = null).
- * - Si CloudFront no está configurado (fallback): genera URL prefirmada de S3 con fecha de expiración.
+ * - Claves temporales (branding/temp, sedes/temp) o no autorizadas nunca se entregan (devuelve null).
+ * - Claves de CLOUDFRONT_PUBLIC_PREFIXES con CloudFront configurado: URL de CloudFront (expiresAt = null).
+ * - Si CloudFront no está configurado, o la clave pertenece a una sede nueva cuya carpeta no
+ *   publica la distribución: URL prefirmada de S3 con fecha de expiración (el bucket sigue privado).
  */
 export async function resolveMediaUrlWithExpiry(
   key: string | null | undefined,
   expiresInSeconds = 3600,
   client: S3Client = getS3Client(),
 ): Promise<{ url: string | null; expiresAt: string | null }> {
-  if (!key || !isCloudFrontEligibleKey(key)) {
+  if (!key) return { url: null, expiresAt: null };
+  const cloudFrontEligible = isCloudFrontEligibleKey(key);
+  if (!cloudFrontEligible && !isPrivateSedeMediaKey(key)) {
     return { url: null, expiresAt: null };
   }
 
   const cloudfrontBase = env.CLOUDFRONT_BASE_URL || process.env.CLOUDFRONT_BASE_URL;
-  if (cloudfrontBase) {
+  if (cloudfrontBase && cloudFrontEligible) {
     return {
       url: buildCloudFrontUrl(cloudfrontBase, key),
       expiresAt: null,

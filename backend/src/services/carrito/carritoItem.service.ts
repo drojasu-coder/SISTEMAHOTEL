@@ -16,6 +16,8 @@ import {
   hasCartReferenceApprovedPayment,
   hasCartReferenceActiveFinancialCommitment,
   eventFinancialExposure,
+  isCartReferenceFullyPaid,
+  cartReferenceProcessingExposure,
 } from "../pago.service";
 
 const db = require("../../models");
@@ -1309,4 +1311,95 @@ export const removeCancelledRoomReservationFromActiveCarts = async (reservationI
       for (const item of items as any[]) await item.destroy({ transaction });
     }
     return !pendingRemoval;
+  });
+
+
+// ======================================================
+// ESTADO DE CARRITO Y PAGO DE UNA RESERVA PROPIA (SOLO LECTURA)
+// ======================================================
+
+export type EstadoCarritoReferencia = "pagada" | "anticipo_pagado" | "pago_parcial" | "procesando" | "en_carrito" | "pagable";
+
+/** Importes de un evento calculados por el servidor (netos de reembolsos aprobados). */
+export interface MontosEventoReferencia {
+  total: number;
+  anticipo_requerido: number;
+  aprobado: number;
+  en_proceso: number;
+  saldo: number;
+}
+
+const REFERENCIAS_CON_ESTADO = {
+  evento: () => ReservaEvento,
+  actividad: () => ReservaActividad,
+  bienestar: () => CitaBienestar,
+} as const;
+export type TipoReferenciaConEstado = keyof typeof REFERENCIAS_CON_ESTADO;
+
+/**
+ * Indica al titular si su reserva ya está pagada, tiene un pago en proceso o ya
+ * está en su carrito activo, con las mismas reglas que impiden agregarla a otro
+ * carrito. No crea, modifica ni cancela carritos ni pagos.
+ * Una reserva ajena o inexistente responde 404.
+ */
+export const getEstadoCarritoReferencia = async (
+  tipoItem: TipoReferenciaConEstado,
+  referenciaId: number,
+  usuarioId: number
+): Promise<{ estado: EstadoCarritoReferencia; carrito_id: number | null; montos?: MontosEventoReferencia }> =>
+  sequelize.transaction({ isolationLevel: "REPEATABLE READ" }, async (transaction: any) => {
+    const reserva = await REFERENCIAS_CON_ESTADO[tipoItem]().findByPk(referenciaId, {
+      attributes: ["id", "usuario_id", ...(tipoItem === "evento" ? ["total", "anticipo"] : [])],
+      transaction,
+    });
+    if (!reserva || Number(reserva.usuario_id) !== Number(usuarioId)) {
+      throw new AppError(404, "CART_REFERENCE_NOT_FOUND", "La reserva no fue encontrada");
+    }
+
+    if (tipoItem === "evento") {
+      // Mismo cálculo que bloquea agregar el evento a otro carrito: aprobado neto de reembolsos y en proceso.
+      const exposure = await eventFinancialExposure(reserva.id, transaction);
+      const total = normalizePrice(reserva.total);
+      const anticipo = normalizePrice(reserva.anticipo ?? 0);
+      const montos: MontosEventoReferencia = {
+        total,
+        anticipo_requerido: anticipo,
+        aprobado: exposure.approved,
+        en_proceso: exposure.processing,
+        saldo: normalizePrice(Math.max(0, total - exposure.approved)),
+      };
+      // Un pago en curso nunca se presenta como pagado ni permite otro cobro.
+      if (exposure.processing > 0) return { estado: "procesando", carrito_id: null, montos };
+      if (exposure.approved > 0) {
+        if (exposure.approved >= total) return { estado: "pagada", carrito_id: null, montos };
+        // «Anticipo pagado» solo si hay un pago aprobado registrado como anticipo y cubre el anticipo requerido.
+        const cartIds = (await CarritoItem.findAll({
+          where: { tipo_item: "evento", referencia_id: reserva.id },
+          attributes: ["carrito_id"],
+          transaction,
+        })).map((item: any) => Number(item.carrito_id));
+        const pagoAnticipo = cartIds.length > 0 && anticipo > 0 && await Pago.findOne({
+          where: { carrito_id: { [Op.in]: cartIds }, tipo_pago: "anticipo", estado: { [Op.in]: ["aprobado", "reembolsado_parcial"] } },
+          attributes: ["id"],
+          transaction,
+        });
+        return { estado: pagoAnticipo && exposure.approved >= anticipo ? "anticipo_pagado" : "pago_parcial", carrito_id: null, montos };
+      }
+    } else if (await hasCartReferenceApprovedPayment(tipoItem, reserva.id, transaction)) {
+      return { estado: (await isCartReferenceFullyPaid(tipoItem, reserva.id, transaction)) ? "pagada" : "pago_parcial", carrito_id: null };
+    }
+
+    if ((await cartReferenceProcessingExposure(tipoItem, reserva.id, transaction)) > 0) {
+      return { estado: "procesando", carrito_id: null };
+    }
+
+    const enCarrito = await CarritoItem.findOne({
+      where: { tipo_item: tipoItem, referencia_id: reserva.id },
+      include: [{ model: Carrito, where: { usuario_id: usuarioId, estado: "activo" }, attributes: ["id"], required: true }],
+      attributes: ["id", "carrito_id"],
+      transaction,
+    });
+    if (enCarrito) return { estado: "en_carrito", carrito_id: Number(enCarrito.carrito_id) };
+
+    return { estado: "pagable", carrito_id: null };
   });

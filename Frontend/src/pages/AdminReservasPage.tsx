@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronRight as Go, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronRight as Go, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Alert, LoadingNotice } from '@/components/ui/Feedback';
 import { getApiErrorMessage } from '@/api/errors';
@@ -11,7 +11,7 @@ import { useSedesQuery } from '@/features/sedes/hooks/useSedes';
 import { useAdminReservasQuery } from '@/features/reservas/admin/hooks/useAdminReservas';
 import { useTextosAdminReservas } from '@/features/reservas/admin/textos';
 import { useTextosRecepcion } from '@/features/reservas/admin/recepcionTextos';
-import { ESTADOS_RESERVA_HABITACION, type ReservaHabitacion } from '@/features/reservas/types';
+import { ESTADOS_RESERVA_HABITACION, titularReserva, type ReservaHabitacion } from '@/features/reservas/types';
 import { ReservaEstadoBadge } from '@/features/mis-reservas/components/ReservaEstadoBadge';
 import { calcularNoches, formatGTQ, resolverNombreSede } from '@/features/mis-reservas/formato';
 import { useLocale } from '@/i18n/LocaleContext';
@@ -68,7 +68,8 @@ export const AdminReservasPage: React.FC = () => {
 
   const term = q.trim().toLowerCase();
   const filtered = enVista[vista].filter((r) => {
-    if (term && ![String(r.id), r.Usuario?.nombre, r.Usuario?.email, r.Habitacion?.numero].some((value) => value?.toLowerCase().includes(term))) return false;
+    const titular = titularReserva(r);
+    if (term && ![String(r.id), titular?.nombre, titular?.email ?? undefined, titular?.telefono ?? undefined, r.Habitacion?.numero].some((value) => value?.toLowerCase().includes(term))) return false;
     if (vista === 'todas' && estado && r.estado !== estado) return false;
     if (desde && r.fecha_entrada < desde) return false;
     if (hasta && r.fecha_entrada > hasta) return false;
@@ -87,6 +88,7 @@ export const AdminReservasPage: React.FC = () => {
         <h1 className="font-sans text-2xl font-semibold tracking-tight text-neutro-900">{t.titulo}</h1>
         {reservasQuery.isSuccess && <p className="mt-1 text-sm text-neutro-600">{t.resumen(reservas.length)} · {t.hoy} {date(today)}</p>}
       </div>
+      <Link to="/admin/reservas/nueva" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-bronce-700 px-4 text-sm font-semibold text-white hover:bg-bronce-800"><Plus className="size-4" aria-hidden="true" />{locale === 'en' ? 'New reservation' : 'Nueva reserva'}</Link>
     </header>
 
     {reservasQuery.isLoading && <LoadingNotice label={tr.listado.cargando} />}
@@ -150,8 +152,8 @@ export const AdminReservasPage: React.FC = () => {
             <tbody className="divide-y divide-neutro-100">
               {visible.map((r) => <tr key={r.id} className="hover:bg-bronce-50/40">
                 <td className="whitespace-nowrap px-4 py-3"><Link to={`/admin/reservas/${r.id}`} aria-label={t.verReserva(r.id)} className="inline-flex min-h-9 items-center gap-1 font-semibold text-bronce-700 underline-offset-2 hover:underline">#{r.id}<Go className="size-3.5" aria-hidden="true" /></Link></td>
-                <td className="px-4 py-3"><span className="block font-medium text-neutro-900">{r.Usuario?.nombre ?? t.sinHuesped}</span>
-                  {r.Usuario?.email && <span className="hidden max-w-[14rem] truncate text-xs text-neutro-500 2xl:block">{r.Usuario.email}</span>}</td>
+                <td className="px-4 py-3"><span className="block font-medium text-neutro-900">{titularReserva(r)?.nombre ?? t.sinHuesped}</span>
+                  {titularReserva(r)?.email && <span className="hidden max-w-[14rem] truncate text-xs text-neutro-500 2xl:block">{titularReserva(r)!.email}</span>}</td>
                 <td className="px-4 py-3"><span className="block font-medium text-neutro-900">{r.Habitacion ? t.hab(r.Habitacion.numero) : t.sinHabitacion}</span>
                   {r.Habitacion?.TipoHabitacion?.nombre && <span className="block text-xs text-neutro-500">{r.Habitacion.TipoHabitacion.nombre} · {t.noches(calcularNoches(r.fecha_entrada, r.fecha_salida) ?? 0)}</span>}</td>
                 {showSite && <td className="px-4 py-3 text-neutro-700">{resolverNombreSede(r, sedesMap)}</td>}
@@ -172,7 +174,7 @@ export const AdminReservasPage: React.FC = () => {
             <Link to={`/admin/reservas/${r.id}`} aria-label={t.verReserva(r.id)} className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-bronce-50/40">
               <span className="min-w-0 space-y-0.5">
                 <span className="flex flex-wrap items-center gap-2"><span className="font-semibold text-neutro-900">#{r.id}</span><ReservaEstadoBadge estado={r.estado} /></span>
-                <span className="block truncate text-sm text-neutro-800">{r.Usuario?.nombre ?? t.sinHuesped}</span>
+                <span className="block truncate text-sm text-neutro-800">{titularReserva(r)?.nombre ?? t.sinHuesped}</span>
                 <span className="block text-xs text-neutro-600">{r.Habitacion ? t.hab(r.Habitacion.numero) : t.sinHabitacion}{showSite && ` · ${resolverNombreSede(r, sedesMap)}`}</span>
                 <span className="block text-xs text-neutro-600">{date(r.fecha_entrada)} → {date(r.fecha_salida)} · {formatGTQ(r.total)}</span>
               </span>

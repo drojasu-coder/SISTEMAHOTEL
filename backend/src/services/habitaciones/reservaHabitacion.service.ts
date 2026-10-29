@@ -8,7 +8,7 @@ import { ROLES, Role } from "../../constants/roles";
 import { env } from "../../config/env";
 import { computeExpiration, getReservationPaymentDeadline, isUncertainReservationPayment, isStayEnded, stampPendingReservationExpiration } from "./reservaExpiracion.policy";
 import { attachRoomReservationToCart } from "../carrito/carritoItem.service";
-import { SedeScope, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
+import { SedeScope, assertHasSede, assertSedeAccess, sedeWhere } from "../../utils/sedeScope";
 
 
 
@@ -50,6 +50,8 @@ const {
 
   Sucursal,
 
+  Huesped,
+
 } = db;
 
 
@@ -68,9 +70,23 @@ type EstadoReservaHabitacion =
 
 
 
+/** Huésped sin cuenta atendido en recepción (titular alternativo a una cuenta de cliente). */
+export interface HuespedPresencialData {
+  nombre_completo: string;
+  telefono?: string | null;
+  email?: string | null;
+}
+
 interface CreateReservaHabitacionData {
 
-  usuario_id: number;
+  /** Cuenta de cliente titular; null cuando el titular es un huésped sin cuenta. */
+  usuario_id: number | null;
+
+  /** Solo personal: titular sin cuenta. Excluyente con usuario_id. */
+  huesped?: HuespedPresencialData;
+
+  /** Solo personal: empleado que registra la reserva (auditoría). */
+  registrado_por_usuario_id?: number;
 
   habitacion_id: number;
 
@@ -149,6 +165,13 @@ const reservationExposureWithoutProcessing =
 
 
 const reservationInclude = [
+
+  // Titular sin cuenta de una reserva presencial (alternativo a Usuario).
+  {
+    model: Huesped,
+    attributes: ["id", "nombre_completo", "telefono", "email"],
+    required: false,
+  },
 
   {
 
@@ -698,7 +721,7 @@ const validateReferences =
  */
 const validateLockedReferences = async (
 
-  usuarioId: number,
+  usuarioId: number | null,
 
   habitacionId: number,
 
@@ -706,9 +729,10 @@ const validateLockedReferences = async (
 
 ) => {
 
+  // Reserva de huésped sin cuenta: no hay usuario titular que validar.
   const usuario =
 
-    await Usuario.findByPk(
+    usuarioId === null ? null : await Usuario.findByPk(
 
       usuarioId,
 
@@ -722,7 +746,7 @@ const validateLockedReferences = async (
 
 
 
-  if (!usuario) {
+  if (usuarioId !== null && !usuario) {
 
     throw new AppError(
 
@@ -826,12 +850,56 @@ const validateLockedReferences = async (
 
   return {
 
+    usuario,
+
     habitacion,
 
     tipoHabitacion,
 
   };
 
+};
+
+/**
+ * Reserva registrada por el personal en nombre de un huésped: el titular debe
+ * ser una cuenta de cliente activa, nunca el propio personal ni otra cuenta
+ * administrativa.
+ */
+const validateHuespedCliente = (usuario: any) => {
+  if (usuario.rol !== ROLES.CLIENTE || !usuario.activo) {
+    throw new AppError(
+      422,
+      "HUESPED_INVALIDO",
+      "La reserva debe registrarse a nombre de una cuenta de cliente activa"
+    );
+  }
+};
+
+/**
+ * Búsqueda de huéspedes (cuentas de cliente activas) para que recepción
+ * registre reservas a su nombre. Solo expone datos de identificación y exige
+ * que el personal tenga al menos una sede asignada.
+ */
+export const searchHuespedes = async (term: string, scope: SedeScope) => {
+  assertHasSede(scope);
+  const q = term.trim();
+  if (q.length < 2) return [];
+  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const id = /^\d+$/.test(q) ? Number(q) : null;
+  return Usuario.findAll({
+    where: {
+      rol: ROLES.CLIENTE,
+      activo: true,
+      [Op.or]: [
+        { nombre: { [Op.iLike]: like } },
+        { email: { [Op.iLike]: like } },
+        ...(id !== null && Number.isSafeInteger(id) ? [{ id }] : []),
+      ],
+    },
+    attributes: ["id", "nombre", "email", "telefono"],
+    order: [["nombre", "ASC"], ["id", "ASC"]],
+    limit: 10,
+  });
 };
 
 
@@ -1234,6 +1302,8 @@ export const createReservaHabitacion =
          */
         const {
 
+          usuario,
+
           habitacion,
 
           tipoHabitacion,
@@ -1248,11 +1318,17 @@ export const createReservaHabitacion =
             transaction
           );
 
+        // Exactamente un titular: cuenta de cliente o, solo para el personal, huésped sin cuenta.
+        if ((data.usuario_id === null) === !data.huesped || (data.huesped && !scope)) {
+          throw new AppError(422, "TITULAR_INVALIDO", "Indique una cuenta de cliente o los datos del huésped, no ambos");
+        }
+
         if (scope) {
           assertSedeAccess(
             scope,
             habitacion.sucursal_id
           );
+          if (!data.huesped) validateHuespedCliente(usuario);
         }
 
         validateHabitacionReservable(
@@ -1260,6 +1336,12 @@ export const createReservaHabitacion =
           habitacion
 
         );
+
+        // Una sede desactivada conserva sus reservas, pero no admite nuevas.
+        const sede = await Sucursal.findByPk(habitacion.sucursal_id, { attributes: ["id", "activa"], transaction });
+        if (!sede?.activa) {
+          throw new AppError(409, "SUCURSAL_INACTIVA", "La sede no está disponible para nuevas reservas");
+        }
 
 
 
@@ -1305,7 +1387,7 @@ export const createReservaHabitacion =
               throw new AppError(409, "RESERVATION_PAYMENT_WINDOW_EXPIRED", "El plazo para pagar la reserva venció. Cancélela y cree una nueva");
             }
             const plazo = limite ?? new Date(Date.now() + env.CART_EXPIRATION_MINUTES * 60_000); // sin límite almacenado: plazo clásico del carrito
-            const carrito = await attachRoomReservationToCart(existente.id, data.usuario_id, plazo, transaction);
+            const carrito = await attachRoomReservationToCart(existente.id, Number(data.usuario_id), plazo, transaction);
             return { reserva: existente, reutilizada: true, carrito };
           }
         }
@@ -1341,6 +1423,17 @@ export const createReservaHabitacion =
 
 
 
+        // Huésped sin cuenta: registro persistente en la misma transacción que la reserva.
+        const huesped = data.huesped
+          ? await Huesped.create({
+              nombre_completo: data.huesped.nombre_completo.trim(),
+              telefono: data.huesped.telefono?.trim() || null,
+              email: data.huesped.email?.trim().toLowerCase() || null,
+              sucursal_id: habitacion.sucursal_id,
+              registrado_por_usuario_id: data.registrado_por_usuario_id,
+            }, { transaction })
+          : null;
+
         const reservaCreada = await ReservaHabitacion.create(
 
           {
@@ -1348,6 +1441,10 @@ export const createReservaHabitacion =
             usuario_id:
 
               data.usuario_id,
+
+            huesped_id: huesped?.id ?? null,
+
+            registrado_por_usuario_id: scope ? data.registrado_por_usuario_id ?? null : null,
 
 
 
@@ -1396,7 +1493,7 @@ export const createReservaHabitacion =
         await stampPendingReservationExpiration(reservaCreada.id, transaction);
         if (options?.agregarAlCarrito) {
           // Mismo plazo inicial que la reserva: un carrito nuevo vence cuando vence el límite de pago de la reserva.
-          const carrito = await attachRoomReservationToCart(reservaCreada.id, data.usuario_id, computeExpiration(new Date()), transaction);
+          const carrito = await attachRoomReservationToCart(reservaCreada.id, Number(data.usuario_id), computeExpiration(new Date()), transaction);
           return { reserva: reservaCreada, reutilizada: false, carrito };
         }
         return reservaCreada;
@@ -1498,6 +1595,11 @@ export const updateReservaHabitacion =
      * la reserva después del PATCH.
 
      */
+
+    // Una reserva presencial conserva su huésped sin cuenta: no se reasigna a una cuenta por PATCH.
+    if (data.usuario_id !== undefined && reservaHabitacion.huesped_id != null) {
+      throw new AppError(409, "TITULAR_PRESENCIAL", "El titular de una reserva de huésped sin cuenta no puede cambiarse a una cuenta de cliente");
+    }
 
     const usuarioId =
 

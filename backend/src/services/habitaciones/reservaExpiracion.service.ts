@@ -119,7 +119,8 @@ export const expirePendingRoomReservations = async (options: { dryRun?: boolean;
           // No amplía ni modifica otros artículos; si falla, el pago de la reserva vencida sigue rechazado por el servidor.
           try {
             const [owner] = await sequelize.query("SELECT usuario_id FROM reservas_habitacion WHERE id = :id", { replacements: { id }, type: QueryTypes.SELECT }) as Array<{ usuario_id: number }>;
-            if (owner) await removeCancelledRoomReservationFromActiveCarts(id, Number(owner.usuario_id));
+            // Una reserva presencial (huésped sin cuenta) no tiene carrito que limpiar.
+            if (owner?.usuario_id != null) await removeCancelledRoomReservationFromActiveCarts(id, Number(owner.usuario_id));
           } catch { /* se reintenta si el cliente vuelve a abrir el carrito o la cancela */ }
         }
         else if (outcome.resultado === "omitida") report.omitidas.push({ reserva_id: id, motivo: outcome.motivo });

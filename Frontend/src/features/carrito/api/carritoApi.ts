@@ -102,4 +102,21 @@ export const carritoApi = {
   removeItem: async (carritoId: number, itemId: number): Promise<void> => {
     await api.delete<void>(`/carritos/${carritoId}/items/${itemId}`);
   },
+
+  /**
+   * Estado de carrito y pago de una reserva propia de evento, actividad o bienestar.
+   * Endpoint de solo lectura: GET /carritos/estado-referencia. No crea carritos ni pagos.
+   */
+  getEstadoReferencia: async (tipoItem: TipoReferenciaConEstado, referenciaId: number, signal?: AbortSignal): Promise<EstadoCarritoReferencia> => {
+    const response = await api.get<{ data: EstadoCarritoReferencia }>('/carritos/estado-referencia', { params: { tipo_item: tipoItem, referencia_id: referenciaId }, signal });
+    return response.data;
+  },
 };
+
+export type TipoReferenciaConEstado = 'evento' | 'actividad' | 'bienestar';
+export interface EstadoCarritoReferencia {
+  estado: 'pagada' | 'anticipo_pagado' | 'pago_parcial' | 'procesando' | 'en_carrito' | 'pagable';
+  carrito_id: number | null;
+  /** Solo eventos: importes calculados por el servidor (netos de reembolsos aprobados). */
+  montos?: { total: number; anticipo_requerido: number; aprobado: number; en_proceso: number; saldo: number };
+}

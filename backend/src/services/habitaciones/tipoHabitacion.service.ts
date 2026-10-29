@@ -100,7 +100,8 @@ export const getPublicCatalog = async (sucursalId?: number) => {
     where: {
       sucursal_id: sucursalId !== undefined ? sucursalId : { [Op.ne]: null },
     },
-    include: [{ model: Sucursal, attributes: ["id", "nombre"] }],
+    // Solo sedes activas: una sede desactivada no se ofrece en el catálogo público.
+    include: [{ model: Sucursal, attributes: ["id", "nombre"], where: { activa: true }, required: true }],
     order: [["sucursal_id", "ASC"], ["tarifa_noche", "ASC"], ["capacidad_maxima", "ASC"], ["id", "ASC"]],
   });
   const conteos = await Habitacion.findAll({

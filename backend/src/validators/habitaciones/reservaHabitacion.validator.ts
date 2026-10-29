@@ -98,6 +98,15 @@ export const createReservaHabitacionSchema =
       numero_huespedes:
         reservaFields.numero_huespedes,
 
+      /** Solo personal: titular sin cuenta (excluyente con usuario_id). */
+      huesped: z
+        .object({
+          nombre_completo: z.string().trim().min(3, "Indique el nombre completo del huésped").max(150),
+          telefono: z.string().trim().regex(/^[+\d][\d\s-]{6,28}$/, "Teléfono no válido").optional().or(z.literal("")),
+          email: z.string().trim().email("Correo no válido").max(150).optional().or(z.literal("")),
+        })
+        .strict()
+        .optional(),
       /** Solo clientes: vincula la reserva al carrito en la misma operación. */
       agregar_al_carrito:
         z.boolean().optional(),
@@ -141,3 +150,22 @@ export const reservaHabitacionIdSchema =
         ),
     })
     .strict();
+
+/** Búsqueda de huéspedes por nombre, correo o número de cuenta. */
+export const searchHuespedesQuerySchema = z
+  .object({
+    q: z.string().trim().min(2, "Escriba al menos 2 caracteres").max(100),
+  })
+  .strict();
+
+/**
+ * Cobro en efectivo de recepción. efectivo_recibido debe ser true: confirmación explícita de
+ * que el dinero se recibió físicamente. La clave de idempotencia evita duplicar el cobro.
+ */
+export const pagoEfectivoRecepcionSchema = z
+  .object({
+    monto: z.number().positive("El importe debe ser mayor que cero").multipleOf(0.01, "Máximo dos decimales"),
+    idempotency_key: z.string().trim().min(16).max(150).regex(/^[A-Za-z0-9_-]+$/, "Clave de idempotencia no válida"),
+    efectivo_recibido: z.literal(true, { message: "Confirme que recibió el efectivo" }),
+  })
+  .strict();

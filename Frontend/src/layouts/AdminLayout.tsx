@@ -9,6 +9,7 @@ import {
   BedDouble,
   Layers,
   CalendarCheck,
+  CalendarPlus,
   UtensilsCrossed,
   Sparkles,
   Dumbbell,
@@ -64,6 +65,7 @@ const navSections: NavSection[] = [
       { id: 'habitaciones', label: 'Habitaciones', path: '/admin/habitaciones', icon: BedDouble },
       { id: 'tipos-habitacion', label: 'Tipos de habitación', path: '/admin/tipos-habitacion', icon: Layers, permission: 'habitaciones.configurar' },
       { id: 'reservas', label: 'Reservas', path: '/admin/reservas', icon: CalendarCheck, permission: 'reservas.gestionar' },
+      { id: 'nueva-reserva', label: 'Nueva reserva', path: '/admin/reservas/nueva', icon: CalendarPlus, permission: 'reservas.gestionar' },
     ],
   },
   {
@@ -217,7 +219,8 @@ export const AdminLayoutContent: React.FC = () => {
                       const section = new URLSearchParams(location.search).get('seccion') ?? 'empleados';
                       const esClientes = ['clientes', 'usuarios'].includes(section);
                       const matchesSection = item.id === 'clientes' ? esClientes : !esClientes;
-                      return itemClass({ isActive: isActive && (!item.path.startsWith('/admin/personal') || matchesSection) });
+                      const otraRutaReservas = item.id === 'reservas' && location.pathname === '/admin/reservas/nueva';
+                      return itemClass({ isActive: isActive && !otraRutaReservas && (!item.path.startsWith('/admin/personal') || matchesSection) });
                     }}>
                       <ItemIcon className="size-4 shrink-0 text-neutro-500 group-hover:text-bronce-700 transition-colors" aria-hidden="true" />
                       <span className="min-w-0 truncate">{t(item.label)}</span>
